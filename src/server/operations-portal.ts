@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as operationsOrchestrator from './operations.js';
-import { sendJson } from './httpio.js';
+import { sendJson, errorText } from './httpio.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import type { HostConfig } from './types.js';
 
@@ -52,6 +52,6 @@ export function handleOperationsRequest(
   } catch (err) {
     if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
     if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    sendJson(res, 400, { error: errorText(err) });
   }
 }

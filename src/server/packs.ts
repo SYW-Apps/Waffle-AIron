@@ -39,7 +39,7 @@ import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 // host core adapter.
 // ---------------------------------------------------------------------------
 
-const NAME_RE = /^[A-Za-z0-9._-]+$/;
+const NAME_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
 const PACK_EXT_RE = /\.(ya?ml|cjs|js)$/i;
 
 /** One extensions.packs registration: a path reference (as `pack add` writes it) or a by-name selection. */
@@ -48,8 +48,17 @@ type PackRegistration = string | PackSelection;
 /** Guard the pack name so it can never traverse out of the packs directory. */
 function assertName(name: string): void {
   if (!NAME_RE.test(name)) {
-    throw new Error(`Invalid pack name "${name}" (allowed: letters, digits, dot, underscore, hyphen).`);
+    throw new Error(`Invalid pack name "${name}" (allowed: letters, digits, dot, underscore, hyphen; not starting with a dot).`);
   }
+}
+
+/** The folder a pack named `name` is extracted into under `base`: refused unless it stays inside `base`. */
+function packDirIn(base: string, name: string): string {
+  assertName(name);
+  const root = path.resolve(base);
+  const dir = path.resolve(root, name);
+  if (!dir.startsWith(root + path.sep)) throw new Error(`Invalid pack name "${name}": it leaves the packs folder.`);
+  return dir;
 }
 
 /** Reject anything that isn't a declarative pack (profiles + language tables).
@@ -406,8 +415,7 @@ function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): Pack
   const info = hostSdk.inspectArchive(archive);
   assertNotCodeArchive(info);
   const packName = name ?? info.name;
-  assertName(packName);
-  const dir = path.join(hostCore.globalPacksDir(), packName);
+  const dir = packDirIn(hostCore.globalPacksDir(), packName);
   extractDeclarativeArchive(archive, dir);
   const descriptor = probe(dir, hostCore.globalPacksDir(), 'global', packName);
   descriptor.tier = 'instance';
@@ -515,10 +523,10 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   const info = hostSdk.inspectArchive(archive);
   assertNotCodeArchive(info);
   const packName = name ?? info.name;
-  assertName(packName);
   const root = getProjectRoot();
+  const dir = packDirIn(path.join(root, '.wai', 'packs'), packName);
   const relRef = `.wai/packs/${packName}`;
-  extractDeclarativeArchive(archive, path.join(root, '.wai', 'packs', packName));
+  extractDeclarativeArchive(archive, dir);
   return probe(relRef, root, 'project', relRef);
 }
 

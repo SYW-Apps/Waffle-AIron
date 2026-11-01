@@ -36,7 +36,7 @@ import { validateAsComplete } from './adapters/validator.js';
 import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
-import { sendJson, setSessionCookie, clearSessionCookie } from './httpio.js';
+import { sendJson, setSessionCookie, clearSessionCookie, errorText } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
@@ -3251,6 +3251,13 @@ function projectDestroy(cfg: HostConfig, sessionId: string, id: string): void {
 // its surfaces). Cookie POSTs are CSRF-gated in http.ts like /web/logout.
 
 const q = (url: URL, name: string): string | undefined => url.searchParams.get(name) ?? undefined;
+/** The `projectId` query parameter; a missing one is refused by name, so a wrong
+ *  parameter name never reads as a forbidden project. */
+const projectIdParam = (url: URL): string => {
+  const id = url.searchParams.get('projectId');
+  if (id) return id;
+  throw new Error('The `projectId` query parameter is required.');
+};
 
 /** The raw uploaded .wpack archive bytes (http.ts reads the raw body as a Buffer
  *  for the upload routes); a non-buffer body is a 400-mapped client error. */
@@ -3574,7 +3581,7 @@ export async function handleWebRequest(
     // GET /web/graph?tier=&projectId=&level= → the level-of-detail graph.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'graph') {
       const tier = url.searchParams.get('tier') ?? 'landscape';
-      const projectId = url.searchParams.get('projectId') ?? '';
+      const projectId = tier === 'project' ? projectIdParam(url) : (url.searchParams.get('projectId') ?? '');
       const level = Number(url.searchParams.get('level') ?? '0');
       return sendJson(res, 200, getGraph(cfg, sessionId, tier, projectId, level));
     }
@@ -3583,7 +3590,7 @@ export async function handleWebRequest(
     // The web UI shell embeds this per selected project via a same-origin iframe,
     // reusing the SAME canvas engine as the static export. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas') {
-      const projectId = url.searchParams.get('projectId') ?? '';
+      const projectId = projectIdParam(url);
       const canvasHtml = getProjectCanvas(cfg, sessionId, projectId);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(canvasHtml);
@@ -3594,7 +3601,7 @@ export async function handleWebRequest(
     // as JSON (the data sibling of /web/canvas). Lets the React app mount the shared
     // canvas renderer directly rather than iframing the HTML. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
-      const projectId = url.searchParams.get('projectId') ?? '';
+      const projectId = projectIdParam(url);
       return sendJson(res, 200, getProjectCanvasModel(cfg, sessionId, projectId));
     }
 
@@ -3608,7 +3615,7 @@ export async function handleWebRequest(
     // GET /web/projects/externals?projectId= → one authorized project's relation
     // health: its externals status, one entry per external. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'externals') {
-      const projectId = url.searchParams.get('projectId') ?? '';
+      const projectId = projectIdParam(url);
       return sendJson(res, 200, { externals: getProjectExternals(cfg, sessionId, projectId) });
     }
 
@@ -3616,14 +3623,14 @@ export async function handleWebRequest(
     // view (the canvas's network view): networks, workloads, gateways and the
     // allowed flows per workload pair, derived from the design. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'network') {
-      const projectId = url.searchParams.get('projectId') ?? '';
+      const projectId = projectIdParam(url);
       return sendJson(res, 200, getProjectNetwork(cfg, sessionId, projectId));
     }
 
     // GET /web/openapi?projectId= → the project's full public surface as an
     // interactive Swagger UI page (owner view — all audiences). Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'openapi') {
-      const projectId = url.searchParams.get('projectId') ?? '';
+      const projectId = projectIdParam(url);
       const spec = url.searchParams.get('spec') ?? undefined;
       const html = getProjectOpenApi(cfg, sessionId, projectId, spec);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -3691,7 +3698,7 @@ export async function handleWebRequest(
       // ── Per-project ops (packs / policy / producers / git) ────────────────
       // GET /web/projects/packs?projectId= — the project's registered packs (project:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'packs') {
-        return sendJson(res, 200, { packs: opsListProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+        return sendJson(res, 200, { packs: opsListProjectPacks(cfg, sessionId, projectIdParam(url)) });
       }
       // POST /web/projects/packs { projectId, name, content } — declarative install (project:admin).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
@@ -3701,7 +3708,7 @@ export async function handleWebRequest(
       // (project:admin). Body is the application/zip archive; name from the
       // envelope or the X-Wairon-Pack-Name header.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'upload') {
-        return sendJson(res, 200, opsInstallProjectPackArchive(cfg, sessionId, q(url, 'projectId') ?? '', archiveBody(body), packNameOverride(req)));
+        return sendJson(res, 200, opsInstallProjectPackArchive(cfg, sessionId, projectIdParam(url), archiveBody(body), packNameOverride(req)));
       }
       // POST /web/projects/packs/remove { projectId, name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
@@ -3721,7 +3728,7 @@ export async function handleWebRequest(
       // GET /web/projects/packs/adoptable?projectId= — the server-global catalog
       // the project may adopt from (project:read).
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adoptable') {
-        return sendJson(res, 200, { packs: opsListAdoptableProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+        return sendJson(res, 200, { packs: opsListAdoptableProjectPacks(cfg, sessionId, projectIdParam(url)) });
       }
       // POST /web/projects/packs/adopt { projectId, name } — vendor a server-global
       // pack into the project by name (project:admin).
@@ -3734,7 +3741,7 @@ export async function handleWebRequest(
         const result = opsExportProjectTree(
           cfg,
           sessionId,
-          q(url, 'projectId') ?? '',
+          projectIdParam(url),
           q(url, 'includeDerived') === '1',
           q(url, 'allowPartial') === '1',
         );
@@ -3754,7 +3761,7 @@ export async function handleWebRequest(
           opsImportProjectTree(
             cfg,
             sessionId,
-            q(url, 'projectId') ?? '',
+            projectIdParam(url),
             archiveBody(body),
             q(url, 'replace') === '1',
           ),
@@ -3762,7 +3769,7 @@ export async function handleWebRequest(
       }
       // GET /web/projects/config?projectId= — the project's editable config (projectType + lock) (project:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'config') {
-        return sendJson(res, 200, opsGetProjectConfig(cfg, sessionId, q(url, 'projectId') ?? ''));
+        return sendJson(res, 200, opsGetProjectConfig(cfg, sessionId, projectIdParam(url)));
       }
       // POST /web/projects/config { projectId, projectType } — set the project-level type (project:write).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'config') {
@@ -3773,11 +3780,11 @@ export async function handleWebRequest(
       // packs still adoptable on selection) (project:read). The project-type
       // picker reads this instead of the instance-wide /web/admin/profiles catalog.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'profiles') {
-        return sendJson(res, 200, { profiles: opsListProjectProfiles(cfg, sessionId, q(url, 'projectId') ?? '') });
+        return sendJson(res, 200, { profiles: opsListProjectProfiles(cfg, sessionId, projectIdParam(url)) });
       }
       // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
-        return sendJson(res, 200, opsPolicyEvaluate(cfg, sessionId, q(url, 'projectId') ?? ''));
+        return sendJson(res, 200, opsPolicyEvaluate(cfg, sessionId, projectIdParam(url)));
       }
       // POST /web/projects/policy/reconcile { projectId }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'policy' && parts[3] === 'reconcile') {
@@ -3785,7 +3792,7 @@ export async function handleWebRequest(
       }
       // GET /web/projects/producers?projectId= — configured producer targets (project:admin).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'producers') {
-        return sendJson(res, 200, { producers: opsListProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
+        return sendJson(res, 200, { producers: opsListProducers(cfg, sessionId, projectIdParam(url)) });
       }
       // POST /web/projects/producers { projectId, target, parentPageId }
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'producers') {
@@ -3804,7 +3811,7 @@ export async function handleWebRequest(
       }
       // GET /web/projects/git?projectId= — the git-backing status (project:admin).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git') {
-        return sendJson(res, 200, opsGitStatus(cfg, sessionId, q(url, 'projectId') ?? ''));
+        return sendJson(res, 200, opsGitStatus(cfg, sessionId, projectIdParam(url)));
       }
       // POST /web/projects/git { projectId, remote, branch } — bind the REAL repo.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'git') {
@@ -4058,7 +4065,7 @@ export async function handleWebRequest(
       }
       // GET /web/admin/share?projectId= — a project's share links.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'share') {
-        return sendJson(res, 200, { links: adminListShareLinks(cfg, sessionId, url.searchParams.get('projectId') ?? '') });
+        return sendJson(res, 200, { links: adminListShareLinks(cfg, sessionId, projectIdParam(url)) });
       }
       // POST /web/admin/share/refresh { linkId } — re-capture the snapshot.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'refresh') {
@@ -4150,7 +4157,7 @@ export async function handleWebRequest(
     }
     // A lock that refused before writing anything is a conflict with the tree's state.
     if (err instanceof Error && err.name === 'LockRefusedError') return sendJson(res, 409, { error: err.message });
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorText(err);
     if (/unsupported graph tier/i.test(msg)) return sendJson(res, 400, { error: msg });
     if (/not found|unknown/i.test(msg)) return sendJson(res, 404, { error: msg });
     return sendJson(res, 400, { error: msg });

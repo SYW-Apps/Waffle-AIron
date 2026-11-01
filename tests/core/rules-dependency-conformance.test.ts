@@ -272,6 +272,43 @@ describe('dependency conformance — UNREALIZED_DEPENDENCY', () => {
     } finally { proj.cleanup(); }
   });
 
+  it('a facade reaching its owned Store only through its owned Registry realizes the owns edge', () => {
+    const proj = createTempProject();
+    proj.component('cust-repo', 'Repository', 'sub-a', 'owns: [cust-store, cust-registry]');
+    proj.component('cust-store', 'Store');
+    proj.component('cust-registry', 'Registry');
+    proj.wire('cust-repo', 'src/repo.ts');
+    proj.wire('cust-store', 'src/store.ts');
+    proj.wire('cust-registry', 'src/registry.ts');
+    proj.source('src/repo.ts', body('custrepo', "import { runcustregistry } from './registry.js';\nvoid runcustregistry;\n"));
+    proj.source('src/store.ts', body('custstore'));
+    proj.source('src/registry.ts', body('custregistry', "import { runcuststore } from './store.js';\nvoid runcuststore;\n"));
+    proj.activate();
+    try {
+      expect(depIssues(validateProject())).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('an owned member neither the facade nor another member reaches is still unrealized', () => {
+    const proj = createTempProject();
+    proj.component('cust-repo', 'Repository', 'sub-a', 'owns: [cust-store, cust-registry]');
+    proj.component('cust-store', 'Store');
+    proj.component('cust-registry', 'Registry');
+    proj.wire('cust-repo', 'src/repo.ts');
+    proj.wire('cust-store', 'src/store.ts');
+    proj.wire('cust-registry', 'src/registry.ts');
+    proj.source('src/repo.ts', body('custrepo', "import { runcustregistry } from './registry.js';\nvoid runcustregistry;\n"));
+    proj.source('src/store.ts', body('custstore'));
+    proj.source('src/registry.ts', body('custregistry'));
+    proj.activate();
+    try {
+      const found = depIssues(validateProject());
+      expect(found.map(i => `${i.code} ${i.message.slice(0, 60)}`)).toEqual([
+        expect.stringMatching(/^UNREALIZED_DEPENDENCY Component "cust-repo" declares owns "cust-store"/),
+      ]);
+    } finally { proj.cleanup(); }
+  });
+
   it('same-file N:1 realization satisfies the declared edge trivially', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator', 'sub-a', 'dependsOn: [store-b]');
