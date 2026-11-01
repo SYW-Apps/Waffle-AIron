@@ -167,7 +167,7 @@ program
 
 program
   .command('lock')
-  .description('Record human approval of the design: validate the spec tree as complete, write the approval to .wai/lock.json (one digest per spec; spec files are not rewritten), and refresh this project\'s generated outputs — only if the design validates. Commit .wai/lock.json; `wairon lock-check` gates on it. In an attached checkout, locks the hosted project instead.')
+  .description('Record human approval of the design: validate the spec tree, judging draft specs as strictly as finished ones (a design error refuses the lock; warnings, DRAFT_* ones included, and code findings do not), write the approval to .wai/lock.json (one digest per spec; spec files are not rewritten), and refresh this project\'s generated outputs — only if the design validates. Commit .wai/lock.json; `wairon lock-check` gates on it. In an attached checkout, locks the hosted project instead.')
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
   .option('--subsystem <id>', 'only lock specs in the specified subsystem')
   .option('--all', 'list every changed spec in the summary instead of summarizing a long list')

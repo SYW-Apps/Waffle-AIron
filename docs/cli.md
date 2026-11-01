@@ -457,7 +457,11 @@ realizes it, in order. A framework handler is green without any design change:
   written as agree: TypeScript's `number` for an int or a float, a date, a
   datetime or a duration as a string, a `Date` or a number, an enum as a string,
   a named scalar as what it holds, and optionality set aside. A union, a named
-  type the design does not know and `any` are not compared.
+  type the design does not know and `any` are not compared. One value where the
+  contract declares a list or a set (`ingredients: string` for
+  `list<ingredient>`), or a list where it declares one value, is
+  `PARAM_TYPE_MISMATCH` too; `bytes` may be written as a list. The element types
+  of two lists are not compared.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the

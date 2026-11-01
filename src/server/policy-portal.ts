@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as projectPolicyOrchestrator from './policy.js';
-import { sendJson } from './httpio.js';
+import { sendJson, errorText } from './httpio.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import type { HostConfig, InstancePackPolicy, ProjectInitRequest } from './types.js';
 
@@ -63,7 +63,7 @@ export function handlePolicyRequest(
   } catch (err) {
     if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
     if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorText(err);
     if (/not found|unknown project/i.test(msg)) return sendJson(res, 404, { error: msg });
     return sendJson(res, 400, { error: msg });
   }

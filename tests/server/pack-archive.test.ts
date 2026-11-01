@@ -170,6 +170,15 @@ describe('hosted pack archive install (sdd_host)', () => {
       expect(fs.existsSync(path.join(dataDir, 'evil.txt'))).toBe(false);
     });
 
+    it('refuses a pack name that would place the pack outside the packs folder', () => {
+      for (const name of ['..', '.']) {
+        expect(() => packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'), name)).toThrow(
+          /Invalid pack name/,
+        );
+      }
+      expect(fs.existsSync(path.join(dataDir, 'pack.yaml'))).toBe(false);
+    });
+
     it('rejects a bad credential (401) and an authenticated non-admin (403) before any effect', () => {
       expect(() => packs.installGlobalPackArchive(cfg, 'wrong', declarativeWpack('acme-doctrine'))).toThrow(
         UnauthenticatedError,
@@ -201,6 +210,18 @@ describe('hosted pack archive install (sdd_host)', () => {
       expect(() => packs.installProjectPackArchive(cfg, ADMIN, 'demo', codeWpack('evil-code'))).toThrow(/code pack/i);
       const root = path.join(dataDir, 'projects', 'demo');
       expect(fs.existsSync(path.join(root, '.wai', 'packs', 'evil-code'))).toBe(false);
+    });
+
+    it('refuses a pack name that would place the pack outside .wai/packs', () => {
+      createPlacedProject(cfg, ADMIN, 'demo');
+      const root = path.join(dataDir, 'projects', 'demo');
+      for (const name of ['..', '.', '.hidden']) {
+        expect(() => packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack('acme-doctrine'), name)).toThrow(
+          /Invalid pack name/,
+        );
+      }
+      expect(fs.existsSync(path.join(root, '.wai', 'pack.yaml'))).toBe(false);
+      expect(fs.existsSync(path.join(root, '.wai', 'project.yaml'))).toBe(true);
     });
 
     it('rejects the archive install on an unknown project', () => {

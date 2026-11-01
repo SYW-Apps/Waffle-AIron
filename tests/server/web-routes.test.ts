@@ -278,6 +278,16 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(json(ghost)).toEqual({ error: 'forbidden' });
     });
 
+    it('a missing projectId is refused by name (400), not read as a forbidden project', async () => {
+      const cookie = adminCookie();
+      createPlacedProject(cfg, MASTER, 'demo');
+      for (const route of ['/web/canvas-model?project=demo', '/web/graph?tier=project&project=demo', '/web/projects/packs']) {
+        const r = await get(route, cookie);
+        expect(r.status).toBe(400);
+        expect(json(r).error).toMatch(/`projectId` query parameter is required/);
+      }
+    });
+
     it('GET /web/canvas-model without a session is 401', async () => {
       const r = await get('/web/canvas-model?projectId=demo');
       expect(r.status).toBe(401);

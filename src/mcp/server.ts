@@ -224,6 +224,18 @@ function publicInterfacesReplacement(
       + 'An entry is identified by the component and interface it is bound to — or, not yet bound, by its type and '
       + 'details — so two entries sharing one are the same entry stated twice. Drop the duplicate. Nothing was written.';
   }
+  // Only an Adapter is published as shared (public-surface-shared); a component
+  // not found yet is left to the validator, which names it.
+  const notAdapters = list
+    .filter((pi) => pi.shared === true && !pi.from && !pi.typeDef && pi.component)
+    .map((pi) => loadComponentSpec(pi.component!))
+    .filter((c): c is ComponentSpec => !!c && c.componentType !== 'Adapter')
+    .map((c) => `"${c.id}" (a ${c.componentType})`);
+  if (notAdapters.length) {
+    return `Refusing to set the public interfaces of subsystem "${subsystem}": it publishes ${notAdapters.join(', ')} as shared, `
+      + 'but only an Adapter may be published as shared (PUBLIC_INTERFACE_SHARED_NOT_ADAPTER). Publish a Portal for anything else, '
+      + 'or drop shared. Nothing was written.';
+  }
   const seen = new Map<string, number>();
   const deletes: Record<string, unknown>[] = [];
   for (const pi of stored) {

@@ -4,6 +4,43 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.7.1 (from v6.7.0)
+
+A fix release. Upgrading:
+
+1. Install 6.7.1 the way you installed wairon (`wairon update`, or `@wairon/cli@6.7.1` from npm).
+2. Restart your AI tool, or reconnect its MCP server, so the assistant talks to the new wairon.
+3. Run `wairon validate --ci`. One parameter check is stricter (see the first entry): a
+   parameter that takes one value where its contract declares a list, or the reverse, is now
+   `PARAM_TYPE_MISMATCH`. Fix the code or the contract, whichever is wrong. The approval carries
+   over unchanged.
+
+- **A list parameter is compared with what the code takes.** A contract parameter declared
+  `list<ingredient>` and realized as `ingredients: string` passed, as did a `string[]` where the
+  contract declares a `string`. One value where a list or a set is declared, and a list or a set
+  where one value is, is now `PARAM_TYPE_MISMATCH`, in TypeScript and in Python, naming both
+  types. `bytes` may still be written as a list. The element types of two lists are not compared.
+- **A Repository may reach its Store through its own Registry.** A facade that owns a Store and
+  touches it only through the Registry or Index it also owns was told `UNREALIZED_DEPENDENCY`
+  for the Store. An `owns` edge is now realized when the owner reaches another member it owns
+  that reaches the owned one.
+- **`sdd_set_public_interfaces` refuses `shared: true` on a component that is not an Adapter.**
+  It stored the entry and left `PUBLIC_INTERFACE_SHARED_NOT_ADAPTER` for the next validate. It
+  now refuses it, naming the component and its type, and writes nothing.
+- **Briefs say how a collaborator is reached.** The "Code linkage you own" section says that each
+  component a brief's component depends on or owns (a Query's Store among them) is passed in or
+  imported, and what the gate reads as the edge realized.
+- **The hosted web routes name a missing `projectId`.** A `/web/*` route that takes a project
+  answered "forbidden" when the `projectId` query parameter was missing or misspelled. It now
+  answers 400, "The `projectId` query parameter is required."
+- **Pack names.** A hosted pack upload refuses a pack name that starts with a dot, and checks
+  that the folder it extracts into stays inside the packs folder.
+- **Hosted error bodies carry an error's message only.** A failure that was not an `Error`
+  was answered with its string form; it is now answered with "request failed".
+- **`wairon lock --help`** says what the lock refuses: a design error, with draft specs judged
+  as strictly as finished ones. Warnings, the `DRAFT_*` ones included, and code findings do not
+  refuse it.
+
 ## v6.7.0 (from v6.6.0)
 
 Upgrading: nothing in a spec tree has to change. The new `shared` field is optional and the new

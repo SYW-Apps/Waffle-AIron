@@ -13,6 +13,12 @@ export function bearerToken(req: IncomingMessage): string | null {
   return m ? m[1].trim() : null;
 }
 
+/** The text a response may carry for a caught value: an Error's own message,
+ *  never its stack or its string form; anything else is not shown. */
+export function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : 'request failed';
+}
+
 export function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
