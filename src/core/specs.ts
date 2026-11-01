@@ -3237,6 +3237,11 @@ export function ineffectiveDeltaPaths(
 
   const walkValue = (d: unknown, m: unknown, s: unknown, path: string, field: string): void => {
     if (Array.isArray(d)) {
+      // A plain-list element written as `{ value }` with no edit marker is that
+      // value, as the merge reads it: compare the value, not the wrapper.
+      d = d.map((x) => (isPlain(x) && Object.keys(x).length === 1 && typeof x.value === 'string' ? x.value : x));
+    }
+    if (Array.isArray(d)) {
       if (!Array.isArray(m)) { say(path, 'the level does not have this field, so the write dropped it'); return; }
       // A narrative whose delta inserts or deletes renumbers everything after
       // the mutation point; no path through it can be compared honestly.

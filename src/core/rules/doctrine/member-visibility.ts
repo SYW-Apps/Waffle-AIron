@@ -58,5 +58,10 @@ export function visibilityEdgeFinding(
   if (ctx.componentMap.get(owner)?.componentType === 'Supervisor') {
     return { severity: 'error', code: 'SUPERVISION_STATE_INTRUSION', message: `"${comp.id}" depends on "${depId}", which Supervisor "${owner}" owns as its supervision state. Supervision state is private to its Supervisor — nobody else depends on it. If "${comp.id}" needs this data it is shared data: move "${depId}" out of "${owner}"'s owns into a data component both depend on (the Supervisor keeping it through read and lifecycle calls), or reach what "${comp.id}" needs through "${owner}".` };
   }
+  // A shared Adapter is owned by mistake, not private on purpose: the facade
+  // cannot stand in for generic I/O, so the remedy is SHARED_ADAPTER_OWNED's.
+  if ([...ctx.sharedSet.values()].some(ids => ids.has(depId))) {
+    return { severity: 'error', code: 'VISIBILITY_VIOLATION', message: `Component "${comp.id}" depends on "${depId}", which pattern "${owner}" owns — but "${depId}" is published as a shared Adapter, which no pattern may own (SHARED_ADAPTER_OWNED). Take it out of "${owner}"'s owns; "${comp.id}" may then depend on it directly.` };
+  }
   return { severity: 'error', code: 'VISIBILITY_VIOLATION', message: `Component "${comp.id}" depends on "${depId}", which is privately owned by pattern "${owner}". Depend on the facade "${owner}" instead.` };
 }

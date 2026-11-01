@@ -82,11 +82,17 @@ function bodyReachable(code: CodeIndex, file: string, symbol: string): boolean {
   return false;
 }
 
+/** The class name a component id is written as in code: ingest_portal → IngestPortal. */
+function pascalCase(componentId: string): string {
+  const local = componentId.slice(componentId.lastIndexOf('::') + 1);
+  return local.split(/[_\-]/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('');
+}
+
 export const methodRealizationRule: SddRule = {
   name: 'method-realization',
   judges: 'code',
   description:
-    "Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method's sourcePath, else the implementation's) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. A method realized by a DECLARATION owes a function BODY as well: at exact grade one must be reachable under the symbol, here or through the imports and republications this file forwards it by, so a signature, an ambient or interface declaration or a plain value binding stops reading as an implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. A dial turned off is said once per implementation as a notice (REALIZATION_UNCHECKED) naming the methods it covers: the dial is code linkage, outside the approval, so without it one line in an implementation spec would switch the realization checks off — method, parameters, async, whether narrated calls are found — with no surface saying so; the doctrine checks still run. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.",
+    "Code↔spec Level 1: every L3 contract method must be realized in its own source file (the method's sourcePath, else the implementation's) at its conformance tier — declared | anchored | off; Portals default to anchored, everything else to declared, and a per-method `symbol` maps an intent-language name onto the code name. The anchored default is for a Portal written as a route table; a Portal whose file declares its own class (ingest_portal as IngestPortal) holds its verbs as that class's members, so there a verb found only as a word (a call of it, a route entry still naming it) is unrealized, unless anchored is set on purpose on the method or the implementation. A method realized by a DECLARATION owes a function BODY as well: at exact grade one must be reachable under the symbol, here or through the imports and republications this file forwards it by, so a signature, an ambient or interface declaration or a plain value binding stops reading as an implementation (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. A dial turned off is said once per implementation as a notice (REALIZATION_UNCHECKED) naming the methods it covers: the dial is code linkage, outside the approval, so without it one line in an implementation spec would switch the realization checks off — method, parameters, async, whether narrated calls are found — with no surface saying so; the doctrine checks still run. Methods whose file escapes the root, is missing or could not be analyzed are left to source-file-linkage, and implementations under chained subsystems (projectPath) validate standalone in their own project run.",
   codes: [
     { code: 'UNREALIZED_METHOD', defaultSeverity: 'warning', summary: 'An L3 contract method has no anchor in its own source file (the method\'s sourcePath, else the implementation\'s) at the required conformance tier' },
     { code: 'METHOD_BODY_NOT_FOUND', defaultSeverity: 'warning', summary: 'The method symbol IS declared in its own source file, but the file holds no function-like body under it — a signature, an ambient or interface declaration, a value binding, an imported or re-exported name', carryable: true },
@@ -149,7 +155,18 @@ export const methodRealizationRule: SddRule = {
         const symbol = methodImpl?.symbol ?? method.name;
         const inDeclared = code.declarationsAt(file).has(symbol);
         const inAnchored = inDeclared || code.anchorsAt(file).has(symbol);
-        const realized = tier === 'declared' ? inDeclared : inAnchored;
+        // The anchored default exists for a Portal written as a route table,
+        // whose verbs live in handlers rather than functions of their own. A
+        // file that declares the component's own CLASS (`IngestPortal` for
+        // ingest_portal) is written in the declared style: its verbs are that
+        // class's members, so a verb found there only as a word (a call of it,
+        // a route entry still naming it) is a verb removed or renamed — unless
+        // anchored was chosen on purpose, on the method or the implementation.
+        const explicitTier = methodImpl?.conformance !== undefined || impl.conformance !== undefined;
+        const declaredStyle = tier === 'anchored' && !explicitTier && !inDeclared
+          && facts.analysisGrade === 'exact'
+          && code.declarationsAt(file).has(pascalCase(component.id));
+        const realized = tier === 'declared' || declaredStyle ? inDeclared : inAnchored;
         if (realized) {
           // Realized by a DECLARATION, at the grade that measures bodies, and
           // no body under that name anywhere the model can follow: the spec
@@ -171,9 +188,11 @@ export const methodRealizationRule: SddRule = {
         }
 
         const label = methodImpl?.symbol ? `"${method.name}" (symbol "${symbol}")` : `"${method.name}"`;
-        const weakHint = tier === 'declared' && inAnchored
-          ? ' Only a weak string/word anchor exists — declare the symbol, map it via a per-method `symbol`, or dial this method to `anchored`.'
-          : '';
+        const weakHint = declaredStyle && inAnchored
+          ? ` The file declares the component's own class "${pascalCase(component.id)}", so its verbs are held to declarations: the name appears here only as a word (a call of it, a route entry still naming it), which reads as a method removed or renamed. Declare it, map the code name via a per-method \`symbol\`, or, for a verb realized by a route handler beside the class, set this method's conformance to \`anchored\`.`
+          : tier === 'declared' && inAnchored
+            ? ' Only a weak string/word anchor exists — declare the symbol, map it via a per-method `symbol`, or dial this method to `anchored`.'
+            : '';
         ctx.addIssue(
           'warning',
           'UNREALIZED_METHOD',

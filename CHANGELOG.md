@@ -9,6 +9,21 @@ npm and the tags carry.
 Upgrading: nothing in a spec tree has to change. The new `shared` field is optional and the new
 rule judges only entries that use it.
 
+1. Install 6.7.0 the way you installed wairon: `wairon update` for the binary,
+   `npm install --global @wairon/cli@6.7.0` (or `--save-dev` in the project) for npm.
+2. Run `wairon doctor --fix` once, so the generated guides (`.wai/context/wairon-guide.md`,
+   `.claude/CLAUDE.md` and their kin) and skills describe 6.7.0, and commit the result. Until
+   then `wairon doctor` reports them stale.
+3. Restart your AI tool, or reconnect its MCP server (`/mcp` in Claude Code), so the assistant talks
+   to the new wairon.
+4. Run `wairon validate --ci` and settle what it reports. The approval carries over unchanged.
+   The new rule and the changed fan-out count both concern Adapters published as
+   `shared: true`, which 6.6.0 could not declare, so they add nothing to a 6.6.0 tree. One code
+   check is stricter (see Changed): a Portal written as its own class whose verb the class
+   no longer declares is now `UNREALIZED_METHOD`. Declare the verb, map its code name with a
+   per-method `symbol`, or, for a verb a route handler beside the class realizes, set that
+   method's `conformance: anchored`.
+
 ### Added
 
 - **Shared Adapters.** A subsystem can publish one of its own Adapters as shared, with
@@ -36,6 +51,27 @@ rule judges only entries that use it.
   access now goes through one internal module, designed as three shared Adapters (files,
   processes, HTTP client). Every component that does I/O depends on them, and its narratives
   name the calls. Nothing changes for a spec tree.
+- **A Portal written as its own class is held to its declarations.** A Portal's verbs are checked
+  at the `anchored` tier by default, where the verb's name anywhere in the file counts, so that
+  a route table with inline handlers is read as realizing them. A Portal whose file declares the
+  component's own class (`ingest_portal` as `IngestPortal`) holds its verbs as that class's
+  members: a verb removed or renamed in the class while a route entry, or a call inside the
+  renamed method, still names it is now `UNREALIZED_METHOD`, where it passed. A `conformance:
+  anchored` set on the method or the implementation keeps the old reading.
+- **Clearer advice around shared Adapters.** A component depending on a shared Adapter that a
+  pattern owns is told to take it out of the owner's `owns` (`SHARED_ADAPTER_OWNED`), not to
+  depend on the facade. An Adapter in the L0 export table (`EXPORT_UNCONSUMABLE`) is told that a
+  shared Adapter stays inside its project and that a library Portal in front of it is the way to
+  other projects. `docs/cli.md` says the same.
+- **`sdd_update_spec` no longer reports a `{ value }` list entry as dropped.** Adding to a plain
+  list such as `owns` with `{ value: "x" }` was stored, but the reply also said "NO EFFECT …
+  the write dropped it".
+- **`lock-check` points to the changed specs.** When specs changed since the approval, it says
+  that `wairon status` names them.
+- **The admin lock route says why it refuses.** `POST /admin/projects/{id}/lock` only locks, for
+  `approval:decide`. Its 403 now names that and `sdd_host_lock_project` as the way to request a
+  lock, where it said only "forbidden"; the other admin-plane refusals name their missing
+  permission too.
 - **The MCP server's project check reads a v5 tree too.** A folder pinned with
   `WAIRON_PROJECT_DIR` that holds only a v5 `.wairon/` tree is now taken as a project, as a
   client root already was.

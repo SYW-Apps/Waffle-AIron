@@ -299,6 +299,69 @@ describe('structural conformance — method realization (exact TS analysis)', ()
     } finally { proj.cleanup(); }
   });
 
+  describe('a Portal written as its own class is held to its declarations', () => {
+    const portalProject = (source: string, implExtra = '') => {
+      const proj = createTempProject();
+      proj.component('portal-a', 'Portal', 'transport: Custom\ndependsOn: [orch-a]');
+      proj.component('orch-a', 'Orchestrator');
+      proj.contract('orch-a', ['submit']);
+      proj.impl('orch-a', `sourcePath: src/orch.ts\nmethods:\n${INTENT('submit')}`);
+      proj.source('src/orch.ts', 'export class OrchA { submit(): void {} }\n');
+      proj.contract('portal-a', ['submit']);
+      proj.impl('portal-a', `sourcePath: src/portal.ts\n${implExtra}methods:\n${INTENT('submit')}`);
+      proj.source('src/portal.ts', source);
+      return proj;
+    };
+    const routeTable = (receiver: string) =>
+      `export function routes(portal: PortalA) { return [{ path: '/s', handler: () => ${receiver}.submit() }]; }\n`;
+
+    it('a verb renamed in the class while the route table still calls it is UNREALIZED_METHOD', () => {
+      const proj = portalProject(
+        "import { OrchA } from './orch';\nexport class PortalA {\n  constructor(private readonly orch: OrchA) {}\n  submitX(): void { this.orch.submit(); }\n}\n"
+        + routeTable('portal'),
+      );
+      proj.activate();
+      try {
+        const found = conformanceIssues(validateProject());
+        expect(found.map(i => i.code)).toEqual(['UNREALIZED_METHOD']);
+        expect(found[0].message).toContain('own class "PortalA"');
+      } finally { proj.cleanup(); }
+    });
+
+    it('the same class with the verb declared is clean', () => {
+      const proj = portalProject(
+        "import { OrchA } from './orch';\nexport class PortalA {\n  constructor(private readonly orch: OrchA) {}\n  submit(): void { this.orch.submit(); }\n}\n"
+        + routeTable('portal'),
+      );
+      proj.activate();
+      try {
+        expect(conformanceIssues(validateProject())).toHaveLength(0);
+      } finally { proj.cleanup(); }
+    });
+
+    it('anchored set on purpose keeps the word anchor', () => {
+      const proj = portalProject(
+        "import { OrchA } from './orch';\nexport class PortalA {\n  constructor(private readonly orch: OrchA) {}\n  submitX(): void { this.orch.submit(); }\n}\n"
+        + routeTable('portal'),
+        'conformance: anchored\n',
+      );
+      proj.activate();
+      try {
+        expect(conformanceIssues(validateProject())).toHaveLength(0);
+      } finally { proj.cleanup(); }
+    });
+
+    it('a route table with no class of its own still forwards inline, as before', () => {
+      const proj = portalProject(
+        "import { OrchA } from './orch';\nexport function routes(orch: OrchA) { return [{ path: '/s', handler: () => orch.submit() }]; }\n",
+      );
+      proj.activate();
+      try {
+        expect(conformanceIssues(validateProject())).toHaveLength(0);
+      } finally { proj.cleanup(); }
+    });
+  });
+
   it('a non-Portal is NOT satisfied by a bare string anchor, and the hint names the weak anchor', () => {
     const proj = createTempProject();
     proj.component('orch-a', 'Orchestrator');

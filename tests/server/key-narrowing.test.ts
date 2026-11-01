@@ -179,7 +179,10 @@ describe('a refusal caused by the key narrowing says so, and reveals nothing abo
     const unknown = await lock('no-such-project');
     expect(other.status).toBe(403);
     expect(unknown.status).toBe(403);
-    expect(await unknown.json()).toEqual(await other.json());
+    const refusal = (await other.json()) as { error: string };
+    expect(await unknown.json()).toEqual(refusal);
+    // The refusal says why and where a writer goes instead, not a bare "forbidden".
+    expect(refusal.error).toMatch(/requires approval:decide over it.*sdd_host_lock_project/);
   });
 
   it('the self-service mint refuses another project and an unknown one with the same words', () => {
