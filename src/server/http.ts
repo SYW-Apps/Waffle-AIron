@@ -652,7 +652,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // Scope denials from the Phase 6 admin lifecycle throw ForbiddenError; map it
     // to 403 like every other plane (AdminAuthError stays 403 for compatibility).
     if (err instanceof ForbiddenError) return sendJson(res, 403, { error: err.message });
-    if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
+    if (err instanceof AdminAuthError) return sendJson(res, 403, { error: err.message });
     if (err instanceof LockValidationError) return sendJson(res, 409, { error: err.message, errors: err.errors });
     // A lock that refused before writing (the design moved since it was
     // requested, an input moved while it ran, or a required member is not

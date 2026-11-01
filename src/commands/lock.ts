@@ -620,7 +620,7 @@ function whatMoved(record: LockRecord, gateNow: StateId): string {
     if (![...renamedFrom.values()].includes(alias)) named.push(`${alias} (removed since the approval)`);
   }
   const parts: string[] = [];
-  if (own !== null && own > 0) parts.push(`${own} own spec file(s) changed since the approval`);
+  if (own !== null && own > 0) parts.push(`${own} own spec file(s) changed since the approval (\`wairon status\` names them)`);
   if (named.length > 0) parts.push(`direct member(s): ${named.join(', ')}`);
   if (parts.length > 0) return `What moved: ${parts.join('; ')}.`;
   return own === null
@@ -645,7 +645,7 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
     ? 'This approval predates per-spec digests, so whether a spec file moved since cannot be said.'
     : diffSize(diff) === 0
       ? 'No own spec file has changed since the approval.'
-      : `${diffSize(diff)} own spec file(s) changed since the approval.`;
+      : `${diffSize(diff)} own spec file(s) changed since the approval (\`wairon status\` names them).`;
   if (diff && diffSize(diff) === 0) {
     // Nothing in the tree moved — in a format-2 record's raw-content reading
     // not even code linkage did — so the cause is the gate, and naming the

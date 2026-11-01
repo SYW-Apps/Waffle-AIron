@@ -9,6 +9,17 @@ npm and the tags carry.
 Upgrading: nothing in a spec tree has to change. The new `shared` field is optional and the new
 rule judges only entries that use it.
 
+1. Install 6.7.0 the way you installed wairon: `wairon update` for the binary,
+   `npm install --global @wairon/cli@6.7.0` (or `--save-dev` in the project) for npm.
+2. Run `wairon doctor --fix` once, so the generated guides (`.wai/context/wairon-guide.md`,
+   `.claude/CLAUDE.md` and their kin) and skills describe 6.7.0, and commit the result. Until
+   then `wairon doctor` reports them stale.
+3. Restart your AI tool, or reconnect its MCP server (`/mcp` in Claude Code), so the assistant talks
+   to the new wairon.
+4. Run `wairon validate --ci`. The approval carries over unchanged, and a 6.6.0 tree gets no new
+   finding: the new rule and the changed fan-out count both concern Adapters published as
+   `shared: true`, which 6.6.0 could not declare.
+
 ### Added
 
 - **Shared Adapters.** A subsystem can publish one of its own Adapters as shared, with
@@ -36,6 +47,12 @@ rule judges only entries that use it.
   access now goes through one internal module, designed as three shared Adapters (files,
   processes, HTTP client). Every component that does I/O depends on them, and its narratives
   name the calls. Nothing changes for a spec tree.
+- **`lock-check` points to the changed specs.** When specs changed since the approval, it says
+  that `wairon status` names them.
+- **The admin lock route says why it refuses.** `POST /admin/projects/{id}/lock` only locks, for
+  `approval:decide`. Its 403 now names that and `sdd_host_lock_project` as the way to request a
+  lock, where it said only "forbidden"; the other admin-plane refusals name their missing
+  permission too.
 - **The MCP server's project check reads a v5 tree too.** A folder pinned with
   `WAIRON_PROJECT_DIR` that holds only a v5 `.wairon/` tree is now taken as a project, as a
   client root already was.

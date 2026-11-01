@@ -1694,9 +1694,11 @@ anywhere until the record exists, so `host permission set` warns and names
 the Users view) show such a subject marked "no user record", with no status.
 
 **Who approves a design.** A hosted lock (`sdd_host_lock_project`, the web UI's
-Lock, `wairon lock` while attached, `POST /admin/projects/{id}/lock`) is the
-project's approval, so it is decided by `approval:decide` over the project, not
-by `project:write`:
+Lock, `wairon lock` while attached) is the project's approval, so it is decided
+by `approval:decide` over the project, not by `project:write`. The admin route
+`POST /admin/projects/{id}/lock` only locks: it needs `approval:decide` = `yes`,
+and refuses anyone else (403, naming `sdd_host_lock_project` as the way to
+request). The others:
 
 - `approval:decide` = `yes` locks directly, recorded as that person's approval.
 - A person who may write the project (`project:write` = `yes` or `approval` at

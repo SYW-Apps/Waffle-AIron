@@ -258,7 +258,7 @@ describe('tinkerer: a storage move is no design change', () => {
     writeFile(dir, file, readFile(dir, file).replace('Counts the hits of one code.', 'Counts and ranks the hits of one code.'));
     const check = await sb.run(['lock-check'], dir);
     expectExit(check, 1);
-    expect(check.all).toContain('What moved: 1 own spec file(s) changed since the approval');
+    expect(check.all).toContain('What moved: 1 own spec file(s) changed since the approval (`wairon status` names them)');
 
     const lock = await sb.run(['lock', '--yes'], dir);
     expectExit(lock, 0);

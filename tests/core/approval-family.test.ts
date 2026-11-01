@@ -400,7 +400,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
 
     fam.touch(fam.sib, 'edited');
     bind(fam.sib);
-    expect(checkApproval(false).message).toContain('1 own spec file(s) changed since the approval.');
+    expect(checkApproval(false).message).toContain('1 own spec file(s) changed since the approval (`wairon status` names them).');
   });
 
   v5it('a content change is plain stale, not upgraded', async () => {
@@ -429,7 +429,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
 
     fam.touch(fam.sib, 'edited');
     bind(fam.sib);
-    expect(checkApproval(false).message).toContain('What moved: 1 own spec file(s) changed since the approval.');
+    expect(checkApproval(false).message).toContain('What moved: 1 own spec file(s) changed since the approval (`wairon status` names them).');
   });
 
   v5it('the pin tree marks a format-1 member upgraded and reads its parent\'s legacy `children` as the pin', async () => {
@@ -539,7 +539,7 @@ describe('gate truth — the root lock-check judges every member project, and pl
     fam.touch(fam.top, 'edited');
     bind(fam.top);
     const both = checkApproval(false);
-    expect(both.message).toContain('What moved: 1 own spec file(s) changed since the approval; direct member(s): sib (its approval moved since this one was taken)');
+    expect(both.message).toContain('What moved: 1 own spec file(s) changed since the approval (`wairon status` names them); direct member(s): sib (its approval moved since this one was taken)');
   });
 });
 
