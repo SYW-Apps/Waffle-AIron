@@ -99,6 +99,16 @@ describe('hosted pack management (sdd_host)', () => {
       expect(() => packs.installGlobalPack(cfg, ADMIN, '../escape', DECLARATIVE_PACK)).toThrow(/Invalid pack name/);
     });
 
+    it('refuses a Windows device name, and a second file declaring a name another pack declares', () => {
+      expect(() => packs.installGlobalPack(cfg, ADMIN, 'con', DECLARATIVE_PACK)).toThrow(/Windows reserves it/);
+      packs.installGlobalPack(cfg, ADMIN, 'acme', DECLARATIVE_PACK);
+      packs.installGlobalPack(cfg, ADMIN, 'acme', DECLARATIVE_PACK); // a refresh, not a clash
+      expect(() => packs.installGlobalPack(cfg, ADMIN, 'other', DECLARATIVE_PACK)).toThrow(
+        /declaring the name "acme-doctrine" is already installed as "acme.yaml"/,
+      );
+      expect(packs.listGlobalPacks(cfg, ADMIN).filter((p) => p.name === 'acme-doctrine')).toHaveLength(1);
+    });
+
     it('rejects a bad credential (401) and an authenticated non-admin (403) before any effect', () => {
       // An unknown credential is unauthenticated under the resolver model.
       expect(() => packs.installGlobalPack(cfg, 'wrong', 'acme', DECLARATIVE_PACK)).toThrow(UnauthenticatedError);
@@ -140,6 +150,10 @@ describe('hosted pack management (sdd_host)', () => {
       expect(first.ref).toBe('.wai/packs/acme.yaml');
       expect(again.ref).toBe('.wai/packs/acme.yaml');
       expect(registeredPacks(root).filter((entry) => entry === '.wai/packs/acme.yaml')).toHaveLength(1);
+
+      // Another file declaring the same name would list twice: refused, nothing written.
+      expect(() => packs.installProjectPack(cfg, ADMIN, 'demo', 'other', DECLARATIVE_PACK)).toThrow(/already installed as "acme.yaml"/);
+      expect(fs.existsSync(path.join(root, '.wai', 'packs', 'other.yaml'))).toBe(false);
     });
 
     it('removal deregisters the kind it matched: a selection by its name, a path reference by that reference', () => {

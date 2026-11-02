@@ -40,6 +40,8 @@ import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 // ---------------------------------------------------------------------------
 
 const NAME_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+/** Device names Windows reserves in every folder, with or without an extension. */
+const RESERVED_RE = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;
 const PACK_EXT_RE = /\.(ya?ml|cjs|js)$/i;
 
 /** One extensions.packs registration: a path reference (as `pack add` writes it) or a by-name selection. */
@@ -49,6 +51,9 @@ type PackRegistration = string | PackSelection;
 function assertName(name: string): void {
   if (!NAME_RE.test(name)) {
     throw new Error(`Invalid pack name "${name}" (allowed: letters, digits, dot, underscore, hyphen; not starting with a dot).`);
+  }
+  if (RESERVED_RE.test(name)) {
+    throw new Error(`Invalid pack name "${name}": Windows reserves it for a device, so no file can carry it there.`);
   }
 }
 
@@ -397,6 +402,7 @@ function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
   // Installs write the MUTABLE instance tier only; the image layer is immutable.
   const dir = hostCore.globalPacksDir();
   const file = path.join(dir, `${name}.yaml`);
+  assertNoNameClash(dir, file, yamlName(content), 'global');
   writeFileAtomic(file, content);
   const descriptor = probe(file, dir, 'global', `${name}.yaml`);
   descriptor.tier = 'instance';
@@ -416,6 +422,7 @@ function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): Pack
   assertNotCodeArchive(info);
   const packName = name ?? info.name;
   const dir = packDirIn(hostCore.globalPacksDir(), packName);
+  assertNoNameClash(hostCore.globalPacksDir(), dir, info.name, 'global');
   extractDeclarativeArchive(archive, dir);
   const descriptor = probe(dir, hostCore.globalPacksDir(), 'global', packName);
   descriptor.tier = 'instance';
@@ -427,6 +434,32 @@ function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): Pack
 function declaredName(loadRef: string, baseRoot: string, scope: PackScope): string | undefined {
   const d = probe(loadRef, baseRoot, scope, loadRef);
   return d.error ? undefined : d.name;
+}
+
+/**
+ * Refuse an install whose pack declares the name another pack in the same
+ * folder already declares: both would list under that one name, and a removal
+ * by it would be ambiguous. Reinstalling over the same file or folder is a
+ * refresh, not a clash.
+ */
+function assertNoNameClash(dir: string, target: string, declared: string | undefined, scope: PackScope): void {
+  if (!declared) return;
+  const self = path.resolve(target);
+  for (const ref of hostCore.discoverPacks(dir)) {
+    if (path.resolve(ref) === self) continue;
+    if (declaredName(ref, dir, scope) === declared) {
+      throw new Error(
+        `A pack declaring the name "${declared}" is already installed as "${path.basename(ref)}". `
+        + 'Install it under that name to replace it, or remove that pack first.',
+      );
+    }
+  }
+}
+
+/** The name a declarative pack's YAML declares, if any. */
+function yamlName(content: string): string | undefined {
+  const parsed = parseYaml(content) as { name?: unknown } | null;
+  return typeof parsed?.name === 'string' ? parsed.name : undefined;
 }
 
 /**
@@ -507,7 +540,9 @@ function storeInstallProjectPack(name: string, content: string): PackDescriptor 
   assertDeclarative(content);
   const root = getProjectRoot();
   const relRef = `.wai/packs/${name}.yaml`;
-  writeFileAtomic(path.join(root, '.wai', 'packs', `${name}.yaml`), content);
+  const packsDir = path.join(root, '.wai', 'packs');
+  assertNoNameClash(packsDir, path.join(packsDir, `${name}.yaml`), yamlName(content), 'project');
+  writeFileAtomic(path.join(packsDir, `${name}.yaml`), content);
   return probe(relRef, root, 'project', relRef);
 }
 
@@ -525,6 +560,7 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   const packName = name ?? info.name;
   const root = getProjectRoot();
   const dir = packDirIn(path.join(root, '.wai', 'packs'), packName);
+  assertNoNameClash(path.join(root, '.wai', 'packs'), dir, info.name, 'project');
   const relRef = `.wai/packs/${packName}`;
   extractDeclarativeArchive(archive, dir);
   return probe(relRef, root, 'project', relRef);

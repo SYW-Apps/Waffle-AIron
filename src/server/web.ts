@@ -3256,7 +3256,9 @@ const q = (url: URL, name: string): string | undefined => url.searchParams.get(n
 const projectIdParam = (url: URL): string => {
   const id = url.searchParams.get('projectId');
   if (id) return id;
-  throw new Error('The `projectId` query parameter is required.');
+  throw new Error(url.searchParams.has('project')
+    ? 'The `projectId` query parameter is required (this request sent `project`).'
+    : 'The `projectId` query parameter is required.');
 };
 
 /** The raw uploaded .wpack archive bytes (http.ts reads the raw body as a Buffer

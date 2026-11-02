@@ -103,6 +103,8 @@ interface ParamFinding {
   told: string;
   /** A name that differs where nothing decided between a rename and another argument. */
   undecided?: boolean;
+  /** A type mismatch between two annotated values (a scalar for another, one value for a list), not a shape the check cannot read. */
+  scalar?: boolean;
 }
 
 /**
@@ -451,6 +453,7 @@ function judge(
       found.mismatched.set(param.name, {
         unit: param.name,
         told: `"${param.name}" (the code takes ${at.name ? `"${at.name}"` : `parameter #${position + 1}`} annotated "${at.type}", where the contract declares "${param.type}")`,
+        scalar: true,
       });
     }
     // ---- 7. a name that differs where the declared type agrees ----
@@ -1100,7 +1103,22 @@ export const paramConformanceRule: SddRule = {
 
       // ---- 6b / 6c. a record, or a scalar, the code's type cannot hold ----
       const mismatched = agreed(judgements, 'mismatched');
-      if (mismatched.length > 0) {
+      if (mismatched.length > 0 && mismatched.every(found => found.scalar)) {
+        // Two annotations that disagree say it in a sentence: the value the
+        // code takes is not the one the design declares.
+        ctx.addIssue(
+          'warning',
+          'PARAM_TYPE_MISMATCH',
+          `Method "${method.name}" of contract "${implementation.contract}" declares ${mismatched.length} `
+          + `parameter(s) ${subject} annotates as another type — ${mismatched.map(found => found.told).join('; ')}. `
+          + 'A caller built from the contract hands over a different value than the code takes (one value for a list, or a number for a string). '
+          + 'Type the parameter as the contract declares it, or change the contract if the code is right.',
+          implementation.id,
+          draftContext,
+          undefined,
+          { at: method.name, covers: mismatched.map(found => found.unit) },
+        );
+      } else if (mismatched.length > 0) {
         ctx.addIssue(
           'warning',
           'PARAM_TYPE_MISMATCH',

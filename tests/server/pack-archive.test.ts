@@ -179,6 +179,26 @@ describe('hosted pack archive install (sdd_host)', () => {
       expect(fs.existsSync(path.join(dataDir, 'pack.yaml'))).toBe(false);
     });
 
+    it('refuses a name Windows reserves for a device', () => {
+      for (const name of ['con', 'NUL', 'com1', 'lpt9.x', 'aux.yaml']) {
+        expect(() => packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'), name)).toThrow(
+          /Windows reserves it/,
+        );
+      }
+      // A name that only starts with one is fine.
+      expect(packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'), 'console').ref).toBe('console');
+    });
+
+    it('refuses a second pack declaring a name another pack already declares; reinstalling refreshes', () => {
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'));
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'));
+      expect(() => packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'), 'custom')).toThrow(
+        /already installed as "acme-doctrine"/,
+      );
+      expect(fs.existsSync(path.join(packsDir, 'custom'))).toBe(false);
+      expect(packs.listGlobalPacks(cfg, ADMIN).filter((p) => p.name === 'acme-doctrine')).toHaveLength(1);
+    });
+
     it('rejects a bad credential (401) and an authenticated non-admin (403) before any effect', () => {
       expect(() => packs.installGlobalPackArchive(cfg, 'wrong', declarativeWpack('acme-doctrine'))).toThrow(
         UnauthenticatedError,
