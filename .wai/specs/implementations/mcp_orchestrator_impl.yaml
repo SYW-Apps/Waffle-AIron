@@ -373,7 +373,9 @@ methods:
           Express the replacement as one delta: a delete for every stored entry the list does not
           restate (an entry is its component and interface), then the list itself — so the write
           stays a single judged write and an entry left out is gone, which is what this tool
-          promises
+          promises. A list naming one entry twice, or publishing as shared a component that is not
+          an Adapter (PUBLIC_INTERFACE_SHARED_NOT_ADAPTER, which validate would refuse), is refused
+          here instead, and nothing is written
         type: local
       - stepNumber: 3
         description: >-
@@ -1044,4 +1046,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-30T12:04:01.822Z'
+updatedAt: '2026-11-01T17:55:06.438Z'

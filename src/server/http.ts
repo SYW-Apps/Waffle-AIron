@@ -5,7 +5,7 @@ import type { AddressInfo } from 'net';
 import { files } from '../io/index.js';
 import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
-import { sendJson, bearerToken, sessionCookieValue, setSessionCookie } from './httpio.js';
+import { sendJson, bearerToken, sessionCookieValue, setSessionCookie, errorText } from './httpio.js';
 import { handleWebRequest, startDevSession } from './web.js';
 import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtime.js';
 import { handleShareRequest } from './sharehttp.js';
@@ -260,7 +260,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
         if (err instanceof PayloadTooLargeError) {
           sendJson(res, 413, { error: err.message });
         } else {
-          sendJson(res, 500, { error: String(err) });
+          sendJson(res, 500, { error: errorText(err) });
         }
       });
     return;
@@ -365,7 +365,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
         if (err instanceof PayloadTooLargeError) {
           sendJson(res, 413, { error: err.message });
         } else {
-          sendJson(res, 500, { error: String(err) });
+          sendJson(res, 500, { error: errorText(err) });
         }
       });
     return;
@@ -639,7 +639,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
       } catch (err) {
         if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
         if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = errorText(err);
         if (/not found/i.test(msg)) return sendJson(res, 404, { error: msg });
         return sendJson(res, 400, { error: msg });
       }
@@ -658,7 +658,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // requested, an input moved while it ran, or a required member is not
     // approved) is a conflict with the tree's state, not a malformed request.
     if (err instanceof Error && err.name === 'LockRefusedError') return sendJson(res, 409, { error: err.message });
-    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    sendJson(res, 400, { error: errorText(err) });
   }
 }
 

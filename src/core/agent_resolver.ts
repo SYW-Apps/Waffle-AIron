@@ -1077,7 +1077,8 @@ function linkageSection(record: AgentRecord): string {
     ? ` Declared now: ${declared.map((impl) => `\`${impl.id}\`: [${(impl.injectedParams ?? []).join(', ')}]`).join('; ')}. These may be guesses written before any code existed: keep the ones your code really takes and remove the rest with \`sdd_update_spec\` (\`{"injectedParams": [{"value": "<name>", "action": "delete"}]}\`, or \`[]\` to clear) — an injection no function takes is UNUSED_INJECTED_PARAM.`
     : '';
   parts.push('## Code linkage you own\n\n'
-    + '`injectedParams` are code linkage, not design: declare them only when your code takes a parameter its framework or wiring imposes beside the contract\'s own (a request handle, a context), with `sdd_write_narrative` (`injectedParams`) or `sdd_update_spec` — no re-lock. A dependency held as a field or passed to a constructor is not one.'
+    + '`injectedParams` are code linkage, not design: declare them only when your code takes a parameter its framework or wiring imposes beside the contract\'s own (a request handle, a context), with `sdd_write_narrative` (`injectedParams`) or `sdd_update_spec` — no re-lock. A dependency held as a field or passed to a constructor is not one.\n\n'
+    + 'How a collaborator reaches its code is yours too, where the design does not say: each component this one `dependsOn` or `owns` is reached through its contract (a Query and an Index through their Store\'s, a facade through its members\'), passed in — a constructor parameter or a field typed by the collaborator\'s class or a port interface, built where the program is composed — or imported directly. Either shows: the gate reads a runtime or type-only import of the collaborator\'s file, or a call the type checker lands there, as the declared edge realized (UNREALIZED_DEPENDENCY when none shows).'
     + `${listed}\n`);
   return parts.join('\n');
 }

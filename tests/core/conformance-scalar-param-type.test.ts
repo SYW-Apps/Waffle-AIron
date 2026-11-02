@@ -126,3 +126,27 @@ describe('the spellings a scalar is written as stay silent', () => {
   });
 });
 
+
+describe('one value where a list is declared, or a list where one value is', () => {
+  it('TypeScript: a string where the contract declares a list, and a list where it declares a string', () => {
+    const one = paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: string')), false), 'list<string>'));
+    expect(one).toHaveLength(1);
+    expect(one[0]).toMatch(/^PARAM_TYPE_MISMATCH: .*annotated "string", where the contract declares "list<string>"/);
+    const many = paramFindings(dispatchTree(ts(TS_BODY('parcelId: string[]')), false));
+    expect(many.map(f => f.split(':')[0])).toEqual(['PARAM_TYPE_MISMATCH']);
+    expect(many[0]).toMatch(/annotated "string\[\]", where the contract declares "string"/);
+  });
+
+  it('Python: str where the contract declares a list, and list[str] where it declares a string', () => {
+    const one = paramFindings(typedAs(dispatchTree(py(PY_BODY('parcel_id: str')), true), 'list<string>'));
+    expect(one.map(f => f.split(':')[0])).toEqual(['PARAM_TYPE_MISMATCH']);
+    const many = paramFindings(dispatchTree(py(PY_BODY('parcel_id: list[str]')), true));
+    expect(many.map(f => f.split(':')[0])).toEqual(['PARAM_TYPE_MISMATCH']);
+  });
+
+  it('a list against a list stays silent, and bytes may travel as a list', () => {
+    expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: string[]')), false), 'list<string>'))).toEqual([]);
+    expect(paramFindings(typedAs(dispatchTree(py(PY_BODY('parcel_id: list[str]')), true), 'list<string>'))).toEqual([]);
+    expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: number[]')), false), 'bytes')).filter(f => f.startsWith('PARAM_TYPE_MISMATCH'))).toEqual([]);
+  });
+});
