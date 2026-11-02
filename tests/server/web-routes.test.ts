@@ -285,6 +285,7 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
         const r = await get(route, cookie);
         expect(r.status).toBe(400);
         expect(json(r).error).toMatch(/`projectId` query parameter is required/);
+        expect(json(r).error.includes('this request sent `project`')).toBe(route.includes('project='));
       }
     });
 
@@ -736,7 +737,10 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
     it('POST /web/admin/packs/remove refuses a manifest name two instance packs declare, naming both files', async () => {
       const cookie = adminCookie();
       expect((await post('/web/admin/packs', { name: 'acme', content: ACME_PACK }, cookie)).status).toBe(200);
-      expect((await post('/web/admin/packs', { name: 'acme2', content: ACME_PACK }, cookie)).status).toBe(200);
+      // An install refuses a second pack declaring the same name; one edited on disk can still declare it.
+      expect((await post('/web/admin/packs', { name: 'acme2', content: ACME_PACK }, cookie)).status).toBe(400);
+      expect((await post('/web/admin/packs', { name: 'acme2', content: ACME_PACK.replace('acme-doctrine', 'other') }, cookie)).status).toBe(200);
+      fs.writeFileSync(path.join(dataDir, 'packs', 'acme2.yaml'), ACME_PACK);
 
       const ambiguous = await post('/web/admin/packs/remove', { name: 'acme-doctrine' }, cookie);
       expect(ambiguous.status).toBe(400);
@@ -773,7 +777,10 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       const cookie = adminCookie();
       createPlacedProject(cfg, MASTER, 'demo');
       expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant', content: TENANT_PACK }, cookie)).status).toBe(200);
-      expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant2', content: TENANT_PACK }, cookie)).status).toBe(200);
+      // An install refuses a second pack declaring the same name; one edited on disk can still declare it.
+      expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant2', content: TENANT_PACK }, cookie)).status).toBe(400);
+      expect((await post('/web/projects/packs', { projectId: 'demo', name: 'tenant2', content: TENANT_PACK.replace('tenant-doctrine', 'other') }, cookie)).status).toBe(200);
+      fs.writeFileSync(path.join(dataDir, 'projects', 'demo', '.wai', 'packs', 'tenant2.yaml'), TENANT_PACK);
       const names = async (): Promise<string[]> =>
         json(await get('/web/projects/packs?projectId=demo', cookie)).packs.map((p: { name: string }) => p.name);
 

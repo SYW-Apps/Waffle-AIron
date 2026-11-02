@@ -1799,6 +1799,14 @@ needed:
 { "webUiEnabled": true }
 ```
 
+A project's views are pages of the app, each with its own address:
+`/canvas/<project id>` is its canvas (with the design's findings), and
+`/projects/<project id>/specs` its specs, beside the tabs `packs`, `policy`,
+`producers`, `git`, `transfer`, `sharing` and `relations` under the same
+`/projects/<project id>/`. The `/web/*` reads behind them take the project as the
+`projectId` query parameter (`/web/canvas-model?projectId=…`, `/web/graph?tier=project&projectId=…`,
+`/web/openapi?projectId=…`), and answer 400 naming it when it is missing.
+
 `requireTls` (default `true`) marks the session cookie `Secure`, so browsers send
 it only over HTTPS (and on `localhost`). Serve the UI behind TLS; set it to
 `false` only on a trusted network reached over plain HTTP. Once the UI is on, an
