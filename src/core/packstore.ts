@@ -243,6 +243,11 @@ export function resolveInstalledPack(name: string, version?: string): InstalledP
 // Mutation
 // ---------------------------------------------------------------------------
 
+/** The message of a thrown value. */
+function messageOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 /**
  * Install an already-materialized pack directory into the store at
  * <name>/<version>/, digest it, and write its install record.
@@ -267,26 +272,39 @@ export function installPackFromDirectory(sourceDir: string, origin?: string): In
   // The store is the machine-wide packs folder the hosted server installs into
   // too: hold its install lock across the name check and the write. Another pack
   // there declaring this name (a file or folder of another name) would list
-  // twice; the pack's own versions folder is a refresh. The digest and the
-  // install record are taken under the same lock, so they describe these files.
+  // twice; the pack's own versions folder is a refresh. A source that is itself
+  // an entry of the store counts too: it stays where it is, so it would list
+  // beside the copy. The digest and the install record are taken under the same
+  // lock, so they describe these files.
   files.ensureDir(store);
   const record = withFileLock(packInstallLockFile(store, 'global'), (): InstallRecord & { digest: string } => {
-    const installed = findPackDeclaring(store, manifest.name, [path.join(store, manifest.name), abs]);
+    const installed = findPackDeclaring(store, manifest.name, [path.join(store, manifest.name)]);
     if (installed !== null) {
       throw new Error(`A pack declaring the name "${manifest.name}" is already installed as "${installed}" in ${store}. Remove that pack first.`);
     }
     // Reinstalling the same name@version replaces it, so an install is idempotent.
     files.remove(dest);
-    files.ensureDir(path.dirname(dest));
-    files.copy(abs, dest, { recursive: true });
-    const written = {
-      origin,
-      digest: computePackDigest(dest),
-      waironVersion: WAIRON_VERSION,
-      installedAt: new Date().toISOString(),
-    };
-    writeYamlFile(path.join(dest, INSTALL_RECORD), written);
-    return written;
+    try {
+      files.ensureDir(path.dirname(dest));
+      files.copy(abs, dest, { recursive: true });
+      const written = {
+        origin,
+        digest: computePackDigest(dest),
+        waironVersion: WAIRON_VERSION,
+        installedAt: new Date().toISOString(),
+      };
+      writeYamlFile(path.join(dest, INSTALL_RECORD), written);
+      return written;
+    } catch (e) {
+      // A version folder this install could not finish is removed, so the store
+      // never lists a partial pack; when even that fails, the error says so.
+      try {
+        files.remove(dest);
+      } catch (cleanup) {
+        throw new Error(`${messageOf(e)} The partial copy at ${dest} could not be removed (${messageOf(cleanup)}); remove it by hand.`);
+      }
+      throw e;
+    }
   });
   const digest = record.digest;
 

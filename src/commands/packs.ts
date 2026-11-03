@@ -160,6 +160,25 @@ function writeUnderInstallLock(packsDir: string, scope: PackScope, declared: str
   });
 }
 
+/**
+ * Refuse a pack added by path into the project's .wai/packs under a name the
+ * project selects from the pack store (`pack use`): its folder is the
+ * selection's bundle folder, and the project would register the pack twice.
+ * `names` are the name the pack declares and its folder's name.
+ */
+function refuseSelectedName(names: Array<string | undefined>): void {
+  const selected = (loadProjectConfig()?.extensions?.packs ?? [])
+    .filter((e): e is PackSelection => typeof e !== 'string')
+    .map((s) => s.name);
+  const name = names.find((n) => n !== undefined && selected.includes(n));
+  if (name !== undefined) {
+    throw new Error(
+      `This project selects the pack "${name}" from the pack store (\`wairon pack use\`), so a pack added by path under that name would register it twice. `
+      + `Drop the selection first (\`wairon pack unuse ${name}\`).`,
+    );
+  }
+}
+
 /** Run an install step, reporting a refusal or failure as the command's error. */
 function reported(step: () => void): boolean {
   try {
@@ -227,6 +246,7 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
   const dest = path.join(packsDir, path.basename(abs));
   files.ensureDir(packsDir);
   const placed = reported(() => writeUnderInstallLock(packsDir, 'project', probe.name, [dest, abs], () => {
+    refuseSelectedName([probe.name, path.basename(dest)]);
     if (path.resolve(dest) !== abs) files.copy(abs, dest, { recursive: true, force: true });
   }));
   if (!placed) return;
@@ -311,6 +331,7 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
   const destDir = path.join(baseDir, name);
   files.ensureDir(baseDir);
   const placed = reported(() => writeUnderInstallLock(baseDir, scope, probe.name, [destDir, staging], () => {
+    if (!options.global) refuseSelectedName([probe.name, name]);
     if (files.exists(destDir)) files.remove(destDir);
     files.copy(staging, destDir, { recursive: true });
   }));
@@ -446,7 +467,7 @@ export async function installPack(source: string, yes?: boolean): Promise<void> 
       logger.error(e instanceof Error ? e.message : String(e));
       process.exitCode = 1;
     } finally {
-      try { files.remove(extracted.dir); } catch { /* temp */ }
+      try { files.remove(extracted.root); } catch { /* temp */ }
     }
     return;
   }
@@ -458,7 +479,7 @@ export async function installPack(source: string, yes?: boolean): Promise<void> 
     const extracted = extractArchiveToTemp(source);
     if (!extracted) return;
     sourceDir = extracted.dir;
-    cleanup = extracted.dir;
+    cleanup = extracted.root;
     origin = path.resolve(source);
   } else {
     let unit;
@@ -537,8 +558,14 @@ function reportInstalled(installed: InstalledPack, origin: string, movedFloating
   }
 }
 
-/** Extract a .wpack/.zip into a temp directory via the SDK, or null on failure. */
-function extractArchiveToTemp(source: string): { dir: string } | null {
+/**
+ * Extract a .wpack/.zip via the SDK into a fresh temporary folder, or null on
+ * failure. The pack is held two levels down (<root>/held/pack): a packs folder
+ * lists a folder holding a pack entry, or one holding such a folder, never
+ * deeper, so the extraction is never an entry of a packs folder, even one that
+ * is the temporary folder itself. Remove `root` when done.
+ */
+function extractArchiveToTemp(source: string): { dir: string; root: string } | null {
   const abs = path.resolve(source);
   if (!files.exists(abs)) {
     logger.error(`Pack archive "${source}" does not exist.`);
@@ -546,10 +573,12 @@ function extractArchiveToTemp(source: string): { dir: string } | null {
     return null;
   }
   const tempDir = files.makeTempDir(path.join(os.tmpdir(), 'wairon-packinstall-'));
+  const held = path.join(tempDir, 'held', 'pack');
   try {
-    const result: PackExtractionResult = extractPack(new Uint8Array(files.readBytes(abs)), tempDir);
+    files.ensureDir(held);
+    const result: PackExtractionResult = extractPack(new Uint8Array(files.readBytes(abs)), held);
     void result;
-    return { dir: tempDir };
+    return { dir: held, root: tempDir };
   } catch (e) {
     try { files.remove(tempDir); } catch { /* temp dir */ }
     logger.error(`Could not extract "${source}": ${e instanceof Error ? e.message : String(e)}`);
@@ -806,7 +835,7 @@ async function fetchAndInstall(selection: PackSelection, url: string): Promise<I
     }
     return pack;
   } finally {
-    try { files.remove(extracted.dir); } catch { /* temp */ }
+    try { files.remove(extracted.root); } catch { /* temp */ }
   }
 }
 
@@ -867,6 +896,14 @@ export function bundlePack(name?: string, options: { all?: boolean } = {}): void
     const packsDir = path.join(root, '.wai', 'packs');
     let dest = '';
     const written = reported(() => writeUnderInstallLock(packsDir, 'project', resolved.name, [path.join(packsDir, resolved.name)], () => {
+      // A pack added by path (`pack add`, a hosted upload) keeps its entry in the
+      // name folder itself, where the loader would never see a bundled version.
+      if (packDirEntry(path.join(packsDir, resolved.name))) {
+        throw new Error(
+          `.wai/packs/${resolved.name} holds a pack added by path (\`wairon pack add\` or a hosted upload), so a bundle there would never load. `
+          + `Remove it first (\`wairon pack remove ${resolved.name}\`).`,
+        );
+      }
       dest = writeBundle(root, resolved);
     }));
     if (!written) continue;
