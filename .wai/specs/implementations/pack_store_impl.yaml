@@ -136,24 +136,28 @@ methods:
       code pack (kind: code) — the declarative-only surface policy — before any bytes touch disk.
       Derive the pack name from the envelope (or the optional override) and sanitize it as
       installGlobalPack does, refusing a folder that would leave the packs directory. Extract the
-      archive into a temporary staging folder outside the packs directory via the SDK adapter under
-      hosted-strict limits (the SDK enforces zip-slip / entry-count / size / compression-ratio /
-      depth and verifies integrity), re-check the extracted pack.yaml parses as a declarative pack
-      (defense in depth), and read the name it declares: the name the pack lists under, which the
-      envelope does not guarantee. Then, holding the packs folder's install lock (the lock file core
-      names for every installer of the folder, held with the shared file-lock primitive) from the
-      check through the write: a pack declaring that name which another pack in the same folder
-      already declares is refused, naming that pack (found through core), since both would list
-      under one name; reinstalling over the same folder (its versions included) replaces it, and the
-      staging folder is never taken for another pack, even when the packs folder is the temporary
-      folder. The staged pack then takes the place of <instance packs dir>/<name>: an installed pack
-      there is first copied aside, one level down in a fresh temporary folder so no packs folder
-      lists it, and comes back when the removal or the copy fails; a failure to copy it aside stops
-      before anything is removed. The copy aside and the staging folder are removed in every case,
-      except a copy aside whose restore failed, which is kept rather than lose the pack; so a
-      refused or failed install leaves an existing installation as it was. Probe and return the
-      PackDescriptor (tier instance). Fails loudly on an unsafe archive, a code pack, a
-      non-declarative payload, or a clash.
+      archive into a temporary staging folder outside the packs directory, held two levels down in a
+      fresh temporary folder (a packs folder lists a folder holding a pack entry, or one holding
+      such a folder, never deeper) via the SDK adapter under hosted-strict limits (the SDK enforces
+      zip-slip / entry-count / size / compression-ratio / depth and verifies integrity), re-check
+      the extracted pack.yaml parses as a declarative pack (defense in depth), and read the name it
+      declares: the name the pack lists under, which the envelope does not guarantee. Then, holding
+      the packs folder's install lock (the lock file core names for every installer of the folder,
+      held with the shared file-lock primitive) from the check through the write: a pack declaring
+      that name which another pack in the same folder already declares is refused, naming that pack
+      (found through core), since both would list under one name; reinstalling over the same folder
+      (its versions included) replaces it, and the staging folder is never taken for another pack,
+      even when the packs folder is the temporary folder. The staged pack then takes the place of
+      <instance packs dir>/<name>: an installed pack there is first copied aside, held the same way
+      in another fresh temporary folder so no packs folder lists it, and comes back when the removal
+      or the copy fails, the install then failing with the placement's own error; a failure to copy
+      it aside stops before anything is removed. The copy aside and the staging folder are removed
+      afterwards, except a copy aside whose restore failed, which is kept rather than lose the pack;
+      a temporary folder that cannot be removed stays behind and never fails an install that placed
+      its pack. So a refused install leaves an existing installation as it was, and a failed one
+      puts it back unless putting it back fails too, when its copy stays in the temporary folder.
+      Probe and return the PackDescriptor (tier instance). Fails loudly on an unsafe archive, a code
+      pack, a non-declarative payload, or a clash.
     calls:
       - host_sdk_adapter.inspectArchive
       - host_sdk_adapter.extractArchive
@@ -177,8 +181,10 @@ methods:
       '.wai/packs/<name>' directory reference the calling orchestrator registers (committed with the
       project, so every clone and CI enforce it). Writes nothing to .wai/project.yaml. Assumes the
       orchestrator has already bound the project root. Fails loudly on unsafe / code /
-      non-declarative input or a clash; a refused or failed install leaves an existing installation
-      as it was.
+      non-declarative input or a clash; a refused install leaves an existing installation as it was
+      and a failed one puts it back, as the global install does; a temporary folder that cannot be
+      removed never fails an install that placed its pack, so the calling orchestrator still
+      registers it.
     calls:
       - host_sdk_adapter.inspectArchive
       - host_sdk_adapter.extractArchive
@@ -266,4 +272,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-11-03T15:02:45.321Z'
+updatedAt: '2026-11-03T18:04:01.990Z'

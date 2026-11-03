@@ -123,7 +123,9 @@ methods:
         type: jump
         toStep: 22
       - stepNumber: 21
-        description: 'Already registered: refresh the vendored copy from the source and report the refresh.'
+        description: >-
+          Already registered: the locked write already refreshed the vendored copy from the source;
+          report the refresh.
         type: local
       - stepNumber: 22
         description: 'Print commit guidance: commit .wai/ so CI and every clone enforce the pack''s doctrine.'
@@ -773,8 +775,12 @@ methods:
         description: >-
           Resolve the pack against the STORE specifically, so an existing bundle cannot satisfy the
           lookup. A pack that is not installed is an error naming the store (exit code 1) and the
-          next target still proceeds; otherwise replace any previous copy at
-          .wai/packs/<name>/<version>/, copy the pack in, and print the written path.
+          next target still proceeds; otherwise, holding the install lock of the project's
+          .wai/packs (the lock file the core portal names, in the project's ignored lock folder),
+          refuse a pack another pack there already declares by name (its own name folder, every
+          version of it, is a refresh), naming it with a non-zero exit code while the next target
+          still proceeds; else replace any previous copy at .wai/packs/<name>/<version>/, copy the
+          pack in, and print the written path.
         type: local
       - stepNumber: 11
         description: Only bundled packs are recorded.
@@ -804,12 +810,15 @@ methods:
       selection, every selection under --all, or (with no argument) those already marked for
       bundling — erroring when nothing matches. For each target, resolves the pack against the STORE
       specifically (a bundle is what is being created, so the existing bundle must not satisfy the
-      lookup), replaces any previous copy at .wai/packs/<name>/<version>/, and copies the pack in; a
-      pack that is not installed is an error naming the store, and the remaining targets still
-      proceed. Then, when anything was bundled, records every bundled pack's exact version and
-      bundle: true on its selection in ONE core portal markSelectionsBundled call, so resolution
-      prefers the committed copy and the declared intent can never drift from the committed bytes.
-      Reports each written path plus the reminder to commit .wai/.
+      lookup), and, holding the install lock of the project's .wai/packs (the lock file the core
+      portal names for every installer of it), refuses a pack another pack there already declares by
+      name (the pack's own name folder, every version of it, is a refresh), naming it; otherwise
+      replaces any previous copy at .wai/packs/<name>/<version>/ and copies the pack in; a pack that
+      is not installed is an error naming the store, and the remaining targets still proceed. Then,
+      when anything was bundled, records every bundled pack's exact version and bundle: true on its
+      selection in ONE core portal markSelectionsBundled call, so resolution prefers the committed
+      copy and the declared intent can never drift from the committed bytes. Reports each written
+      path plus the reminder to commit .wai/.
   - name: syncPacks
     narrative:
       - stepNumber: 1
@@ -1001,4 +1010,4 @@ lint:
         hosted server.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-11-03T14:59:34.152Z'
+updatedAt: '2026-11-03T18:04:10.281Z'
