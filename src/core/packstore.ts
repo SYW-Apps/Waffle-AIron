@@ -267,9 +267,10 @@ export function installPackFromDirectory(sourceDir: string, origin?: string): In
   // The store is the machine-wide packs folder the hosted server installs into
   // too: hold its install lock across the name check and the write. Another pack
   // there declaring this name (a file or folder of another name) would list
-  // twice; the pack's own versions folder is a refresh.
+  // twice; the pack's own versions folder is a refresh. The digest and the
+  // install record are taken under the same lock, so they describe these files.
   files.ensureDir(store);
-  withFileLock(packInstallLockFile(store, 'global'), () => {
+  const record = withFileLock(packInstallLockFile(store, 'global'), (): InstallRecord & { digest: string } => {
     const installed = findPackDeclaring(store, manifest.name, [path.join(store, manifest.name), abs]);
     if (installed !== null) {
       throw new Error(`A pack declaring the name "${manifest.name}" is already installed as "${installed}" in ${store}. Remove that pack first.`);
@@ -278,16 +279,16 @@ export function installPackFromDirectory(sourceDir: string, origin?: string): In
     files.remove(dest);
     files.ensureDir(path.dirname(dest));
     files.copy(abs, dest, { recursive: true });
+    const written = {
+      origin,
+      digest: computePackDigest(dest),
+      waironVersion: WAIRON_VERSION,
+      installedAt: new Date().toISOString(),
+    };
+    writeYamlFile(path.join(dest, INSTALL_RECORD), written);
+    return written;
   });
-
-  const digest = computePackDigest(dest);
-  const record: InstallRecord = {
-    origin,
-    digest,
-    waironVersion: WAIRON_VERSION,
-    installedAt: new Date().toISOString(),
-  };
-  writeYamlFile(path.join(dest, INSTALL_RECORD), record);
+  const digest = record.digest;
 
   return {
     name: manifest.name,
