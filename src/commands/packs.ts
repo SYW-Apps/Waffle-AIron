@@ -11,12 +11,15 @@ import { downloadFile } from '../utils/download.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import type { PackSelection } from '../models/project.js';
 import { isNewerVersion } from '../utils/version.js';
+import { withFileLock } from '../utils/file-lock.js';
 // validator_portal: the pack impact every pack-selecting command shows before it writes.
 import { measurePackImpact } from '../core/validation.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import {
   discoverPacks,
   globalPacksDir,
+  packInstallLockFile,
+  findPackDeclaring,
   loadExtensionPacks,
   packDirEntry,
   packEntryLabel,
@@ -134,6 +137,41 @@ function resolveSourceUnit(source: string): { abs: string; isDir: boolean } {
   return { abs, isDir };
 }
 
+/**
+ * Write a pack into `packsDir` holding the folder's install lock, the one the
+ * hosted server and every other installer take, so two installs take turns.
+ * Under the lock, a pack declaring a name another pack there already declares
+ * is refused, naming that pack: both would list under one name. A ref at or
+ * under one of `except` (the install's own target, its source) is no clash.
+ */
+function writeUnderInstallLock(packsDir: string, scope: PackScope, declared: string | undefined, except: string[], write: () => void): void {
+  const lockFile = packInstallLockFile(packsDir, scope);
+  files.ensureDir(path.dirname(lockFile));
+  withFileLock(lockFile, () => {
+    const installed = declared ? findPackDeclaring(packsDir, declared, except) : null;
+    if (installed !== null) {
+      const remove = `wairon pack remove ${installed}${scope === 'global' ? ' --global' : ''}`;
+      throw new Error(
+        `A pack declaring the name "${declared}" is already installed as "${installed}" in ${packsDir}. `
+        + `Remove it first (\`${remove}\`), or install from a source named "${installed}" to replace it.`,
+      );
+    }
+    write();
+  });
+}
+
+/** Run an install step, reporting a refusal or failure as the command's error. */
+function reported(step: () => void): boolean {
+  try {
+    step();
+    return true;
+  } catch (e) {
+    logger.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 1;
+    return false;
+  }
+}
+
 /** A .wpack / .zip archive source is installed via the SDK, not vendored verbatim. */
 function isArchiveRef(source: string): boolean {
   return /\.(wpack|zip)$/i.test(source);
@@ -163,10 +201,11 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
   if (options.global) {
     const destDir = globalPacksDir();
     const dest = path.join(destDir, path.basename(abs));
-    if (path.resolve(dest) !== abs) {
-      files.ensureDir(destDir);
-      files.copy(abs, dest, { recursive: true, force: true });
-    }
+    files.ensureDir(destDir);
+    const placed = reported(() => writeUnderInstallLock(destDir, 'global', probe.name, [dest, abs], () => {
+      if (path.resolve(dest) !== abs) files.copy(abs, dest, { recursive: true, force: true });
+    }));
+    if (!placed) return;
     logger.success(`Installed pack "${probe.name}" globally: ${dest}`);
     logger.info(`${describe(probe)} — auto-loaded for every project on this machine (WAIRON_PACKS_DIR / ~/.wairon/packs).`);
     logger.info('Note: repo-defining doctrine belongs in project packs (committed); use `wairon pack add <source>` inside the project for that.');
@@ -184,12 +223,13 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
   // Steps 11-15: the impact before anything is vendored or registered — the
   // probed manifest supplied as the candidate, since nothing is on disk yet.
   if (!unattended(options.yes) && !(await confirmPackWrite({ entry: relRef }, abs, `Apply the pack "${probe.name}" to this project?`))) return;
-  const dest = path.join(root, '.wai', 'packs', path.basename(abs));
-  if (path.resolve(dest) !== abs) {
-
-    files.ensureDir(path.dirname(dest));
-    files.copy(abs, dest, { recursive: true, force: true });
-  }
+  const packsDir = path.join(root, '.wai', 'packs');
+  const dest = path.join(packsDir, path.basename(abs));
+  files.ensureDir(packsDir);
+  const placed = reported(() => writeUnderInstallLock(packsDir, 'project', probe.name, [dest, abs], () => {
+    if (path.resolve(dest) !== abs) files.copy(abs, dest, { recursive: true, force: true });
+  }));
+  if (!placed) return;
 
   if (registerPackRef(relRef)) {
     logger.success(`Vendored pack "${probe.name}" into ${relRef} and registered it in .wai/project.yaml.`);
@@ -270,9 +310,12 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
   // Relocate the extracted tree to <name>/ (replacing any prior copy).
   const destDir = path.join(baseDir, name);
   files.ensureDir(baseDir);
-  if (files.exists(destDir)) files.remove(destDir);
-  files.copy(staging, destDir, { recursive: true });
+  const placed = reported(() => writeUnderInstallLock(baseDir, scope, probe.name, [destDir, staging], () => {
+    if (files.exists(destDir)) files.remove(destDir);
+    files.copy(staging, destDir, { recursive: true });
+  }));
   dropStaging();
+  if (!placed) return;
 
   if (options.global) {
     logger.success(`Installed pack "${probe.name ?? name}" globally: ${destDir}`);

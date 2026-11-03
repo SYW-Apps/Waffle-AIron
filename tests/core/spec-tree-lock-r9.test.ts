@@ -80,11 +80,16 @@ describe('the spec tree write lock (item 4, EDGE)', () => {
   }, 120_000);
 
   it('the same two writers WITHOUT the lock lose writes — the race the lock closes', async () => {
-    const dir = tree();
-    fs.writeFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), '0');
-    await race(dir, [writerScript(dir, 60, true), writerScript(dir, 60, true)]);
-    // Unlocked, a write is lost or two writes interleave into a torn number: never the 120 both made.
-    expect(Number(fs.readFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), 'utf8'))).not.toBe(120);
+    // Unlocked, a write is lost or two writes interleave into a torn number. Nothing
+    // forces the two writers to overlap, so the race gets a few tries to show itself.
+    const results: number[] = [];
+    for (let attempt = 0; attempt < 5 && !results.some((n) => n !== 120); attempt++) {
+      const dir = tree();
+      fs.writeFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), '0');
+      await race(dir, [writerScript(dir, 60, true), writerScript(dir, 60, true)]);
+      results.push(Number(fs.readFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), 'utf8')));
+    }
+    expect(results.some((n) => n !== 120)).toBe(true);
   }, 120_000);
 
   it('a lock whose holder process is gone is broken at once', () => {

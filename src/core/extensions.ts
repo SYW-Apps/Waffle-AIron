@@ -523,6 +523,48 @@ export function discoverPacks(dir: string): string[] {
   return refs;
 }
 
+/**
+ * The lock file every install into one packs folder holds from its name check
+ * through its write, whoever installs (the hosted server, `wairon host packs`,
+ * `wairon pack add`/`install`): inside the folder for a machine-wide packs
+ * folder, and for a project's .wai/packs inside the project's lock folder,
+ * which its .wai/.gitignore already keeps out of git. Hold it with the shared
+ * generation lock primitive (src/utils/file-lock.ts).
+ */
+export function packInstallLockFile(packsDir: string, scope: PackScope): string {
+  return scope === 'project'
+    ? path.join(path.dirname(packsDir), '.spec-write.lock', 'packs-install')
+    : path.join(packsDir, '.install');
+}
+
+/** The name the pack at a discovered ref declares, or undefined when it does not load. */
+function declaredPackName(ref: string): string | undefined {
+  try {
+    const entry = files.stat(ref).isDirectory() ? packDirEntry(ref) : ref;
+    if (!entry) return undefined;
+    return readManifest(entry, path.dirname(entry)).name;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The install entry (the file or folder directly in `packsDir`) of a pack there
+ * that declares `name`, or null when none does. A ref at or under one of
+ * `except` (the install's own target, its staging folder) is skipped, so a
+ * reinstall over the same file or folder, a versioned folder's versions
+ * included, is a refresh and not a clash.
+ */
+export function findPackDeclaring(packsDir: string, name: string, except: string[]): string | null {
+  const skipped = except.map((p) => path.resolve(p));
+  for (const ref of discoverPacks(packsDir)) {
+    const at = path.resolve(ref);
+    if (skipped.some((s) => at === s || at.startsWith(s + path.sep))) continue;
+    if (declaredPackName(ref) === name) return path.relative(packsDir, ref).split(path.sep)[0];
+  }
+  return null;
+}
+
 function isRuleShaped(r: unknown): r is SddRule {
   if (!r || typeof r !== 'object') return false;
   const c = r as Record<string, unknown>;

@@ -4,7 +4,8 @@ import * as path from 'path';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { isNewerVersion } from '../utils/version.js';
-import { globalPacksDir, packDirEntry, readManifest } from './extensions.js';
+import { withFileLock } from '../utils/file-lock.js';
+import { findPackDeclaring, globalPacksDir, packDirEntry, packInstallLockFile, readManifest } from './extensions.js';
 
 // ---------------------------------------------------------------------------
 // Pack Store Adapter (sdd_core)
@@ -260,12 +261,24 @@ export function installPackFromDirectory(sourceDir: string, origin?: string): In
 
   const manifest = readManifest(entryFile, path.dirname(entryFile));
   const version = manifest.version && manifest.version.length > 0 ? manifest.version : UNVERSIONED;
-  const dest = path.join(packStoreDir(), manifest.name, version);
+  const store = packStoreDir();
+  const dest = path.join(store, manifest.name, version);
 
-  // Reinstalling the same name@version replaces it, so an install is idempotent.
-  files.remove(dest);
-  files.ensureDir(path.dirname(dest));
-  files.copy(abs, dest, { recursive: true });
+  // The store is the machine-wide packs folder the hosted server installs into
+  // too: hold its install lock across the name check and the write. Another pack
+  // there declaring this name (a file or folder of another name) would list
+  // twice; the pack's own versions folder is a refresh.
+  files.ensureDir(store);
+  withFileLock(packInstallLockFile(store, 'global'), () => {
+    const installed = findPackDeclaring(store, manifest.name, [path.join(store, manifest.name), abs]);
+    if (installed !== null) {
+      throw new Error(`A pack declaring the name "${manifest.name}" is already installed as "${installed}" in ${store}. Remove that pack first.`);
+    }
+    // Reinstalling the same name@version replaces it, so an install is idempotent.
+    files.remove(dest);
+    files.ensureDir(path.dirname(dest));
+    files.copy(abs, dest, { recursive: true });
+  });
 
   const digest = computePackDigest(dest);
   const record: InstallRecord = {

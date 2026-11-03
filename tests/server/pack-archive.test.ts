@@ -241,6 +241,20 @@ describe('hosted pack archive install (sdd_host)', () => {
       expect(packs.listGlobalPacks(cfg, ADMIN).map((p) => p.name).sort()).toEqual(['acme-doctrine', 'plain']);
     });
 
+    it('never takes its own staging folder for another pack when the packs folder is the temporary folder', () => {
+      const first = declarativeWpack('alpha');
+      const second = declarativeWpack('alpha', '2.0.0');
+      fs.mkdirSync(packsDir, { recursive: true });
+      for (const key of ['TMPDIR', 'TMP', 'TEMP']) process.env[key] = packsDir;
+      expect(os.tmpdir()).toBe(packsDir);
+      packs.installGlobalPackArchive(cfg, ADMIN, first);
+      packs.installGlobalPackArchive(cfg, ADMIN, second);
+      expect(fs.readFileSync(path.join(packsDir, 'alpha', 'pack.yaml'), 'utf8')).toMatch(/version: 2\.0\.0/);
+      // Neither the staging folder nor the copy aside is left behind to list.
+      expect(packs.listGlobalPacks(cfg, ADMIN).map((p) => p.name)).toEqual(['alpha']);
+      expect(fs.readdirSync(packsDir).filter((n) => !n.startsWith('.install'))).toEqual(['alpha']);
+    });
+
     it('rejects a bad credential (401) and an authenticated non-admin (403) before any effect', () => {
       expect(() => packs.installGlobalPackArchive(cfg, 'wrong', declarativeWpack('acme-doctrine'))).toThrow(
         UnauthenticatedError,

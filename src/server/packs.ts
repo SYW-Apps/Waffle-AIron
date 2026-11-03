@@ -147,25 +147,48 @@ function stageDeclarativeArchive(archive: Uint8Array): StagedPack {
   }
 }
 
-/** Put a staged pack in the place of `dest` (an earlier install there is replaced) and drop the staging folder. */
+/**
+ * Put a staged pack in the place of `dest`. An earlier install there is first
+ * copied aside, one level down in a fresh temporary folder so no packs folder
+ * lists it, and comes back when the removal or the copy fails; the copy aside
+ * is dropped once the staged pack is in place. A failure to copy it aside
+ * stops before anything is removed.
+ */
 function placeStaged(staged: StagedPack, dest: string): void {
-  files.remove(dest);
-  files.copy(staged.dir, dest, { recursive: true });
+  if (!files.exists(dest)) {
+    try {
+      files.copy(staged.dir, dest, { recursive: true });
+    } catch (e) {
+      files.remove(dest);
+      throw e;
+    }
+    return;
+  }
+  const backupRoot = files.makeTempDir(path.join(os.tmpdir(), 'wairon-hosted-pack-backup-'));
+  const backup = path.join(backupRoot, 'pack');
+  let restored = true;
+  try {
+    files.copy(dest, backup, { recursive: true });
+    try {
+      files.remove(dest);
+      files.copy(staged.dir, dest, { recursive: true });
+    } catch (e) {
+      restored = false;
+      files.remove(dest);
+      files.copy(backup, dest, { recursive: true });
+      restored = true;
+      throw e;
+    }
+  } finally {
+    // A restore that failed keeps the copy aside rather than lose the pack.
+    if (restored) files.remove(backupRoot);
+  }
 }
 
-/** Where the lock serializing installs into one packs folder lives: inside the
- *  instance packs folder for the global tier, and, for a project, inside the
- *  project's lock folder, which its .wai/.gitignore already keeps out of git
- *  (the project's .wai/packs is committed with it). */
-function installLockFile(dir: string, scope: PackScope): string {
-  return scope === 'project'
-    ? path.join(path.dirname(dir), '.spec-write.lock', 'packs-install')
-    : path.join(dir, '.install');
-}
-
-/** Run an install's clash check and write holding its packs folder's install lock. */
+/** Run an install's clash check and write holding its packs folder's install lock
+ *  (the shared install-lock file core names, so every installer takes turns). */
 function underInstallLock<T>(dir: string, scope: PackScope, install: () => T): T {
-  const lockFile = installLockFile(dir, scope);
+  const lockFile = hostCore.packInstallLockFile(dir, scope);
   files.ensureDir(path.dirname(lockFile));
   return withFileLock(lockFile, install);
 }
@@ -439,7 +462,7 @@ function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
   const dir = hostCore.globalPacksDir();
   const file = path.join(dir, `${name}.yaml`);
   underInstallLock(dir, 'global', () => {
-    assertNoNameClash(dir, file, yamlName(content), 'global');
+    assertNoNameClash(dir, yamlName(content), [file]);
     writeFileAtomic(file, content);
   });
   const descriptor = probe(file, dir, 'global', `${name}.yaml`);
@@ -466,7 +489,7 @@ function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): Pack
   const staged = stageDeclarativeArchive(archive);
   try {
     underInstallLock(packsDir, 'global', () => {
-      assertNoNameClash(packsDir, dir, staged.declared, 'global');
+      assertNoNameClash(packsDir, staged.declared, [dir, staged.dir]);
       placeStaged(staged, dir);
     });
   } finally {
@@ -488,21 +511,18 @@ function declaredName(loadRef: string, baseRoot: string, scope: PackScope): stri
  * Refuse an install whose pack declares the name another pack in the same
  * folder already declares: both would list under that one name, and a removal
  * by it would be ambiguous. Reinstalling over the same file or folder (a
- * versioned folder's versions included) is a refresh, not a clash.
+ * versioned folder's versions included) is a refresh, not a clash, and the
+ * install's own staging folder is never another pack, even when the packs
+ * folder holds the temporary folder.
  */
-function assertNoNameClash(dir: string, target: string, declared: string | undefined, scope: PackScope): void {
+function assertNoNameClash(dir: string, declared: string | undefined, except: string[]): void {
   if (!declared) return;
-  const self = path.resolve(target);
-  for (const ref of hostCore.discoverPacks(dir)) {
-    const at = path.resolve(ref);
-    if (at === self || at.startsWith(self + path.sep)) continue;
-    if (declaredName(ref, dir, scope) === declared) {
-      const installed = path.relative(dir, ref).split(path.sep)[0];
-      throw new Error(
-        `A pack declaring the name "${declared}" is already installed as "${installed}". `
-        + 'Install it under that name to replace it, or remove that pack first.',
-      );
-    }
+  const installed = hostCore.findPackDeclaring(dir, declared, except);
+  if (installed !== null) {
+    throw new Error(
+      `A pack declaring the name "${declared}" is already installed as "${installed}". `
+      + 'Install it under that name to replace it, or remove that pack first.',
+    );
   }
 }
 
@@ -592,7 +612,7 @@ function storeInstallProjectPack(name: string, content: string): PackDescriptor 
   const relRef = `.wai/packs/${name}.yaml`;
   const packsDir = path.join(root, '.wai', 'packs');
   underInstallLock(packsDir, 'project', () => {
-    assertNoNameClash(packsDir, path.join(packsDir, `${name}.yaml`), yamlName(content), 'project');
+    assertNoNameClash(packsDir, yamlName(content), [path.join(packsDir, `${name}.yaml`)]);
     writeFileAtomic(path.join(packsDir, `${name}.yaml`), content);
   });
   return probe(relRef, root, 'project', relRef);
@@ -619,7 +639,7 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   const staged = stageDeclarativeArchive(archive);
   try {
     underInstallLock(packsDir, 'project', () => {
-      assertNoNameClash(packsDir, dir, staged.declared, 'project');
+      assertNoNameClash(packsDir, staged.declared, [dir, staged.dir]);
       placeStaged(staged, dir);
     });
   } finally {
