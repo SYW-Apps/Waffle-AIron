@@ -4,19 +4,24 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { buildPack } from '@wairon/sdk';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { discoverPacks } from '../../src/core/index.js';
+import { discoverPacks, loadProjectConfig } from '../../src/core/index.js';
 import * as packs from '../../src/server/packs.js';
 import type { HostConfig } from '../../src/server/types.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
+import { createPlacedProject } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // A hosted archive install that fails while it puts the new pack in place keeps
 // the installed one: the copy of the staged pack into the installed folder is
 // made to fail (a full disk, a permission error), and the earlier pack must be
-// there afterwards with its own content, with nothing extra listed.
+// there afterwards with its own content, with nothing extra listed. A temporary
+// folder that cannot be removed afterwards never fails an install that placed
+// its pack.
 // ---------------------------------------------------------------------------
 
 const injected = vi.hoisted(() => ({
   failCopy: null as null | ((from: string, to: string) => boolean),
+  failRemove: null as null | ((target: string) => boolean),
   // The temporary folder the server sees: a worker thread cannot move it through TMPDIR.
   tmpdir: null as null | string,
 }));
@@ -35,10 +40,19 @@ vi.mock('../../src/io/files.js', async (importOriginal) => {
       if (injected.failCopy?.(from, to)) throw new Error('no space left on device (injected)');
       real.copy(from, to, options);
     },
+    remove: (target: string) => {
+      if (injected.failRemove?.(target)) throw new Error('resource busy or locked (injected)');
+      real.remove(target);
+    },
   };
 });
 
 const ADMIN = 'test-admin-secret';
+
+/** Whether a path lies in an install's staging folder, or in its copy aside. */
+const inTemp = (kind: 'staging' | 'aside') => (p: string): boolean => path.resolve(p).split(path.sep).some((seg) =>
+  kind === 'aside' ? seg.startsWith('wairon-hosted-pack-backup-')
+    : seg.startsWith('wairon-hosted-pack-') && !seg.startsWith('wairon-hosted-pack-backup-'));
 
 function declarativeWpack(root: string, name: string, version: string): Uint8Array {
   const pack = path.join(root, `${name}-${version}`);
@@ -74,6 +88,7 @@ describe('a hosted archive install that fails while placing the pack', () => {
 
   afterEach(() => {
     injected.failCopy = null;
+    injected.failRemove = null;
     injected.tmpdir = null;
     invalidateSpecCache();
     process.env = { ...savedEnv };
@@ -90,9 +105,7 @@ describe('a hosted archive install that fails while placing the pack', () => {
     const asideBefore = new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('wairon-hosted-pack-backup-')));
     // Only the staged pack's copy into the installed folder fails; copying the
     // installed pack aside and back still works.
-    injected.failCopy = (from, to) => path.basename(from).startsWith('wairon-hosted-pack-')
-      && !path.basename(from).startsWith('wairon-hosted-pack-backup-')
-      && path.resolve(to) === path.resolve(installed);
+    injected.failCopy = (from, to) => inTemp('staging')(from) && path.resolve(to) === path.resolve(installed);
     expect(() => packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack(sources, 'alpha', '2.0.0'))).toThrow(
       /no space left on device/,
     );
@@ -134,5 +147,64 @@ describe('a hosted archive install that fails while placing the pack', () => {
     injected.failCopy = null;
 
     expect(fs.readFileSync(path.join(installed, 'pack.yaml'), 'utf8')).toBe(before);
+  });
+
+  it('keeps the installed pack of a project, and its registration', () => {
+    const sources = path.join(base, 'src');
+    createPlacedProject(cfg, ADMIN, 'demo');
+    const root = path.join(cfg.dataDir, 'projects', 'demo');
+    packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack(sources, 'alpha', '1.0.0'));
+    const installed = path.join(root, '.wai', 'packs', 'alpha');
+    const before = fs.readFileSync(path.join(installed, 'pack.yaml'), 'utf8');
+
+    injected.failCopy = (from, to) => inTemp('staging')(from) && path.resolve(to) === path.resolve(installed);
+    expect(() => packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack(sources, 'alpha', '2.0.0'))).toThrow(
+      /no space left on device/,
+    );
+    injected.failCopy = null;
+
+    expect(fs.readFileSync(path.join(installed, 'pack.yaml'), 'utf8')).toBe(before);
+    expect(fs.readdirSync(path.join(root, '.wai', 'packs'))).toEqual(['alpha']);
+    expect(runWithProjectRoot(root, () => loadProjectConfig())?.extensions?.packs ?? []).toContain('.wai/packs/alpha');
+  });
+
+  it('keeps a copy aside it could not put back where no packs folder lists it', () => {
+    const sources = path.join(base, 'src');
+    const first = declarativeWpack(sources, 'alpha', '1.0.0');
+    const second = declarativeWpack(sources, 'alpha', '2.0.0');
+    fs.mkdirSync(packsDir, { recursive: true });
+    injected.tmpdir = packsDir;
+    packs.installGlobalPackArchive(cfg, ADMIN, first);
+    const installed = path.join(packsDir, 'alpha');
+
+    // Both the replacement and the restore fail: the install fails with its own error.
+    injected.failCopy = (_from, to) => path.resolve(to) === path.resolve(installed);
+    expect(() => packs.installGlobalPackArchive(cfg, ADMIN, second)).toThrow(/no space left on device/);
+    injected.failCopy = null;
+    injected.tmpdir = null;
+
+    const kept = fs.readdirSync(packsDir).filter((n) => n.startsWith('wairon-hosted-pack-backup-'));
+    expect(kept).toHaveLength(1);
+    expect(fs.readFileSync(path.join(packsDir, kept[0], 'held', 'pack', 'pack.yaml'), 'utf8')).toMatch(/version: 1.0.0/);
+    // The packs folder is the temporary folder, and still lists no pack from the copy aside.
+    expect(discoverPacks(packsDir)).toEqual([]);
+    expect(packs.listGlobalPacks(cfg, ADMIN)).toEqual([]);
+  });
+
+  it('does not fail an install that placed its pack when a temporary folder cannot be removed', () => {
+    const sources = path.join(base, 'src');
+    createPlacedProject(cfg, ADMIN, 'demo');
+    const root = path.join(cfg.dataDir, 'projects', 'demo');
+    packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack(sources, 'alpha', '1.0.0'));
+
+    injected.failRemove = (target) => inTemp('staging')(target) || inTemp('aside')(target);
+    const desc = packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack(sources, 'alpha', '2.0.0'));
+    packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack(sources, 'beta', '1.0.0'));
+    injected.failRemove = null;
+
+    expect(desc.error).toBeUndefined();
+    expect(fs.readFileSync(path.join(root, '.wai', 'packs', 'alpha', 'pack.yaml'), 'utf8')).toMatch(/version: 2.0.0/);
+    const registered = runWithProjectRoot(root, () => loadProjectConfig())?.extensions?.packs ?? [];
+    expect(registered).toEqual(expect.arrayContaining(['.wai/packs/alpha', '.wai/packs/beta']));
   });
 });

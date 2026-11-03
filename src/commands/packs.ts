@@ -234,7 +234,7 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
   if (registerPackRef(relRef)) {
     logger.success(`Vendored pack "${probe.name}" into ${relRef} and registered it in .wai/project.yaml.`);
   } else {
-    files.copy(abs, dest, { recursive: true, force: true });
+    // The locked write above already refreshed the vendored copy.
     logger.success(`Pack "${probe.name}" already registered — refreshed ${relRef} from the source.`);
   }
   logger.info(`${describe(probe)} — commit .wai/ so CI and every clone enforce it.`);
@@ -862,7 +862,14 @@ export function bundlePack(name?: string, options: { all?: boolean } = {}): void
       process.exitCode = 1;
       continue;
     }
-    const dest = writeBundle(root, resolved);
+    // The bundle goes into the project's .wai/packs under its install lock. Its
+    // own name folder (every version of it) is a refresh, never a clash.
+    const packsDir = path.join(root, '.wai', 'packs');
+    let dest = '';
+    const written = reported(() => writeUnderInstallLock(packsDir, 'project', resolved.name, [path.join(packsDir, resolved.name)], () => {
+      dest = writeBundle(root, resolved);
+    }));
+    if (!written) continue;
 
     // Pin what was actually committed, and record the bundle so resolution and
     // a later `pack bundle` (no args) both know this pack travels with the repo.

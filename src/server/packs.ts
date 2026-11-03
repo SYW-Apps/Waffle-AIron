@@ -123,9 +123,31 @@ function assertNotCodeArchive(info: PackArchiveInfo): void {
 
 /** A declarative pack extracted into a staging folder outside every packs folder. */
 interface StagedPack {
+  /** The fresh temporary folder that holds the staging, removed after the install. */
+  root: string;
+  /** The extracted pack itself, nested in `root`. */
   dir: string;
   /** The name its pack.yaml declares: the name it lists under, which the envelope does not guarantee. */
   declared: string | undefined;
+}
+
+/** A fresh temporary folder and the place two levels down in it where a pack is
+ *  held: a packs folder lists a folder holding a pack entry, or one holding such
+ *  a folder (a versioned pack), never deeper, so no packs folder lists a pack
+ *  held there even when the packs folder is the temporary folder. */
+function holdingFolder(prefix: string): { root: string; held: string } {
+  const root = files.makeTempDir(path.join(os.tmpdir(), prefix));
+  return { root, held: path.join(root, 'held', 'pack') };
+}
+
+/** Remove a temporary folder an install is done with. A folder left behind never
+ *  fails an install that placed its pack, nor hides the error of one that did not. */
+function removeLeftover(dir: string): void {
+  try {
+    files.remove(dir);
+  } catch {
+    /* the temporary folder stays behind */
+  }
 }
 
 /** Safely extract a declarative .wpack into a fresh staging folder under
@@ -135,53 +157,55 @@ interface StagedPack {
  *  The staging folder is removed on failure; on success the caller places the
  *  pack and removes it. */
 function stageDeclarativeArchive(archive: Uint8Array): StagedPack {
-  const staging = files.makeTempDir(path.join(os.tmpdir(), 'wairon-hosted-pack-'));
+  const { root, held } = holdingFolder('wairon-hosted-pack-');
   try {
-    const result = hostSdk.extractArchive(archive, staging, HOSTED_STRICT_LIMITS);
+    files.ensureDir(held);
+    const result = hostSdk.extractArchive(archive, held, HOSTED_STRICT_LIMITS);
     const content = files.readText(path.join(result.directory, result.entryPath));
     assertDeclarative(content);
-    return { dir: staging, declared: yamlName(content) };
+    return { root, dir: held, declared: yamlName(content) };
   } catch (e) {
-    files.remove(staging);
+    removeLeftover(root);
     throw e;
   }
 }
 
 /**
  * Put a staged pack in the place of `dest`. An earlier install there is first
- * copied aside, one level down in a fresh temporary folder so no packs folder
- * lists it, and comes back when the removal or the copy fails; the copy aside
- * is dropped once the staged pack is in place. A failure to copy it aside
- * stops before anything is removed.
+ * copied aside, nested in a fresh temporary folder so no packs folder lists it,
+ * and comes back when the removal or the copy fails, which then fails with its
+ * own error; the copy aside is dropped once the staged pack is in place. A
+ * failure to copy it aside stops before anything is removed, and a copy aside
+ * that could not be put back is kept rather than lose the pack.
  */
 function placeStaged(staged: StagedPack, dest: string): void {
   if (!files.exists(dest)) {
     try {
       files.copy(staged.dir, dest, { recursive: true });
     } catch (e) {
-      files.remove(dest);
+      removeLeftover(dest);
       throw e;
     }
     return;
   }
-  const backupRoot = files.makeTempDir(path.join(os.tmpdir(), 'wairon-hosted-pack-backup-'));
-  const backup = path.join(backupRoot, 'pack');
-  let restored = true;
+  const aside = holdingFolder('wairon-hosted-pack-backup-');
+  let keepAside = false;
   try {
-    files.copy(dest, backup, { recursive: true });
+    files.copy(dest, aside.held, { recursive: true });
     try {
       files.remove(dest);
       files.copy(staged.dir, dest, { recursive: true });
     } catch (e) {
-      restored = false;
-      files.remove(dest);
-      files.copy(backup, dest, { recursive: true });
-      restored = true;
+      try {
+        files.remove(dest);
+        files.copy(aside.held, dest, { recursive: true });
+      } catch {
+        keepAside = true;
+      }
       throw e;
     }
   } finally {
-    // A restore that failed keeps the copy aside rather than lose the pack.
-    if (restored) files.remove(backupRoot);
+    if (!keepAside) removeLeftover(aside.root);
   }
 }
 
@@ -489,11 +513,11 @@ function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): Pack
   const staged = stageDeclarativeArchive(archive);
   try {
     underInstallLock(packsDir, 'global', () => {
-      assertNoNameClash(packsDir, staged.declared, [dir, staged.dir]);
+      assertNoNameClash(packsDir, staged.declared, [dir, staged.root]);
       placeStaged(staged, dir);
     });
   } finally {
-    files.remove(staged.dir);
+    removeLeftover(staged.root);
   }
   const descriptor = probe(dir, hostCore.globalPacksDir(), 'global', packName);
   descriptor.tier = 'instance';
@@ -639,11 +663,11 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   const staged = stageDeclarativeArchive(archive);
   try {
     underInstallLock(packsDir, 'project', () => {
-      assertNoNameClash(packsDir, staged.declared, [dir, staged.dir]);
+      assertNoNameClash(packsDir, staged.declared, [dir, staged.root]);
       placeStaged(staged, dir);
     });
   } finally {
-    files.remove(staged.dir);
+    removeLeftover(staged.root);
   }
   return probe(relRef, root, 'project', relRef);
 }

@@ -3,10 +3,26 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { zipSync } from 'fflate';
-import { addPack } from '../../src/commands/packs.js';
+import { addPack, bundlePack } from '../../src/commands/packs.js';
 import { installPackFromDirectory, packInstallLockFile } from '../../src/core/index.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { logger } from '../../src/utils/logger.js';
+import { inspectFileLock } from '../../src/utils/file-lock.js';
+
+// Every copy into a packs folder reports whether the folder's install lock is
+// held at that moment, so a test can see the write happen under it.
+const watched = vi.hoisted(() => ({ lockFile: null as null | string, held: [] as boolean[], inspect: null as null | ((f: string) => unknown) }));
+
+vi.mock('../../src/io/files.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../src/io/files.js')>();
+  return {
+    ...real,
+    copy: (from: string, to: string, options?: Parameters<typeof real.copy>[2]) => {
+      if (watched.lockFile && watched.inspect) watched.held.push(watched.inspect(watched.lockFile) !== null);
+      real.copy(from, to, options);
+    },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // `wairon pack add` and the pack store's install write into the same packs
@@ -37,7 +53,7 @@ function wpack(dir: string, envelope: string, inner: string): string {
   return file;
 }
 
-function writeProject(root: string): void {
+function writeProject(root: string, packs?: unknown[]): void {
   const waiDir = path.join(root, '.wai');
   fs.mkdirSync(path.join(waiDir, 'specs', 'subsystems'), { recursive: true });
   fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
@@ -46,6 +62,7 @@ function writeProject(root: string): void {
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {},
+    ...(packs ? { extensions: { packs } } : {}),
     createdAt: '2026-11-03T12:00:00Z',
     updatedAt: '2026-11-03T12:00:00Z',
   }));
@@ -73,6 +90,8 @@ afterEach(() => {
   invalidateSpecCache();
   vi.restoreAllMocks();
   process.exitCode = 0;
+  watched.lockFile = null;
+  watched.held = [];
   if (savedPacksDir === undefined) delete process.env.WAIRON_PACKS_DIR;
   else process.env.WAIRON_PACKS_DIR = savedPacksDir;
 });
@@ -114,13 +133,19 @@ describe('pack add --global', () => {
     expect(packEntries(packsDir)).toEqual(['alpha.yaml']);
   });
 
-  it('holds the install lock every installer of the folder takes', async () => {
+  it('copies the pack in while it holds the install lock every installer of the folder takes', async () => {
     const first = path.join(sources, 'a.yaml');
     fs.writeFileSync(first, packYaml('a'));
-    await addPack(first, true, true);
     const lock = packInstallLockFile(packsDir, 'global');
     expect(path.dirname(lock)).toBe(packsDir);
-    expect(fs.readdirSync(packsDir).some((n) => n.startsWith(`${path.basename(lock)}.lock.`))).toBe(true);
+    watched.inspect = inspectFileLock;
+    watched.lockFile = lock;
+    await addPack(first, true, true);
+    watched.lockFile = null;
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(watched.held).toEqual([true]);
+    // Released afterwards.
+    expect(inspectFileLock(lock)).toBeNull();
   });
 });
 
@@ -145,6 +170,45 @@ describe('pack add into a project', () => {
     expect(fs.readdirSync(path.join(proj, '.wai', 'packs'))).toEqual(['a.yaml']);
     expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).not.toContain('b.yaml');
     expect(fs.existsSync(path.join(proj, '.wai', '.spec-write.lock'))).toBe(true);
+  });
+});
+
+describe('pack bundle', () => {
+  function storePack(name: string, version: string): void {
+    const dir = path.join(sources, `${name}-${version}`);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pack.yaml'), packYaml(name, version));
+    installPackFromDirectory(dir);
+  }
+
+  it('refuses a bundle another pack in .wai/packs already declares, and bundles a new version over an old one', async () => {
+    storePack('shared', '1.0.0');
+    storePack('shared', '2.0.0');
+    const proj = mkTmp();
+    writeProject(proj, [{ name: 'shared', version: '1.0.0' }]);
+    vi.spyOn(process, 'cwd').mockReturnValue(proj);
+    invalidateSpecCache();
+    const projectPacks = path.join(proj, '.wai', 'packs');
+    fs.mkdirSync(projectPacks, { recursive: true });
+    fs.writeFileSync(path.join(projectPacks, 'legacy.yaml'), packYaml('shared'));
+
+    bundlePack('shared');
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/declaring the name "shared" is already installed as "legacy\.yaml"/);
+    expect(fs.existsSync(path.join(projectPacks, 'shared'))).toBe(false);
+
+    process.exitCode = 0;
+    fs.rmSync(path.join(projectPacks, 'legacy.yaml'));
+    bundlePack('shared');
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(fs.existsSync(path.join(projectPacks, 'shared', '1.0.0', 'pack.yaml'))).toBe(true);
+
+    // Another version of the same pack is its own name folder: a refresh, never a clash.
+    writeProject(proj, [{ name: 'shared', version: '2.0.0' }]);
+    invalidateSpecCache();
+    bundlePack('shared');
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(fs.existsSync(path.join(projectPacks, 'shared', '2.0.0', 'pack.yaml'))).toBe(true);
   });
 });
 

@@ -23,12 +23,14 @@ A fix release. Upgrading:
   `nul`, `com1`, …, with or without an extension), and a pack that declares the same name as
   another pack in the same folder, which would list twice under one name; reinstalling under
   the same name still replaces it. An archive is judged by the name its `pack.yaml` declares,
-  not the name on its envelope, and a refused or failed archive install leaves an installed pack
-  as it was.
+  not the name on its envelope. A refused archive install leaves an installed pack as it was, and
+  a failed one puts it back; should putting it back fail too, the earlier copy is kept in a
+  `wairon-hosted-pack-backup-*` folder in the system temporary folder, and the error says the
+  install failed.
 - **Pack installs take turns.** Every install into a packs folder holds that folder's install
   lock from its name check through its write: the hosted server, `wairon host packs`,
-  `wairon pack add` and `wairon pack install`. Two installs at the same moment take turns, and
-  `wairon pack add` and `wairon pack install` now also refuse a pack whose declared name another
+  `wairon pack add`, `wairon pack bundle` and `wairon pack install`. Two installs at the same
+  moment take turns, and the local commands now also refuse a pack whose declared name another
   pack in the folder already declares, naming it.
 - **Hosted web reads.** A missing `projectId` says so when the request sent `project`
   instead. The CLI reference names the web app's project pages and the `/web/*` reads behind
