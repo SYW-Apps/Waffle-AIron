@@ -46,6 +46,21 @@ methods:
         description: >-
           The directory a module (non-YAML) pack target is required from: the project root, or the
           directory of the bundle entry being loaded
+  - name: packInstallLockFile
+    description: >-
+      The lock file every install into one packs folder holds from its name check through its write,
+      whoever installs: <packsDir>/.install for a machine-wide folder,
+      <project>/.wai/.spec-write.lock/packs-install for a project's .wai/packs (already ignored by
+      git). Held with the shared generation lock primitive.
+    signature: 'packInstallLockFile(packsDir: string, scope: pack_scope): string'
+    returns: string
+    params:
+      - name: packsDir
+        type: string
+        description: The packs folder an install writes into.
+      - name: scope
+        type: pack_scope
+        description: global for a machine-wide packs folder, project for a project's .wai/packs.
 status: complete
 createdAt: '2026-07-14T18:59:04.313Z'
-updatedAt: '2026-10-04T10:19:11.333Z'
+updatedAt: '2026-11-03T15:01:24.188Z'

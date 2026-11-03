@@ -37,8 +37,12 @@ methods:
         onFalseStep: 8
       - stepNumber: 6
         description: >-
-          Copy the pack into the machine-wide packs directory (guarding against a self-copy) and
-          report that it now auto-loads for every project on this machine.
+          Holding the machine-wide packs folder's install lock (the lock file the core portal names
+          for every installer of the folder, held with the shared generation lock primitive, so a
+          hosted server installing into the same folder takes turns with it), refuse a pack another
+          pack there already declares by name (found through the core portal), naming it and how to
+          remove it, with a non-zero exit code; otherwise copy the pack in (guarding against a
+          self-copy) and report that it now auto-loads for every project on this machine.
         type: local
       - stepNumber: 7
         description: Done for the global scope.
@@ -90,7 +94,12 @@ methods:
         outcome: declined; nothing written
       - stepNumber: 16
         label: vendor
-        description: Vendor the pack into .wai/packs/ under its basename (guarding against a self-copy).
+        description: >-
+          Holding the install lock of the project's .wai/packs (the lock file the core portal names,
+          in the project's ignored lock folder), refuse a pack another pack there already declares
+          by name, naming it and how to remove it, with a non-zero exit code and nothing registered;
+          otherwise vendor the pack into .wai/packs/ under its basename (guarding against a
+          self-copy).
         type: local
       - stepNumber: 17
         description: >-
@@ -130,10 +139,14 @@ methods:
       nothing vendored or registered; a refresh of an already-registered pack is measured the same
       way, as an update. It registers the directory ref through the core portal's registerPackRef,
       which appends it only when absent and records useGlobalPacks itself; a false result means the
-      ref was already registered, and the pack is reported as refreshed instead. The pack is
-      probe-loaded to verify it parses before anything is registered; a malformed/unsafe source
-      fails with a clear error and leaves no partial registration. --global selects nothing for any
-      project and shows no report.
+      ref was already registered, and the pack is reported as refreshed instead. Every write into a
+      packs folder (global or project, archive or file/dir) holds that folder's install lock, the
+      lock file the core portal names for every installer of it, from a name check through the
+      write: a pack another pack in the folder already declares by name is refused, naming it, so
+      two packs never list under one name and an install takes turns with the hosted server's. The
+      pack is probe-loaded to verify it parses before anything is registered; a malformed/unsafe
+      source fails with a clear error and leaves no partial registration. --global selects nothing
+      for any project and shows no report.
   - name: listPacks
     narrative:
       - stepNumber: 1
@@ -969,6 +982,23 @@ methods:
         outcome: impact shown; nothing written
     detail: calls-only
 detail: calls-only
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/packs.ts -> src/utils/file-lock.ts
+      reason: >-
+        pack add holds a packs folder's install lock with the same generation lock primitive the
+        hosted pack installs, the hosted stores and the spec tree take (src/utils/file-lock.ts,
+        file_write_lock): one safety-critical protocol every holder must follow. Like
+        src/utils/fs.ts it is shared infrastructure below the subsystems; a second copy in sdd_cli
+        would be two implementations of one protocol that can drift apart, and routing a lock
+        through sdd_host's portal would make the CLI depend on the hosted server.
+    - code: IMPORT_BYPASSES_PORTAL
+      at: src/commands/packs.ts -> src/utils/file-lock.ts
+      reason: >-
+        Same import as the UNDECLARED_DEPENDENCY allow: pack add uses the shared generation lock
+        primitive directly, which no sdd_host portal publishes because it is not a capability of the
+        hosted server.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-10-31T23:47:38.883Z'
+updatedAt: '2026-11-03T14:59:34.152Z'

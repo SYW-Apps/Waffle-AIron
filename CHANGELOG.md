@@ -10,8 +10,9 @@ A fix release. Upgrading:
 
 1. Install 6.7.2 the way you installed wairon (`wairon update`, or `@wairon/cli@6.7.2` from npm).
 2. Restart your AI tool, or reconnect its MCP server, so the assistant talks to the new wairon.
-3. Hosted: a pack folder that holds two packs declaring the same name keeps working, but the
-   next install of either under another file name is refused; remove one of them.
+3. A pack folder that holds two packs declaring the same name keeps working, but the next
+   install of either under another file name is refused, on a hosted server and by
+   `wairon pack add` and `wairon pack install` alike; remove one of them.
 
 - **`PARAM_TYPE_MISMATCH` says a value mismatch plainly.** A parameter annotated as another
   type than its contract declares (one value for a list, a number for a string) is told in a
@@ -23,8 +24,12 @@ A fix release. Upgrading:
   another pack in the same folder, which would list twice under one name; reinstalling under
   the same name still replaces it. An archive is judged by the name its `pack.yaml` declares,
   not the name on its envelope, and a refused or failed archive install leaves an installed pack
-  as it was. Two installs into one packs folder at the same moment, from the server and the
-  admin CLI, take turns.
+  as it was.
+- **Pack installs take turns.** Every install into a packs folder holds that folder's install
+  lock from its name check through its write: the hosted server, `wairon host packs`,
+  `wairon pack add` and `wairon pack install`. Two installs at the same moment take turns, and
+  `wairon pack add` and `wairon pack install` now also refuse a pack whose declared name another
+  pack in the folder already declares, naming it.
 - **Hosted web reads.** A missing `projectId` says so when the request sent `project`
   instead. The CLI reference names the web app's project pages and the `/web/*` reads behind
   them.

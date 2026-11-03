@@ -34,11 +34,15 @@ methods:
     narrative: []
     intent: >-
       Reads the pack's manifest to learn its declared name and version (defaulting the version to
-      "0.0.0-unversioned"), computes the content digest, copies the directory to
-      <store>/<name>/<version>/ — replacing that exact version if it already exists so a reinstall
-      is idempotent — and writes the install record alongside it with the origin, digest, wairon
-      version, and timestamp. A source directory with no pack entry file is refused before anything
-      is written, so a failed install never leaves a partial pack in the store.
+      "0.0.0-unversioned"), computes the content digest, then, holding the store folder's install
+      lock (the lock file the pack source names for every installer of a machine-wide packs folder,
+      held with the shared generation lock primitive, so a hosted server installing into the same
+      folder takes turns with it), refuses a pack another entry of the folder already declares (a
+      file or folder of another name, found through the pack source), naming it, and copies the
+      directory to <store>/<name>/<version>/ — replacing that exact version if it already exists so
+      a reinstall is idempotent — and writes the install record alongside it with the origin,
+      digest, wairon version, and timestamp. A source directory with no pack entry file is refused
+      before anything is written, so a failed install never leaves a partial pack in the store.
   - name: uninstallPack
     narrative: []
     intent: >-
@@ -55,6 +59,23 @@ methods:
       path order. Sorting and path normalization are what make the digest reproducible across
       platforms and independent of how the pack arrived.
 detail: intent
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/core/packstore.ts -> src/utils/file-lock.ts
+      reason: >-
+        The pack store's install takes the same generation lock primitive the hosted stores, the
+        spec tree and the hosted pack installs take (src/utils/file-lock.ts, file_write_lock), on
+        the install-lock file the pack source names for the folder: one safety-critical protocol
+        every holder must follow. Like src/utils/fs.ts it is shared infrastructure below the
+        subsystems; a second copy would be two implementations of one protocol that can drift apart,
+        and routing a lock through sdd_host's portal would make core depend on the hosted server.
+    - code: IMPORT_BYPASSES_PORTAL
+      at: src/core/packstore.ts -> src/utils/file-lock.ts
+      reason: >-
+        Same import as the UNDECLARED_DEPENDENCY allow: the pack store uses the shared generation
+        lock primitive directly, which no sdd_host portal publishes because it is not a capability
+        of the hosted server.
 status: complete
 createdAt: '2026-07-29T17:42:12.283Z'
-updatedAt: '2026-08-08T11:29:08.541Z'
+updatedAt: '2026-11-03T14:59:32.711Z'

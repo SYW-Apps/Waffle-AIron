@@ -35,6 +35,14 @@ methods:
       is required as a CommonJS module and its default/module export used (carrying programmatic
       rules). Any read/require/parse failure propagates to the caller, which records it as an
       EXTENSION_LOAD_ERROR.
+  - name: packInstallLockFile
+    narrative: []
+    intent: >-
+      Pure path: <packsDir>/.install for the global scope; for the project scope the lock folder
+      beside the project's packs folder, <packsDir>/../.spec-write.lock/packs-install, which a
+      project's .wai/.gitignore already keeps out of git, so nothing extra is committed with
+      .wai/packs. Every installer names its lock through this one function, so they all take the
+      same lock.
 detail: intent
 lint:
   allow:
@@ -45,4 +53,4 @@ lint:
         propagates to EXTENSION_LOAD_ERROR — a narrative would restate a parser, not add spec.
 status: complete
 createdAt: '2026-07-14T19:00:52.644Z'
-updatedAt: '2026-07-18T14:19:01.542Z'
+updatedAt: '2026-11-03T15:01:25.262Z'
