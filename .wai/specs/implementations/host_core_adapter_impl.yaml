@@ -227,6 +227,22 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: describeProject
+  - name: packInstallLockFile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packInstallLockFile
+    detail: calls-only
+  - name: findPackDeclaring
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: findPackDeclaring
+    detail: calls-only
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-10-24T11:32:15.553Z'
+updatedAt: '2026-11-03T14:59:28.666Z'

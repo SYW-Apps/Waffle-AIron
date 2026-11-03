@@ -505,7 +505,45 @@ methods:
           from a YAML pack on disk
         type: return
         outcome: ExtensionPack
+  - name: packInstallLockFile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack source
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: packInstallLockFile
+  - name: findPackDeclaring
+    narrative:
+      - stepNumber: 1
+        description: List the pack refs in the folder through the pack source.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: discoverPacks
+      - stepNumber: 2
+        description: Walk the refs in load order.
+        type: loop
+        loopKind: forEach
+        over: the discovered refs
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Skip a ref at or under one of the excepted paths (the install's own target, its source or
+          staging folder); for a folder, take its entry file.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Read the name the ref declares through the pack source; one that fails to read declares
+          nothing.
+        type: call
+        targetComponent: pack_source_adapter
+        targetMethod: readManifest
+      - stepNumber: 5
+        description: >-
+          Answer the first ref declaring the name by its install entry, the path segment directly
+          under the folder.
+        type: return
+        outcome: the install entry of a pack already declaring the name, or null
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-10-31T23:34:08.189Z'
+updatedAt: '2026-11-03T15:01:29.907Z'
