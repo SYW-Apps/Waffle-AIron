@@ -28,6 +28,7 @@ dependsOn:
   - host_sdk_adapter
   - host_validator_adapter
   - files_adapter
+  - file_write_lock
 durability: read-through
 lint:
   allow:
@@ -39,4 +40,4 @@ lint:
         level3 branch merges (the enum value does not exist in this branch's schema).
 status: complete
 createdAt: '2026-07-04T18:42:27.572Z'
-updatedAt: '2026-10-31T23:23:09.642Z'
+updatedAt: '2026-11-03T09:14:15.128Z'
