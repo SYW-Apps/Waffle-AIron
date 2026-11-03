@@ -149,6 +149,7 @@ methods:
       - host_core_adapter.loadExtensionPacks
       - host_core_adapter.discoverPacks
       - file_write_lock.run
+      - files_adapter.remove
     symbol: storeInstallGlobalPackArchive
   - name: installProjectPackArchive
     narrative: []
@@ -169,6 +170,7 @@ methods:
       - host_core_adapter.loadExtensionPacks
       - host_core_adapter.discoverPacks
       - file_write_lock.run
+      - files_adapter.remove
     symbol: storeInstallProjectPackArchive
   - name: executeApprovedResolveGlobalPacks
     narrative: []
@@ -248,4 +250,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-11-03T09:14:15.951Z'
+updatedAt: '2026-11-03T12:15:58.189Z'
