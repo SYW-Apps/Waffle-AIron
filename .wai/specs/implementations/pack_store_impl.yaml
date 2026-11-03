@@ -151,13 +151,16 @@ methods:
       <instance packs dir>/<name>: an installed pack there is first copied aside, held the same way
       in another fresh temporary folder so no packs folder lists it, and comes back when the removal
       or the copy fails, the install then failing with the placement's own error; a failure to copy
-      it aside stops before anything is removed. The copy aside and the staging folder are removed
-      afterwards, except a copy aside whose restore failed, which is kept rather than lose the pack;
-      a temporary folder that cannot be removed stays behind and never fails an install that placed
-      its pack. So a refused install leaves an existing installation as it was, and a failed one
-      puts it back unless putting it back fails too, when its copy stays in the temporary folder.
-      Probe and return the PackDescriptor (tier instance). Fails loudly on an unsafe archive, a code
-      pack, a non-declarative payload, or a clash.
+      it aside stops before anything is removed. A first install whose copy fails removes what it
+      wrote, and its error says so, naming the folder, when that removal fails. The copy aside and
+      the staging folder are removed afterwards, except a copy aside whose restore failed, which is
+      kept rather than lose the pack, the error then saying that the earlier pack is not back and
+      naming the kept copy's temporary folder; a temporary folder that cannot be removed stays
+      behind and never fails an install that placed its pack. So a refused install leaves an
+      existing installation as it was, and a failed one puts it back unless putting it back fails
+      too, when its copy stays in the temporary folder. Probe and return the PackDescriptor (tier
+      instance). Fails loudly on an unsafe archive, a code pack, a non-declarative payload, or a
+      clash.
     calls:
       - host_sdk_adapter.inspectArchive
       - host_sdk_adapter.extractArchive
@@ -175,16 +178,18 @@ methods:
       Bound-project counterpart of installGlobalPackArchive: reject code packs, stage and check the
       extraction under hosted-strict limits (SDK adapter) exactly as the global install does, and,
       holding the install lock of the project's .wai/packs (the lock file core names, in the
-      project's ignored lock folder), refuse a declared name another pack there already declares
-      before the staged pack takes the place of .wai/packs/<name>/, copied aside and restored on
-      failure exactly as the global install does. Return its probe, whose ref is the
-      '.wai/packs/<name>' directory reference the calling orchestrator registers (committed with the
-      project, so every clone and CI enforce it). Writes nothing to .wai/project.yaml. Assumes the
-      orchestrator has already bound the project root. Fails loudly on unsafe / code /
-      non-declarative input or a clash; a refused install leaves an existing installation as it was
-      and a failed one puts it back, as the global install does; a temporary folder that cannot be
-      removed never fails an install that placed its pack, so the calling orchestrator still
-      registers it.
+      project's ignored lock folder), refuse a declared name another pack there already declares,
+      and a declared or folder name the project selects from the pack store (its configuration read
+      through the core adapter), since .wai/packs/<name>/ is that selection's bundle folder and the
+      project would register the pack twice, before the staged pack takes the place of
+      .wai/packs/<name>/, copied aside and restored on failure exactly as the global install does.
+      Return its probe, whose ref is the '.wai/packs/<name>' directory reference the calling
+      orchestrator registers (committed with the project, so every clone and CI enforce it). Writes
+      nothing to .wai/project.yaml. Assumes the orchestrator has already bound the project root.
+      Fails loudly on unsafe / code / non-declarative input or a clash; a refused install leaves an
+      existing installation as it was and a failed one puts it back, as the global install does; a
+      temporary folder that cannot be removed never fails an install that placed its pack, so the
+      calling orchestrator still registers it.
     calls:
       - host_sdk_adapter.inspectArchive
       - host_sdk_adapter.extractArchive
@@ -193,6 +198,7 @@ methods:
       - files_adapter.remove
       - host_core_adapter.packInstallLockFile
       - host_core_adapter.findPackDeclaring
+      - host_core_adapter.loadProjectConfig
     symbol: storeInstallProjectPackArchive
   - name: executeApprovedResolveGlobalPacks
     narrative: []
@@ -272,4 +278,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-11-03T18:04:01.990Z'
+updatedAt: '2026-11-03T21:54:46.205Z'

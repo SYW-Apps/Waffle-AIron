@@ -38,13 +38,16 @@ methods:
       source names for every installer of a machine-wide packs folder, held with the shared
       generation lock primitive, so a hosted server installing into the same folder takes turns with
       it), refuses a pack another entry of the folder already declares (a file or folder of another
-      name, found through the pack source), naming it, and copies the directory to
+      name, found through the pack source; the source itself counts when it is an entry of the
+      folder, since it stays there beside the copy), naming it, and copies the directory to
       <store>/<name>/<version>/ — replacing that exact version if it already exists so a reinstall
       is idempotent — computes the content digest of the copied files and writes the install record
       alongside it with the origin, digest, wairon version, and timestamp, all still under the lock
       so the digest and the record describe the files this install wrote. A source directory with no
-      pack entry file is refused before anything is written, so a failed install never leaves a
-      partial pack in the store.
+      pack entry file is refused before anything is written. A copy, digest or record that fails
+      removes the version folder this install wrote, so the store never lists a partial pack, and
+      when that removal fails too the error says so and names the folder; a failed reinstall of an
+      installed version leaves that version removed.
   - name: uninstallPack
     narrative: []
     intent: >-
@@ -80,4 +83,4 @@ lint:
         of the hosted server.
 status: complete
 createdAt: '2026-07-29T17:42:12.283Z'
-updatedAt: '2026-11-03T18:04:08.859Z'
+updatedAt: '2026-11-03T21:54:43.968Z'
