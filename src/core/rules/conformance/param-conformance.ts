@@ -1103,7 +1103,11 @@ export const paramConformanceRule: SddRule = {
 
       // ---- 6b / 6c. a record, or a scalar, the code's type cannot hold ----
       const mismatched = agreed(judgements, 'mismatched');
-      if (mismatched.length > 0 && mismatched.every(found => found.scalar)) {
+      // agreed() keeps the first body's findings: every body must read the
+      // parameter as a plain mismatch, or the longer explanation stays.
+      const plainOnly = mismatched.every(found =>
+        judgements.every(judgement => judgement.mismatched.get(found.unit)?.scalar === true));
+      if (mismatched.length > 0 && plainOnly) {
         // Two annotations that disagree say it in a sentence: the value the
         // code takes is not the one the design declares.
         ctx.addIssue(

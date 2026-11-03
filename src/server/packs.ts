@@ -1,6 +1,8 @@
 import { files } from '../io/index.js';
 import type { ProfileFamily } from '../core/extensions.js';
+import * as os from 'os';
 import * as path from 'path';
+import { withFileLock } from '../utils/file-lock.js';
 import { runWithProjectRoot, getProjectRoot, replaceFile } from '../utils/fs.js';
 import { parseYaml } from '../utils/yaml.js';
 import type { PackScope } from '../core/extensions.js';
@@ -119,19 +121,53 @@ function assertNotCodeArchive(info: PackArchiveInfo): void {
   }
 }
 
-/** Safely extract a declarative .wpack into a FRESH pack directory under
+/** A declarative pack extracted into a staging folder outside every packs folder. */
+interface StagedPack {
+  dir: string;
+  /** The name its pack.yaml declares: the name it lists under, which the envelope does not guarantee. */
+  declared: string | undefined;
+}
+
+/** Safely extract a declarative .wpack into a fresh staging folder under
  *  hosted-strict limits (the SDK enforces zip-slip / entry-count / size /
  *  compression-ratio / depth and verifies integrity), then re-check the
- *  extracted entry parses as a declarative pack, removing the partial
- *  extraction on failure. */
-function extractDeclarativeArchive(archive: Uint8Array, destDir: string): void {
-  const result = hostSdk.extractArchive(archive, destDir, HOSTED_STRICT_LIMITS);
+ *  extracted entry parses as a declarative pack and read the name it declares.
+ *  The staging folder is removed on failure; on success the caller places the
+ *  pack and removes it. */
+function stageDeclarativeArchive(archive: Uint8Array): StagedPack {
+  const staging = files.makeTempDir(path.join(os.tmpdir(), 'wairon-hosted-pack-'));
   try {
-    assertDeclarative(files.readText(path.join(result.directory, result.entryPath)));
+    const result = hostSdk.extractArchive(archive, staging, HOSTED_STRICT_LIMITS);
+    const content = files.readText(path.join(result.directory, result.entryPath));
+    assertDeclarative(content);
+    return { dir: staging, declared: yamlName(content) };
   } catch (e) {
-    files.remove(destDir);
+    files.remove(staging);
     throw e;
   }
+}
+
+/** Put a staged pack in the place of `dest` (an earlier install there is replaced) and drop the staging folder. */
+function placeStaged(staged: StagedPack, dest: string): void {
+  files.remove(dest);
+  files.copy(staged.dir, dest, { recursive: true });
+}
+
+/** Where the lock serializing installs into one packs folder lives: inside the
+ *  instance packs folder for the global tier, and, for a project, inside the
+ *  project's lock folder, which its .wai/.gitignore already keeps out of git
+ *  (the project's .wai/packs is committed with it). */
+function installLockFile(dir: string, scope: PackScope): string {
+  return scope === 'project'
+    ? path.join(path.dirname(dir), '.spec-write.lock', 'packs-install')
+    : path.join(dir, '.install');
+}
+
+/** Run an install's clash check and write holding its packs folder's install lock. */
+function underInstallLock<T>(dir: string, scope: PackScope, install: () => T): T {
+  const lockFile = installLockFile(dir, scope);
+  files.ensureDir(path.dirname(lockFile));
+  return withFileLock(lockFile, install);
 }
 
 /** Load one pack ref in isolation to learn its name and contents. Never throws
@@ -402,8 +438,10 @@ function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
   // Installs write the MUTABLE instance tier only; the image layer is immutable.
   const dir = hostCore.globalPacksDir();
   const file = path.join(dir, `${name}.yaml`);
-  assertNoNameClash(dir, file, yamlName(content), 'global');
-  writeFileAtomic(file, content);
+  underInstallLock(dir, 'global', () => {
+    assertNoNameClash(dir, file, yamlName(content), 'global');
+    writeFileAtomic(file, content);
+  });
   const descriptor = probe(file, dir, 'global', `${name}.yaml`);
   descriptor.tier = 'instance';
   return descriptor;
@@ -413,17 +451,27 @@ function storeInstallGlobalPack(name: string, content: string): PackDescriptor {
  * Install a declarative pack from a .wpack archive into the MUTABLE instance
  * packs directory (WAIRON_PACKS_DIR); the image tier is never written. Inspect
  * + reject a code pack before disk, derive + sanitize the pack name (envelope,
- * or the optional override), extract into <instance packs dir>/<name> under
- * hosted-strict limits, re-verify it is declarative, and return its probe
- * (tier 'instance').
+ * or the optional override), extract it into a staging folder under
+ * hosted-strict limits, re-verify it is declarative and read the name its
+ * pack.yaml declares; then, holding the install lock, refuse that name when
+ * another pack declares it and place the pack at <instance packs dir>/<name>.
+ * The staging folder goes in every case. Returns its probe (tier 'instance').
  */
 function storeInstallGlobalPackArchive(archive: Uint8Array, name?: string): PackDescriptor {
   const info = hostSdk.inspectArchive(archive);
   assertNotCodeArchive(info);
   const packName = name ?? info.name;
-  const dir = packDirIn(hostCore.globalPacksDir(), packName);
-  assertNoNameClash(hostCore.globalPacksDir(), dir, info.name, 'global');
-  extractDeclarativeArchive(archive, dir);
+  const packsDir = hostCore.globalPacksDir();
+  const dir = packDirIn(packsDir, packName);
+  const staged = stageDeclarativeArchive(archive);
+  try {
+    underInstallLock(packsDir, 'global', () => {
+      assertNoNameClash(packsDir, dir, staged.declared, 'global');
+      placeStaged(staged, dir);
+    });
+  } finally {
+    files.remove(staged.dir);
+  }
   const descriptor = probe(dir, hostCore.globalPacksDir(), 'global', packName);
   descriptor.tier = 'instance';
   return descriptor;
@@ -439,17 +487,19 @@ function declaredName(loadRef: string, baseRoot: string, scope: PackScope): stri
 /**
  * Refuse an install whose pack declares the name another pack in the same
  * folder already declares: both would list under that one name, and a removal
- * by it would be ambiguous. Reinstalling over the same file or folder is a
- * refresh, not a clash.
+ * by it would be ambiguous. Reinstalling over the same file or folder (a
+ * versioned folder's versions included) is a refresh, not a clash.
  */
 function assertNoNameClash(dir: string, target: string, declared: string | undefined, scope: PackScope): void {
   if (!declared) return;
   const self = path.resolve(target);
   for (const ref of hostCore.discoverPacks(dir)) {
-    if (path.resolve(ref) === self) continue;
+    const at = path.resolve(ref);
+    if (at === self || at.startsWith(self + path.sep)) continue;
     if (declaredName(ref, dir, scope) === declared) {
+      const installed = path.relative(dir, ref).split(path.sep)[0];
       throw new Error(
-        `A pack declaring the name "${declared}" is already installed as "${path.basename(ref)}". `
+        `A pack declaring the name "${declared}" is already installed as "${installed}". `
         + 'Install it under that name to replace it, or remove that pack first.',
       );
     }
@@ -541,15 +591,19 @@ function storeInstallProjectPack(name: string, content: string): PackDescriptor 
   const root = getProjectRoot();
   const relRef = `.wai/packs/${name}.yaml`;
   const packsDir = path.join(root, '.wai', 'packs');
-  assertNoNameClash(packsDir, path.join(packsDir, `${name}.yaml`), yamlName(content), 'project');
-  writeFileAtomic(path.join(packsDir, `${name}.yaml`), content);
+  underInstallLock(packsDir, 'project', () => {
+    assertNoNameClash(packsDir, path.join(packsDir, `${name}.yaml`), yamlName(content), 'project');
+    writeFileAtomic(path.join(packsDir, `${name}.yaml`), content);
+  });
   return probe(relRef, root, 'project', relRef);
 }
 
 /**
  * Archive counterpart of storeInstallProjectPack for the bound project: inspect
- * + reject a code pack before disk, safely extract the declarative pack into
- * .wai/packs/<name>/ under hosted-strict limits, and return its probe, whose ref
+ * + reject a code pack before disk, stage and check the extraction as the
+ * global install does, refuse a declared name another pack in .wai/packs
+ * already declares (holding the install lock), place the pack at
+ * .wai/packs/<name>/, and return its probe, whose ref
  * (.wai/packs/<name>) is the directory reference the calling orchestrator
  * registers — committed with the project, so every clone and CI enforce it.
  * Assumes a project root is already bound in scope.
@@ -559,10 +613,18 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   assertNotCodeArchive(info);
   const packName = name ?? info.name;
   const root = getProjectRoot();
-  const dir = packDirIn(path.join(root, '.wai', 'packs'), packName);
-  assertNoNameClash(path.join(root, '.wai', 'packs'), dir, info.name, 'project');
+  const packsDir = path.join(root, '.wai', 'packs');
+  const dir = packDirIn(packsDir, packName);
   const relRef = `.wai/packs/${packName}`;
-  extractDeclarativeArchive(archive, dir);
+  const staged = stageDeclarativeArchive(archive);
+  try {
+    underInstallLock(packsDir, 'project', () => {
+      assertNoNameClash(packsDir, dir, staged.declared, 'project');
+      placeStaged(staged, dir);
+    });
+  } finally {
+    files.remove(staged.dir);
+  }
   return probe(relRef, root, 'project', relRef);
 }
 
