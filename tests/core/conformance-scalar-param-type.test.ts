@@ -68,6 +68,19 @@ describe('a scalar parameter annotated as another scalar', () => {
     expect(paramFindings(dispatchTree(ts(TS_BODY('parcelId: string')), false))).toEqual([]);
     expect(paramFindings(dispatchTree(py(PY_BODY('parcel_id: str')), true))).toEqual([]);
   });
+
+  it('a later body reading the parameter as an object keeps the longer explanation', () => {
+    const after = [
+      'export async function dispatchParcel(parcelId: any): Promise<string> {',
+      '  return `route-${parcelId.code}`;',
+      '}',
+    ];
+    const found = paramFindings(dispatchTree(ts(TS_BODY('parcelId: number'), after), false));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^PARAM_TYPE_MISMATCH: /);
+    expect(found[0]).toMatch(/cannot hold what it declares/);
+    expect(found[0]).not.toMatch(/annotates as another type/);
+  });
 });
 
 describe('the spellings a scalar is written as stay silent', () => {

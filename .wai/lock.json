@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "367b317a540fefd0c7908d5e23dea5a2ea878e4f6aed55b157801933321f879f"
+    "digest": "63aecfb95bb9338f668fcfc4e3494a8e6449eae2425fed777b610ca0b0e01b4a"
   },
-  "lockedAt": "2026-11-02T17:21:27.777Z",
+  "lockedAt": "2026-11-03T12:55:05.642Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.7.1-dev.2",
+  "validatorVersion": "6.7.2-dev.2",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -208,7 +208,7 @@
     ".wai/specs/components/pack_orchestrator.yaml": "7699fb47688b21f04a2016caab9a2a7b333d25fc0721350ae82f44cd8c3fc4a8",
     ".wai/specs/components/pack_scaffold.yaml": "7cc9e9fd6c2474a0139ed927dee122756f745f2af40126aef3ee7f9ae8c7faef",
     ".wai/specs/components/pack_source_adapter.yaml": "cf5fa9316491b85410a396ee1ca31e882b5cb0ee4a073f87d158cb58fd9bdd0f",
-    ".wai/specs/components/pack_store.yaml": "2c1462d63df82fd5ddf0fc3eb698657d9d348f6c8817de6dde0be7c1ed927caf",
+    ".wai/specs/components/pack_store.yaml": "1414c011b1cc93246577e51d30e5de295276db988b473e0a6ae31df8feb630a5",
     ".wai/specs/components/pack_store_adapter.yaml": "dd0447cd71b0d35e76b2936594077862e5009b8891f731427c9ec981052ac2f9",
     ".wai/specs/components/part_context.yaml": "c29b6577bbae31ccf6cb7a9540c9708c9233f6d8a4223429fd3d1ba6cdd5ced2",
     ".wai/specs/components/permission_admin_orchestrator.yaml": "119c3081051c8d53f53378cc7ae10fe8d3c1e6ac5d77a81adab0c5f63fca8772",
@@ -551,7 +551,7 @@
     ".wai/specs/implementations/pack_scaffold_impl.yaml": "6747ad4995f53a09d01864f1977611fb7d822116c94fe59c00bea8ac114efd05",
     ".wai/specs/implementations/pack_source_adapter_impl.yaml": "93c7504a58e4fef839403e86dd41818141d2cb5d7a7a0858cc9d408d36fbd7d3",
     ".wai/specs/implementations/pack_store_adapter_impl.yaml": "7d3dad5959dd3fbdca3509ef3ae1bf9a8b77880677e792836449866eef3a078e",
-    ".wai/specs/implementations/pack_store_impl.yaml": "331e2c4eb1b66b0691c09b0db1597e3a4c1fd4afd4f6fd78c4ad377a6a1ec8a9",
+    ".wai/specs/implementations/pack_store_impl.yaml": "d6a7959125b298be6e22b7a7d7f675a45e6bb7e72cdb3dc423d5ac8988c8353c",
     ".wai/specs/implementations/part_context_impl.yaml": "6e504ee9a51db63ee47c1b283cfe0ee00da411659bd76ef88f6538161f564617",
     ".wai/specs/implementations/permission_admin_orchestrator_impl.yaml": "a26582edcb1375bb49ffdcc9fb902a2103382103e1262edbc01d08f1c06c0cd3",
     ".wai/specs/implementations/permission_index_impl.yaml": "ce66cf1f76b24725b90904751fdc3df1358a7ae77dabe0cf88b205634493030d",
@@ -1790,7 +1790,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "b7955a429ac4a524fb60adce886e86ae8f84646332daca44b5e882192990c9c3",
+    "design": "ebf400c997071fa55e8072a90a65fa9bb3270ac82ea5497c3153e6737878391c",
     "release": "19678f595fd80d6d89ff08c6ed5dac4293387082f9114ab8515548b8d77b26f7",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1801,7 +1801,7 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.7.1-dev.2",
+      "validatorVersion": "6.7.2-dev.2",
       "doctrineDigest": "18781085ddc487404dc20654ac4e797732285c4af67a0c5c5bd3b50b23a2f516",
       "grade": "exact"
     },

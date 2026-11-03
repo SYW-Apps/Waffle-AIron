@@ -14,12 +14,17 @@ A fix release. Upgrading:
    next install of either under another file name is refused; remove one of them.
 
 - **`PARAM_TYPE_MISMATCH` says a value mismatch plainly.** A parameter annotated as another
-  type than its contract declares (one value for a list, a number for a string) is told in two
-  sentences, without the explanation meant for opaque and record-shaped parameters.
+  type than its contract declares (one value for a list, a number for a string) is told in a
+  short message ending with the fix, without the explanation meant for opaque and record-shaped
+  parameters. A parameter one overload annotates plainly and another reads as an object keeps
+  that explanation.
 - **Hosted pack names.** An install refuses a pack name Windows reserves for a device (`con`,
   `nul`, `com1`, …, with or without an extension), and a pack that declares the same name as
   another pack in the same folder, which would list twice under one name; reinstalling under
-  the same name still replaces it.
+  the same name still replaces it. An archive is judged by the name its `pack.yaml` declares,
+  not the name on its envelope, and a refused or failed archive install leaves an installed pack
+  as it was. Two installs into one packs folder at the same moment, from the server and the
+  admin CLI, take turns.
 - **Hosted web reads.** A missing `projectId` says so when the request sent `project`
   instead. The CLI reference names the web app's project pages and the `/web/*` reads behind
   them.

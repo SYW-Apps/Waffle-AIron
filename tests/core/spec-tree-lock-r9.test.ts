@@ -83,7 +83,8 @@ describe('the spec tree write lock (item 4, EDGE)', () => {
     const dir = tree();
     fs.writeFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), '0');
     await race(dir, [writerScript(dir, 60, true), writerScript(dir, 60, true)]);
-    expect(Number(fs.readFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), 'utf8'))).toBeLessThan(120);
+    // Unlocked, a write is lost or two writes interleave into a torn number: never the 120 both made.
+    expect(Number(fs.readFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), 'utf8'))).not.toBe(120);
   }, 120_000);
 
   it('a lock whose holder process is gone is broken at once', () => {
