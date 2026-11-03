@@ -15,7 +15,17 @@ import type { HostConfig } from '../../src/server/types.js';
 // there afterwards with its own content, with nothing extra listed.
 // ---------------------------------------------------------------------------
 
-const injected = vi.hoisted(() => ({ failCopy: null as null | ((from: string, to: string) => boolean) }));
+const injected = vi.hoisted(() => ({
+  failCopy: null as null | ((from: string, to: string) => boolean),
+  // The temporary folder the server sees: a worker thread cannot move it through TMPDIR.
+  tmpdir: null as null | string,
+}));
+
+vi.mock('os', async (importOriginal) => {
+  const real = await importOriginal<typeof import('os')>();
+  const tmpdir = () => injected.tmpdir ?? real.tmpdir();
+  return { ...real, tmpdir, default: { ...real, tmpdir } };
+});
 
 vi.mock('../../src/io/files.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../src/io/files.js')>();
@@ -64,6 +74,7 @@ describe('a hosted archive install that fails while placing the pack', () => {
 
   afterEach(() => {
     injected.failCopy = null;
+    injected.tmpdir = null;
     invalidateSpecCache();
     process.env = { ...savedEnv };
     fs.rmSync(base, { recursive: true, force: true });
@@ -93,6 +104,21 @@ describe('a hosted archive install that fails while placing the pack', () => {
     // The copy aside is gone once the pack is back.
     expect(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('wairon-hosted-pack-backup-') && !asideBefore.has(n)))
       .toEqual([]);
+  });
+
+  it('never takes its own staging folder for another pack when the packs folder is the temporary folder', () => {
+    const sources = path.join(base, 'src');
+    const first = declarativeWpack(sources, 'alpha', '1.0.0');
+    const second = declarativeWpack(sources, 'alpha', '2.0.0');
+    fs.mkdirSync(packsDir, { recursive: true });
+    injected.tmpdir = packsDir;
+    packs.installGlobalPackArchive(cfg, ADMIN, first);
+    packs.installGlobalPackArchive(cfg, ADMIN, second);
+    injected.tmpdir = null;
+    expect(fs.readFileSync(path.join(packsDir, 'alpha', 'pack.yaml'), 'utf8')).toMatch(/version: 2\.0\.0/);
+    // Neither the staging folder nor the copy aside is left behind to list.
+    expect(packs.listGlobalPacks(cfg, ADMIN).map((p) => p.name)).toEqual(['alpha']);
+    expect(fs.readdirSync(packsDir).filter((n) => !n.startsWith('.install'))).toEqual(['alpha']);
   });
 
   it('stops before removing anything when the installed pack cannot be copied aside', () => {
