@@ -75,19 +75,23 @@ methods:
       declarative pack exactly as the global install does. Holding the packs folder's install lock
       (the lock file core names for every installer of the folder, held with the shared file-lock
       primitive) from the check through the write, so two installs cannot both pass it, whether they
-      come from this server, the admin CLI or wairon pack add: a pack that declares the name another
-      pack in the same folder already declares is refused, naming that pack, since both would list
-      under one name; reinstalling over the same file or folder (a versioned folder's versions
-      included) replaces it. On success vendors it atomically into the bound project's
-      .wai/packs/<name>.yaml (re-installing refreshes the file). Writes nothing to
-      .wai/project.yaml: returns its probe, whose ref is that project-relative path reference, for
-      the calling orchestrator to register (registration appends only when absent, so a re-install
-      leaves a single registration). Because the pack and its registration are committed with the
-      project, every clone and CI then enforce it.
+      come from this server, the admin CLI or wairon pack add: a pack whose file or declared name
+      the project selects from the pack store (its configuration read through the core adapter) is
+      refused first, since .wai/packs/<name>/ is that selection's bundle folder and the project
+      would register the pack twice (an upload, an adoption and a policy install all write through
+      here); then a pack that declares the name another pack in the same folder already declares is
+      refused, naming that pack, since both would list under one name; reinstalling over the same
+      file or folder (a versioned folder's versions included) replaces it. On success vendors it
+      atomically into the bound project's .wai/packs/<name>.yaml (re-installing refreshes the file).
+      Writes nothing to .wai/project.yaml: returns its probe, whose ref is that project-relative
+      path reference, for the calling orchestrator to register (registration appends only when
+      absent, so a re-install leaves a single registration). Because the pack and its registration
+      are committed with the project, every clone and CI then enforce it.
     calls:
       - file_write_lock.run
       - host_core_adapter.packInstallLockFile
       - host_core_adapter.findPackDeclaring
+      - host_core_adapter.loadProjectConfig
     symbol: storeInstallProjectPack
   - name: removeProjectPack
     narrative: []
@@ -178,10 +182,10 @@ methods:
       Bound-project counterpart of installGlobalPackArchive: reject code packs, stage and check the
       extraction under hosted-strict limits (SDK adapter) exactly as the global install does, and,
       holding the install lock of the project's .wai/packs (the lock file core names, in the
-      project's ignored lock folder), refuse a declared name another pack there already declares,
-      and a declared or folder name the project selects from the pack store (its configuration read
-      through the core adapter), since .wai/packs/<name>/ is that selection's bundle folder and the
-      project would register the pack twice, before the staged pack takes the place of
+      project's ignored lock folder), refuse a declared or folder name the project selects from the
+      pack store (its configuration read through the core adapter), since .wai/packs/<name>/ is that
+      selection's bundle folder and the project would register the pack twice, and then a declared
+      name another pack there already declares, before the staged pack takes the place of
       .wai/packs/<name>/, copied aside and restored on failure exactly as the global install does.
       Return its probe, whose ref is the '.wai/packs/<name>' directory reference the calling
       orchestrator registers (committed with the project, so every clone and CI enforce it). Writes
@@ -278,4 +282,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-11-03T21:54:46.205Z'
+updatedAt: '2026-11-04T00:17:59.072Z'
