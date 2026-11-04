@@ -40,11 +40,12 @@ A fix release. Upgrading:
   itself one of its entries, and removes a version it could not finish copying, so it never
   lists a partial pack.
 - **A store selection and a pack added by path keep apart.** `wairon pack add` into a project,
-  and a hosted upload into one, refuse a pack under a name the project selects from the pack
-  store (`wairon pack use`): its `.wai/packs/<name>` folder is that selection's bundle, and the
-  pack would be registered twice. `wairon pack bundle` refuses a `.wai/packs/<name>` folder that
-  holds a pack added by path, where the bundled version would never load. Each names what to
-  remove first.
+  and a hosted install into one (an upload, an adoption or a policy install), refuse a pack under
+  a name the project selects from the pack store (`wairon pack use`): its `.wai/packs/<name>`
+  folder is that selection's bundle, and the pack would be registered twice. `wairon pack use`
+  refuses a pack the project already has added by path, and `wairon pack bundle` refuses a
+  `.wai/packs/<name>` folder that holds one, where the bundled version would never load. Each
+  names what to remove first.
 - **Hosted web reads.** A missing `projectId` says so when the request sent `project`
   instead. The CLI reference names the web app's project pages and the `/web/*` reads behind
   them.

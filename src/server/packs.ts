@@ -648,6 +648,7 @@ function storeInstallProjectPack(name: string, content: string): PackDescriptor 
   const relRef = `.wai/packs/${name}.yaml`;
   const packsDir = path.join(root, '.wai', 'packs');
   underInstallLock(packsDir, 'project', () => {
+    assertNotSelected(name, yamlName(content));
     assertNoNameClash(packsDir, yamlName(content), [path.join(packsDir, `${name}.yaml`)]);
     writeFileAtomic(path.join(packsDir, `${name}.yaml`), content);
   });
@@ -675,8 +676,8 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   const staged = stageDeclarativeArchive(archive);
   try {
     underInstallLock(packsDir, 'project', () => {
-      assertNoNameClash(packsDir, staged.declared, [dir, staged.root]);
       assertNotSelected(packName, staged.declared);
+      assertNoNameClash(packsDir, staged.declared, [dir, staged.root]);
       placeStaged(staged, dir);
     });
   } finally {
@@ -686,10 +687,11 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
 }
 
 /**
- * Refuse an upload into the bound project under a name the project selects from
- * the pack store: .wai/packs/<name>/ is that selection's bundle folder, and the
- * project would register the pack twice. `folder` is the name of the folder the
- * upload replaces, `declared` the name the pack declares.
+ * Refuse an upload, adoption or policy install into the bound project under a
+ * name the project selects from the pack store: .wai/packs/<name>/ is that
+ * selection's bundle folder, and the project would register the pack twice.
+ * `folder` is the name of the file or folder the install writes, `declared` the
+ * name the pack declares.
  */
 function assertNotSelected(folder: string, declared: string | undefined): void {
   const selected = (hostCore.loadProjectConfig()?.extensions?.packs ?? [])
@@ -697,7 +699,7 @@ function assertNotSelected(folder: string, declared: string | undefined): void {
     .map((s) => s.name);
   const name = [declared, folder].find((n) => n !== undefined && selected.includes(n));
   if (name !== undefined) {
-    throw new Error(`This project selects the pack "${name}" from the pack store, so an upload under that name would register it twice. Remove that pack from the project first.`);
+    throw new Error(`This project selects the pack "${name}" from the pack store, so a pack installed under that name would register it twice. Remove that pack from the project first.`);
   }
 }
 

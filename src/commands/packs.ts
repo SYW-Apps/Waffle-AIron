@@ -144,10 +144,12 @@ function resolveSourceUnit(source: string): { abs: string; isDir: boolean } {
  * is refused, naming that pack: both would list under one name. A ref at or
  * under one of `except` (the install's own target, its source) is no clash.
  */
-function writeUnderInstallLock(packsDir: string, scope: PackScope, declared: string | undefined, except: string[], write: () => void): void {
+function writeUnderInstallLock(packsDir: string, scope: PackScope, declared: string | undefined, except: string[], write: () => void, selectedNames?: Array<string | undefined>): void {
   const lockFile = packInstallLockFile(packsDir, scope);
   files.ensureDir(path.dirname(lockFile));
   withFileLock(lockFile, () => {
+    // A name the project selects is the more precise refusal: checked first.
+    if (selectedNames) refuseSelectedName(selectedNames);
     const installed = declared ? findPackDeclaring(packsDir, declared, except) : null;
     if (installed !== null) {
       const remove = `wairon pack remove ${installed}${scope === 'global' ? ' --global' : ''}`;
@@ -246,9 +248,8 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
   const dest = path.join(packsDir, path.basename(abs));
   files.ensureDir(packsDir);
   const placed = reported(() => writeUnderInstallLock(packsDir, 'project', probe.name, [dest, abs], () => {
-    refuseSelectedName([probe.name, path.basename(dest)]);
     if (path.resolve(dest) !== abs) files.copy(abs, dest, { recursive: true, force: true });
-  }));
+  }, [probe.name, path.basename(dest)]));
   if (!placed) return;
 
   if (registerPackRef(relRef)) {
@@ -331,10 +332,9 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
   const destDir = path.join(baseDir, name);
   files.ensureDir(baseDir);
   const placed = reported(() => writeUnderInstallLock(baseDir, scope, probe.name, [destDir, staging], () => {
-    if (!options.global) refuseSelectedName([probe.name, name]);
     if (files.exists(destDir)) files.remove(destDir);
     files.copy(staging, destDir, { recursive: true });
-  }));
+  }, options.global ? undefined : [probe.name, name]));
   dropStaging();
   if (!placed) return;
 
@@ -677,6 +677,18 @@ export async function usePack(
     return;
   }
 
+  // The project may already have this pack added by path: selecting it too would
+  // register it twice, and a bundle could never land in its folder.
+  const added = pathAddedPack(resolved.name);
+  if (added !== null) {
+    logger.error(
+      `This project already has the pack "${resolved.name}" added by path (${added}), so selecting it from the pack store would register it twice. `
+      + `Remove it first (\`wairon pack remove ${resolved.name}\`).`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   // Step 7: the selection to record.
   const recorded = options.source ?? resolved.origin;
   const selection = buildSelection(resolved, { ...options, pinVersion: version !== undefined });
@@ -701,6 +713,18 @@ export async function usePack(
   }
   warnIfUnobtainable(selection, recorded, options.bundle === true);
   logger.info('Commit .wai/project.yaml so every clone applies the same doctrine.');
+}
+
+/** The path reference this project registers for a pack named `name` (by the
+ *  name it declares, or its file or folder name), or null when there is none. */
+function pathAddedPack(name: string): string | null {
+  const root = getProjectRoot();
+  for (const entry of loadProjectConfig()?.extensions?.packs ?? []) {
+    if (typeof entry !== 'string') continue;
+    if (path.basename(entry).replace(/\.(ya?ml|cjs|js)$/i, '') === name) return entry;
+    if (probePack(entry, root, 'project').name === name) return entry;
+  }
+  return null;
 }
 
 /** True for a source a fresh machine or CI runner could actually fetch. */

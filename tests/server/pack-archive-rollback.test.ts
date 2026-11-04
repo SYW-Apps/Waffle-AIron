@@ -272,9 +272,19 @@ describe('a hosted archive install that fails while placing the pack', () => {
     fs.writeFileSync(path.join(bundled, 'pack.yaml'), 'name: alpha\nversion: 1.0.0\n');
 
     expect(() => packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack(sources, 'alpha', '2.0.0'))).toThrow(
-      /selects the pack "alpha" from the pack store, so an upload under that name would register it twice/,
+      /selects the pack "alpha" from the pack store, so a pack installed under that name would register it twice/,
     );
     expect(fs.readdirSync(path.join(root, '.wai', 'packs', 'alpha'))).toEqual(['1.0.0']);
     expect(runWithProjectRoot(root, () => loadProjectConfig())?.extensions?.packs ?? []).not.toContain('.wai/packs/alpha');
+
+    // A plain YAML install (the route adoption and policy installs share) is refused the same way.
+    const yaml = 'name: alpha\nversion: 2.0.0\nprofiles:\n  ddd:\n    family: backend-like\n';
+    expect(() => packs.installProjectPack(cfg, ADMIN, 'demo', 'alpha', yaml)).toThrow(/selects the pack "alpha" from the pack store/);
+    // Named for the selection while declaring another name: only the selection rule refuses it.
+    const zeta = 'name: zeta\nversion: 1.0.0\nprofiles:\n  ddd:\n    family: backend-like\n';
+    expect(() => packs.installProjectPack(cfg, ADMIN, 'demo', 'alpha', zeta)).toThrow(/selects the pack "alpha" from the pack store/);
+    expect(fs.readdirSync(path.join(root, '.wai', 'packs'))).toEqual(['alpha']);
+    const registered = runWithProjectRoot(root, () => loadProjectConfig())?.extensions?.packs ?? [];
+    expect(registered.filter((e) => typeof e === 'string')).toEqual([]);
   });
 });
