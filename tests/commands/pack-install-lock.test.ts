@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { zipSync } from 'fflate';
+import inquirer from 'inquirer';
 import { addPack, bundlePack, installPack, usePack } from '../../src/commands/packs.js';
 import { installPackFromDirectory, packInstallLockFile } from '../../src/core/index.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
@@ -18,6 +19,8 @@ const watched = vi.hoisted(() => ({
   held: [] as boolean[],
   inspect: null as null | ((f: string) => unknown),
   partialTo: null as null | string,
+  // When set, only a copy from this source to `partialTo` fails.
+  partialFrom: null as null | string,
   failRemove: null as null | string,
   // The temporary folder the commands see: a worker thread cannot move it through TMPDIR.
   tmpdir: null as null | string,
@@ -37,7 +40,8 @@ vi.mock('../../src/io/files.js', async (importOriginal) => {
     ...real,
     copy: (from: string, to: string, options?: Parameters<typeof real.copy>[2]) => {
       if (watched.lockFile && watched.inspect) watched.held.push(watched.inspect(watched.lockFile) !== null);
-      if (watched.partialTo && nodePath.resolve(to) === nodePath.resolve(watched.partialTo)) {
+      if (watched.partialTo && nodePath.resolve(to) === nodePath.resolve(watched.partialTo)
+        && (!watched.partialFrom || nodePath.resolve(from) === nodePath.resolve(watched.partialFrom))) {
         nodeFs.mkdirSync(to, { recursive: true });
         nodeFs.writeFileSync(nodePath.join(to, 'pack.yaml'), 'name: partial\n');
         throw new Error('no space left on device (injected)');
@@ -122,6 +126,7 @@ afterEach(() => {
   watched.lockFile = null;
   watched.held = [];
   watched.partialTo = null;
+  watched.partialFrom = null;
   watched.failRemove = null;
   watched.tmpdir = null;
   if (savedPacksDir === undefined) delete process.env.WAIRON_PACKS_DIR;
@@ -178,6 +183,20 @@ describe('pack add --global', () => {
     expect(watched.held).toEqual([true]);
     // Released afterwards.
     expect(inspectFileLock(lock)).toBeNull();
+  });
+
+  it('counts the packs folder when the source folder holds it', async () => {
+    const source = path.join(sources, 'outer');
+    fs.mkdirSync(source, { recursive: true });
+    fs.writeFileSync(path.join(source, 'pack.yaml'), packYaml('shared'));
+    packsDir = path.join(source, 'packs');
+    process.env.WAIRON_PACKS_DIR = packsDir;
+    fs.mkdirSync(packsDir, { recursive: true });
+    fs.writeFileSync(path.join(packsDir, 'a.yaml'), packYaml('shared'));
+    await addPack(source, true, true);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/declaring the name "shared" is already installed as "a\.yaml"/);
+    expect(packEntries(packsDir)).toEqual(['a.yaml']);
   });
 });
 
@@ -335,6 +354,44 @@ describe('pack bundle', () => {
     expect(process.exitCode ?? 0).toBe(0);
     expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).toMatch(/shared/);
   });
+
+  it('pack use checks again under the install lock for a pack added by path while it asked', async () => {
+    storePack('shared', '1.0.0');
+    const proj = mkTmp();
+    writeProject(proj);
+    vi.spyOn(process, 'cwd').mockReturnValue(proj);
+    invalidateSpecCache();
+    const added = path.join(proj, '.wai', 'packs', 'mine');
+    const lock = packInstallLockFile(path.join(proj, '.wai', 'packs'), 'project');
+    let heldWhileAsking: unknown = 'unset';
+    // While the question is open, another command adds the pack by path.
+    vi.spyOn(inquirer, 'prompt').mockImplementation((async () => {
+      heldWhileAsking = inspectFileLock(lock);
+      fs.mkdirSync(added, { recursive: true });
+      fs.writeFileSync(path.join(added, 'pack.yaml'), packYaml('shared'));
+      writeProject(proj, ['.wai/packs/mine']);
+      invalidateSpecCache();
+      return { confirmed: true };
+    }) as unknown as typeof inquirer.prompt);
+    const stdinTty = process.stdin.isTTY;
+    const stdoutTty = process.stdout.isTTY;
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+    try {
+      await usePack('shared');
+    } finally {
+      Object.defineProperty(process.stdin, 'isTTY', { value: stdinTty, configurable: true });
+      Object.defineProperty(process.stdout, 'isTTY', { value: stdoutTty, configurable: true });
+    }
+    // The question is asked without the lock; the write is refused under it.
+    expect(heldWhileAsking).toBeNull();
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/already has the pack "shared" added by path \(\.wai\/packs\/mine\)/);
+    const config = fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8');
+    expect(config).toContain('.wai/packs/mine');
+    expect(config).not.toMatch(/name: shared|"name":\s*"shared"/);
+    expect(inspectFileLock(lock)).toBeNull();
+  });
 });
 
 describe('the pack store install', () => {
@@ -393,6 +450,37 @@ describe('the pack store install', () => {
 
     installPackFromDirectory(dir);
     expect(fs.readFileSync(path.join(dest, 'pack.yaml'), 'utf8')).toBe(packYaml('shared'));
+  });
+
+  it('keeps the installed version when its reinstall fails, and names the copy it could not put back', () => {
+    const temp = mkTmp('wairon-pack-tmp-');
+    watched.tmpdir = temp;
+    const dir = path.join(sources, 'shared');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pack.yaml'), packYaml('shared'));
+    installPackFromDirectory(dir);
+    const dest = path.join(packsDir, 'shared', '1.0.0');
+    const earlier = fs.readFileSync(path.join(dest, 'pack.yaml'), 'utf8');
+
+    // The replacement's copy fails part way: the earlier version comes back.
+    fs.writeFileSync(path.join(dir, 'pack.yaml'), `${packYaml('shared')}# changed\n`);
+    watched.partialTo = dest;
+    watched.partialFrom = dir;
+    expect(() => installPackFromDirectory(dir)).toThrow(/^no space left on device \(injected\)$/);
+    expect(fs.readFileSync(path.join(dest, 'pack.yaml'), 'utf8')).toBe(earlier);
+    expect(fs.readdirSync(temp)).toEqual([]);
+
+    // Putting it back fails too: its copy is kept in the temporary folder and named.
+    watched.partialFrom = null;
+    let message = '';
+    try { installPackFromDirectory(dir); } catch (e) { message = (e as Error).message; }
+    const kept = fs.readdirSync(temp);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toMatch(/^wairon-packstore-backup-/);
+    expect(message).toContain(`Putting the earlier version back failed too (no space left on device (injected)); its copy is kept in the system temporary folder as ${kept[0]}.`);
+    expect(fs.readFileSync(path.join(temp, kept[0], 'held', 'pack', 'pack.yaml'), 'utf8')).toBe(earlier);
+    // The partial copy the failed restore wrote is not left to be listed.
+    expect(fs.existsSync(dest)).toBe(false);
   });
 
   it('installs an archive whose temporary extraction lies in the store itself', async () => {

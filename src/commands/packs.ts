@@ -223,7 +223,7 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
     const destDir = globalPacksDir();
     const dest = path.join(destDir, path.basename(abs));
     files.ensureDir(destDir);
-    const placed = reported(() => writeUnderInstallLock(destDir, 'global', probe.name, [dest, abs], () => {
+    const placed = reported(() => writeUnderInstallLock(destDir, 'global', probe.name, [dest], () => {
       if (path.resolve(dest) !== abs) files.copy(abs, dest, { recursive: true, force: true });
     }));
     if (!placed) return;
@@ -247,12 +247,15 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
   const packsDir = path.join(root, '.wai', 'packs');
   const dest = path.join(packsDir, path.basename(abs));
   files.ensureDir(packsDir);
-  const placed = reported(() => writeUnderInstallLock(packsDir, 'project', probe.name, [dest, abs], () => {
+  let registered = false;
+  const placed = reported(() => writeUnderInstallLock(packsDir, 'project', probe.name, [dest], () => {
     if (path.resolve(dest) !== abs) files.copy(abs, dest, { recursive: true, force: true });
+    // Registered under the same lock, so a `pack use` of this name takes turns with it.
+    registered = registerPackRef(relRef);
   }, [probe.name, path.basename(dest)]));
   if (!placed) return;
 
-  if (registerPackRef(relRef)) {
+  if (registered) {
     logger.success(`Vendored pack "${probe.name}" into ${relRef} and registered it in .wai/project.yaml.`);
   } else {
     // The locked write above already refreshed the vendored copy.
@@ -331,9 +334,13 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
   // Relocate the extracted tree to <name>/ (replacing any prior copy).
   const destDir = path.join(baseDir, name);
   files.ensureDir(baseDir);
+  let registered = false;
   const placed = reported(() => writeUnderInstallLock(baseDir, scope, probe.name, [destDir, staging], () => {
     if (files.exists(destDir)) files.remove(destDir);
     files.copy(staging, destDir, { recursive: true });
+    // A project registers the folder under the same lock, so a `pack use` of
+    // this name takes turns with it.
+    if (!options.global) registered = registerPackRef(relRef);
   }, options.global ? undefined : [probe.name, name]));
   dropStaging();
   if (!placed) return;
@@ -346,7 +353,7 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
 
   // Register the DIRECTORY ref, exactly like vendoring registers a ref.
   if (unattended(options.yes)) sayAppliedUnseen(probe.name ?? name, relRef);
-  if (registerPackRef(relRef)) {
+  if (registered) {
     logger.success(`Installed pack "${probe.name ?? name}" into ${relRef} and registered it in .wai/project.yaml.`);
   } else {
     logger.success(`Pack "${probe.name ?? name}" already registered — refreshed ${relRef} from ${path.basename(abs)}.`);
@@ -681,10 +688,7 @@ export async function usePack(
   // register it twice, and a bundle could never land in its folder.
   const added = pathAddedPack(resolved.name);
   if (added !== null) {
-    logger.error(
-      `This project already has the pack "${resolved.name}" added by path (${added}), so selecting it from the pack store would register it twice. `
-      + `Remove it first (\`wairon pack remove ${resolved.name}\`).`,
-    );
+    logger.error(pathAddedRefusal(resolved.name, added));
     process.exitCode = 1;
     return;
   }
@@ -702,8 +706,17 @@ export async function usePack(
       return;
     }
   }
-  // Step 13: recorded — project_config.withPack's reading, the one the report measured.
-  const reselected = upsertPackSelection(selection);
+  // Step 19: recorded — project_config.withPack's reading, the one the report
+  // measured — holding the install lock of the project's .wai/packs, which
+  // `pack add` holds while it adds a pack by path, and checking again there for
+  // a pack added by path in the meantime.
+  let reselected = false;
+  const recordedOk = reported(() => writeUnderInstallLock(path.join(getProjectRoot(), '.wai', 'packs'), 'project', undefined, [], () => {
+    const addedMeanwhile = pathAddedPack(resolved.name);
+    if (addedMeanwhile !== null) throw new Error(pathAddedRefusal(resolved.name, addedMeanwhile));
+    reselected = upsertPackSelection(selection);
+  }));
+  if (!recordedOk) return;
 
   // Step 14.
   logger.success(`${reselected ? 'Re-selected' : 'Selected'} pack "${resolved.name}"${selection.version ? ` v${selection.version}` : ' (latest installed)'} for this project.`);
@@ -713,6 +726,12 @@ export async function usePack(
   }
   warnIfUnobtainable(selection, recorded, options.bundle === true);
   logger.info('Commit .wai/project.yaml so every clone applies the same doctrine.');
+}
+
+/** Why `pack use` refuses a pack the project already has added by path. */
+function pathAddedRefusal(name: string, ref: string): string {
+  return `This project already has the pack "${name}" added by path (${ref}), so selecting it from the pack store would register it twice. `
+    + `Remove it first (\`wairon pack remove ${name}\`).`;
 }
 
 /** The path reference this project registers for a pack named `name` (by the

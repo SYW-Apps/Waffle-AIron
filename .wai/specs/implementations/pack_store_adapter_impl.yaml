@@ -44,10 +44,13 @@ methods:
       is idempotent — computes the content digest of the copied files and writes the install record
       alongside it with the origin, digest, wairon version, and timestamp, all still under the lock
       so the digest and the record describe the files this install wrote. A source directory with no
-      pack entry file is refused before anything is written. A copy, digest or record that fails
-      removes the version folder this install wrote, so the store never lists a partial pack, and
-      when that removal fails too the error says so and names the folder; a failed reinstall of an
-      installed version leaves that version removed.
+      pack entry file is refused before anything is written. An installed version being replaced is
+      first copied aside, nested in a fresh temporary folder so no packs folder lists it; a failure
+      to copy it aside stops before anything is removed. A copy, digest or record that fails removes
+      the version folder this install wrote and puts the earlier version back, so the store never
+      lists a partial pack; when that removal fails the error says so and names the folder, and when
+      putting the earlier version back fails, what the restore wrote is removed and the copy aside
+      is kept and named in the error. The copy aside is dropped otherwise.
   - name: uninstallPack
     narrative: []
     intent: >-
@@ -83,4 +86,4 @@ lint:
         of the hosted server.
 status: complete
 createdAt: '2026-07-29T17:42:12.283Z'
-updatedAt: '2026-11-03T21:54:43.968Z'
+updatedAt: '2026-11-04T10:26:04.362Z'
