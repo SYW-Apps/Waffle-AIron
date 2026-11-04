@@ -3,23 +3,52 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { zipSync } from 'fflate';
-import { addPack, bundlePack } from '../../src/commands/packs.js';
+import { addPack, bundlePack, installPack } from '../../src/commands/packs.js';
 import { installPackFromDirectory, packInstallLockFile } from '../../src/core/index.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { logger } from '../../src/utils/logger.js';
 import { inspectFileLock } from '../../src/utils/file-lock.js';
 
 // Every copy into a packs folder reports whether the folder's install lock is
-// held at that moment, so a test can see the write happen under it.
-const watched = vi.hoisted(() => ({ lockFile: null as null | string, held: [] as boolean[], inspect: null as null | ((f: string) => unknown) }));
+// held at that moment, so a test can see the write happen under it. A copy to
+// `partialTo` writes a pack entry there and then fails, as a full disk would
+// part way; a removal of `failRemove`, once it exists, fails.
+const watched = vi.hoisted(() => ({
+  lockFile: null as null | string,
+  held: [] as boolean[],
+  inspect: null as null | ((f: string) => unknown),
+  partialTo: null as null | string,
+  failRemove: null as null | string,
+  // The temporary folder the commands see: a worker thread cannot move it through TMPDIR.
+  tmpdir: null as null | string,
+}));
+
+vi.mock('os', async (importOriginal) => {
+  const real = await importOriginal<typeof import('os')>();
+  const tmpdir = () => watched.tmpdir ?? real.tmpdir();
+  return { ...real, tmpdir, default: { ...real, tmpdir } };
+});
 
 vi.mock('../../src/io/files.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../src/io/files.js')>();
+  const nodeFs = await import('fs');
+  const nodePath = await import('path');
   return {
     ...real,
     copy: (from: string, to: string, options?: Parameters<typeof real.copy>[2]) => {
       if (watched.lockFile && watched.inspect) watched.held.push(watched.inspect(watched.lockFile) !== null);
+      if (watched.partialTo && nodePath.resolve(to) === nodePath.resolve(watched.partialTo)) {
+        nodeFs.mkdirSync(to, { recursive: true });
+        nodeFs.writeFileSync(nodePath.join(to, 'pack.yaml'), 'name: partial\n');
+        throw new Error('no space left on device (injected)');
+      }
       real.copy(from, to, options);
+    },
+    remove: (target: string) => {
+      if (watched.failRemove && nodePath.resolve(target) === nodePath.resolve(watched.failRemove) && nodeFs.existsSync(target)) {
+        throw new Error('resource busy or locked (injected)');
+      }
+      real.remove(target);
     },
   };
 });
@@ -92,6 +121,9 @@ afterEach(() => {
   process.exitCode = 0;
   watched.lockFile = null;
   watched.held = [];
+  watched.partialTo = null;
+  watched.failRemove = null;
+  watched.tmpdir = null;
   if (savedPacksDir === undefined) delete process.env.WAIRON_PACKS_DIR;
   else process.env.WAIRON_PACKS_DIR = savedPacksDir;
 });
@@ -171,6 +203,35 @@ describe('pack add into a project', () => {
     expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).not.toContain('b.yaml');
     expect(fs.existsSync(path.join(proj, '.wai', '.spec-write.lock'))).toBe(true);
   });
+
+  it('refuses a pack under a name the project selects from the pack store, from a folder or an archive', async () => {
+    const proj = mkTmp();
+    writeProject(proj, [{ name: 'shared', version: '1.0.0', bundle: true }]);
+    vi.spyOn(process, 'cwd').mockReturnValue(proj);
+    invalidateSpecCache();
+    const bundled = path.join(proj, '.wai', 'packs', 'shared', '1.0.0');
+    fs.mkdirSync(bundled, { recursive: true });
+    fs.writeFileSync(path.join(bundled, 'pack.yaml'), packYaml('shared'));
+
+    // A folder named for the selection, declaring another name: it would replace the bundle.
+    const folder = path.join(sources, 'shared');
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, 'pack.yaml'), packYaml('other'));
+    await addPack(folder, false, true);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/selects the pack "shared" from the pack store/);
+    expect(errors.join('\n')).toMatch(/wairon pack unuse shared/);
+
+    process.exitCode = 0;
+    errors.length = 0;
+    await addPack(wpack(sources, 'shared', 'shared'), false, true);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/selects the pack "shared" from the pack store/);
+
+    // The bundle is untouched and nothing was registered by path.
+    expect(fs.readdirSync(path.join(proj, '.wai', 'packs', 'shared'))).toEqual(['1.0.0']);
+    expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).not.toContain('.wai/packs/shared');
+  });
 });
 
 describe('pack bundle', () => {
@@ -210,6 +271,24 @@ describe('pack bundle', () => {
     expect(process.exitCode ?? 0).toBe(0);
     expect(fs.existsSync(path.join(projectPacks, 'shared', '2.0.0', 'pack.yaml'))).toBe(true);
   });
+
+  it('refuses to bundle into a folder that holds a pack added by path', () => {
+    storePack('shared', '1.0.0');
+    const proj = mkTmp();
+    writeProject(proj, [{ name: 'shared', version: '1.0.0' }]);
+    vi.spyOn(process, 'cwd').mockReturnValue(proj);
+    invalidateSpecCache();
+    const added = path.join(proj, '.wai', 'packs', 'shared');
+    fs.mkdirSync(added, { recursive: true });
+    fs.writeFileSync(path.join(added, 'pack.yaml'), packYaml('shared'));
+
+    bundlePack('shared');
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/\.wai\/packs\/shared holds a pack added by path/);
+    expect(errors.join('\n')).toMatch(/wairon pack remove shared/);
+    expect(fs.readdirSync(added)).toEqual(['pack.yaml']);
+    expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).not.toMatch(/"bundle"\s*:\s*true|bundle: true/);
+  });
 });
 
 describe('the pack store install', () => {
@@ -225,6 +304,61 @@ describe('the pack store install', () => {
     fs.rmSync(path.join(packsDir, 'legacy.yaml'));
     installPackFromDirectory(dir);
     installPackFromDirectory(dir);
+    expect(fs.existsSync(path.join(packsDir, 'shared', '1.0.0', 'pack.yaml'))).toBe(true);
+    expect(packEntries(packsDir)).toEqual(['shared']);
+  });
+
+  it('refuses a source that is itself an entry of the store, since it would list beside the copy', () => {
+    const inside = path.join(packsDir, 'shared-src');
+    fs.mkdirSync(inside, { recursive: true });
+    fs.writeFileSync(path.join(inside, 'pack.yaml'), packYaml('shared'));
+    expect(() => installPackFromDirectory(inside)).toThrow(/declaring the name "shared" is already installed as "shared-src"/);
+    expect(packEntries(packsDir)).toEqual(['shared-src']);
+  });
+
+  it('copies, digests and records while it holds the store install lock', () => {
+    const dir = path.join(sources, 'shared');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pack.yaml'), packYaml('shared'));
+    fs.mkdirSync(packsDir, { recursive: true });
+    const lock = packInstallLockFile(packsDir, 'global');
+    watched.inspect = inspectFileLock;
+    watched.lockFile = lock;
+    installPackFromDirectory(dir);
+    watched.lockFile = null;
+    expect(watched.held).toEqual([true]);
+    expect(inspectFileLock(lock)).toBeNull();
+  });
+
+  it('removes a version it could not finish copying, and says so when it cannot', () => {
+    const dir = path.join(sources, 'shared');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'pack.yaml'), packYaml('shared'));
+    const dest = path.join(packsDir, 'shared', '1.0.0');
+
+    watched.partialTo = dest;
+    expect(() => installPackFromDirectory(dir)).toThrow(/^no space left on device \(injected\)$/);
+    expect(fs.existsSync(dest)).toBe(false);
+
+    watched.failRemove = dest;
+    expect(() => installPackFromDirectory(dir)).toThrow(/no space left on device \(injected\) The partial copy at .* could not be removed \(resource busy or locked \(injected\)\)/);
+    watched.failRemove = null;
+    watched.partialTo = null;
+
+    installPackFromDirectory(dir);
+    expect(fs.readFileSync(path.join(dest, 'pack.yaml'), 'utf8')).toBe(packYaml('shared'));
+  });
+
+  it('installs an archive whose temporary extraction lies in the store itself', async () => {
+    const outside = mkTmp();
+    vi.spyOn(process, 'cwd').mockReturnValue(outside);
+    const archive = wpack(sources, 'shared', 'shared');
+    fs.mkdirSync(packsDir, { recursive: true });
+    watched.tmpdir = packsDir;
+    await installPack(archive, true);
+    watched.tmpdir = null;
+    expect(errors).toEqual([]);
+    expect(process.exitCode ?? 0).toBe(0);
     expect(fs.existsSync(path.join(packsDir, 'shared', '1.0.0', 'pack.yaml'))).toBe(true);
     expect(packEntries(packsDir)).toEqual(['shared']);
   });

@@ -140,6 +140,11 @@ function holdingFolder(prefix: string): { root: string; held: string } {
   return { root, held: path.join(root, 'held', 'pack') };
 }
 
+/** The message of a thrown value. */
+function messageOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 /** Remove a temporary folder an install is done with. A folder left behind never
  *  fails an install that placed its pack, nor hides the error of one that did not. */
 function removeLeftover(dir: string): void {
@@ -176,14 +181,20 @@ function stageDeclarativeArchive(archive: Uint8Array): StagedPack {
  * and comes back when the removal or the copy fails, which then fails with its
  * own error; the copy aside is dropped once the staged pack is in place. A
  * failure to copy it aside stops before anything is removed, and a copy aside
- * that could not be put back is kept rather than lose the pack.
+ * that could not be put back is kept rather than lose the pack; the error then
+ * says so and names it. A first install whose copy fails removes what it wrote,
+ * and says so when it cannot.
  */
 function placeStaged(staged: StagedPack, dest: string): void {
   if (!files.exists(dest)) {
     try {
       files.copy(staged.dir, dest, { recursive: true });
     } catch (e) {
-      removeLeftover(dest);
+      try {
+        files.remove(dest);
+      } catch (cleanup) {
+        throw new Error(`${messageOf(e)} The partial copy "${path.basename(dest)}" in the packs folder could not be removed (${messageOf(cleanup)}); remove it before installing again.`);
+      }
       throw e;
     }
     return;
@@ -199,8 +210,9 @@ function placeStaged(staged: StagedPack, dest: string): void {
       try {
         files.remove(dest);
         files.copy(aside.held, dest, { recursive: true });
-      } catch {
+      } catch (restore) {
         keepAside = true;
+        throw new Error(`${messageOf(e)} Putting the earlier pack "${path.basename(dest)}" back failed too (${messageOf(restore)}); its copy is kept in the server's temporary folder as ${path.basename(aside.root)}.`);
       }
       throw e;
     }
@@ -664,12 +676,29 @@ function storeInstallProjectPackArchive(archive: Uint8Array, name?: string): Pac
   try {
     underInstallLock(packsDir, 'project', () => {
       assertNoNameClash(packsDir, staged.declared, [dir, staged.root]);
+      assertNotSelected(packName, staged.declared);
       placeStaged(staged, dir);
     });
   } finally {
     removeLeftover(staged.root);
   }
   return probe(relRef, root, 'project', relRef);
+}
+
+/**
+ * Refuse an upload into the bound project under a name the project selects from
+ * the pack store: .wai/packs/<name>/ is that selection's bundle folder, and the
+ * project would register the pack twice. `folder` is the name of the folder the
+ * upload replaces, `declared` the name the pack declares.
+ */
+function assertNotSelected(folder: string, declared: string | undefined): void {
+  const selected = (hostCore.loadProjectConfig()?.extensions?.packs ?? [])
+    .filter((e): e is PackSelection => typeof e !== 'string')
+    .map((s) => s.name);
+  const name = [declared, folder].find((n) => n !== undefined && selected.includes(n));
+  if (name !== undefined) {
+    throw new Error(`This project selects the pack "${name}" from the pack store, so an upload under that name would register it twice. Remove that pack from the project first.`);
+  }
 }
 
 /**

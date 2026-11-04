@@ -13,6 +13,10 @@ A fix release. Upgrading:
 3. A pack folder that holds two packs declaring the same name keeps working, but the next
    install of either under another file name is refused, on a hosted server and by
    `wairon pack add` and `wairon pack install` alike; remove one of them.
+4. A project that selects a pack from the pack store and also has a pack of that name added by
+   path keeps working, but the next `pack add`, upload or `pack bundle` of that name is refused;
+   drop the selection (`wairon pack unuse <name>`) or the pack added by path
+   (`wairon pack remove <name>`).
 
 - **`PARAM_TYPE_MISMATCH` says a value mismatch plainly.** A parameter annotated as another
   type than its contract declares (one value for a list, a number for a string) is told in a
@@ -25,13 +29,22 @@ A fix release. Upgrading:
   the same name still replaces it. An archive is judged by the name its `pack.yaml` declares,
   not the name on its envelope. A refused archive install leaves an installed pack as it was, and
   a failed one puts it back; should putting it back fail too, the earlier copy is kept in a
-  `wairon-hosted-pack-backup-*` folder in the system temporary folder, and the error says the
-  install failed.
+  `wairon-hosted-pack-backup-*` folder in the system temporary folder, and the error says so and
+  names that folder. A first install whose copy fails removes what it wrote, and says so when it
+  cannot.
 - **Pack installs take turns.** Every install into a packs folder holds that folder's install
   lock from its name check through its write: the hosted server, `wairon host packs`,
   `wairon pack add`, `wairon pack bundle` and `wairon pack install`. Two installs at the same
   moment take turns, and the local commands now also refuse a pack whose declared name another
-  pack in the folder already declares, naming it.
+  pack in the folder already declares, naming it. The pack store counts a source folder that is
+  itself one of its entries, and removes a version it could not finish copying, so it never
+  lists a partial pack.
+- **A store selection and a pack added by path keep apart.** `wairon pack add` into a project,
+  and a hosted upload into one, refuse a pack under a name the project selects from the pack
+  store (`wairon pack use`): its `.wai/packs/<name>` folder is that selection's bundle, and the
+  pack would be registered twice. `wairon pack bundle` refuses a `.wai/packs/<name>` folder that
+  holds a pack added by path, where the bundled version would never load. Each names what to
+  remove first.
 - **Hosted web reads.** A missing `projectId` says so when the request sent `project`
   instead. The CLI reference names the web app's project pages and the `/web/*` reads behind
   them.
