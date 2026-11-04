@@ -37,8 +37,12 @@ methods:
         onFalseStep: 8
       - stepNumber: 6
         description: >-
-          Copy the pack into the machine-wide packs directory (guarding against a self-copy) and
-          report that it now auto-loads for every project on this machine.
+          Holding the machine-wide packs folder's install lock (the lock file the core portal names
+          for every installer of the folder, held with the shared generation lock primitive, so a
+          hosted server installing into the same folder takes turns with it), refuse a pack another
+          pack there already declares by name (found through the core portal), naming it and how to
+          remove it, with a non-zero exit code; otherwise copy the pack in (guarding against a
+          self-copy) and report that it now auto-loads for every project on this machine.
         type: local
       - stepNumber: 7
         description: Done for the global scope.
@@ -90,13 +94,20 @@ methods:
         outcome: declined; nothing written
       - stepNumber: 16
         label: vendor
-        description: Vendor the pack into .wai/packs/ under its basename (guarding against a self-copy).
+        description: >-
+          Holding the install lock of the project's .wai/packs (the lock file the core portal names,
+          in the project's ignored lock folder), refuse a pack another pack there already declares
+          by name, naming it and how to remove it, and a pack whose declared or folder name the
+          project selects from the pack store (its configuration read through the core portal),
+          naming the selection and `wairon pack unuse <name>`, each with a non-zero exit code and
+          nothing registered; otherwise vendor the pack into .wai/packs/ under its basename
+          (guarding against a self-copy) and, still holding the lock, register it (the next step).
         type: local
       - stepNumber: 17
         description: >-
-          Register the vendored ref in extensions.packs through the core portal: it is appended only
-          when absent, the write records useGlobalPacks itself, and the result says whether it was
-          added.
+          Under the same lock, so a `pack use` of the name takes turns with it, register the
+          vendored ref in extensions.packs through the core portal: it is appended only when absent,
+          the write records useGlobalPacks itself, and the result says whether it was added.
         type: call
         targetComponent: project_config_portal
         targetMethod: registerPackRef
@@ -114,7 +125,9 @@ methods:
         type: jump
         toStep: 22
       - stepNumber: 21
-        description: 'Already registered: refresh the vendored copy from the source and report the refresh.'
+        description: >-
+          Already registered: the locked write already refreshed the vendored copy from the source;
+          report the refresh.
         type: local
       - stepNumber: 22
         description: 'Print commit guidance: commit .wai/ so CI and every clone enforce the pack''s doctrine.'
@@ -128,12 +141,22 @@ methods:
       terminal), it then measures the probed manifest as a supplied candidate through
       validator_portal.measurePackImpact, prints the report and asks — anything but yes returns with
       nothing vendored or registered; a refresh of an already-registered pack is measured the same
-      way, as an update. It registers the directory ref through the core portal's registerPackRef,
-      which appends it only when absent and records useGlobalPacks itself; a false result means the
-      ref was already registered, and the pack is reported as refreshed instead. The pack is
-      probe-loaded to verify it parses before anything is registered; a malformed/unsafe source
-      fails with a clear error and leaves no partial registration. --global selects nothing for any
-      project and shows no report.
+      way, as an update. It registers the directory ref through the core portal's registerPackRef
+      while it still holds the project's install lock (below), so a `pack use` of the name takes
+      turns with it; registerPackRef appends it only when absent and records useGlobalPacks itself;
+      a false result means the ref was already registered, and the pack is reported as refreshed
+      instead. Every write into a packs folder (global or project, archive or file/dir) holds that
+      folder's install lock, the lock file the core portal names for every installer of it, from a
+      name check through the write: a pack another pack in the folder already declares by name is
+      refused, naming it (the source is no exception, even when it holds the packs folder), so two
+      packs never list under one name and an install takes turns with the hosted server's. A project
+      install by path (file/dir or archive) also refuses, under that lock and before the name check,
+      a pack whose declared or folder name the project selects from the pack store (read through the
+      core portal's loadProjectConfig), since that folder is the selection's bundle folder and the
+      project would register the pack twice: it names the selection and `wairon pack unuse <name>`.
+      The pack is probe-loaded to verify it parses before anything is registered; a malformed/unsafe
+      source fails with a clear error and leaves no partial registration. --global selects nothing
+      for any project and shows no report.
   - name: listPacks
     narrative:
       - stepNumber: 1
@@ -346,9 +369,11 @@ methods:
         targetMethod: download
       - stepNumber: 2
         description: >-
-          A .wpack/.zip source is extracted into a temp directory through the SDK portal's hardened
-          path (envelope inspection, code-pack refusal, extraction limits); a plain directory source
-          is used as-is, and a bare pack FILE is refused because the store versions directories.
+          A .wpack/.zip source is extracted, held two levels down in a fresh temporary folder so no
+          packs folder lists it (the store included, even when it is the temporary folder), through
+          the SDK portal's hardened path (envelope inspection, code-pack refusal, extraction
+          limits); a plain directory source is used as-is, and a bare pack FILE is refused because
+          the store versions directories.
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
@@ -553,18 +578,35 @@ methods:
         type: return
         outcome: no-such-pack error; exit code 1, nothing written
       - stepNumber: 10
+        description: Read the project's path references, to find one holding a pack of the requested name
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 11
+        description: A pack the project already has added by path is not selected as well.
+        type: branch
+        condition: a path reference's file or folder name is the requested name, or its pack declares it
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Report the path reference and `wairon pack remove <name>`, with a non-zero exit code, and
+          stop without writing.
+        type: return
+        outcome: refused; nothing written
+      - stepNumber: 13
         description: >-
           Build the selection to record: the name; the resolved version when one was requested or
           --pin was passed; the digest under --pin; the source from --source or the recorded origin,
           only when it is a fetchable URL; the bundle flag when asked
         type: local
-      - stepNumber: 11
+      - stepNumber: 14
         description: 'An unattended run applies without the report: --yes, or no terminal to ask on'
         type: branch
         condition: '--yes was passed or stdin/stdout is not a terminal'
-        onTrueStep: 16
-        onFalseStep: 12
-      - stepNumber: 12
+        onTrueStep: 19
+        onFalseStep: 15
+      - stepNumber: 15
         description: >-
           Measure the selection before writing it: the pack's doctrine against wairon's defaults,
           the profiles of it that would govern, and the findings that change on this project (a dry
@@ -572,30 +614,32 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
-      - stepNumber: 13
+      - stepNumber: 16
         description: >-
           Print the impact report — on an update, also what the replaced version changed — and ask
           whether to apply it
         type: local
-      - stepNumber: 14
+      - stepNumber: 17
         description: Installing a pack is intentional
         type: branch
         condition: the answer is not yes
-        onFalseStep: 16
-      - stepNumber: 15
+        onFalseStep: 19
+      - stepNumber: 18
         description: Stop without writing
         type: return
         outcome: declined; nothing written
-      - stepNumber: 16
+      - stepNumber: 19
         label: record
         description: >-
-          Record the selection: any same-name selection is dropped and this one is appended last,
-          the highest precedence (project_config.withPack's reading, the one the report measured).
-          The result says whether a selection was replaced.
+          Holding the install lock of the project's .wai/packs, check again for a pack added by path
+          in the meantime (refused as in step 12, nothing written); then record the selection: any
+          same-name selection is dropped and this one is appended last, the highest precedence
+          (project_config.withPack's reading, the one the report measured). The result says whether
+          a selection was replaced.
         type: call
         targetComponent: project_config_portal
         targetMethod: upsertPackSelection
-      - stepNumber: 17
+      - stepNumber: 20
         description: >-
           Report "Re-selected" when a selection was replaced and "Selected" otherwise — an
           unattended run adds that it applied without showing the impact and names `wairon pack
@@ -607,19 +651,24 @@ methods:
     intent: >-
       Refuses outside a wairon project (the core portal's projectConfigExists). Resolves the
       requested name (and optional version) against the store via the core surface, erroring with
-      the installed names when nothing matches. Builds the selection: the name always; the resolved
-      version when one was requested or --pin was passed; the content digest under --pin; the source
-      from --source or the store's recorded origin, but ONLY when that origin is a fetchable URL;
-      and the bundle flag when asked. Unless the run is unattended (--yes, or no terminal to ask
-      on), it measures the selection through validator_portal.measurePackImpact and prints the
-      report — the pack's changes against wairon's defaults, the profiles of it that would govern,
-      the findings that change here — and asks to apply; anything but yes returns with nothing
-      written. Records it through the core portal's upsertPackSelection, which drops any same-name
-      selection and appends this one last — the highest precedence — and reports "Re-selected" when
-      that replaced a selection and "Selected" otherwise; an unattended run says it applied without
-      showing the impact and names `wairon pack impact`. Warns when no fetchable source was recorded
-      and no bundle was requested, because CI and a fresh clone would then be unable to obtain the
-      pack.
+      the installed names when nothing matches. Refuses a pack the project already has added by path
+      (a path reference in its configuration whose file or folder name is that name, or whose pack
+      declares it), naming the reference and `wairon pack remove <name>`, since selecting it too
+      would register it twice. Builds the selection: the name always; the resolved version when one
+      was requested or --pin was passed; the content digest under --pin; the source from --source or
+      the store's recorded origin, but ONLY when that origin is a fetchable URL; and the bundle flag
+      when asked. Unless the run is unattended (--yes, or no terminal to ask on), it measures the
+      selection through validator_portal.measurePackImpact and prints the report — the pack's
+      changes against wairon's defaults, the profiles of it that would govern, the findings that
+      change here — and asks to apply; anything but yes returns with nothing written. Records it
+      holding the install lock of the project's .wai/packs (the lock file the core portal names,
+      which a pack added by path holds through its registration), checking again there for a pack
+      added by path in the meantime (refused as above, with nothing written), through the core
+      portal's upsertPackSelection, which drops any same-name selection and appends this one last —
+      the highest precedence — and reports "Re-selected" when that replaced a selection and
+      "Selected" otherwise; an unattended run says it applied without showing the impact and names
+      `wairon pack impact`. Warns when no fetchable source was recorded and no bundle was requested,
+      because CI and a fresh clone would then be unable to obtain the pack.
   - name: unusePack
     narrative:
       - stepNumber: 1
@@ -740,7 +789,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the targets
-        endStep: 10
+        endStep: 11
       - stepNumber: 7
         description: Look the target up in the pack store specifically, so an existing bundle cannot satisfy it
         type: call
@@ -758,27 +807,39 @@ methods:
         targetMethod: packStoreDir
       - stepNumber: 10
         description: >-
+          Does the target's name folder in .wai/packs hold a pack entry itself: a pack added by
+          path, which the locked write refuses?
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packDirEntry
+      - stepNumber: 11
+        description: >-
           Resolve the pack against the STORE specifically, so an existing bundle cannot satisfy the
           lookup. A pack that is not installed is an error naming the store (exit code 1) and the
-          next target still proceeds; otherwise replace any previous copy at
-          .wai/packs/<name>/<version>/, copy the pack in, and print the written path.
+          next target still proceeds; otherwise, holding the install lock of the project's
+          .wai/packs (the lock file the core portal names, in the project's ignored lock folder),
+          refuse a pack another pack there already declares by name (its own name folder, every
+          version of it, is a refresh), and a name folder holding a pack added by path, naming
+          `wairon pack remove <name>`, each with a non-zero exit code while the next target still
+          proceeds; else replace any previous copy at .wai/packs/<name>/<version>/, copy the pack
+          in, and print the written path.
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Only bundled packs are recorded.
         type: branch
         condition: nothing was bundled
-        onTrueStep: 12
-        onFalseStep: 13
-      - stepNumber: 12
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
         description: Stop without writing the configuration.
         type: return
         outcome: nothing bundled; configuration untouched
-      - stepNumber: 13
+      - stepNumber: 14
         description: 'Record every bundled pack''s exact version and bundle: true on its selection, in one write.'
         type: call
         targetComponent: project_config_portal
         targetMethod: markSelectionsBundled
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Report the bundled packs and remind to commit .wai/: a clone and CI now apply this
           doctrine with no pack store and no network.
@@ -791,12 +852,17 @@ methods:
       selection, every selection under --all, or (with no argument) those already marked for
       bundling — erroring when nothing matches. For each target, resolves the pack against the STORE
       specifically (a bundle is what is being created, so the existing bundle must not satisfy the
-      lookup), replaces any previous copy at .wai/packs/<name>/<version>/, and copies the pack in; a
-      pack that is not installed is an error naming the store, and the remaining targets still
-      proceed. Then, when anything was bundled, records every bundled pack's exact version and
-      bundle: true on its selection in ONE core portal markSelectionsBundled call, so resolution
-      prefers the committed copy and the declared intent can never drift from the committed bytes.
-      Reports each written path plus the reminder to commit .wai/.
+      lookup), and, holding the install lock of the project's .wai/packs (the lock file the core
+      portal names for every installer of it), refuses a pack another pack there already declares by
+      name (the pack's own name folder, every version of it, is a refresh), naming it, and a name
+      folder that holds a pack added by path (its pack entry in the folder itself, from `pack add`
+      or a hosted upload, where the loader would never see a bundled version), naming `wairon pack
+      remove <name>`; otherwise replaces any previous copy at .wai/packs/<name>/<version>/ and
+      copies the pack in; a pack that is not installed is an error naming the store, and the
+      remaining targets still proceed. Then, when anything was bundled, records every bundled pack's
+      exact version and bundle: true on its selection in ONE core portal markSelectionsBundled call,
+      so resolution prefers the committed copy and the declared intent can never drift from the
+      committed bytes. Reports each written path plus the reminder to commit .wai/.
   - name: syncPacks
     narrative:
       - stepNumber: 1
@@ -869,9 +935,10 @@ methods:
         type: local
       - stepNumber: 14
         description: >-
-          Download the archive to a temporary file and extract it through the SDK portal's hardened
-          path — the same envelope inspection, code-pack refusal, and extraction limits a local
-          install gets, so a remote pack has no separate validation route.
+          Download the archive to a temporary file and extract it, held two levels down in a fresh
+          temporary folder so no packs folder lists it, through the SDK portal's hardened path — the
+          same envelope inspection, code-pack refusal, and extraction limits a local install gets,
+          so a remote pack has no separate validation route.
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
@@ -969,6 +1036,23 @@ methods:
         outcome: impact shown; nothing written
     detail: calls-only
 detail: calls-only
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/packs.ts -> src/utils/file-lock.ts
+      reason: >-
+        pack add holds a packs folder's install lock with the same generation lock primitive the
+        hosted pack installs, the hosted stores and the spec tree take (src/utils/file-lock.ts,
+        file_write_lock): one safety-critical protocol every holder must follow. Like
+        src/utils/fs.ts it is shared infrastructure below the subsystems; a second copy in sdd_cli
+        would be two implementations of one protocol that can drift apart, and routing a lock
+        through sdd_host's portal would make the CLI depend on the hosted server.
+    - code: IMPORT_BYPASSES_PORTAL
+      at: src/commands/packs.ts -> src/utils/file-lock.ts
+      reason: >-
+        Same import as the UNDECLARED_DEPENDENCY allow: pack add uses the shared generation lock
+        primitive directly, which no sdd_host portal publishes because it is not a capability of the
+        hosted server.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-10-31T23:47:38.883Z'
+updatedAt: '2026-11-04T10:26:08.383Z'

@@ -17,17 +17,28 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Rejects an unsafe pack name (anything outside [A-Za-z0-9._-], to prevent path traversal).
-      Parses the content as YAML and validates it against the declarative-pack schema (name +
-      profiles + language/platform tables); a programmatic/code pack — or any parse or shape failure
-      — is refused with guidance to install code packs via the trusted filesystem (a baked image
-      layer or a mounted packs volume). On success writes it atomically as <name>.yaml into the
-      MUTABLE instance packs directory (WAIRON_PACKS_DIR), creating that directory if needed; the
-      immutable image-layer directory is never written. Returns its probe (tier 'instance').
+      Rejects an unsafe pack name (anything outside [A-Za-z0-9._-], to prevent path traversal; nor
+      starting with a dot). A name Windows reserves for a device (con, prn, aux, nul, com0-9,
+      lpt0-9, with or without an extension) is refused too. Parses the content as YAML and validates
+      it against the declarative-pack schema (name + profiles + language/platform tables); a
+      programmatic/code pack — or any parse or shape failure — is refused with guidance to install
+      code packs via the trusted filesystem (a baked image layer or a mounted packs volume). Holding
+      the packs folder's install lock (the lock file core names for every installer of the folder,
+      held with the shared file-lock primitive) from the check through the write, so two installs
+      cannot both pass it, whether they come from this server, the admin CLI or wairon pack add: a
+      pack that declares the name another pack in the same folder already declares is refused,
+      naming that pack, since both would list under one name; reinstalling over the same file or
+      folder (a versioned folder's versions included) replaces it. On success writes it atomically
+      as <name>.yaml into the MUTABLE instance packs directory (WAIRON_PACKS_DIR), creating that
+      directory if needed; the immutable image-layer directory is never written. Returns its probe
+      (tier 'instance').
     calls:
       - host_core_adapter.checkDeclarativePack
       - host_core_adapter.globalPacksDir
       - host_core_adapter.loadExtensionPacks
+      - file_write_lock.run
+      - host_core_adapter.packInstallLockFile
+      - host_core_adapter.findPackDeclaring
     symbol: storeInstallGlobalPack
   - name: removeGlobalPack
     narrative: []
@@ -60,13 +71,27 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Rejects an unsafe pack name, then validates the content as a declarative pack exactly as the
-      global install does. On success vendors it atomically into the bound project's
-      .wai/packs/<name>.yaml (re-installing refreshes the file). Writes nothing to
-      .wai/project.yaml: returns its probe, whose ref is that project-relative path reference, for
-      the calling orchestrator to register (registration appends only when absent, so a re-install
-      leaves a single registration). Because the pack and its registration are committed with the
-      project, every clone and CI then enforce it.
+      Rejects an unsafe pack name as the global install does, then validates the content as a
+      declarative pack exactly as the global install does. Holding the packs folder's install lock
+      (the lock file core names for every installer of the folder, held with the shared file-lock
+      primitive) from the check through the write, so two installs cannot both pass it, whether they
+      come from this server, the admin CLI or wairon pack add: a pack whose file or declared name
+      the project selects from the pack store (its configuration read through the core adapter) is
+      refused first, since .wai/packs/<name>/ is that selection's bundle folder and the project
+      would register the pack twice (an upload, an adoption and a policy install all write through
+      here); then a pack that declares the name another pack in the same folder already declares is
+      refused, naming that pack, since both would list under one name; reinstalling over the same
+      file or folder (a versioned folder's versions included) replaces it. On success vendors it
+      atomically into the bound project's .wai/packs/<name>.yaml (re-installing refreshes the file).
+      Writes nothing to .wai/project.yaml: returns its probe, whose ref is that project-relative
+      path reference, for the calling orchestrator to register (registration appends only when
+      absent, so a re-install leaves a single registration). Because the pack and its registration
+      are committed with the project, every clone and CI then enforce it.
+    calls:
+      - file_write_lock.run
+      - host_core_adapter.packInstallLockFile
+      - host_core_adapter.findPackDeclaring
+      - host_core_adapter.loadProjectConfig
     symbol: storeInstallProjectPack
   - name: removeProjectPack
     narrative: []
@@ -113,33 +138,71 @@ methods:
       Install a declarative pack from a .wpack archive into the MUTABLE instance packs directory
       (the image tier is never written). Inspect the envelope via the host SDK adapter and reject a
       code pack (kind: code) — the declarative-only surface policy — before any bytes touch disk.
-      Derive the pack name from the envelope (or the optional override) and sanitize it to the
-      pack-name charset, then extract the archive into <instance packs dir>/<name> via the SDK
-      adapter under hosted-strict limits (the SDK enforces zip-slip / entry-count / size /
-      compression-ratio / depth and verifies integrity). Re-check the extracted pack.yaml parses as
-      a declarative pack via the core adapter (defense in depth), removing the partial extraction on
-      failure. Probe and return the PackDescriptor (tier instance). Fails loudly on an unsafe
-      archive, a code pack, or a non-declarative payload.
+      Derive the pack name from the envelope (or the optional override) and sanitize it as
+      installGlobalPack does, refusing a folder that would leave the packs directory. Extract the
+      archive into a temporary staging folder outside the packs directory, held two levels down in a
+      fresh temporary folder (a packs folder lists a folder holding a pack entry, or one holding
+      such a folder, never deeper) via the SDK adapter under hosted-strict limits (the SDK enforces
+      zip-slip / entry-count / size / compression-ratio / depth and verifies integrity), re-check
+      the extracted pack.yaml parses as a declarative pack (defense in depth), and read the name it
+      declares: the name the pack lists under, which the envelope does not guarantee. Then, holding
+      the packs folder's install lock (the lock file core names for every installer of the folder,
+      held with the shared file-lock primitive) from the check through the write: a pack declaring
+      that name which another pack in the same folder already declares is refused, naming that pack
+      (found through core), since both would list under one name; reinstalling over the same folder
+      (its versions included) replaces it, and the staging folder is never taken for another pack,
+      even when the packs folder is the temporary folder. The staged pack then takes the place of
+      <instance packs dir>/<name>: an installed pack there is first copied aside, held the same way
+      in another fresh temporary folder so no packs folder lists it, and comes back when the removal
+      or the copy fails, the install then failing with the placement's own error; a failure to copy
+      it aside stops before anything is removed. A first install whose copy fails removes what it
+      wrote, and its error says so, naming the folder, when that removal fails. The copy aside and
+      the staging folder are removed afterwards, except a copy aside whose restore failed, which is
+      kept rather than lose the pack, the error then saying that the earlier pack is not back and
+      naming the kept copy's temporary folder; a temporary folder that cannot be removed stays
+      behind and never fails an install that placed its pack. So a refused install leaves an
+      existing installation as it was, and a failed one puts it back unless putting it back fails
+      too, when its copy stays in the temporary folder. Probe and return the PackDescriptor (tier
+      instance). Fails loudly on an unsafe archive, a code pack, a non-declarative payload, or a
+      clash.
     calls:
       - host_sdk_adapter.inspectArchive
       - host_sdk_adapter.extractArchive
       - host_core_adapter.globalPacksDir
       - host_core_adapter.loadExtensionPacks
+      - file_write_lock.run
+      - files_adapter.remove
+      - host_core_adapter.packInstallLockFile
+      - host_core_adapter.findPackDeclaring
     symbol: storeInstallGlobalPackArchive
   - name: installProjectPackArchive
     narrative: []
     detail: intent
     intent: >-
-      Bound-project counterpart of installGlobalPackArchive: reject code packs, safely extract the
-      declarative pack into the project's .wai/packs/<name>/ under hosted-strict limits (SDK
-      adapter), and return its probe, whose ref is the '.wai/packs/<name>' directory reference the
-      calling orchestrator registers (committed with the project, so every clone and CI enforce it).
-      Writes nothing to .wai/project.yaml. Assumes the orchestrator has already bound the project
-      root. Fails loudly on unsafe / code / non-declarative input.
+      Bound-project counterpart of installGlobalPackArchive: reject code packs, stage and check the
+      extraction under hosted-strict limits (SDK adapter) exactly as the global install does, and,
+      holding the install lock of the project's .wai/packs (the lock file core names, in the
+      project's ignored lock folder), refuse a declared or folder name the project selects from the
+      pack store (its configuration read through the core adapter), since .wai/packs/<name>/ is that
+      selection's bundle folder and the project would register the pack twice, and then a declared
+      name another pack there already declares, before the staged pack takes the place of
+      .wai/packs/<name>/, copied aside and restored on failure exactly as the global install does.
+      Return its probe, whose ref is the '.wai/packs/<name>' directory reference the calling
+      orchestrator registers (committed with the project, so every clone and CI enforce it). Writes
+      nothing to .wai/project.yaml. Assumes the orchestrator has already bound the project root.
+      Fails loudly on unsafe / code / non-declarative input or a clash; a refused install leaves an
+      existing installation as it was and a failed one puts it back, as the global install does; a
+      temporary folder that cannot be removed never fails an install that placed its pack, so the
+      calling orchestrator still registers it.
     calls:
       - host_sdk_adapter.inspectArchive
       - host_sdk_adapter.extractArchive
       - host_core_adapter.loadExtensionPacks
+      - file_write_lock.run
+      - files_adapter.remove
+      - host_core_adapter.packInstallLockFile
+      - host_core_adapter.findPackDeclaring
+      - host_core_adapter.loadProjectConfig
     symbol: storeInstallProjectPackArchive
   - name: executeApprovedResolveGlobalPacks
     narrative: []
@@ -219,4 +282,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-04T18:42:57.340Z'
-updatedAt: '2026-10-04T19:55:01.991Z'
+updatedAt: '2026-11-04T00:17:59.072Z'

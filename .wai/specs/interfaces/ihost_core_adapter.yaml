@@ -293,8 +293,39 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: packInstallLockFile
+    description: >-
+      The install-lock file of a packs folder, forwarded to the extension portal: the one every
+      installer of the folder holds.
+    signature: 'packInstallLockFile(packsDir: string, scope: pack_scope): string'
+    returns: string
+    params:
+      - name: packsDir
+        type: string
+        description: The packs folder an install writes into.
+      - name: scope
+        type: pack_scope
+        description: global for a machine-wide packs folder, project for a project's .wai/packs.
+  - name: findPackDeclaring
+    description: >-
+      The install entry of a pack in a packs folder declaring a name, skipping the given paths, or
+      null; forwarded to the extension portal.
+    signature: 'findPackDeclaring(packsDir: string, name: string, except: list<string>): string?'
+    returns: string?
+    params:
+      - name: packsDir
+        type: string
+        description: The packs folder to look in.
+      - name: name
+        type: string
+        description: The name the pack being installed declares.
+      - name: except
+        type: list<string>
+        description: >-
+          Paths whose packs are not another pack: the install's own target, its source or staging
+          folder.
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-10-23T22:30:29.554Z'
+updatedAt: '2026-11-03T14:59:27.528Z'

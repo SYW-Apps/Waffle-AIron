@@ -46,6 +46,8 @@ export {
   // Extension packs, for the hosted pack store and the policy plane.
   globalPacksDir,
   discoverPacks,
+  packInstallLockFile,
+  findPackDeclaring,
   loadExtensionPacks,
   checkDeclarativePack,
   parseDeclarativePack,

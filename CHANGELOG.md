@@ -4,6 +4,56 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.7.2 (from v6.7.1)
+
+A fix release. Upgrading:
+
+1. Install 6.7.2 the way you installed wairon (`wairon update`, or `@wairon/cli@6.7.2` from npm).
+2. Restart your AI tool, or reconnect its MCP server, so the assistant talks to the new wairon.
+3. A pack folder that holds two packs declaring the same name keeps working, but the next
+   install of either under another file name is refused, on a hosted server and by
+   `wairon pack add` and `wairon pack install` alike; remove one of them.
+4. A project that selects a pack from the pack store and also has a pack of that name added by
+   path keeps working, but the next `pack add`, upload or `pack bundle` of that name is refused;
+   drop the selection (`wairon pack unuse <name>`) or the pack added by path
+   (`wairon pack remove <name>`).
+
+- **`PARAM_TYPE_MISMATCH` says a value mismatch plainly.** A parameter annotated as another
+  type than its contract declares (one value for a list, a number for a string) is told in a
+  short message ending with the fix, without the explanation meant for opaque and record-shaped
+  parameters. A parameter one overload annotates plainly and another reads as an object keeps
+  that explanation.
+- **Hosted pack names.** An install refuses a pack name Windows reserves for a device (`con`,
+  `nul`, `com1`, …, with or without an extension), and a pack that declares the same name as
+  another pack in the same folder, which would list twice under one name; reinstalling under
+  the same name still replaces it. An archive is judged by the name its `pack.yaml` declares,
+  not the name on its envelope. A refused archive install leaves an installed pack as it was, and
+  a failed one puts it back; should putting it back fail too, the earlier copy is kept in a
+  `wairon-hosted-pack-backup-*` folder in the system temporary folder, and the error says so and
+  names that folder. A first install whose copy fails removes what it wrote, and says so when it
+  cannot.
+- **Pack installs take turns.** Every install into a packs folder holds that folder's install
+  lock from its name check through its write: the hosted server, `wairon host packs`,
+  `wairon pack add`, `wairon pack bundle` and `wairon pack install`. Two installs at the same
+  moment take turns, and the local commands now also refuse a pack whose declared name another
+  pack in the folder already declares, naming it, even when the source folder holds the packs
+  folder. The pack store counts a source folder that is itself one of its entries. A store
+  install that fails part way removes the version it could not finish and puts back the version
+  it replaced; when the removal fails, or putting the earlier version back fails, the error says
+  so and names the folder to remove or the copy kept in a `wairon-packstore-backup-*` folder in
+  the system temporary folder.
+- **A store selection and a pack added by path keep apart.** `wairon pack add` into a project,
+  and a hosted install into one (an upload, an adoption or a policy install), refuse a pack under
+  a name the project selects from the pack store (`wairon pack use`): its `.wai/packs/<name>`
+  folder is that selection's bundle, and the pack would be registered twice. `wairon pack use`
+  refuses a pack the project already has added by path, and `wairon pack bundle` refuses a
+  `.wai/packs/<name>` folder that holds one, where the bundled version would never load. Each
+  names what to remove first. `pack add` registers its pack, and `pack use` records its
+  selection, under the project's install lock, so the two take turns.
+- **Hosted web reads.** A missing `projectId` says so when the request sent `project`
+  instead. The CLI reference names the web app's project pages and the `/web/*` reads behind
+  them.
+
 ## v6.7.1 (from v6.7.0)
 
 A fix release. Upgrading:

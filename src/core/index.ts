@@ -309,6 +309,8 @@ export type { ExtensionPack } from './extensions.js';
 export {
   globalPacksDir,
   discoverPacks,
+  packInstallLockFile,
+  findPackDeclaring,
   packDirEntry,
   loadExtensionPacks,
   checkDeclarativePack,

@@ -46,6 +46,9 @@ describe('a scalar parameter annotated as another scalar', () => {
     const found = paramFindings(dispatchTree(ts(TS_BODY('parcelId: number')), false));
     expect(found).toHaveLength(1);
     expect(found[0]).toMatch(/^PARAM_TYPE_MISMATCH: .*"parcelId" \(the code takes "parcelId" annotated "number", where the contract declares "string"\)/);
+    // Two annotations that disagree are said plainly, without the opaque-shape explanation.
+    expect(found[0]).toMatch(/annotates as another type/);
+    expect(found[0]).not.toMatch(/credential|opaque/);
   });
 
   it('Python: int where the contract declares a string', () => {
@@ -64,6 +67,19 @@ describe('a scalar parameter annotated as another scalar', () => {
   it('the same scalar stays silent in both languages', () => {
     expect(paramFindings(dispatchTree(ts(TS_BODY('parcelId: string')), false))).toEqual([]);
     expect(paramFindings(dispatchTree(py(PY_BODY('parcel_id: str')), true))).toEqual([]);
+  });
+
+  it('a later body reading the parameter as an object keeps the longer explanation', () => {
+    const after = [
+      'export async function dispatchParcel(parcelId: any): Promise<string> {',
+      '  return `route-${parcelId.code}`;',
+      '}',
+    ];
+    const found = paramFindings(dispatchTree(ts(TS_BODY('parcelId: number'), after), false));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^PARAM_TYPE_MISMATCH: /);
+    expect(found[0]).toMatch(/cannot hold what it declares/);
+    expect(found[0]).not.toMatch(/annotates as another type/);
   });
 });
 
@@ -132,6 +148,8 @@ describe('one value where a list is declared, or a list where one value is', () 
     const one = paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: string')), false), 'list<string>'));
     expect(one).toHaveLength(1);
     expect(one[0]).toMatch(/^PARAM_TYPE_MISMATCH: .*annotated "string", where the contract declares "list<string>"/);
+    expect(one[0]).toMatch(/one value for a list/);
+    expect(one[0]).not.toMatch(/credential|opaque/);
     const many = paramFindings(dispatchTree(ts(TS_BODY('parcelId: string[]')), false));
     expect(many.map(f => f.split(':')[0])).toEqual(['PARAM_TYPE_MISMATCH']);
     expect(many[0]).toMatch(/annotated "string\[\]", where the contract declares "string"/);

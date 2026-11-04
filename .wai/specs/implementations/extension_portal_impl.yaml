@@ -171,6 +171,20 @@ methods:
         type: call
         targetComponent: extension_orchestrator
         targetMethod: parseDeclarativePack
+  - name: packInstallLockFile
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packInstallLockFile
+  - name: findPackDeclaring
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: findPackDeclaring
 status: complete
 createdAt: '2026-09-25T17:33:11.897Z'
-updatedAt: '2026-10-07T21:49:50.435Z'
+updatedAt: '2026-11-03T14:59:24.149Z'

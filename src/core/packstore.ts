@@ -1,10 +1,12 @@
 import * as crypto from 'crypto';
 import { files } from '../io/index.js';
+import * as os from 'os';
 import * as path from 'path';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { isNewerVersion } from '../utils/version.js';
-import { globalPacksDir, packDirEntry, readManifest } from './extensions.js';
+import { withFileLock } from '../utils/file-lock.js';
+import { findPackDeclaring, globalPacksDir, packDirEntry, packInstallLockFile, readManifest } from './extensions.js';
 
 // ---------------------------------------------------------------------------
 // Pack Store Adapter (sdd_core)
@@ -242,6 +244,18 @@ export function resolveInstalledPack(name: string, version?: string): InstalledP
 // Mutation
 // ---------------------------------------------------------------------------
 
+/** The message of a thrown value. */
+function messageOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** A fresh temporary folder to hold a copy of a pack, nested two levels deep so
+ *  that no packs folder lists it, even when the temporary folder is the store. */
+function holdingFolder(): { root: string; held: string } {
+  const root = files.makeTempDir(path.join(os.tmpdir(), 'wairon-packstore-backup-'));
+  return { root, held: path.join(root, 'held', 'pack') };
+}
+
 /**
  * Install an already-materialized pack directory into the store at
  * <name>/<version>/, digest it, and write its install record.
@@ -260,21 +274,37 @@ export function installPackFromDirectory(sourceDir: string, origin?: string): In
 
   const manifest = readManifest(entryFile, path.dirname(entryFile));
   const version = manifest.version && manifest.version.length > 0 ? manifest.version : UNVERSIONED;
-  const dest = path.join(packStoreDir(), manifest.name, version);
+  const store = packStoreDir();
+  const dest = path.join(store, manifest.name, version);
 
-  // Reinstalling the same name@version replaces it, so an install is idempotent.
-  files.remove(dest);
-  files.ensureDir(path.dirname(dest));
-  files.copy(abs, dest, { recursive: true });
-
-  const digest = computePackDigest(dest);
-  const record: InstallRecord = {
-    origin,
-    digest,
-    waironVersion: WAIRON_VERSION,
-    installedAt: new Date().toISOString(),
-  };
-  writeYamlFile(path.join(dest, INSTALL_RECORD), record);
+  // The store is the machine-wide packs folder the hosted server installs into
+  // too: hold its install lock across the name check and the write. Another pack
+  // there declaring this name (a file or folder of another name) would list
+  // twice; the pack's own versions folder is a refresh. A source that is itself
+  // an entry of the store counts too: it stays where it is, so it would list
+  // beside the copy. The digest and the install record are taken under the same
+  // lock, so they describe these files.
+  files.ensureDir(store);
+  const record = withFileLock(packInstallLockFile(store, 'global'), (): InstallRecord & { digest: string } => {
+    const installed = findPackDeclaring(store, manifest.name, [path.join(store, manifest.name)]);
+    if (installed !== null) {
+      throw new Error(`A pack declaring the name "${manifest.name}" is already installed as "${installed}" in ${store}. Remove that pack first.`);
+    }
+    // Reinstalling the same name@version replaces it, so an install is idempotent.
+    return replaceVersion(dest, () => {
+      files.ensureDir(path.dirname(dest));
+      files.copy(abs, dest, { recursive: true });
+      const written = {
+        origin,
+        digest: computePackDigest(dest),
+        waironVersion: WAIRON_VERSION,
+        installedAt: new Date().toISOString(),
+      };
+      writeYamlFile(path.join(dest, INSTALL_RECORD), written);
+      return written;
+    });
+  });
+  const digest = record.digest;
 
   return {
     name: manifest.name,
@@ -285,6 +315,58 @@ export function installPackFromDirectory(sourceDir: string, origin?: string): In
     waironVersion: record.waironVersion,
     path: dest,
   };
+}
+
+/**
+ * Write a version folder in the place of `dest`. An installed version there is
+ * first copied aside, nested in a fresh temporary folder so no packs folder
+ * lists it (a failure to copy it aside stops before anything is removed), and
+ * comes back when the write fails. A version folder the write could not finish
+ * is removed, so the store never lists a partial pack; when that removal fails
+ * the error says so and names it, and a copy aside that cannot be put back is
+ * kept and named, with what the restore wrote removed.
+ */
+function replaceVersion<T>(dest: string, write: () => T): T {
+  const aside = files.exists(dest) ? holdingFolder() : null;
+  let keepAside = false;
+  try {
+    if (aside) files.copy(dest, aside.held, { recursive: true });
+    try {
+      files.remove(dest);
+      return write();
+    } catch (e) {
+      try {
+        files.remove(dest);
+      } catch (cleanup) {
+        keepAside = aside !== null;
+        const kept = aside ? ` The earlier version is kept in the system temporary folder as ${path.basename(aside.root)}.` : '';
+        throw new Error(`${messageOf(e)} The partial copy at ${dest} could not be removed (${messageOf(cleanup)}); remove it by hand.${kept}`);
+      }
+      if (aside) {
+        try {
+          files.copy(aside.held, dest, { recursive: true });
+        } catch (restore) {
+          keepAside = true;
+          // What the failed restore wrote is not left for the store to list.
+          try {
+            files.remove(dest);
+          } catch {
+            /* the error below names the copy to put back by hand */
+          }
+          throw new Error(`${messageOf(e)} Putting the earlier version back failed too (${messageOf(restore)}); its copy is kept in the system temporary folder as ${path.basename(aside.root)}.`);
+        }
+      }
+      throw e;
+    }
+  } finally {
+    if (aside && !keepAside) {
+      try {
+        files.remove(aside.root);
+      } catch {
+        /* the temporary folder stays behind */
+      }
+    }
+  }
 }
 
 /**

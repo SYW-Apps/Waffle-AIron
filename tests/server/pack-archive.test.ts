@@ -92,6 +92,21 @@ function zipSlipWpack(): Uint8Array {
   });
 }
 
+/** A declarative pack.yaml declaring `name`. */
+const packYaml = (name: string): string =>
+  [`name: ${name}`, 'version: 1.0.0', 'profiles:', '  ddd:', '    family: backend-like', ''].join('\n');
+
+/** A raw declarative archive whose envelope names `envelope` while its pack.yaml declares `inner`
+ *  (no digests, as a hand-assembled archive carries none). */
+function mislabelledWpack(envelope: string, inner: string): Uint8Array {
+  return zipSync({
+    'wairon-pack.yaml': enc(
+      ['formatVersion: 1', `name: ${envelope}`, 'version: 1.0.0', 'kind: declarative', 'entry: pack.yaml', ''].join('\n'),
+    ),
+    'pack.yaml': enc(packYaml(inner)),
+  });
+}
+
 afterAll(() => {
   for (const dir of srcRoots) {
     try {
@@ -179,6 +194,53 @@ describe('hosted pack archive install (sdd_host)', () => {
       expect(fs.existsSync(path.join(dataDir, 'pack.yaml'))).toBe(false);
     });
 
+    it('refuses a name Windows reserves for a device', () => {
+      for (const name of ['con', 'NUL', 'com1', 'lpt9.x', 'aux.yaml']) {
+        expect(() => packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'), name)).toThrow(
+          /Windows reserves it/,
+        );
+      }
+      // A name that only starts with one is fine.
+      expect(packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'), 'console').ref).toBe('console');
+    });
+
+    it('refuses a second pack declaring a name another pack already declares; reinstalling refreshes', () => {
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'));
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'));
+      expect(() => packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'), 'custom')).toThrow(
+        /already installed as "acme-doctrine"/,
+      );
+      expect(fs.existsSync(path.join(packsDir, 'custom'))).toBe(false);
+      expect(packs.listGlobalPacks(cfg, ADMIN).filter((p) => p.name === 'acme-doctrine')).toHaveLength(1);
+    });
+
+    it('judges an archive by the name its pack declares, and a refused install leaves the existing one as it was', () => {
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('alpha'));
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('beta'));
+      // The envelope says beta (the folder it would replace), the pack inside declares alpha.
+      expect(() => packs.installGlobalPackArchive(cfg, ADMIN, mislabelledWpack('beta', 'alpha'))).toThrow(
+        /declaring the name "alpha" is already installed as "alpha"/,
+      );
+      expect(fs.readFileSync(path.join(packsDir, 'beta', 'pack.yaml'), 'utf8')).toMatch(/^name: beta/);
+      expect(packs.listGlobalPacks(cfg, ADMIN).filter((p) => p.name === 'alpha')).toHaveLength(1);
+    });
+
+    it('reinstalling over a versioned pack folder replaces it', () => {
+      const version = path.join(packsDir, 'vp', '1.0.0');
+      fs.mkdirSync(version, { recursive: true });
+      fs.writeFileSync(path.join(version, 'pack.yaml'), packYaml('vp'));
+      expect(packs.listGlobalPacks(cfg, ADMIN).map((p) => p.name)).toContain('vp');
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('vp'));
+      expect(fs.existsSync(path.join(packsDir, 'vp', 'pack.yaml'))).toBe(true);
+      expect(packs.listGlobalPacks(cfg, ADMIN).filter((p) => p.name === 'vp')).toHaveLength(1);
+    });
+
+    it('keeps the install lock out of the listing', () => {
+      packs.installGlobalPack(cfg, ADMIN, 'plain', packYaml('plain'));
+      packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('acme-doctrine'));
+      expect(packs.listGlobalPacks(cfg, ADMIN).map((p) => p.name).sort()).toEqual(['acme-doctrine', 'plain']);
+    });
+
     it('rejects a bad credential (401) and an authenticated non-admin (403) before any effect', () => {
       expect(() => packs.installGlobalPackArchive(cfg, 'wrong', declarativeWpack('acme-doctrine'))).toThrow(
         UnauthenticatedError,
@@ -203,6 +265,17 @@ describe('hosted pack archive install (sdd_host)', () => {
       expect(registered).toContain('.wai/packs/acme-doctrine');
 
       expect(packs.listProjectPacks(cfg, ADMIN, 'demo').map((p) => p.name)).toContain('acme-doctrine');
+    });
+
+    it('judges a project archive by its declared name and keeps the install lock out of .wai/packs', () => {
+      createPlacedProject(cfg, ADMIN, 'demo');
+      const root = path.join(dataDir, 'projects', 'demo');
+      packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack('alpha'));
+      expect(() => packs.installProjectPackArchive(cfg, ADMIN, 'demo', mislabelledWpack('beta', 'alpha'))).toThrow(
+        /declaring the name "alpha" is already installed as "alpha"/,
+      );
+      // Only the pack: the lock lives in the project's ignored lock folder, not beside the packs.
+      expect(fs.readdirSync(path.join(root, '.wai', 'packs'))).toEqual(['alpha']);
     });
 
     it('rejects a code pack for a bound project', () => {
