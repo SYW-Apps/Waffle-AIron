@@ -36,16 +36,20 @@ A fix release. Upgrading:
   lock from its name check through its write: the hosted server, `wairon host packs`,
   `wairon pack add`, `wairon pack bundle` and `wairon pack install`. Two installs at the same
   moment take turns, and the local commands now also refuse a pack whose declared name another
-  pack in the folder already declares, naming it. The pack store counts a source folder that is
-  itself one of its entries, and removes a version it could not finish copying, so it never
-  lists a partial pack.
+  pack in the folder already declares, naming it, even when the source folder holds the packs
+  folder. The pack store counts a source folder that is itself one of its entries. A store
+  install that fails part way removes the version it could not finish and puts back the version
+  it replaced; when the removal fails, or putting the earlier version back fails, the error says
+  so and names the folder to remove or the copy kept in a `wairon-packstore-backup-*` folder in
+  the system temporary folder.
 - **A store selection and a pack added by path keep apart.** `wairon pack add` into a project,
   and a hosted install into one (an upload, an adoption or a policy install), refuse a pack under
   a name the project selects from the pack store (`wairon pack use`): its `.wai/packs/<name>`
   folder is that selection's bundle, and the pack would be registered twice. `wairon pack use`
   refuses a pack the project already has added by path, and `wairon pack bundle` refuses a
   `.wai/packs/<name>` folder that holds one, where the bundled version would never load. Each
-  names what to remove first.
+  names what to remove first. `pack add` registers its pack, and `pack use` records its
+  selection, under the project's install lock, so the two take turns.
 - **Hosted web reads.** A missing `projectId` says so when the request sent `project`
   instead. The CLI reference names the web app's project pages and the `/web/*` reads behind
   them.
