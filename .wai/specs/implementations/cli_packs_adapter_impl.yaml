@@ -101,13 +101,13 @@ methods:
           project selects from the pack store (its configuration read through the core portal),
           naming the selection and `wairon pack unuse <name>`, each with a non-zero exit code and
           nothing registered; otherwise vendor the pack into .wai/packs/ under its basename
-          (guarding against a self-copy).
+          (guarding against a self-copy) and, still holding the lock, register it (the next step).
         type: local
       - stepNumber: 17
         description: >-
-          Register the vendored ref in extensions.packs through the core portal: it is appended only
-          when absent, the write records useGlobalPacks itself, and the result says whether it was
-          added.
+          Under the same lock, so a `pack use` of the name takes turns with it, register the
+          vendored ref in extensions.packs through the core portal: it is appended only when absent,
+          the write records useGlobalPacks itself, and the result says whether it was added.
         type: call
         targetComponent: project_config_portal
         targetMethod: registerPackRef
@@ -141,20 +141,22 @@ methods:
       terminal), it then measures the probed manifest as a supplied candidate through
       validator_portal.measurePackImpact, prints the report and asks — anything but yes returns with
       nothing vendored or registered; a refresh of an already-registered pack is measured the same
-      way, as an update. It registers the directory ref through the core portal's registerPackRef,
-      which appends it only when absent and records useGlobalPacks itself; a false result means the
-      ref was already registered, and the pack is reported as refreshed instead. Every write into a
-      packs folder (global or project, archive or file/dir) holds that folder's install lock, the
-      lock file the core portal names for every installer of it, from a name check through the
-      write: a pack another pack in the folder already declares by name is refused, naming it, so
-      two packs never list under one name and an install takes turns with the hosted server's. A
-      project install by path (file/dir or archive) also refuses, under that lock and before the
-      name check, a pack whose declared or folder name the project selects from the pack store (read
-      through the core portal's loadProjectConfig), since that folder is the selection's bundle
-      folder and the project would register the pack twice: it names the selection and `wairon pack
-      unuse <name>`. The pack is probe-loaded to verify it parses before anything is registered; a
-      malformed/unsafe source fails with a clear error and leaves no partial registration. --global
-      selects nothing for any project and shows no report.
+      way, as an update. It registers the directory ref through the core portal's registerPackRef
+      while it still holds the project's install lock (below), so a `pack use` of the name takes
+      turns with it; registerPackRef appends it only when absent and records useGlobalPacks itself;
+      a false result means the ref was already registered, and the pack is reported as refreshed
+      instead. Every write into a packs folder (global or project, archive or file/dir) holds that
+      folder's install lock, the lock file the core portal names for every installer of it, from a
+      name check through the write: a pack another pack in the folder already declares by name is
+      refused, naming it (the source is no exception, even when it holds the packs folder), so two
+      packs never list under one name and an install takes turns with the hosted server's. A project
+      install by path (file/dir or archive) also refuses, under that lock and before the name check,
+      a pack whose declared or folder name the project selects from the pack store (read through the
+      core portal's loadProjectConfig), since that folder is the selection's bundle folder and the
+      project would register the pack twice: it names the selection and `wairon pack unuse <name>`.
+      The pack is probe-loaded to verify it parses before anything is registered; a malformed/unsafe
+      source fails with a clear error and leaves no partial registration. --global selects nothing
+      for any project and shows no report.
   - name: listPacks
     narrative:
       - stepNumber: 1
@@ -629,9 +631,11 @@ methods:
       - stepNumber: 19
         label: record
         description: >-
-          Record the selection: any same-name selection is dropped and this one is appended last,
-          the highest precedence (project_config.withPack's reading, the one the report measured).
-          The result says whether a selection was replaced.
+          Holding the install lock of the project's .wai/packs, check again for a pack added by path
+          in the meantime (refused as in step 12, nothing written); then record the selection: any
+          same-name selection is dropped and this one is appended last, the highest precedence
+          (project_config.withPack's reading, the one the report measured). The result says whether
+          a selection was replaced.
         type: call
         targetComponent: project_config_portal
         targetMethod: upsertPackSelection
@@ -657,11 +661,14 @@ methods:
       selection through validator_portal.measurePackImpact and prints the report — the pack's
       changes against wairon's defaults, the profiles of it that would govern, the findings that
       change here — and asks to apply; anything but yes returns with nothing written. Records it
-      through the core portal's upsertPackSelection, which drops any same-name selection and appends
-      this one last — the highest precedence — and reports "Re-selected" when that replaced a
-      selection and "Selected" otherwise; an unattended run says it applied without showing the
-      impact and names `wairon pack impact`. Warns when no fetchable source was recorded and no
-      bundle was requested, because CI and a fresh clone would then be unable to obtain the pack.
+      holding the install lock of the project's .wai/packs (the lock file the core portal names,
+      which a pack added by path holds through its registration), checking again there for a pack
+      added by path in the meantime (refused as above, with nothing written), through the core
+      portal's upsertPackSelection, which drops any same-name selection and appends this one last —
+      the highest precedence — and reports "Re-selected" when that replaced a selection and
+      "Selected" otherwise; an unattended run says it applied without showing the impact and names
+      `wairon pack impact`. Warns when no fetchable source was recorded and no bundle was requested,
+      because CI and a fresh clone would then be unable to obtain the pack.
   - name: unusePack
     narrative:
       - stepNumber: 1
@@ -1048,4 +1055,4 @@ lint:
         hosted server.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-11-04T00:18:00.732Z'
+updatedAt: '2026-11-04T10:26:08.383Z'
