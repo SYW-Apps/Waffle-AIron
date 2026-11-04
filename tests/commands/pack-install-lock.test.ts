@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { zipSync } from 'fflate';
-import { addPack, bundlePack, installPack } from '../../src/commands/packs.js';
+import { addPack, bundlePack, installPack, usePack } from '../../src/commands/packs.js';
 import { installPackFromDirectory, packInstallLockFile } from '../../src/core/index.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { logger } from '../../src/utils/logger.js';
@@ -222,6 +222,17 @@ describe('pack add into a project', () => {
     expect(errors.join('\n')).toMatch(/selects the pack "shared" from the pack store/);
     expect(errors.join('\n')).toMatch(/wairon pack unuse shared/);
 
+    // Another folder name declaring the selected name: the selection is named, not the bundle.
+    process.exitCode = 0;
+    errors.length = 0;
+    const elsewhere = path.join(sources, 'elsewhere');
+    fs.mkdirSync(elsewhere, { recursive: true });
+    fs.writeFileSync(path.join(elsewhere, 'pack.yaml'), packYaml('shared'));
+    await addPack(elsewhere, false, true);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/selects the pack "shared" from the pack store/);
+    expect(errors.join('\n')).not.toMatch(/already installed as/);
+
     process.exitCode = 0;
     errors.length = 0;
     await addPack(wpack(sources, 'shared', 'shared'), false, true);
@@ -288,6 +299,41 @@ describe('pack bundle', () => {
     expect(errors.join('\n')).toMatch(/wairon pack remove shared/);
     expect(fs.readdirSync(added)).toEqual(['pack.yaml']);
     expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).not.toMatch(/"bundle"\s*:\s*true|bundle: true/);
+  });
+
+  it('pack use refuses a pack the project already has added by path, by its name or its folder name', async () => {
+    storePack('shared', '1.0.0');
+    const proj = mkTmp();
+    const added = path.join(proj, '.wai', 'packs', 'mine');
+    fs.mkdirSync(added, { recursive: true });
+    fs.writeFileSync(path.join(added, 'pack.yaml'), packYaml('shared'));
+    writeProject(proj, ['.wai/packs/mine']);
+    vi.spyOn(process, 'cwd').mockReturnValue(proj);
+    invalidateSpecCache();
+
+    await usePack('shared', { yes: true });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/already has the pack "shared" added by path \(\.wai\/packs\/mine\)/);
+    expect(errors.join('\n')).toMatch(/wairon pack remove shared/);
+    expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).not.toMatch(/name: shared|"name":\s*"shared"/);
+
+    // A path reference whose file name is the pack's name counts as well.
+    process.exitCode = 0;
+    errors.length = 0;
+    fs.writeFileSync(path.join(proj, '.wai', 'packs', 'shared.yaml'), 'not: a pack\n');
+    writeProject(proj, ['.wai/packs/shared.yaml']);
+    invalidateSpecCache();
+    await usePack('shared', { yes: true });
+    expect(process.exitCode).toBe(1);
+    expect(errors.join('\n')).toMatch(/added by path \(\.wai\/packs\/shared\.yaml\)/);
+
+    // With no such pack the selection is recorded.
+    process.exitCode = 0;
+    writeProject(proj);
+    invalidateSpecCache();
+    await usePack('shared', { yes: true });
+    expect(process.exitCode ?? 0).toBe(0);
+    expect(fs.readFileSync(path.join(proj, '.wai', 'project.yaml'), 'utf8')).toMatch(/shared/);
   });
 });
 
