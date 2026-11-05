@@ -1,7 +1,7 @@
 {
   "name": "@wairon/cli",
   "version": "0.0.0-dev",
-  "description": "SYW Waffle AIron — CLI for managing AI coding agent topology across projects",
+  "description": "Experimental: spec-driven development for AI coding tools — a machine-checked design spec tree, a conformance gate and an MCP server. Any release may break things.",
   "keywords": [
     "ai",
     "agents",
@@ -9,7 +9,8 @@
     "topology",
     "claude",
     "gemini",
-    "developer-tools"
+    "developer-tools",
+    "experimental"
   ],
   "author": "SYW",
   "license": "MIT",
@@ -51,7 +52,7 @@
     "dev": "tsx src/cli/index.ts",
     "build:sdk": "npm --prefix sdk run build",
     "prebuild": "npm --prefix sdk run build",
-    "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true});\" && node scripts/embed-web.mjs && node scripts/design-schema.mjs",
+    "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true});\" && node scripts/embed-web.mjs && node scripts/copy-swagger-ui.mjs && node scripts/design-schema.mjs",
     "gen:canvas": "node scripts/gen-canvas-engine.mjs",
     "build:web": "node scripts/gen-canvas-engine.mjs && npm --prefix web install --no-audit --no-fund && npm --prefix web run build",
     "build:all": "npm run build:web && npm run build",
@@ -69,36 +70,34 @@
     "assets": [
       "dist/templates/**/*",
       "release-notes/*.md",
-      "dist/webapp.html"
+      "dist/webapp.html",
+      "dist/swagger-ui/*"
     ],
     "scripts": [],
     "outputPath": "bin"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "chalk": "^4.1.2",
-    "commander": "^12.1.0",
-    "inquirer": "^8.2.6",
-    "js-yaml": "^4.1.0",
-    "ora": "^5.4.1",
-    "swagger-ui-dist": "^5.32.9",
-    "typescript": "^5.5.2",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "js-yaml": "^4.3.2",
+    "typescript": "^5.9.3",
     "yaml": "^2.9.1",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/inquirer": "^8.2.10",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.0",
     "@vitest/coverage-v8": "^4.1.9",
     "@wairon/sdk": "*",
     "@yao-pkg/pkg": "^6.24.0",
     "ajv": "^8.20.0",
+    "chalk": "^6.0.1",
+    "commander": "^15.0.0",
     "cytoscape": "^3.34.0",
+    "inquirer": "^14.2.5",
     "rimraf": "^5.0.7",
+    "swagger-ui-dist": "^5.34.1",
     "tsup": "^8.1.0",
     "tsx": "^4.15.7",
-    "vitest": "^4.1.9",
-    "zod-to-json-schema": "^3.25.2"
+    "vitest": "^4.1.9"
   }
 }

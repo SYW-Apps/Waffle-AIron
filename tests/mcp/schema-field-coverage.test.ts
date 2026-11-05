@@ -314,7 +314,7 @@ describe('MCP write-tool schema field coverage', () => {
     it(`every publicInterfaces ENTRY field is reachable through ${tool}`, () => {
       const itemProps = (toolProps[tool]?.publicInterfaces?.items?.properties ?? {}) as Record<string, any>;
       expect(Object.keys(itemProps).length, `${tool} publishes no publicInterfaces item schema`).toBeGreaterThan(0);
-      const unclassified = Object.keys(PublicInterfaceSchema.innerType().shape).filter((f) => f !== 'type' && !(f in itemProps)); // `type` is the v5 export kind, derived from the Portal's transport and no longer authored
+      const unclassified = Object.keys(PublicInterfaceSchema.shape).filter((f) => f !== 'type' && !(f in itemProps)); // `type` is the v5 export kind, derived from the Portal's transport and no longer authored
       expect(
         unclassified,
         `publicInterfaces entry fields ${tool} cannot set: ${unclassified.join(', ')}. `

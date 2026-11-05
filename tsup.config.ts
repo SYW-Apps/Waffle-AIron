@@ -6,7 +6,7 @@ export default defineConfig({
     index: 'src/index.ts',
   },
   format: ['cjs'],
-  target: 'node18',
+  target: 'node22',
   outDir: 'dist',
   clean: true,
   sourcemap: true,
@@ -23,7 +23,7 @@ export default defineConfig({
   // hosting image has no node_modules/@wairon/sdk to resolve at runtime — so bundle
   // it (and its pure-JS zip dep fflate) INTO dist. js-yaml stays external (a real
   // root dependency present in the runtime node_modules).
-  noExternal: ['@wairon/sdk', 'fflate'],
+  noExternal: ['@wairon/sdk', 'fflate', 'chalk', 'commander', 'inquirer'],
   // Copy non-TS assets (YAML templates, bundles) into dist
   // These are referenced at runtime by the CLI
   loader: {

@@ -4,6 +4,40 @@
   "description": "One project's whole design, resolved (format `wairon-design`). A MINOR formatVersion only adds a field or a member of a closed set, and consumers ignore what they do not know; a MAJOR removes, renames or changes a meaning and is named in the CHANGELOG. Generated from the zod schema in src/models/design-export.ts — never edit by hand.",
   "$ref": "#/definitions/DesignExport",
   "definitions": {
+    "__schema0": {
+      "type": "object",
+      "properties": {
+        "form": {
+          "type": "string",
+          "enum": [
+            "primitive",
+            "named",
+            "list",
+            "set",
+            "map",
+            "optional",
+            "union",
+            "async",
+            "applied",
+            "result"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/__schema0"
+          }
+        }
+      },
+      "required": [
+        "form",
+        "args"
+      ],
+      "additionalProperties": {}
+    },
     "DesignExport": {
       "type": "object",
       "properties": {
@@ -46,7 +80,7 @@
             "approved",
             "approval"
           ],
-          "additionalProperties": true
+          "additionalProperties": {}
         },
         "project": {
           "type": "object",
@@ -107,7 +141,7 @@
                   "targetKind",
                   "target"
                 ],
-                "additionalProperties": true
+                "additionalProperties": {}
               }
             }
           },
@@ -118,7 +152,7 @@
             "requirements",
             "exports"
           ],
-          "additionalProperties": true
+          "additionalProperties": {}
         },
         "dependencies": {
           "type": "array",
@@ -154,7 +188,7 @@
               "role",
               "uses"
             ],
-            "additionalProperties": true
+            "additionalProperties": {}
           }
         },
         "subsystems": {
@@ -210,13 +244,45 @@
                     "component",
                     "method"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "exports": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/definitions/DesignExport/properties/project/properties/exports/items"
+                  "type": "object",
+                  "properties": {
+                    "publicName": {
+                      "type": "string"
+                    },
+                    "targetKind": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "audience": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "stability": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "publicName",
+                    "targetKind",
+                    "target"
+                  ],
+                  "additionalProperties": {}
                 }
               },
               "trustedLinks": {
@@ -227,6 +293,9 @@
               },
               "ext": {
                 "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
                 "additionalProperties": {}
               }
             },
@@ -239,7 +308,7 @@
               "exports",
               "trustedLinks"
             ],
-            "additionalProperties": true
+            "additionalProperties": {}
           }
         },
         "components": {
@@ -307,7 +376,7 @@
                 "required": [
                   "kind"
                 ],
-                "additionalProperties": true
+                "additionalProperties": {}
               },
               "owns": {
                 "type": "array",
@@ -340,7 +409,7 @@
                   "required": [
                     "topic"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "subscribesTo": {
@@ -349,19 +418,20 @@
                   "type": "object",
                   "properties": {
                     "topic": {
-                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/emits/items/properties/topic"
+                      "type": "string",
+                      "minLength": 1
                     },
                     "event": {
-                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/emits/items/properties/event"
+                      "type": "string"
                     },
                     "description": {
-                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/emits/items/properties/description"
+                      "type": "string"
                     }
                   },
                   "required": [
                     "topic"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "auth": {
@@ -417,8 +487,7 @@
                       "required": [
                         "name",
                         "description"
-                      ],
-                      "additionalProperties": true
+                      ]
                     }
                   },
                   "flow": {
@@ -443,7 +512,7 @@
                 "required": [
                   "scheme"
                 ],
-                "additionalProperties": true
+                "additionalProperties": {}
               },
               "basePath": {
                 "type": "string"
@@ -472,7 +541,7 @@
                     "component",
                     "method"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "patterns": {
@@ -490,7 +559,7 @@
                   "required": [
                     "id"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "externalLinks": {
@@ -502,12 +571,12 @@
                       "type": "string"
                     },
                     "type": {
+                      "default": "informative",
                       "type": "string",
                       "enum": [
                         "implementation",
                         "informative"
-                      ],
-                      "default": "informative"
+                      ]
                     },
                     "label": {
                       "type": "string"
@@ -516,7 +585,7 @@
                   "required": [
                     "url"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "formerly": {
@@ -526,7 +595,11 @@
                 }
               },
               "ext": {
-                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               }
             },
             "required": [
@@ -545,7 +618,7 @@
               "externalLinks",
               "formerly"
             ],
-            "additionalProperties": true
+            "additionalProperties": {}
           }
         },
         "interfaces": {
@@ -597,44 +670,17 @@
                                 "type": "string"
                               },
                               "expression": {
-                                "type": "object",
-                                "properties": {
-                                  "form": {
-                                    "type": "string",
-                                    "enum": [
-                                      "primitive",
-                                      "named",
-                                      "list",
-                                      "set",
-                                      "map",
-                                      "optional",
-                                      "union",
-                                      "async",
-                                      "applied",
-                                      "result"
-                                    ]
-                                  },
-                                  "name": {
-                                    "type": "string"
-                                  },
-                                  "args": {
-                                    "type": "array",
-                                    "items": {
-                                      "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type/properties/expression"
-                                    }
+                                "allOf": [
+                                  {
+                                    "$ref": "#/definitions/__schema0"
                                   }
-                                },
-                                "required": [
-                                  "form",
-                                  "args"
-                                ],
-                                "additionalProperties": true
+                                ]
                               }
                             },
                             "required": [
                               "text"
                             ],
-                            "additionalProperties": true
+                            "additionalProperties": {}
                           },
                           "optional": {
                             "type": "boolean"
@@ -654,11 +700,27 @@
                           "type",
                           "optional"
                         ],
-                        "additionalProperties": true
+                        "additionalProperties": {}
                       }
                     },
                     "returns": {
-                      "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type"
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        },
+                        "expression": {
+                          "allOf": [
+                            {
+                              "$ref": "#/definitions/__schema0"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ],
+                      "additionalProperties": {}
                     },
                     "signature": {
                       "type": "string"
@@ -676,10 +738,39 @@
                       }
                     },
                     "invokedBy": {
-                      "$ref": "#/definitions/DesignExport/properties/components/items/properties/invokedBy"
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "entry",
+                            "runtime"
+                          ]
+                        },
+                        "caller": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "outside",
+                            "network"
+                          ]
+                        },
+                        "planned": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "additionalProperties": {}
                     },
                     "endpoint": {
                       "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
                       "additionalProperties": {
                         "type": "string"
                       }
@@ -691,7 +782,11 @@
                       }
                     },
                     "ext": {
-                      "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
                     }
                   },
                   "required": [
@@ -703,7 +798,7 @@
                     "guarantees",
                     "formerly"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "formerly": {
@@ -713,7 +808,11 @@
                 }
               },
               "ext": {
-                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               }
             },
             "required": [
@@ -725,7 +824,7 @@
               "methods",
               "formerly"
             ],
-            "additionalProperties": true
+            "additionalProperties": {}
           }
         },
         "implementations": {
@@ -837,8 +936,7 @@
                             },
                             "required": [
                               "from"
-                            ],
-                            "additionalProperties": true
+                            ]
                           },
                           "assertsGuarantees": {
                             "type": "array",
@@ -883,8 +981,7 @@
                               "required": [
                                 "value",
                                 "step"
-                              ],
-                              "additionalProperties": true
+                              ]
                             }
                           },
                           "defaultStep": {
@@ -923,8 +1020,7 @@
                               "required": [
                                 "error",
                                 "step"
-                              ],
-                              "additionalProperties": true
+                              ]
                             }
                           },
                           "finallyStep": {
@@ -946,8 +1042,7 @@
                               },
                               "required": [
                                 "step"
-                              ],
-                              "additionalProperties": true
+                              ]
                             }
                           },
                           "toStep": {
@@ -969,7 +1064,7 @@
                           "description",
                           "type"
                         ],
-                        "additionalProperties": true
+                        "additionalProperties": {}
                       }
                     }
                   },
@@ -980,7 +1075,7 @@
                     "calls",
                     "narrative"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "formerly": {
@@ -990,7 +1085,11 @@
                 }
               },
               "ext": {
-                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               }
             },
             "required": [
@@ -1004,7 +1103,7 @@
               "methods",
               "formerly"
             ],
-            "additionalProperties": true
+            "additionalProperties": {}
           }
         },
         "types": {
@@ -1036,7 +1135,23 @@
                       "type": "string"
                     },
                     "type": {
-                      "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type"
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        },
+                        "expression": {
+                          "allOf": [
+                            {
+                              "$ref": "#/definitions/__schema0"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ],
+                      "additionalProperties": {}
                     },
                     "optional": {
                       "type": "boolean"
@@ -1062,23 +1177,235 @@
                     "type",
                     "optional"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "methods": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items"
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "params": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "object",
+                            "properties": {
+                              "text": {
+                                "type": "string"
+                              },
+                              "expression": {
+                                "allOf": [
+                                  {
+                                    "$ref": "#/definitions/__schema0"
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "text"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "optional": {
+                            "type": "boolean"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "formerly": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "type",
+                          "optional"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "returns": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        },
+                        "expression": {
+                          "allOf": [
+                            {
+                              "$ref": "#/definitions/__schema0"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "signature": {
+                      "type": "string"
+                    },
+                    "signatureType": {
+                      "type": "string"
+                    },
+                    "effect": {
+                      "type": "string"
+                    },
+                    "guarantees": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "invokedBy": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "entry",
+                            "runtime"
+                          ]
+                        },
+                        "caller": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string",
+                          "enum": [
+                            "outside",
+                            "network"
+                          ]
+                        },
+                        "planned": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "endpoint": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "formerly": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ext": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "name",
+                    "params",
+                    "returns",
+                    "signature",
+                    "guarantees",
+                    "formerly"
+                  ],
+                  "additionalProperties": {}
                 }
               },
               "params": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items"
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        },
+                        "expression": {
+                          "allOf": [
+                            {
+                              "$ref": "#/definitions/__schema0"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "optional": {
+                      "type": "boolean"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "formerly": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type",
+                    "optional"
+                  ],
+                  "additionalProperties": {}
                 }
               },
               "returns": {
-                "$ref": "#/definitions/DesignExport/properties/interfaces/items/properties/methods/items/properties/params/items/properties/type"
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "expression": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/__schema0"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "additionalProperties": {}
               },
               "values": {
                 "type": "array",
@@ -1096,7 +1423,7 @@
                   "required": [
                     "name"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "holds": {
@@ -1112,15 +1439,19 @@
                       "maxLength": 64,
                       "allOf": [
                         {
+                          "type": "string",
                           "pattern": "^[a-z0-9-_]+$"
                         },
                         {
+                          "type": "string",
                           "pattern": "^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])$)"
                         },
                         {
+                          "type": "string",
                           "pattern": "^(?!-)"
                         },
                         {
+                          "type": "string",
                           "pattern": "^(?!__proto__$)"
                         }
                       ]
@@ -1134,7 +1465,7 @@
                     "id",
                     "description"
                   ],
-                  "additionalProperties": true
+                  "additionalProperties": {}
                 }
               },
               "componentClass": {
@@ -1159,7 +1490,11 @@
                 }
               },
               "ext": {
-                "$ref": "#/definitions/DesignExport/properties/subsystems/items/properties/ext"
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
               }
             },
             "required": [
@@ -1173,7 +1508,7 @@
               "invariants",
               "formerly"
             ],
-            "additionalProperties": true
+            "additionalProperties": {}
           }
         },
         "typeGroups": {
@@ -1201,7 +1536,7 @@
               "key",
               "name"
             ],
-            "additionalProperties": true
+            "additionalProperties": {}
           }
         }
       },
@@ -1218,7 +1553,7 @@
         "implementations",
         "types"
       ],
-      "additionalProperties": true
+      "additionalProperties": {}
     }
   }
 }

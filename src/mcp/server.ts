@@ -119,6 +119,18 @@ import type { FamilyMigrationReport, MigrationRequest } from '../migrations/type
 // Usage: wairon mcp serve  (add to .claude/settings.json mcpServers)
 // ---------------------------------------------------------------------------
 
+// A refused enum value names the value it received, as the tools have always said it
+// ("Invalid enum value. Expected 'a' | 'b', received 'x'"): zod 4's own message lists
+// the options only, and an agent fixing a call needs to see what it sent.
+z.config({
+  customError: (issue) => {
+    if (issue.code !== 'invalid_value' || !Array.isArray(issue.values)) return undefined;
+    const quoted = (v: unknown): string => (typeof v === 'string' ? `'${v}'` : String(v));
+    const received = typeof issue.input === 'undefined' ? 'undefined' : quoted(issue.input);
+    return `Invalid enum value. Expected ${issue.values.map(quoted).join(' | ')}, received ${received}`;
+  },
+});
+
 /**
  * The family context sdd_get_status opens with (mcp_orchestrator getStatus step
  * 5): where the bound root sits among chained projects, told in-band, because a
@@ -450,7 +462,7 @@ const externalPinsOutput = {
     snapshot: z.string().optional(),
     digest: z.string().optional(),
     usedNames: z.number(),
-    unexported: z.array(z.record(z.unknown())),
+    unexported: z.array(z.record(z.string(), z.unknown())),
     detail: z.string().optional(),
   })).describe('One outcome per alias pinned, in declaration order, with its unexported references.'),
   ...staleServerOutput,
@@ -461,9 +473,9 @@ const externalAdditionOutput = {
   alias: z.string(),
   written: z.boolean().describe('Whether .wai/project.yaml now carries the declaration (false on a refusal and on a dry run).'),
   dryRun: z.boolean().optional().describe('Present, true, on a dry run: nothing was written.'),
-  declaration: z.record(z.unknown()).nullable().describe('The declaration as written, in object form; null on a refusal.'),
+  declaration: z.record(z.string(), z.unknown()).nullable().describe('The declaration as written, in object form; null on a refusal.'),
   project: z.string().optional().describe('The producer\'s project id as the producer answered to it.'),
-  pin: z.record(z.unknown()).nullable().optional().describe('The pin taken right after, when asked.'),
+  pin: z.record(z.string(), z.unknown()).nullable().optional().describe('The pin taken right after, when asked.'),
   refusal: z.string().optional().describe('Why nothing was written, in one sentence naming the accepted form.'),
   unreachable: z.string().optional().describe('Set when the declaration was written but its producer could not be read: why, and that nothing was pinned.'),
   ...staleServerOutput,
@@ -611,7 +623,7 @@ const externalStatusesOutput = {
     reachable: z.boolean(),
     stale: z.boolean(),
     drifted: z.boolean().optional(),
-    uses: z.array(z.record(z.unknown())),
+    uses: z.array(z.record(z.string(), z.unknown())),
     detail: z.string().optional(),
     outOfReach: z.boolean().optional(),
     health: z.enum(['incompatible', 'unavailable', 'drifted', 'ok']).optional().describe(
@@ -788,7 +800,7 @@ const exportUseOutput = z.object({
   members: z.array(z.string()).describe('The contract methods (or `type`) a consumer reaches on it that the removal takes away.'),
   specs: z.array(z.string()).optional(),
   formerNames: z.array(z.string()).optional(),
-  formerMembers: z.record(z.array(z.string())).optional(),
+  formerMembers: z.record(z.string(), z.array(z.string())).optional(),
 });
 
 /** One consumer a removal breaks, narrowed to what it uses of what goes. */
@@ -1180,7 +1192,7 @@ const validateTreeOutput = {
 const getSpecOutput = {
   kind: z.enum(SPEC_KINDS).describe('The kind of spec read.'),
   id: z.string().describe('The id it was read by.'),
-  spec: z.record(z.unknown()).describe(
+  spec: z.record(z.string(), z.unknown()).describe(
     'The stored spec, exactly as the text block renders it — minus the two derived markers below, which '
     + 'the text folds in and this answer keeps separate so nothing derived can be mistaken for stored.',
   ),
@@ -1229,7 +1241,7 @@ const getSpecOutput = {
     method: z.string().describe('The contract method that takes its signature from a source.'),
     signatureFrom: z.string().describe('The source it names, as the spec holds it.'),
     signature: z.string().describe('The text it shows, derived from the resolved params and returns.'),
-    params: z.array(z.record(z.unknown())).optional().describe('The params the source supplies; absent when it supplies none (unresolved, ambiguous or chained).'),
+    params: z.array(z.record(z.string(), z.unknown())).optional().describe('The params the source supplies; absent when it supplies none (unresolved, ambiguous or chained).'),
     returns: z.string().describe('The returns the source supplies (`unknown` when it supplies none).'),
   })).optional().describe(
     'Derived, read-only: for a contract whose methods take their signature from a source, each such method\'s '
@@ -2779,7 +2791,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           event: z.string().optional(),
           description: z.string().optional(),
         }).strict()).optional().describe('Topics this component consumes (typical on Observers) — every subscription needs an emitter somewhere in the tree (UNSOURCED_SUBSCRIPTION).'),
-        ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data (namespaced keys, e.g. "mypack:priority") — preserved verbatim, never validated or interpreted by the core'),
+        ext: z.record(z.string(), z.unknown()).optional().describe('Opaque pack/tool extension data (namespaced keys, e.g. "mypack:priority") — preserved verbatim, never validated or interpreted by the core'),
         variant: z.string().optional().describe('A declared specialization of the componentType, e.g. "gateway" on a Portal that authenticates, authorizes, validates or rate-limits before it dispatches (UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). Omitted on a re-authoring, the stored variant is carried; sdd_update_spec {"unset": ["variant"]} removes it'),
     status: statusInput,
   };
@@ -2896,7 +2908,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             severity: z.enum(['error', 'warning', 'notice']).describe('Default severity, before project severity overrides and draft-context downgrades. A notice is reported but never fails the gate'),
             summary: z.string().describe('One line saying what the finding means'),
           }).strict()).optional().describe('The finding codes this method can report, each with its default severity and summary. Each declared code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). A code is declared once per method; sdd_update_spec upserts and deletes findings by code.'),
-          ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
+          ext: z.record(z.string(), z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
   };
   const interfaceMethodInputFields = Object.keys(interfaceMethodShape);
   const interfaceInput = {
@@ -3114,7 +3126,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     conformance: conformanceEnum.optional().describe('Conformance tier for this method (overrides the spec default)'),
     symbol: z.string().optional().describe('Code-level name realizing this contract method in the sourcePath file, when it legitimately differs from the intent-language contract name (e.g. put realized by saveSnapshot)'),
     exportedVia: z.string().optional().describe('The exported binding a consumer imports to REACH this method, when the realization is published as a value that composes it rather than exported in its own right (a rule module publishes callConformanceRule, and the method is the check inside it). Not symbol, which names the function itself: this names the route to it, so the surface check reads that export as promised. A handle the method\'s own source file does not actually export is reported (UNREALIZED_EXPORT_HANDLE) and allows nothing'),
-    ext: z.record(z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
+    ext: z.record(z.string(), z.unknown()).optional().describe('Opaque pack/tool extension data for this method (namespaced keys) — preserved verbatim'),
     narrative: z.array(narrativeStepInput).optional(),
     calls: z.array(z.string().min(1)).optional().describe('The calls this method makes, when its narrative does not show them (detail: intent, or calls-only with no steps authored) — each as "<component>.<method>", the spelling the debt register and lint allows name a unit with. The narrative walk takes exactly these edges and no others, so an undeclared collaborator is NOT reached: this is what keeps unused-detection honest at a lower detail dial. Each entry is validated like a call step (the component resolves, this component declares it, the method is on its contract). Refused beside a non-empty narrative — add the call step there instead'),
   };
@@ -3629,7 +3641,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       inputSchema: {
         kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type', 'group']).describe('The spec kind to update (group = a type group: name, description, parent, subsystem; system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports)'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
-        delta: z.record(z.any()).describe('The fields to merge. LISTS UPSERT by identity at every depth: naming one element leaves the others, and a named element merges field by field — a field left out, or null, keeps its stored value (a method named without "narrative" keeps its steps). Identity is name or id by default; dispatch by capability, lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by subsystem, publicInterfaces by component+interface (a re-export by from+item+interface+as), lint.allow by code+at, findings by code, boundaries by name, globalRequirements by description, cases by value, catches by error. Plain-value lists (owns, dependsOn, guarantees, technologies, requirements written as text) append what they lack and keep what they hold. Restating a list with exactly its stored elements in another order REORDERS it. Remove an element with "action": "delete" (or "remove": true) beside its identity, a plain value as {"value": …, "action": "delete"}; [] clears a list; {"unset": ["basePath"]} removes an optional field (null means no change). NARRATIVE steps are addressed by stepNumber, applied in ascending order against the numbering earlier entries of the same delta left: "action": "insert" shifts later steps up, "delete" shifts them down — refused when a jump still targets the step, when a restated label or description does not match it, or for a loop/try/parallel header whose body stands. Stored jumps relocate; a jump the delta writes names the final numbering; "captureJumps": true on an insert lands entry jumps on the new step. Every jump field has a *Label twin (toLabel, onFalseLabel, endLabel, a case or catch "label") resolved after the merge. Retyping a step rebuilds it for its new type and names the fields dropped. lint: {"allow": [{code, at, covers, reason}]} silences a warning or notice on this spec: "at" is the site the finding reports and is required when it reports one, "covers" lists an aggregating finding\'s units; errors never silence. Local ids are qualified as the loader qualifies them. A key that is not a field at its depth is named back under NO EFFECT: read that list.'),
+        delta: z.record(z.string(), z.any()).describe('The fields to merge. LISTS UPSERT by identity at every depth: naming one element leaves the others, and a named element merges field by field — a field left out, or null, keeps its stored value (a method named without "narrative" keeps its steps). Identity is name or id by default; dispatch by capability, lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by subsystem, publicInterfaces by component+interface (a re-export by from+item+interface+as), lint.allow by code+at, findings by code, boundaries by name, globalRequirements by description, cases by value, catches by error. Plain-value lists (owns, dependsOn, guarantees, technologies, requirements written as text) append what they lack and keep what they hold. Restating a list with exactly its stored elements in another order REORDERS it. Remove an element with "action": "delete" (or "remove": true) beside its identity, a plain value as {"value": …, "action": "delete"}; [] clears a list; {"unset": ["basePath"]} removes an optional field (null means no change). NARRATIVE steps are addressed by stepNumber, applied in ascending order against the numbering earlier entries of the same delta left: "action": "insert" shifts later steps up, "delete" shifts them down — refused when a jump still targets the step, when a restated label or description does not match it, or for a loop/try/parallel header whose body stands. Stored jumps relocate; a jump the delta writes names the final numbering; "captureJumps": true on an insert lands entry jumps on the new step. Every jump field has a *Label twin (toLabel, onFalseLabel, endLabel, a case or catch "label") resolved after the merge. Retyping a step rebuilds it for its new type and names the fields dropped. lint: {"allow": [{code, at, covers, reason}]} silences a warning or notice on this spec: "at" is the site the finding reports and is required when it reports one, "covers" lists an aggregating finding\'s units; errors never silence. Local ids are qualified as the loader qualifies them. A key that is not a field at its depth is named back under NO EFFECT: read that list.'),
         dryRun: z.boolean().optional().describe('Ask what this delta WOULD do: the whole write runs — the gate and the writer\'s parse included — and answers the report it would produce, marked DRY RUN, with not one byte written.'),
         search: z.array(z.string()).optional().describe('Folders to scan for consumer checkouts outside the family, read when the delta removes contract methods: the removal names the consumers it breaks, as a rename does'),
       },

@@ -25,8 +25,8 @@ function child(schema: z.ZodTypeAny, segment: string): z.ZodTypeAny | null {
     return shape[segment] ?? null;
   }
   // A record's keys are the author's own (an alias, a code): any key reads.
-  if (s instanceof z.ZodRecord) return s.valueSchema as z.ZodTypeAny;
-  if (s instanceof z.ZodUnion || s instanceof z.ZodDiscriminatedUnion) {
+  if (s instanceof z.ZodRecord) return s.valueType as z.ZodTypeAny;
+  if (s instanceof z.ZodUnion) {
     for (const option of s.options as z.ZodTypeAny[]) {
       const found = child(option, segment);
       if (found) return found;
@@ -40,9 +40,9 @@ function unwrap(schema: z.ZodTypeAny): z.ZodTypeAny {
   let s = schema;
   for (;;) {
     if (s instanceof z.ZodOptional || s instanceof z.ZodNullable) s = s.unwrap();
-    else if (s instanceof z.ZodDefault) s = s._def.innerType;
-    else if (s instanceof z.ZodEffects) s = s.innerType();
-    else if (s instanceof z.ZodLazy) s = s.schema;
+    else if (s instanceof z.ZodDefault || s instanceof z.ZodPrefault) s = s.def.innerType as z.ZodTypeAny;
+    else if (s instanceof z.ZodPipe) s = (s.def.in instanceof z.ZodTransform ? s.def.out : s.def.in) as z.ZodTypeAny;
+    else if (s instanceof z.ZodLazy) s = s.unwrap() as z.ZodTypeAny;
     else return s;
   }
 }

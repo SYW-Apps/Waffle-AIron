@@ -320,14 +320,14 @@ async function runInitInteractive(): Promise<void> {
       name: 'customPath',
       message: 'Custom agents output directory (relative to project root):',
       default: '.ai-agents',
-      when: (ans) => ans.targetTypes.includes('custom'),
+      when: (ans) => ans.targetTypes?.includes('custom') ?? false,
     },
     {
       type: 'input',
       name: 'customLabel',
       message: 'Label for this custom target (e.g. "Cursor"):',
       default: 'Custom',
-      when: (ans) => ans.targetTypes.includes('custom'),
+      when: (ans) => ans.targetTypes?.includes('custom') ?? false,
     },
   ]);
 

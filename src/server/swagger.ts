@@ -3,7 +3,7 @@ import * as path from 'path';
 
 // ---------------------------------------------------------------------------
 // Self-contained Swagger UI viewer (sdd_host). The swagger-ui-dist browser
-// assets (~1.5 MB) are read from node_modules on first use and cached; the page
+// assets (~1.5 MB) are read from dist/swagger-ui (copied at build) on first use; the page
 // INLINES them so it has no external dependency (works under the share page's
 // CSP and offline). Falls back to a minimal pretty-printed page when the assets
 // are unavailable (kept external from the bundle — see tsup.config.ts).
@@ -11,14 +11,30 @@ import * as path from 'path';
 
 let cache: { css: string; js: string } | null | undefined; // undefined = unloaded, null = unavailable
 
+function readAssets(dir: string): { css: string; js: string } {
+  return {
+    css: files.readText(path.join(dir, 'swagger-ui.css')),
+    js: files.readText(path.join(dir, 'swagger-ui-bundle.js')),
+  };
+}
+
 function loadAssets(): { css: string; js: string } | null {
   if (cache !== undefined) return cache;
+  cache = null;
+  // The build copies the assets into dist/swagger-ui/ (scripts/copy-swagger-ui.mjs):
+  // dist/index.js reads them beside itself, dist/cli/index.js one folder up, and the
+  // packaged binary from its snapshot of dist.
+  for (const dir of [path.resolve(__dirname, 'swagger-ui'), path.resolve(__dirname, '..', 'swagger-ui')]) {
+    try {
+      cache = readAssets(dir);
+      return cache;
+    } catch {
+      /* not here — try the next place */
+    }
+  }
+  // From source (tests, `npm run dev`) the swagger-ui-dist devDependency is the origin.
   try {
-    const dir = path.dirname(require.resolve('swagger-ui-dist/package.json'));
-    cache = {
-      css: files.readText(path.join(dir, 'swagger-ui.css')),
-      js: files.readText(path.join(dir, 'swagger-ui-bundle.js')),
-    };
+    cache = readAssets(path.dirname(require.resolve('swagger-ui-dist/package.json')));
   } catch {
     cache = null;
   }

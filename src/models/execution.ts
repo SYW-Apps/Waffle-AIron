@@ -188,7 +188,7 @@ export const ExecutionConfigSchema = z.object({
    * over derivation — the tree is a good default, not an authority on how
    * you want to spend.
    */
-  overrides: z.record(ExecutionBudgetSchema.partial()).default({}),
+  overrides: z.record(z.string(), ExecutionBudgetSchema.partial()).default({}),
 });
 
 export type ExecutionConfig = z.infer<typeof ExecutionConfigSchema>;
