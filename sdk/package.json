@@ -1,14 +1,15 @@
 {
   "name": "@wairon/sdk",
   "version": "0.0.0-dev",
-  "description": "Wairon pack-archive (.wpack) format authority and authoring toolkit — scaffold, build, inspect, and safely extract wairon extension packs.",
+  "description": "Experimental: wairon pack-archive (.wpack) format authority and authoring toolkit — scaffold, build, inspect, and safely extract wairon extension packs.",
   "keywords": [
     "wairon",
     "sdd",
     "pack",
     "wpack",
     "archive",
-    "developer-tools"
+    "developer-tools",
+    "experimental"
   ],
   "author": "SYW",
   "license": "MIT",
@@ -36,7 +37,7 @@
   },
   "dependencies": {
     "fflate": "^0.8.2",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.3.2"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

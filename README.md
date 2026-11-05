@@ -3,16 +3,11 @@
 **Waffle AIron** — an AI-Driven Development (AIDD) support tool built around
 **Spec-Driven Development (SDD)**.
 
-> **Status:** stable, actively developed — the SDD spec tree, the conformance gate (a
-> documented rule registry — `wairon rules list` — with narrative control-flow
-> validation, code↔spec conformance, technology boundaries, and per-spec
-> `lint.allow`), human approval (`wairon lock`) with a CI merge gate
-> (`wairon lock-check`), members and cross-project references, live agent
-> briefs and skills, the MCP server, the design export, diagrams (Mermaid,
-> interactive canvas + ERD, draw.io/Excalidraw), extension packs (injectable
-> profiles, language tables, and rules), and a self-hostable HTTP **hosting
-> server** (`wairon serve` — HTTP MCP for many isolated projects, with a web UI)
-> are working. See the [roadmap](docs/roadmap.md) for what's next.
+> **Status: experimental.** wairon is under active development, and that includes breaking
+> changes. Any release may change behaviour, a patch release included, and the version number
+> counts iterations, not maturity. Only the latest release is supported. If you try it, pin an
+> exact version and read the [CHANGELOG](CHANGELOG.md) before updating. If you'd rather wait for
+> it to settle, you're welcome to check back later; the [roadmap](docs/roadmap.md) says what's next.
 
 ---
 

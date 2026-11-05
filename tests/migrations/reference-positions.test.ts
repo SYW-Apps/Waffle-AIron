@@ -164,20 +164,20 @@ const SCHEMAS: Record<Kind, unknown> = {
 
 /** Every string leaf of a zod schema (a string, or a list of strings), by dotted path. */
 function stringLeaves(schema: unknown, at = '', out = new Set<string>()): Set<string> {
-  const def = (schema as { _def?: Record<string, any> })._def;
-  switch (def?.typeName) {
-    case 'ZodOptional': case 'ZodNullable': case 'ZodDefault': return stringLeaves(def.innerType, at, out);
-    case 'ZodEffects': return stringLeaves(def.schema, at, out);
-    case 'ZodLazy': return stringLeaves(def.getter(), at, out);
-    case 'ZodArray': return stringLeaves(def.type, at, out);
-    case 'ZodObject': {
-      const shape = def.shape();
+  const def = (schema as { def?: Record<string, any> }).def;
+  switch (def?.type) {
+    case 'optional': case 'nullable': case 'default': case 'prefault': return stringLeaves(def.innerType, at, out);
+    // A transform or preprocess is a pipe: the shape is on the side that is not the transform.
+    case 'pipe': return stringLeaves(def.in?.def?.type === 'transform' ? def.out : def.in, at, out);
+    case 'lazy': return stringLeaves(def.getter(), at, out);
+    case 'array': return stringLeaves(def.element, at, out);
+    case 'object': {
+      const shape = def.shape;
       for (const key of Object.keys(shape)) stringLeaves(shape[key], at ? `${at}.${key}` : key, out);
       return out;
     }
-    case 'ZodUnion': for (const o of def.options) stringLeaves(o, at, out); return out;
-    case 'ZodDiscriminatedUnion': for (const o of def.options.values ? [...def.options.values()] : def.options) stringLeaves(o, at, out); return out;
-    case 'ZodString': out.add(at); return out;
+    case 'union': for (const o of def.options) stringLeaves(o, at, out); return out;
+    case 'string': out.add(at); return out;
     default: return out;
   }
 }

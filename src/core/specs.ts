@@ -5159,7 +5159,7 @@ export class SpecWorkspace {
     const index = this.scanAll();
     const inScope = include ?? ((): boolean => true);
 
-    const check = (kind: string, id: string, result: z.SafeParseReturnType<unknown, unknown>): void => {
+    const check = (kind: string, id: string, result: z.ZodSafeParseResult<unknown>): void => {
       if (result.success) return;
       issues.push({
         severity: 'error',

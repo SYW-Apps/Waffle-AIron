@@ -102,7 +102,7 @@ export const LanguagePackDefSchema = z.preprocess((value, ctx) => {
   }
   return value;
 }, z.object({
-  unsupportedFlow: z.record(z.string()).default({}),
+  unsupportedFlow: z.record(z.string(), z.string()).default({}),
 }));
 export type LanguagePackDef = z.infer<typeof LanguagePackDefSchema>;
 
@@ -154,7 +154,7 @@ export interface PackInstructionBlock {
 // Annotated rather than inferred: the string arm normalizes to the SAME shape as
 // the object arm, so consumers see one block type instead of a union they have to
 // narrow before reading `profile`.
-export const PackInstructionBlockSchema: z.ZodType<PackInstructionBlock, z.ZodTypeDef, unknown> = z.union([
+export const PackInstructionBlockSchema: z.ZodType<PackInstructionBlock, unknown> = z.union([
   // Scalar shorthand: `instructions: >- …` — the common case, unscoped.
   z.string().min(1).transform((text) => ({ text })),
   z.object({
@@ -182,7 +182,7 @@ export const PatternDefSchema = z.object({
   id: z.string().min(1),
   version: z.string().min(1),
   description: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type PatternDef = z.infer<typeof PatternDefSchema>;
 
@@ -255,8 +255,8 @@ export function assertionFullCode(packName: string, code: string): string {
 export const DeclarativePackSchema = z.object({
   name: z.string().min(1),
   version: z.string().optional(),
-  profiles: z.record(ProfileDefSchema).default({}),
-  languages: z.record(LanguagePackDefSchema).default({}),
+  profiles: z.record(z.string(), ProfileDefSchema).default({}),
+  languages: z.record(z.string(), LanguagePackDefSchema).default({}),
   skills: z.array(PackSkillSchema).default([]),
   patterns: z.array(PatternDefSchema).default([]),
   /** Declarative rule assertions — instances of closed kinds, hosted-safe. */
@@ -274,7 +274,7 @@ export const DeclarativePackSchema = z.object({
    * leakage rule (TECH_LEAKAGE_IN_CODE) compares imports with, for a driver or
    * SDK the table does not know. Data only.
    */
-  technologyPackages: z.record(z.array(z.string().min(1))).default({}),
+  technologyPackages: z.record(z.string(), z.array(z.string().min(1))).default({}),
   /**
    * Connecting-agent guidance appended to wairon's own MCP `initialize`
    * instructions, attributed to this pack, in pack load order.

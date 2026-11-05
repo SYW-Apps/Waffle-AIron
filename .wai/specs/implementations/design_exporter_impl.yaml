@@ -8,9 +8,9 @@ description: >-
   as the stable `alias::publicName` a consumer resolves, read back from that member's L0 export
   table, never as the loader's in-memory key; each dependency carries its pinned digest from the
   externals lock when it has one. The zod schema of the format lives in src/models/design-export.ts,
-  and the JSON Schema shipped in the package (schemas/design-export-1.json) is generated from it at
-  build time with the zod-to-json-schema devDependency (zod is 3.23), a test failing when the two
-  drift.
+  and the JSON Schema shipped in the package (schemas/design-export-2.json) is generated from it at
+  build time with zod's own JSON Schema conversion (z.toJSONSchema, zod 4), a test failing when the
+  two drift.
 contract: idesign_exporter
 sourcePath: src/core/design-export.ts
 methods:
@@ -204,4 +204,4 @@ methods:
     symbol: dependencies
 status: complete
 createdAt: '2026-10-04T13:54:26.399Z'
-updatedAt: '2026-10-23T22:27:45.975Z'
+updatedAt: '2026-11-04T23:34:16.474Z'

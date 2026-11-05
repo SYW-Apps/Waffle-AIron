@@ -21,13 +21,13 @@ on it, and credit you in the advisory when it is published, unless you ask us no
 
 ## Supported versions
 
-Security fixes land on the latest release line and ship as a patch release of it.
+wairon is experimental, and only the latest release is supported. Security fixes ship in a new
+release; earlier releases get none.
 
 | Version | Supported |
 | --- | --- |
-| Latest 6.x minor | Yes |
-| Earlier 6.x minors | No — update to the latest |
-| 5.x and older | No |
+| The latest release | Yes |
+| Any earlier release | No — update to the latest |
 
 ## Scope
 
