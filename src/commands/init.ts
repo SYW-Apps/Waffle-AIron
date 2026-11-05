@@ -275,7 +275,7 @@ async function runInitInteractive(): Promise<void> {
 
   const { projectType } = await inquirer.prompt<{ projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' | 'plc-cyclic' | 'fullstack' }>([
     {
-      type: 'list',
+      type: 'select',
       name: 'projectType',
       message: 'Project type / architecture profile:',
       choices: [
