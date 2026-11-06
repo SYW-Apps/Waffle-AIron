@@ -4016,7 +4016,7 @@ export class SpecWorkspace {
           severity: 'error',
           code: 'SCHEMA_VALIDATION_ERROR',
           // A schema refusal reads as `path: message` per issue, never zod's JSON dump.
-          message: `Failed to parse ${detectedType} spec "${file}": ${e instanceof z.ZodError ? formatZodIssues(e) : e.message || String(e)}`,
+          message: `Failed to parse ${detectedType === 'spec' ? '' : `${detectedType} `}spec "${file}": ${e instanceof z.ZodError ? formatZodIssues(e) : e.message || String(e)}`,
           specId: this.loaderIssueSpecId(file, rawId, key),
           // Structured, so references into this spec are folded, not matched on text.
           unparsed: { kind: detectedType, id: this.loaderIssueSpecId(file, rawId, key), ...(detectedType === 'interface' && rawComponent ? { component: keyIn(key, rawComponent) } : {}) },

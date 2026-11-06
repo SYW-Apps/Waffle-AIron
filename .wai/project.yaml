@@ -92,6 +92,10 @@ rules:
       # Constants — the supported aliases, the version, the default target list.
       # 16 importers and nothing to call.
       - src/config/defaults.ts
+      # The wording zod gives a refused value, set once for the process (zod 3's
+      # messages kept under zod 4). Loaded for its effect by the parsing models and
+      # the MCP server; nothing calls it.
+      - src/models/zod-messages.ts
       # Stereotype predicates shared by three doctrine rules that are themselves
       # modelled. Rule-family vocabulary.
       - src/core/rules/doctrine/stereotype-terms.ts

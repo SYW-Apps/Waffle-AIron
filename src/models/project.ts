@@ -1,5 +1,7 @@
 import * as path from 'path';
 import { z } from 'zod';
+// The zod 3 wording of refused values, set before any parse (models/zod-messages.ts).
+import './zod-messages';
 import { CustomTargetSchema } from './agent.js';
 import { ExecutionConfigSchema } from './execution.js';
 import { isNewerVersion } from '../utils/version.js';
