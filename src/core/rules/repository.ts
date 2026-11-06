@@ -65,6 +65,7 @@ import { profileRegistrationRule } from './extension/profile-registration.js';
 import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
 import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
 import { patternReferencesRule } from './extension/pattern-references.js';
+import { practiceReferencesRule } from './extension/practice-references.js';
 import { variantReferencesRule } from './extension/component-variants.js';
 import { assertionForbiddenEdgesRule } from './extension/assertion-forbidden-edges.js';
 import { assertionRequiredFieldsRule } from './extension/assertion-required-fields.js';
@@ -245,6 +246,7 @@ export const SDD_RULES: SddRule[] = [
   profileStereotypeFencingRule,
   packProfileStereotypesRule,
   patternReferencesRule,
+  practiceReferencesRule,
   variantReferencesRule,
   // Pack-instantiated declarative doctrine rides with the pack-reference
   // family: same data source, same provenance-bearing findings. One rule per

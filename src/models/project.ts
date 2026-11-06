@@ -664,6 +664,15 @@ const NetworkFieldSchema = z.preprocess(
   NetworkDeclarationSchema.optional(),
 );
 
+const PracticeEntriesSchema = z.array(z.string().min(1));
+export const PracticeSelectionSchema = z.object({
+  use: PracticeEntriesSchema.optional(),
+  subsystems: z.record(z.string(), PracticeEntriesSchema).optional(),
+  components: z.record(z.string(), PracticeEntriesSchema).optional(),
+  roles: z.record(z.string(), PracticeEntriesSchema).optional(),
+});
+export type PracticeSelection = z.infer<typeof PracticeSelectionSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -753,6 +762,14 @@ export const ProjectConfigSchema = z.object({
    * part's configuration.
    */
   network: NetworkFieldSchema.optional(),
+
+  /**
+   * practice_selection — which pack practices apply where: the whole project
+   * (`use`), per subsystem, per component and per agent role. Every list adds
+   * to the scope around it; `!<id>` drops an inherited practice. Process, not
+   * design: outside the approval, so changing it never asks for a re-lock.
+   */
+  practices: PracticeSelectionSchema.optional(),
 
   /**
    * The type/profile of the project, which configures targeted guidelines, rules,

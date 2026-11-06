@@ -452,6 +452,67 @@ need `guide` as well — naming both shows the text twice there.
 - Pack skills stay the place for depth. `instructions` is the map that makes an
   agent go and read them; keeping it short is the point.
 
+## Practices (`practices`)
+
+A practice is a way of working or a priority: build only what has a caller, tests
+first, a security review before approval, accuracy above all. A pack declares
+practices; a project chooses where they apply. A practice is process, not
+architecture: it carries guidance only, no rules or stereotypes.
+
+```yaml
+# pack.yaml
+practices:
+  - id: test-first
+    description: Write the failing test before the code.
+    guidance: >-
+      Write a failing test for each contract method before implementing it, and
+      run it to see it fail.
+```
+
+Declaring a practice applies it nowhere. A project selects practices in
+`.wai/project.yaml`, outside the specs, so changing a selection never needs a
+re-lock:
+
+```yaml
+practices:
+  use: [lean-scope, test-first]       # the whole project
+  subsystems:
+    payments: [accuracy-first]        # every component of the subsystem
+  components:
+    ledger: ['!lean-scope']           # `!` drops an inherited practice
+  roles:
+    reviewer: [security-review]       # a built-in agent role
+```
+
+Scopes apply in the order project, subsystem, component, role, then the
+session. Each one adds to what it inherits, and `!<id>` drops a practice. A role
+is a built-in agent template: `architect`, `domain-owner`, `guardian`,
+`implementer`, `reviewer` or `tester`.
+
+Where the guidance arrives:
+
+- **The generated guide** carries the practices the project selects for itself
+  (`use`), under `## Practice "<id>" (pack "<name>")`. It is written by
+  `wairon generate`.
+- **Each live brief** carries the practices in force for its subsystem,
+  component and role, plus the session's picks, before the project's own
+  guidance (`.wai/agents/<id>.md`).
+- **The MCP server instructions** name the project's practices and point at
+  `sdd_use_practices`.
+
+A session picks its own with `sdd_use_practices`: called with no arguments, it
+lists every declared practice and what is in force. `add` and `drop` change this
+session's practices only, and a dropped practice can be one of the project's
+own. A local (stdio) session keeps its picks, and the briefs it fetches
+afterwards carry them. The hosted server is built per request, so there the
+answer covers that call only (`remembered: false`). A session's picks never
+change `project.yaml`.
+
+Validation reports `UNKNOWN_PRACTICE` when the selection names a practice no
+loaded pack declares, and `UNKNOWN_PRACTICE_SCOPE` when a key names no subsystem,
+component or built-in role. When two loaded packs declare the same practice id,
+the first keeps it and the later one is reported as a pack load error.
+
 ## Reusable, versioned pattern references
 
 Packs can declare named, versioned architecture patterns; component specs

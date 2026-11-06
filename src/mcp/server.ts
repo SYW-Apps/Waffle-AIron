@@ -65,6 +65,7 @@ import {
   renameField,
   renameParam,
   loadProjectConfig,
+  loadProjectExtensions,
   getStatusReport,
   approvalVerdict,
   composeAgentBrief,
@@ -105,6 +106,8 @@ import { declaredExternals, declaredMembers } from '../models/project.js';
 import { narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
 import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
+import { practiceSections, resolvePractices } from '../models/practices.js';
+import { SessionPracticeStore, type PracticeReport } from './session-practices.js';
 // The pending-transaction banner sdd_get_status and sdd_validate_tree lead
 // with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
 import { pending as pendingMigrations, run as runMigration, scaffold as scaffoldSessions } from './migrations.js';
@@ -3995,6 +3998,60 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  // The practice entries this session picked (sdd_use_practices): one store per
+  // server instance, so a stdio session keeps them and two sessions never share.
+  const sessionPractices = new SessionPracticeStore();
+
+  reg<{ add?: string[]; drop?: string[] }>(server,
+    'sdd_use_practices',
+    {
+      description: 'List the practices the loaded extension packs declare and pick the ones in force for THIS session: add a practice on top of the project\'s selection (project.yaml `practices`), or drop one, the project\'s own included. Answers the practices available, the project\'s, this session\'s entries, those now in force and their guidance. A local (stdio) session keeps its picks, and the briefs it fetches afterwards with sdd_get_agent_brief carry them; the hosted server is built per request, so there the answer covers that call only (remembered: false). Never changes project.yaml. Call with no arguments to only list.',
+      inputSchema: {
+        add: z.array(z.string().min(1)).optional().describe('Practice ids to put in force for this session'),
+        drop: z.array(z.string().min(1)).optional().describe('Practice ids to take out of force for this session, the project\'s own included'),
+      },
+    },
+    ({ add, drop }) => {
+      try {
+        // Steps 1-2: the declared practices and the project's selection.
+        const declared = loadProjectExtensions().practices ?? [];
+        const selection = loadProjectConfig()?.practices;
+        // Steps 3-4: refuse an id no loaded pack declares, changing nothing.
+        const ids = new Set(declared.map((p) => p.id));
+        const unknown = [...(add ?? []), ...(drop ?? [])].filter((id) => !ids.has(id));
+        if (unknown.length > 0) {
+          const offered = declared.length > 0 ? `The loaded packs declare: ${declared.map((p) => p.id).join(', ')}.` : 'No loaded pack declares any practice.';
+          return errText(`Unknown practice ${unknown.map((id) => `"${id}"`).join(', ')}: no loaded extension pack declares it. ${offered} Nothing was changed.`);
+        }
+        // Steps 5-7: apply add then drop to the session's entries and keep them.
+        let entries = sessionPractices.entries();
+        for (const id of add ?? []) {
+          entries = entries.filter((e) => e !== id && e !== `!${id}`);
+          entries.push(id);
+        }
+        for (const id of drop ?? []) {
+          entries = entries.filter((e) => e !== id && e !== `!${id}`);
+          entries.push(`!${id}`);
+        }
+        sessionPractices.replace(entries);
+        // Steps 8-9: the report.
+        const project = resolvePractices(selection);
+        const inForce = resolvePractices(selection, { session: entries });
+        const report: PracticeReport = {
+          available: declared.map((p) => ({ id: p.id, description: p.description, pack: p.pack })),
+          project,
+          session: entries,
+          inForce,
+          guidance: practiceSections(inForce, declared) ?? '',
+          remembered: !options.hostedTools,
+        };
+        return json(report);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
   reg<{ agentId: string }>(server,
     'sdd_get_agent_brief',
     {
@@ -4005,7 +4062,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ agentId }) => {
       try {
-        return json(composeAgentBrief(agentId));
+        // The brief carries the practices this session picked.
+        return json(composeAgentBrief(agentId, sessionPractices.entries()));
       } catch (e) {
         return errText(String(e));
       }

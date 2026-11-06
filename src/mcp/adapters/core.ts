@@ -26,6 +26,7 @@ export {
   renameField,
   renameParam,
   loadProjectConfig,
+  loadProjectExtensions,
   setNetwork,
   getStatusReport,
   approvalVerdict,

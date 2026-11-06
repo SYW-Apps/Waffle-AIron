@@ -6,6 +6,18 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **Practices.** A pack can declare practices: ways of working or priorities (tests first, build
+  only what has a caller, a security review before approval). A project selects them in
+  `.wai/project.yaml` under `practices`, for the whole project (`use`), per subsystem, per component
+  and per agent role. Each scope adds to the one around it, and `!<id>` drops an inherited practice.
+  The selection is outside the approval, so changing it needs no re-lock. The generated guide
+  carries the project's own practices; each live brief carries the practices in force for its
+  subsystem, component and role, before the project's own guidance. A new MCP tool,
+  `sdd_use_practices`, lists the declared practices and adds or drops practices for the current
+  session; a local session keeps its picks, and the briefs it fetches afterwards carry them.
+  Validation reports `UNKNOWN_PRACTICE` (a selected practice no loaded pack declares) and
+  `UNKNOWN_PRACTICE_SCOPE` (a key that names no subsystem, component or built-in role). See
+  "Practices" in docs/extending-wairon.md.
 - **A pack's guidance reaches the guide and the briefs.** An instruction block in a pack may name
   the channels it reaches: `server` (the MCP instructions a connecting agent receives, the default
   and the only channel before), `guide` (the generated in-project guide, such as

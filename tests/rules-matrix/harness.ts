@@ -92,6 +92,8 @@ export interface FixtureTree {
    * real project-extension loader, exactly as a user project would load them.
    */
   packs?: string[];
+  /** The project.yaml `practices` selection (project, subsystems, components, roles). */
+  practices?: Record<string, unknown>;
   /**
    * Extra files materialized relative to the temp project root, forward-slash
    * relative paths ('src/billing/ledger.ts', '.wai/surfaces/crm.yaml', …).
@@ -318,6 +320,7 @@ export function materializeFixtureProject(root: string, tree: FixtureTree): void
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: mergedRules,
     extensions: { packs: tree.packs ?? [], useGlobalPacks: false },
+    ...(tree.practices ? { practices: tree.practices } : {}),
     createdAt: TS_STAMP,
     updatedAt: TS_STAMP,
   });

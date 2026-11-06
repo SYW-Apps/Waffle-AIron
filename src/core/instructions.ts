@@ -1,5 +1,6 @@
 import type { LoadedInstructionBlock } from './extensions.js';
 import { blockReaches } from '../models/pack-instructions.js';
+import { resolvePractices } from '../models/practices.js';
 import { listSkillResources, type SkillResourceDescriptor } from './skills.js';
 import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core.js';
 
@@ -30,6 +31,23 @@ import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core
 // load (skills_core_adapter). The cycle is safe in both the ESM and the bundled
 // CJS output because every access happens inside a function body at call time —
 // nothing here runs during module initialization.
+
+/** The practices the bound project selects for itself, or none when its configuration cannot be read. */
+function projectPractices(): string[] {
+  try {
+    return resolvePractices(loadProjectConfig()?.practices);
+  } catch {
+    return [];
+  }
+}
+
+/** The short practices section: the project's own, and the session tool. */
+function practicesSection(project: string[]): string {
+  const own = project.length > 0
+    ? `This project works under the practices ${project.map((id) => `\`${id}\``).join(', ')}; their guidance is in the project guide and in every brief.`
+    : 'This project selects no practice for itself.';
+  return `## Practices\n\n${own} \`sdd_use_practices\` lists every practice the loaded packs declare and picks this session's own; the briefs this session fetches afterwards carry them.`;
+}
 
 /** The governing projectType/profile of the bound project, or null when it cannot be read. */
 function governingProfile(): string | null {
@@ -169,6 +187,7 @@ export function buildServerInstructions(): string {
   let skills: SkillResourceDescriptor[] = [];
   let blocks: LoadedInstructionBlock[] = [];
   let packNames: string[] = [];
+  let declaredPractices: string[] = [];
   // The variant vocabulary is deliberately NOT listed here. Reading the variant
   // registry from this module would be an sdd_skills → sdd_core hop onto an
   // internal Adapter, which the boundary rules refuse; routing it through the
@@ -181,11 +200,15 @@ export function buildServerInstructions(): string {
     const extensions = loadProjectExtensions();
     blocks = extensions.instructions;
     packNames = extensions.packNames;
+    declaredPractices = (extensions.practices ?? []).map((p) => p.id);
   } catch {
     // Degrade to wairon's own briefing — see the contract above.
   }
 
   const sections = [waironInstructions(profile, packNames, skills, variants)];
+  // Step 4 (part): when the packs declare practices, name the project's own and
+  // point at the tool that lists them and picks this session's.
+  if (declaredPractices.length > 0) sections.push(practicesSection(projectPractices()));
   for (const block of blocks) {
     // Step 5: only blocks that reach the server under the governing profile.
     if (!blockReaches(block, 'server', profile)) continue;

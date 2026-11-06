@@ -35,6 +35,7 @@ import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { DeclaredMember, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import { BUILTIN_AGENT_ROLES } from '../../models/practices.js';
 import type { CarriedFindingEntry, FindingParts } from './types.js';
 import {
   ArchProfile,
@@ -267,6 +268,8 @@ export interface BuildContextOptions {
   declaredMembers?: DeclaredMember[];
   /** The bound project's own network declaration (see RuleContext.network); absent when it declares none. */
   network?: import('../../models/project.js').NetworkDeclaration;
+  /** The bound project's practice selection (see RuleContext.practiceSelection); absent when it selects none. */
+  practiceSelection?: import('../../models/project.js').PracticeSelection;
   /** The retired reachability forms the scan met (see RuleContext.retiredReachFacts). */
   retiredReachFacts?: import('../../models/specs.js').RetiredReachFact[];
   /** The resolved export tables (see RuleContext.exportTables); absent when none were gathered. */
@@ -1086,12 +1089,14 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     documentationConfigFor,
     namingConfigFor,
     isBuiltinType,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, technologyPackages: extensions.technologyPackages ?? {}, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [] },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, practices: extensions.practices ?? [], guarantees: extensions.guarantees, technologyPackages: extensions.technologyPackages ?? {}, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),
     ...(opts.declaredMembers ? { declaredMembers: opts.declaredMembers } : {}),
     ...(opts.network ? { network: opts.network } : {}),
+    ...(opts.practiceSelection ? { practiceSelection: opts.practiceSelection } : {}),
+    knownRoles: BUILTIN_AGENT_ROLES,
     // Each scanned project's L0 language, from the project graph's nodes.
     ...(family
       ? { projectLanguages: new Map(family.nodes.filter((n) => n.targetLanguage).map((n) => [n.namespace, normalizeLanguage(n.targetLanguage!)] as const)) }
