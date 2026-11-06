@@ -46,9 +46,10 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Select the pack instruction blocks that apply to this project: a block with no declared
-          profile scope always applies, one with a scope applies only when it names the governing
-          profile. Preserves pack load order, so load order is append order.
+          Select the pack instruction blocks that reach the server channel under the governing
+          profile (loaded_instruction_block.reaches): a block naming no channels reaches the server
+          only, and one with a profile scope applies only when it names the governing profile.
+          Preserves pack load order, so load order is append order.
         type: local
       - stepNumber: 6
         description: Append each selected block to wairon's briefing, in pack load order.
@@ -71,4 +72,4 @@ methods:
     symbol: buildServerInstructions
 status: complete
 createdAt: '2026-07-29T10:50:20.337Z'
-updatedAt: '2026-09-17T20:30:39.055Z'
+updatedAt: '2026-11-06T19:52:50.112Z'

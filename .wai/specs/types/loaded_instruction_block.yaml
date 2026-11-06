@@ -3,11 +3,11 @@ id: loaded_instruction_block
 name: LoadedInstructionBlock
 description: >-
   A pack instruction block as loaded: the authored PackInstructionBlock tagged with the pack that
-  contributes it, which is the attribution rendered into the composed instructions.
+  contributes it, which is the attribution rendered wherever it is delivered.
 fields:
   - name: text
     type: string
-    description: The guidance appended to wairon's instructions.
+    description: The guidance delivered.
     optional: false
   - name: profile
     type: list<string>
@@ -21,7 +21,28 @@ fields:
       Provenance: the name of the pack contributing this block, rendered into the attributed
       heading.
     optional: false
-methods: []
+  - name: channels
+    type: list<InstructionChannel>
+    description: 'Optional: the channels this block reaches. Absent = the server instructions only.'
+    optional: true
+methods:
+  - name: reaches
+    signature: 'reaches(channel: InstructionChannel, profile: string?): bool'
+    params:
+      - name: channel
+        type: InstructionChannel
+        description: Where the guidance is being composed
+      - name: profile
+        type: string?
+        description: The profile governing that place, or none when it cannot be resolved
+    returns: bool
+    description: >-
+      Whether this block is delivered to that channel under that profile: the channel must be one it
+      names (none named = server only), and a profile-scoped block applies only when it names the
+      given profile. A block scoped to a profile that cannot be resolved is withheld, so a pack that
+      says 'only under my profile' never leaks its platform doctrine elsewhere. Pure
+    sourcePath: src/core/extensions.ts
+    symbol: blockReaches
 sourcePath: src/core/extensions.ts
 createdAt: '2026-10-03T17:04:19.739Z'
-updatedAt: '2026-10-04T10:20:23.644Z'
+updatedAt: '2026-11-06T19:52:46.717Z'
