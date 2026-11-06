@@ -70,8 +70,14 @@ export function zod3Message(issue: Issue): string | undefined {
       return sizeMessage(issue, true);
     case 'too_big':
       return sizeMessage(issue, false);
-    case 'invalid_union':
+    case 'invalid_union': {
+      // A discriminated union names the values its discriminator takes, as zod 3 did.
+      const options = (issue as { note?: string; options?: unknown[] }).options;
+      if ((issue as { note?: string }).note === 'No matching discriminator' && Array.isArray(options)) {
+        return `Invalid discriminator value. Expected ${options.map(quoted).join(' | ')}`;
+      }
       return 'Invalid input';
+    }
     default:
       return undefined;
   }

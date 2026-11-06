@@ -22,6 +22,7 @@ const CASES: Array<[string, z.ZodType, unknown, string]> = [
   ['enum', z.enum(['HTTP', 'gRPC']), 'HTTP_API', "Invalid enum value. Expected 'HTTP' | 'gRPC', received 'HTTP_API'"],
   ['enum missing', z.object({ t: z.enum(['a', 'b']) }), {}, "Required"],
   ['union', z.union([z.string(), z.number()]), true, "Invalid input"],
+  ['discriminator', z.discriminatedUnion('kind', [z.object({ kind: z.literal('a') }), z.object({ kind: z.literal('b') })]), { kind: 'c' }, "Invalid discriminator value. Expected 'a' | 'b'"],
   ['custom message kept', z.string().min(1, 'id must not be empty'), '', "id must not be empty"],
   ['record value', z.record(z.string(), z.number()), { a: 'x' }, "Expected number, received string"],
 ];

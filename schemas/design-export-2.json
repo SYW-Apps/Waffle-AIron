@@ -889,7 +889,8 @@
                         "properties": {
                           "stepNumber": {
                             "type": "integer",
-                            "exclusiveMinimum": 0
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
                           },
                           "label": {
                             "type": "string",
@@ -956,11 +957,13 @@
                           },
                           "onTrueStep": {
                             "type": "integer",
-                            "exclusiveMinimum": 0
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
                           },
                           "onFalseStep": {
                             "type": "integer",
-                            "exclusiveMinimum": 0
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
                           },
                           "on": {
                             "type": "string"
@@ -975,7 +978,8 @@
                                 },
                                 "step": {
                                   "type": "integer",
-                                  "exclusiveMinimum": 0
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
                                 }
                               },
                               "required": [
@@ -986,7 +990,8 @@
                           },
                           "defaultStep": {
                             "type": "integer",
-                            "exclusiveMinimum": 0
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
                           },
                           "loopKind": {
                             "type": "string",
@@ -1002,7 +1007,8 @@
                           },
                           "endStep": {
                             "type": "integer",
-                            "exclusiveMinimum": 0
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
                           },
                           "catches": {
                             "type": "array",
@@ -1014,7 +1020,8 @@
                                 },
                                 "step": {
                                   "type": "integer",
-                                  "exclusiveMinimum": 0
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
                                 }
                               },
                               "required": [
@@ -1025,7 +1032,8 @@
                           },
                           "finallyStep": {
                             "type": "integer",
-                            "exclusiveMinimum": 0
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
                           },
                           "branches": {
                             "type": "array",
@@ -1034,7 +1042,8 @@
                               "properties": {
                                 "step": {
                                   "type": "integer",
-                                  "exclusiveMinimum": 0
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
                                 },
                                 "name": {
                                   "type": "string"
@@ -1047,7 +1056,8 @@
                           },
                           "toStep": {
                             "type": "integer",
-                            "exclusiveMinimum": 0
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
                           },
                           "detach": {
                             "type": "boolean"

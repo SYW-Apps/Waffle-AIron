@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { z } from 'zod';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -107,6 +108,37 @@ describe('a rebuild is judged by its schema fingerprint', () => {
     const first = schemaFingerprint();
     expect(first).toMatch(/^[0-9a-f]{64}$/);
     expect(schemaFingerprint()).toBe(first);
+  });
+
+  // The fingerprint of a build whose TypeSpecSchema is the given one: the server
+  // module is loaded afresh over a spec model that differs only there.
+  async function fingerprintWith(typeSchema: (actual: z.ZodObject<z.ZodRawShape>) => unknown): Promise<string> {
+    vi.resetModules();
+    vi.doMock('../../src/models/specs.js', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../../src/models/specs.js')>();
+      return { ...actual, TypeSpecSchema: typeSchema(actual.TypeSpecSchema as unknown as z.ZodObject<z.ZodRawShape>) };
+    });
+    try {
+      return (await import('../../src/mcp/server.js')).schemaFingerprint();
+    } finally {
+      vi.doUnmock('../../src/models/specs.js');
+      vi.resetModules();
+    }
+  }
+
+  it('reads the fields of a spec schema: one field more is another fingerprint', async () => {
+    const same = await fingerprintWith((actual) => actual);
+    const added = await fingerprintWith((actual) => actual.safeExtend({ addedField: z.string().optional() }));
+    const retyped = await fingerprintWith((actual) => actual.safeExtend({ description: z.number().optional() }));
+    expect(added).not.toBe(same);
+    expect(retyped).not.toBe(same);
+    expect(retyped).not.toBe(added);
+  });
+
+  it('does not read prose: a reworded description is the same fingerprint', async () => {
+    const same = await fingerprintWith((actual) => actual);
+    const described = await fingerprintWith((actual) => actual.safeExtend({ description: z.string().optional().describe('reworded') }));
+    expect(described).toBe(same);
   });
 
   it('a rebuild whose schemas match is build-changed: warned, writes allowed', () => {
