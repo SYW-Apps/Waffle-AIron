@@ -277,8 +277,8 @@ fields:
   - name: knownRoles
     type: list<string>
     description: >-
-      The agent roles a practice selection may name: the built-in agent templates and the ones in
-      the project's templates directory.
+      The agent roles a practice selection may name: the built-in agent templates wairon ships
+      (architect, domain-owner, guardian, implementer, reviewer, tester).
     optional: false
 methods:
   - name: isComponentDraft
@@ -519,4 +519,4 @@ methods:
       which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-11-06T21:44:27.936Z'
+updatedAt: '2026-11-06T22:00:46.817Z'

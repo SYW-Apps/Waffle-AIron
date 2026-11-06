@@ -24,9 +24,8 @@ fields:
   - name: roles
     type: map<string, list<string>>
     description: >-
-      Practice entries per agent role — the agent template a brief is composed from (architect,
-      implementer, reviewer, tester, guardian, domain-owner, or one from the project's templates
-      directory).
+      Practice entries per agent role — the built-in agent template a brief is composed from
+      (architect, domain-owner, guardian, implementer, reviewer, tester).
     optional: true
 methods:
   - name: resolve
@@ -55,4 +54,4 @@ methods:
     symbol: resolvePractices
 sourcePath: src/models/project.ts
 createdAt: '2026-11-06T21:43:43.261Z'
-updatedAt: '2026-11-06T21:43:44.419Z'
+updatedAt: '2026-11-06T22:00:48.269Z'
