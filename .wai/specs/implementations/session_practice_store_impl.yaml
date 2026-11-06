@@ -1,0 +1,26 @@
+id: session_practice_store_impl
+name: Session Practice Store Implementation
+description: >-
+  src/mcp/session-practices.ts: a small class holding one list; each MCP server instance creates its
+  own, so two sessions never share entries.
+contract: isession_practice_store
+sourcePath: src/mcp/session-practices.ts
+methods:
+  - name: entries
+    narrative:
+      - stepNumber: 1
+        description: Return a copy of the held list, so a caller cannot change it in place
+        type: return
+        outcome: the session's entries
+  - name: replace
+    narrative:
+      - stepNumber: 1
+        description: Hold a copy of the given list in place of the old one
+        type: local
+      - stepNumber: 2
+        description: Done
+        type: return
+        outcome: nothing
+status: complete
+createdAt: '2026-11-06T21:46:46.675Z'
+updatedAt: '2026-11-06T21:46:47.797Z'

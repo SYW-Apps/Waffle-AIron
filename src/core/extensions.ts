@@ -192,6 +192,19 @@ export const PatternDefSchema = z.object({
 export type PatternDef = z.infer<typeof PatternDefSchema>;
 
 /**
+ * practice_def — a practice a pack declares: a way of working or a priority a
+ * project selects per scope in its project.yaml `practices` section. Process,
+ * never architecture doctrine: it carries only guidance, delivered to the
+ * agents working where it is selected. Declaring one applies it nowhere.
+ */
+export const PracticeDefSchema = z.object({
+  id: z.string().min(1),
+  description: z.string().min(1),
+  guidance: z.string().min(1),
+});
+export type PracticeDef = z.infer<typeof PracticeDefSchema>;
+
+/**
  * Selector for declarative assertions (closed, v1): absent keys match all,
  * present keys AND together. `profile` matches the component's governing
  * profile — how a platform pack scopes doctrine to its own subsystems.
@@ -264,6 +277,11 @@ export const DeclarativePackSchema = z.object({
   languages: z.record(z.string(), LanguagePackDefSchema).default({}),
   skills: z.array(PackSkillSchema).default([]),
   patterns: z.array(PatternDefSchema).default([]),
+  /** Practices this pack declares; a project selects them in project.yaml `practices`. */
+  practices: z.array(PracticeDefSchema).default([]).refine(
+    (list) => new Set(list.map((p) => p.id)).size === list.length,
+    { message: 'a practice id is declared twice in this pack' },
+  ),
   /** Declarative rule assertions — instances of closed kinds, hosted-safe. */
   assertions: z.array(PackAssertionSchema).default([]),
   /**
@@ -321,6 +339,8 @@ export function skillExtendErrors(skills: LoadedPackSkill[]): string[] {
     .filter((s) => s.extends !== undefined && !EXTENDABLE_BUILTIN_SKILLS.includes(s.extends))
     .map((s) => `Extension pack "${s.pack}" declares a skill extending "${s.extends}", which is not a builtin skill (extendable: ${EXTENDABLE_BUILTIN_SKILLS.join(', ')}).`);
 }
+/** loaded_practice — a pack practice tagged with the pack that declares it. */
+export type LoadedPractice = PracticeDef & { pack: string };
 /** A pack pattern definition tagged with the pack that declares it. */
 export type LoadedPattern = PatternDef & { pack: string };
 /** A pack instruction block tagged with the pack that contributes it (the attribution rendered into the composed instructions). */
@@ -412,6 +432,8 @@ export interface LoadedExtensions {
   skills: LoadedPackSkill[];
   /** Pack-registered reusable pattern definitions (with provenance). */
   patterns: LoadedPattern[];
+  /** Pack-declared practices (with provenance), in load order; a later pack's repeat of an id is reported in `errors`. */
+  practices: LoadedPractice[];
   /** Pack-declared semantic guarantee tokens (merged, deduped) — the extension half of the guarantee vocabulary. */
   guarantees: string[];
   /** Pack-contributed package names per technology name (lower-cased, deduped across packs). */
@@ -436,7 +458,7 @@ export interface LoadedExtensions {
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], technologyPackages: {}, assertions: [], instructions: [], errors: [], selectionFailures: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], practices: [], guarantees: [], technologyPackages: {}, assertions: [], instructions: [], errors: [], selectionFailures: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -590,6 +612,16 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   // ids by convention), so they accumulate across packs with their provenance.
   for (const s of pack.skills) out.skills.push({ ...s, pack: pack.name, packVersion: pack.version, sourcePath: path.resolve(packDir, s.source) });
   for (const p of pack.patterns) out.patterns.push({ ...p, pack: pack.name });
+  // Practices are selected by bare id, so an id means one practice: the first
+  // pack to declare it keeps it, and a later repeat is a load error.
+  for (const p of pack.practices) {
+    const first = out.practices.find((q) => q.id === p.id);
+    if (first) {
+      out.errors.push(`Extension pack "${pack.name}" declares practice "${p.id}", which pack "${first.pack}" already declares; the later declaration is ignored.`);
+      continue;
+    }
+    out.practices.push({ ...p, pack: pack.name });
+  }
   // Guarantee tokens are a flat vocabulary — same token from two packs is one token.
   out.guarantees = [...new Set([...out.guarantees, ...pack.guarantees])];
   // Technology packages accumulate per technology name, lower-cased and deduped.
@@ -655,6 +687,7 @@ export function readManifest(target: string, resolveFrom: string): ExtensionPack
     languages: mod.languages ?? {},
     skills: mod.skills ?? [],
     patterns: mod.patterns ?? [],
+    practices: mod.practices ?? [],
     guarantees: mod.guarantees ?? [],
     technologyPackages: mod.technologyPackages ?? {},
     assertions: mod.assertions ?? [],

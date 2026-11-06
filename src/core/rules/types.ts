@@ -22,7 +22,7 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { CarriedDebtKind, DeclaredMember, NetworkDeclaration, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { CarriedDebtKind, DeclaredMember, NetworkDeclaration, PackRequirement, PackSelection, PracticeSelection, ProjectIdentity } from '../../models/project.js';
 import type { RetiredReachFact } from '../../models/specs.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
@@ -541,6 +541,14 @@ export interface RuleContext {
    */
   network?: NetworkDeclaration;
   /**
+   * The bound project's practice selection (project_config.practices): what
+   * practice-references judges. Absent when it selects none, when its
+   * configuration is unreadable, and on a candidate run.
+   */
+  practiceSelection?: PracticeSelection;
+  /** The agent roles a practice selection may name: the built-in agent templates. */
+  knownRoles: readonly string[];
+  /**
    * Each scanned project's L0 targetLanguage by project key ('' for the bound
    * root), normalized like targetLanguageFor: what library-calls judges a
    * contained member's native library against. Absent on a candidate run.
@@ -679,6 +687,8 @@ export interface RuleContext {
     profiles: Record<string, ProfileDef>;
     languages: Record<string, LanguagePackDef>;
     patterns: LoadedPattern[];
+    /** Pack-declared practices, which practice-references resolves the practice selection against. */
+    practices: import('../extensions.js').LoadedPractice[];
     /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
     guarantees: string[];
     /** Pack-contributed package names per technology name — what technology.packages adds to the built-in table. */

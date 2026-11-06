@@ -41,6 +41,8 @@ import { readYamlFile } from '../utils/yaml.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
 import { loadProjectExtensions, type LoadedInstructionBlock } from './extensions.js';
 import { blockReaches } from '../models/pack-instructions.js';
+import { practiceSections, resolvePractices } from '../models/practices.js';
+import type { PracticeSelection } from '../models/project.js';
 
 // Cache for project files relative to the system root
 const projectFilesCache = new Map<string, string[]>();
@@ -632,14 +634,14 @@ export class UnknownAgentError extends WaironError {
 // Live delegation brief: composed on demand from the CURRENT spec tree, the
 // dynamic replacement for generate-time agent files.
 // ---------------------------------------------------------------------------
-export function composeAgentBrief(agentId: string): AgentBrief {
+export function composeAgentBrief(agentId: string, sessionPractices?: readonly string[]): AgentBrief {
   // Steps 1-4: an id qualified by a direct member's alias composes AT THE
   // MEMBER'S ROOT (brief-through-mount) — exactly the brief the member's own
   // session gets, so it never grows with the family — and comes back with its
   // fence re-expressed under the member's directory. One hop per member.
   const hop = memberHop(agentId);
   if (hop) {
-    const brief = runWithProjectRoot(hop.directory, () => composeAgentBrief(hop.rest));
+    const brief = runWithProjectRoot(hop.directory, () => composeAgentBrief(hop.rest, sessionPractices));
     return throughMount(brief, hop.alias, hop.relative);
   }
 
@@ -709,7 +711,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
 
   // Steps 11-12: the governing packs' guidance for briefs, under the profile
   // governing this agent, ahead of the project guidance (the last word).
-  const packGuidance = packBriefSections(record, config.projectType ?? null);
+  const packGuidance = packBriefSections(record, config.projectType ?? null, config.practices, sessionPractices ?? []);
   if (packGuidance) instructions = `${instructions.trimEnd()}\n\n${packGuidance}\n`;
 
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
@@ -998,32 +1000,43 @@ function implementationLanguage(record: AgentRecord): string | undefined {
  * The governing profile is the agent's subsystem profile, else the project's.
  * A pack load that fails leaves the brief without pack guidance.
  */
-function packBriefSections(record: AgentRecord, projectProfile: string | null): string | null {
-  let blocks: LoadedInstructionBlock[];
+function packBriefSections(
+  record: AgentRecord,
+  projectProfile: string | null,
+  selection: PracticeSelection | undefined,
+  sessionPractices: readonly string[],
+): string | null {
+  let extensions: ReturnType<typeof loadProjectExtensions>;
   try {
-    blocks = loadProjectExtensions().instructions;
+    extensions = loadProjectExtensions();
   } catch {
     return null;
   }
-  if (blocks.length === 0) return null;
-  const profile = subsystemProfileOf(record) ?? projectProfile;
-  const sections = blocks
-    .filter((block) => blockReaches(block, 'brief', profile))
+  const scope = workScopeOf(record);
+  const profile = (scope.subsystem ? loadSubsystemSpecs().find((s) => s.id === scope.subsystem)?.profile : undefined) ?? projectProfile;
+  const sections = extensions.instructions
+    .filter((block: LoadedInstructionBlock) => blockReaches(block, 'brief', profile))
     .map((block) => `## From pack "${block.pack}"\n\n${block.text.trim()}`);
+  // The practices in force for this agent: its subsystem, component and role,
+  // then the session's own picks.
+  const inForce = resolvePractices(selection, { ...scope, role: record.template, session: sessionPractices });
+  const practices = practiceSections(inForce, extensions.practices ?? []);
+  if (practices) sections.push(practices);
   return sections.length > 0 ? sections.join('\n\n') : null;
 }
 
-/** The profile the subsystem of an implementer's component (or of a subsystem owner) declares for itself, if any. */
-function subsystemProfileOf(record: AgentRecord): string | undefined {
-  let subsystemId: string | undefined;
+/** The subsystem (and, for an implementer, the component) an agent's work belongs to. */
+function workScopeOf(record: AgentRecord): { subsystem?: string; component?: string } {
   if (record.template === 'implementer') {
     const componentId = record.id.endsWith('-implementer') ? record.id.slice(0, -'-implementer'.length) : record.id;
-    subsystemId = loadComponentSpecs().find((c) => c.id === componentId)?.subsystem;
-  } else if (isSubsystemOwner(record)) {
-    subsystemId = loadSubsystemSpecs().find((s) => record.ownedPaths.some((p) => p.includes(`/${s.id}/`) || p.endsWith(`/${s.id}.yaml`)))?.id;
+    const component = loadComponentSpecs().find((c) => c.id === componentId);
+    return component ? { component: component.id, subsystem: component.subsystem } : {};
   }
-  if (!subsystemId) return undefined;
-  return loadSubsystemSpecs().find((s) => s.id === subsystemId)?.profile;
+  if (isSubsystemOwner(record)) {
+    const subsystem = loadSubsystemSpecs().find((s) => record.ownedPaths.some((p) => p.includes(`/${s.id}/`) || p.endsWith(`/${s.id}.yaml`)));
+    return subsystem ? { subsystem: subsystem.id } : {};
+  }
+  return {};
 }
 
 /** Whether a record implements components (an implementer, or a subsystem owner inferred from an L1). */

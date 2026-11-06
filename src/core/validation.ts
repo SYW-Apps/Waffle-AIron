@@ -1002,6 +1002,8 @@ function runOwnersGate(
       ...(boundConfig ? { declaredMembers: declaredMembers(boundConfig) } : {}),
       // The bound project's own network, for network-boundaries.
       ...(boundConfig?.network ? { network: boundConfig.network } : {}),
+      // The bound project's practice selection, for practice-references.
+      ...(boundConfig?.practices ? { practiceSelection: boundConfig.practices } : {}),
       // The retired reachability forms the scan met in the v5 reading, for entry-declarations.
       retiredReachFacts: retiredReachFacts(),
       surfaceSnapshots,

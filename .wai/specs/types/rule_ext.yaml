@@ -64,6 +64,12 @@ fields:
       (loaded_extensions.technologyPackages) — what technology.packages adds to the built-in table
       when the code twin of the leakage rule compares an import's package name
     optional: false
+  - name: practices
+    type: list<LoadedPractice>
+    description: >-
+      Pack-declared practices, which the practice-references rule resolves the project's practice
+      selection against.
+    optional: false
 methods: []
 lint:
   allow:
@@ -73,4 +79,4 @@ lint:
         src/core/rules/types.ts (code reaches it as RuleContext['ext']), so there is no symbol a
         sourcePath could bind.
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-10-07T06:30:28.545Z'
+updatedAt: '2026-11-06T21:44:25.990Z'

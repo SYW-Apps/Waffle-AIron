@@ -257,12 +257,21 @@ lint:
         - mcp_core_adapter.getLoaderIssues
         - mcp_core_adapter.loadGroupSpecs
         - mcp_validator_adapter.adviseNetwork
+        - mcp_core_adapter.loadProjectExtensions
       reason: >-
         create is the tool registry: these calls are made by the tool handlers it registers, each
         the tool's own behaviour run when an assistant calls that tool, not calls create makes. Its
         narrative summarizes the registrations by group; narrating every handler's calls would
         exceed the step limit. Remove once the registry is split into per-group registration
         methods.
+    - code: UNDECLARED_WRITE_CALL
+      at: create
+      covers:
+        - session_practice_store.replace
+      reason: >-
+        create is the tool registry: the sdd_use_practices handler it registers keeps the session's
+        practice entries — the mcp_orchestrator.usePractices workflow narrates that write — not a
+        call create makes. Remove once the registry is split into per-group registration methods.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-31T23:30:44.330Z'
+updatedAt: '2026-11-06T22:28:03.946Z'

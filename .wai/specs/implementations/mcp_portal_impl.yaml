@@ -437,6 +437,14 @@ methods:
         targetComponent: mcp_lookup_orchestrator
         targetMethod: references
     symbol: sdd_find_references
+  - name: usePractices
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the practice workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: usePractices
+    symbol: sdd_use_practices
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T19:16:34.590Z'
+updatedAt: '2026-11-06T21:47:27.569Z'

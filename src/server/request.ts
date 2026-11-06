@@ -339,6 +339,9 @@ const READ_TOOL_NAMES = new Set<string>([
   'sdd_search_specs',
   'sdd_find_references',
   'sdd_surface_diff',
+  // Lists the declared practices and picks this session's own: it writes no spec
+  // and no configuration, only the per-server session store.
+  'sdd_use_practices',
 ]);
 
 /**
