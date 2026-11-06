@@ -35,7 +35,7 @@ export const TemplateSchema = z.object({
    * Optional YAML front-matter fields to include in generated output.
    * These are passed through to the exporter as-is.
    */
-  frontmatter: z.record(z.unknown()).optional(),
+  frontmatter: z.record(z.string(), z.unknown()).optional(),
 
   /** Version of this template definition */
   version: z.string().default('1.0.0'),

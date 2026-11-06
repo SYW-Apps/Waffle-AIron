@@ -1,5 +1,7 @@
 import * as path from 'path';
 import { z } from 'zod';
+// The zod 3 wording of refused values, set before any parse (models/zod-messages.ts).
+import './zod-messages';
 import { CustomTargetSchema } from './agent.js';
 import { ExecutionConfigSchema } from './execution.js';
 import { isNewerVersion } from '../utils/version.js';
@@ -58,7 +60,7 @@ export const NamingRuleConfigSchema = z.object({
   /** Casing style or regular expression for parameters/variables */
   variables: z.string().optional(),
   /** Stereotype-specific naming rules (prefixes, suffixes, regexes) */
-  stereotypes: z.record(z.object({
+  stereotypes: z.record(z.string(), z.object({
     match: z.enum(['id', 'name', 'both']).default('both'),
     prefix: z.string().optional(),
     suffix: z.string().optional(),
@@ -409,7 +411,7 @@ export const RulesConfigSchema = z.object({
    * A notice is still reported, but never makes the tree invalid and never
    * fails `--ci`; off is not reported at all.
    */
-  sddRuleSeverity: z.record(z.enum(['error', 'warning', 'notice', 'off'])).default({}),
+  sddRuleSeverity: z.record(z.string(), z.enum(['error', 'warning', 'notice', 'off'])).default({}),
 
   /** Dynamic naming conventions and stereotype suffix rules */
   naming: NamingRuleConfigSchema.optional(),
@@ -708,7 +710,7 @@ export const ProjectConfigSchema = z.object({
    * time; stage 2 writes it by hand only. The alias is a plain record key: a
    * malformed alias is REPORTED (EXTERNAL_UNRESOLVED), never unreadable.
    */
-  externals: z.record(ExternalDeclarationSchema).optional(),
+  externals: z.record(z.string(), ExternalDeclarationSchema).optional(),
 
   /**
    * What this project is made of beyond its own specs folder, keyed by alias,
@@ -723,7 +725,7 @@ export const ProjectConfigSchema = z.object({
    * project's alias table. The legacy L1 `projectPath` mount and the long-form
    * `path` key are wairon 5 forms, read only in the v5 reading.
    */
-  members: z.record(z.union([z.string(), MemberDeclarationSchema])).optional(),
+  members: z.record(z.string(), z.union([z.string(), MemberDeclarationSchema])).optional(),
 
   /**
    * Set only in a NON-CONTAINED part's configuration (stage 8: a sibling
@@ -770,7 +772,7 @@ export const ProjectConfigSchema = z.object({
    */
   targets: z.array(TargetConfigSchema).default([]),
 
-  rules: RulesConfigSchema.default({}),
+  rules: RulesConfigSchema.prefault({}),
 
   /**
    * Execution budgets — the RESOURCE axis of the derived topology. Controls
@@ -780,7 +782,7 @@ export const ProjectConfigSchema = z.object({
    * Defaults to tier `off`, so adding this feature changes no existing
    * project's generated output until it is deliberately turned on.
    */
-  execution: ExecutionConfigSchema.default({ tier: 'off', overrides: {} }),
+  execution: ExecutionConfigSchema.prefault({ tier: 'off', overrides: {} }),
 
   /**
    * Extension packs — wairon's plugin surface. Each entry is a relative path
@@ -819,7 +821,7 @@ export const ProjectConfigSchema = z.object({
     useGlobalPacks: z.boolean().default(false),
   }).optional(),
 
-  paths: PathsConfigSchema.default({}),
+  paths: PathsConfigSchema.prefault({}),
 
   /**
    * The profile/pack selection a hosted policy workflow applied to this project.

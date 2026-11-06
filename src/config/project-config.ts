@@ -501,7 +501,7 @@ function schemaFieldOrder(at: (string | number)[]): string[] | null {
   const objectsOf = (schema: z.ZodTypeAny): z.ZodObject<z.ZodRawShape>[] => {
     const shape = shapeOf(schema);
     if (shape instanceof z.ZodObject) return [shape];
-    if (shape instanceof z.ZodUnion) return (shape._def.options as z.ZodTypeAny[]).flatMap(objectsOf);
+    if (shape instanceof z.ZodUnion) return (shape.def.options as z.ZodTypeAny[]).flatMap(objectsOf);
     return [];
   };
   let current: z.ZodTypeAny | null = ProjectConfigSchema;
@@ -511,7 +511,7 @@ function schemaFieldOrder(at: (string | number)[]): string[] | null {
     if (typeof segment === 'number') {
       current = shape instanceof z.ZodArray ? shape.element as z.ZodTypeAny : null;
     } else if (shape instanceof z.ZodRecord) {
-      current = shape._def.valueType as z.ZodTypeAny;
+      current = shape.def.valueType as z.ZodTypeAny;
     } else {
       current = objectsOf(current).map((o) => o.shape[segment] as z.ZodTypeAny | undefined).find((s) => s !== undefined) ?? null;
     }
@@ -774,10 +774,11 @@ function hasOwn(object: object, key: string): boolean {
 function shapeOf(schema: z.ZodTypeAny): z.ZodTypeAny {
   let current = schema;
   for (;;) {
-    if (current instanceof z.ZodDefault) current = current._def.innerType;
-    else if (current instanceof z.ZodOptional || current instanceof z.ZodNullable) current = current.unwrap();
-    else if (current instanceof z.ZodEffects) current = current.innerType();
-    else if (current instanceof z.ZodLazy) current = current.schema;
+    if (current instanceof z.ZodDefault || current instanceof z.ZodPrefault) current = current.def.innerType as z.ZodTypeAny;
+    else if (current instanceof z.ZodOptional || current instanceof z.ZodNullable) current = current.unwrap() as z.ZodTypeAny;
+    // A transform or preprocess is a pipe in zod 4: the shape lives on the side that is not the transform.
+    else if (current instanceof z.ZodPipe) current = (current.def.in instanceof z.ZodTransform ? current.def.out : current.def.in) as z.ZodTypeAny;
+    else if (current instanceof z.ZodLazy) current = current.unwrap() as z.ZodTypeAny;
     else return current;
   }
 }
@@ -798,16 +799,17 @@ function overlayKnownFields(schema: z.ZodTypeAny, typed: unknown, onDisk: unknow
   if (shape instanceof z.ZodObject) {
     const fields = shape.shape as Record<string, z.ZodTypeAny>;
     // A passthrough or catchall object keeps foreign keys through the parse itself.
-    const open = shape._def.unknownKeys === 'passthrough' || !(shape._def.catchall instanceof z.ZodNever);
+    const catchall = shape.def.catchall;
+    const open = catchall !== undefined && !(catchall instanceof z.ZodNever);
     return overlayLevel(typed, onDisk, (key) => (hasOwn(fields, key) ? fields[key] : open ? z.unknown() : null));
   }
   if (shape instanceof z.ZodRecord) {
     // Every key of a record is data, so every key is known.
-    const valueType = shape._def.valueType as z.ZodTypeAny;
+    const valueType = shape.def.valueType as z.ZodTypeAny;
     return overlayLevel(typed, onDisk, () => valueType);
   }
   if (shape instanceof z.ZodUnion) {
-    const options = shape._def.options as z.ZodTypeAny[];
+    const options = shape.def.options as z.ZodTypeAny[];
     const match = options.find((option) => shapeOf(option) instanceof z.ZodObject && option.safeParse(typed).success);
     return match ? overlayKnownFields(match, typed, onDisk) : typed;
   }

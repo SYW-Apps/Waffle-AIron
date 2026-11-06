@@ -1,4 +1,6 @@
 import { z } from 'zod';
+// The zod 3 wording of refused values, set before any parse (models/zod-messages.ts).
+import './zod-messages';
 import { INVISIBLE_CHARACTERS, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 import { fieldTypeRefs, methodTypeRefs, signatureTypeRefs, typeMatchesRef } from './type-references.js';
 import { readsV5Forms } from '../utils/fs.js';
@@ -471,7 +473,7 @@ export type LintConfig = z.infer<typeof LintConfigSchema>;
  * preserved verbatim through load/save so pack rules have something to read.
  * Key discipline (e.g. "mypack:priority") is the pack's concern.
  */
-export const ExtDataSchema = z.record(z.unknown());
+export const ExtDataSchema = z.record(z.string(), z.unknown());
 export type ExtData = z.infer<typeof ExtDataSchema>;
 
 /** The flow a declared lifecycle entrypoint roots. */
@@ -2793,7 +2795,7 @@ export const ExternalLockEntrySchema = z.object({
   project: z.string(),
   snapshot: z.string(),
   digest: z.string(),
-  used: z.record(z.record(z.string())).default({}),
+  used: z.record(z.string(), z.record(z.string(), z.string())).default({}),
   /** The producer's commit at pin time (stage 8): provenance, never compared by a verdict. */
   commit: z.string().optional(),
   /** external | member | parent (stage 8); absent reads as external. */
@@ -2807,7 +2809,7 @@ export type ExternalLockEntry = z.infer<typeof ExternalLockEntrySchema>;
  * parent, whose snapshot is a ParentExcerpt.
  */
 export const ExternalsLockSchema = z.object({
-  externals: z.record(ExternalLockEntrySchema).default({}),
+  externals: z.record(z.string(), ExternalLockEntrySchema).default({}),
   parent: ExternalLockEntrySchema.optional(),
 });
 export type ExternalsLock = z.infer<typeof ExternalsLockSchema>;
@@ -2827,11 +2829,11 @@ export const ParentExcerptSchema = z.object({
   /** The parent's governing projectType. */
   projectType: z.string().optional(),
   /** The parent's rule configuration, as its configuration records it. */
-  rules: z.record(z.unknown()).default({}),
+  rules: z.record(z.string(), z.unknown()).default({}),
   /** The parent's pack selections as its configuration records them. */
-  packs: z.array(z.union([z.string(), z.record(z.unknown())])).default([]),
+  packs: z.array(z.union([z.string(), z.record(z.string(), z.unknown())])).default([]),
   /** The parent's spec documents the part references, and the closure judging them needs (its L0 included). */
-  specs: z.array(z.record(z.unknown())).default([]),
+  specs: z.array(z.record(z.string(), z.unknown())).default([]),
   /** sha256:… over the canonical excerpt without its commit. */
   digest: z.string(),
 });

@@ -60,7 +60,7 @@ export const DesignDependencyRoleSchema = z.enum(DESIGN_DEPENDENCY_ROLES);
 export type DesignDependencyRole = z.infer<typeof DesignDependencyRoleSchema>;
 
 /** A pack's extension data, passed through untouched under each pack's key. */
-const ExtSchema = z.record(z.unknown());
+const ExtSchema = z.record(z.string(), z.unknown());
 
 /**
  * type_expression, as the export carries it: a parsed type position whose named
@@ -120,7 +120,7 @@ export const DesignMethodSchema = z.object({
   effect: z.string().optional(),
   guarantees: z.array(z.string()),
   invokedBy: DeclaredInvocationSchema.optional(),
-  endpoint: z.record(z.string()).optional(),
+  endpoint: z.record(z.string(), z.string()).optional(),
   formerly: z.array(z.string()),
   ext: ExtSchema.optional(),
 }).passthrough();
