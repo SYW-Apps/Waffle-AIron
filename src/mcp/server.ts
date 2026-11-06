@@ -1,6 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+// The zod 3 wording of refused values, set before any parse (models/zod-messages.ts).
+import '../models/zod-messages';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   RootsListChangedNotificationSchema,
@@ -118,18 +120,6 @@ import type { FamilyMigrationReport, MigrationRequest } from '../migrations/type
 // Transport: stdio (for use with Claude Code / Gemini CLI MCP config)
 // Usage: wairon mcp serve  (add to .claude/settings.json mcpServers)
 // ---------------------------------------------------------------------------
-
-// A refused enum value names the value it received, as the tools have always said it
-// ("Invalid enum value. Expected 'a' | 'b', received 'x'"): zod 4's own message lists
-// the options only, and an agent fixing a call needs to see what it sent.
-z.config({
-  customError: (issue) => {
-    if (issue.code !== 'invalid_value' || !Array.isArray(issue.values)) return undefined;
-    const quoted = (v: unknown): string => (typeof v === 'string' ? `'${v}'` : String(v));
-    const received = typeof issue.input === 'undefined' ? 'undefined' : quoted(issue.input);
-    return `Invalid enum value. Expected ${issue.values.map(quoted).join(' | ')}, received ${received}`;
-  },
-});
 
 /**
  * The family context sdd_get_status opens with (mcp_orchestrator getStatus step

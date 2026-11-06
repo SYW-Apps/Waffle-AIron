@@ -1,4 +1,6 @@
 import { z } from 'zod';
+// The zod 3 wording of refused values, set before any parse (models/zod-messages.ts).
+import './zod-messages';
 import { INVISIBLE_CHARACTERS, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 import { fieldTypeRefs, methodTypeRefs, signatureTypeRefs, typeMatchesRef } from './type-references.js';
 import { readsV5Forms } from '../utils/fs.js';
