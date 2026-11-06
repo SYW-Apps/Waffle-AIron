@@ -28,6 +28,17 @@ A fix release. Upgrading:
   plainly that wairon is experimental: any release may change behaviour, and only the latest
   release is supported.
 
+### Known limitations
+
+- A method whose narrative leaves its detail unstated accepts, in its code, a call to any
+  collaborator the component declares: an extra call is reported only as an `OPEN_ROUTE_CALL`
+  notice, which `validate --ci` does not fail on. State the method's calls in its narrative to have
+  them checked.
+- A router that dispatches through a private helper function is not read: its Portal gets
+  `UNREADABLE_ROUTER`.
+- A component calling a component written in another language in the same process passes at design
+  time; only the code check reports it (`CALL_ACROSS_LANGUAGE`, a notice).
+
 ## v6.7.2 (from v6.7.1)
 
 A fix release. Upgrading:
