@@ -85,6 +85,24 @@ fields:
       Practices this pack declares — ways of working and priorities a project selects per scope in
       its project.yaml `practices` section. Declaring one applies it nowhere: only a selection does.
     optional: false
+  - name: description
+    type: string
+    description: >-
+      One line saying what the pack is for, shown where packs are listed (the registry's pack page
+      and search).
+    optional: true
+  - name: homepage
+    type: string
+    description: The pack's home page URL.
+    optional: true
+  - name: repository
+    type: string
+    description: The URL of the pack's source repository.
+    optional: true
+  - name: license
+    type: string
+    description: The pack's license, as an SPDX identifier (MIT, Apache-2.0, …).
+    optional: true
 methods:
   - name: settings
     signature: 'settings(profile: string | null): PackSettings'
@@ -114,4 +132,4 @@ methods:
     symbol: doctrineChanges
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-11-06T21:43:47.750Z'
+updatedAt: '2026-11-06T23:39:44.854Z'

@@ -1,0 +1,51 @@
+id: ipack_registry_adapter
+name: Pack Registry Adapter Interface
+description: Resolve and publish against the wairon pack registry.
+component: pack_registry_adapter
+methods:
+  - name: resolve
+    description: >-
+      Resolve a pack name and a range (`*` when none) to one exact version: GET
+      /v1/packs/{name}/resolve with the running wairon's version, so versions needing a later wairon
+      are skipped. An unknown name or a range nothing satisfies throws with the registry's message;
+      a network failure or a 5xx throws saying the registry could not be reached.
+    signature: 'resolve(name: string, range: string, waironVersion: string): async RegistryResolution'
+    returns: async RegistryResolution
+    params:
+      - name: name
+        type: string
+        description: The pack name, `@scope/pack` or flat
+      - name: range
+        type: string
+        description: A semver range or exact version, passed through; the registry evaluates it
+      - name: waironVersion
+        type: string
+        description: The running wairon's version
+    effect: io
+  - name: publish
+    description: >-
+      Publish one archive: PUT /v1/packs/{name}/{version} with the archive bytes and the bearer
+      token. Answers `published`, `exists` (with the stored version's integrity) or `refused` (the
+      registry's code and message, each validation finding listed); throws only when the registry
+      could not be reached.
+    signature: >-
+      publish(name: string, version: string, archive: bytes, token: string): async
+      RegistryPublishResult
+    returns: async RegistryPublishResult
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: The exact version
+      - name: archive
+        type: bytes
+        description: The .wpack archive
+      - name: token
+        type: string
+        description: A registry API token (WAIRON_REGISTRY_TOKEN)
+    effect: io
+status: complete
+createdAt: '2026-11-06T23:41:18.799Z'
+updatedAt: '2026-11-06T23:41:21.288Z'

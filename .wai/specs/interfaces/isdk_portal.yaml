@@ -99,6 +99,17 @@ methods:
       - name: rule
         type: pack_rule
         description: The rule as authored
+  - name: packContentDigest
+    description: >-
+      A pack's content integrity (`sha256-<hex>`) over its files as extracted — the digest
+      project.yaml pins and a registry publishes, computed by the one implementation every consumer
+      shares.
+    signature: 'packContentDigest(files: list<pack_file>): string'
+    returns: string
+    params:
+      - name: files
+        type: list<pack_file>
+        description: The pack's files, paths relative to the pack root
 status: complete
 createdAt: '2026-07-21T18:13:58.018Z'
-updatedAt: '2026-10-06T18:55:13.109Z'
+updatedAt: '2026-11-06T23:40:30.304Z'

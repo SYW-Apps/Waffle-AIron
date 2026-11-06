@@ -1,0 +1,44 @@
+kind: value-object
+id: registry_publish_result
+name: RegistryPublishResult
+description: 'What the wairon pack registry answers to a publish: the version it now serves, or why it refused.'
+subsystem: sdd_cli
+fields:
+  - name: status
+    type: string
+    description: >-
+      `published`, `exists` (this version is already published: versions are never reused) or
+      `refused`.
+    optional: false
+  - name: name
+    type: string
+    description: The pack name.
+    optional: false
+  - name: version
+    type: string
+    description: The version.
+    optional: false
+  - name: integrity
+    type: string
+    description: >-
+      The registry's content integrity for this version — for `exists`, the one already stored, so
+      the caller can say whether the content is the same.
+    optional: true
+  - name: url
+    type: string
+    description: The published version's page, when published.
+    optional: true
+  - name: code
+    type: string
+    description: >-
+      The registry's refusal code (UNAUTHENTICATED, NOT_OWNER, PUBLISHING_CLOSED, TOO_LARGE,
+      INVALID_PACK, …), when refused.
+    optional: true
+  - name: message
+    type: string
+    description: The registry's refusal message, with each validation finding, when refused.
+    optional: true
+methods: []
+sourcePath: src/commands/registry.ts
+createdAt: '2026-11-06T23:41:06.619Z'
+updatedAt: '2026-11-06T23:41:07.488Z'

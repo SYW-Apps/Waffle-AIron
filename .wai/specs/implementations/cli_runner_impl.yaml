@@ -923,6 +923,8 @@ methods:
             step: 25
           - value: impact
             step: 27
+          - value: publish
+            step: 29
         defaultStep: 12
       - stepNumber: 2
         label: doInit
@@ -984,8 +986,10 @@ methods:
       - stepNumber: 13
         label: doInstall
         description: >-
-          Install a pack into this wairon install's store (applies to nothing until a project
-          selects it).
+          Install a pack into this wairon install's store — from the registry by name, or from a
+          directory, archive or URL — passing --yes, --registry and --allow-unverified-code (applies
+          to nothing until a project selects it). `wairon install` and `wairon i` run the same
+          action.
         type: call
         targetComponent: cli_packs_adapter
         targetMethod: installPack
@@ -1063,6 +1067,16 @@ methods:
         description: Done.
         type: return
         outcome: impact done
+      - stepNumber: 29
+        label: doPublish
+        description: Publish a pack directory or .wpack archive to the wairon pack registry.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: publishPack
+      - stepNumber: 30
+        description: Done.
+        type: return
+        outcome: publish done
   - name: runLock
     narrative:
       - stepNumber: 1
@@ -4449,4 +4463,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-31T23:49:15.889Z'
+updatedAt: '2026-11-06T23:43:18.270Z'

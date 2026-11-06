@@ -22,6 +22,7 @@ dependsOn:
   - validator_portal
   - files_adapter
   - http_client_adapter
+  - pack_registry_adapter
 status: complete
 createdAt: '2026-07-14T20:08:56.448Z'
-updatedAt: '2026-10-31T23:49:14.533Z'
+updatedAt: '2026-11-06T23:42:24.267Z'

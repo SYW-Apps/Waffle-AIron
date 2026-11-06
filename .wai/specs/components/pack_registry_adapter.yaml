@@ -1,0 +1,17 @@
+id: pack_registry_adapter
+name: Pack Registry Adapter
+description: >-
+  The client of the wairon pack registry's HTTP API (registry v1): resolve a name and a range to one
+  exact version, and publish an archive. It owns the wire format — the base URL (WAIRON_REGISTRY,
+  else https://wairon.sywapps.com/registry), the paths (a scoped name is two path segments,
+  `@scope/pack`), the bearer token, and the `{ error: { code, message, details } }` refusal shape —
+  so the pack commands deal in names, versions and results only. Reads are anonymous; publishing
+  carries the token.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - http_client_adapter
+status: complete
+createdAt: '2026-11-06T23:41:12.892Z'
+updatedAt: '2026-11-06T23:41:13.720Z'
