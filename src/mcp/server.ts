@@ -1304,60 +1304,43 @@ export interface BuildFreshness {
 }
 
 /** Bumped when what the fingerprint reads changes, so that change reads as a schema change too. */
-const FINGERPRINT_VERSION = 1;
+const FINGERPRINT_VERSION = 2;
+
+/** The definition of a zod schema or check, or undefined for anything else. */
+function zodDef(value: unknown): Record<string, unknown> | undefined {
+  return (value as { _zod?: { def?: Record<string, unknown> } } | null)?._zod?.def;
+}
 
 /**
  * A zod schema read STRUCTURALLY: what it accepts and what it keeps, never its
  * prose. Object keys and their strictness, element types, unions, enums,
- * literals, defaults and checks all count; a description does not, so a
- * reworded field is no reason to refuse a write while a retyped one is.
- * Refinement bodies are code, not structure — only their presence is read.
+ * literals, defaults and checks all count; a description does not (zod keeps
+ * it in its registry, outside the definition), so a reworded field is no reason
+ * to refuse a write while a retyped one is. Refinement and transform bodies are
+ * code, not structure: only their presence is read.
  */
 function schemaShape(schema: unknown, seen: Map<unknown, number> = new Map()): unknown {
-  const def = (schema as { _def?: Record<string, any> } | null)?._def;
+  const def = zodDef(schema);
   if (!def) return null;
   const known = seen.get(schema);
   if (known !== undefined) return { ref: known };
   seen.set(schema, seen.size);
-  const inner = (s: unknown): unknown => schemaShape(s, seen);
-  const kind = String(def.typeName);
-  switch (kind) {
-    case 'ZodObject': {
-      const shape = typeof def.shape === 'function' ? def.shape() : def.shape;
-      return {
-        kind,
-        keys: Object.keys(shape).sort().map((key) => [key, inner(shape[key])]),
-        unknownKeys: def.unknownKeys,
-        catchall: inner(def.catchall),
-      };
+  // A lazy schema's getter is the one function whose result is structure.
+  if (def.type === 'lazy') return { type: 'lazy', of: schemaShape((def.getter as () => unknown)(), seen) };
+  // Every other definition is plain data whose nested schemas are read the same way:
+  // an object's shape and catchall, an array's element, a union's options, a check.
+  const plain = (value: unknown): unknown => {
+    if (zodDef(value)) return schemaShape(value, seen);
+    if (typeof value === 'function') return 'fn';
+    if (value instanceof RegExp) return String(value);
+    if (typeof value === 'bigint') return `${value}n`;
+    if (Array.isArray(value)) return value.map(plain);
+    if (value && typeof value === 'object') {
+      return Object.keys(value).sort().map((key) => [key, plain((value as Record<string, unknown>)[key])]);
     }
-    case 'ZodArray': return { kind, of: inner(def.type), min: def.minLength?.value, max: def.maxLength?.value };
-    case 'ZodOptional':
-    case 'ZodNullable':
-    case 'ZodReadonly':
-    case 'ZodBranded':
-    case 'ZodCatch': return { kind, of: inner(def.innerType ?? def.type) };
-    case 'ZodDefault': return { kind, of: inner(def.innerType), default: JSON.stringify(def.defaultValue?.()) };
-    case 'ZodEffects': return { kind, effect: def.effect?.type, of: inner(def.schema) };
-    case 'ZodLazy': return { kind, of: inner(def.getter()) };
-    case 'ZodUnion':
-    case 'ZodDiscriminatedUnion': {
-      const options = def.options instanceof Map ? [...def.options.values()] : def.options;
-      return { kind, discriminator: def.discriminator, of: (options as unknown[]).map(inner) };
-    }
-    case 'ZodIntersection': return { kind, left: inner(def.left), right: inner(def.right) };
-    case 'ZodTuple': return { kind, of: (def.items as unknown[]).map(inner), rest: inner(def.rest) };
-    case 'ZodRecord':
-    case 'ZodMap': return { kind, key: inner(def.keyType), value: inner(def.valueType) };
-    case 'ZodSet': return { kind, of: inner(def.valueType) };
-    case 'ZodEnum': return { kind, values: def.values };
-    case 'ZodNativeEnum': return { kind, values: def.values };
-    case 'ZodLiteral': return { kind, value: def.value };
-    case 'ZodPipeline': return { kind, in: inner(def.in), out: inner(def.out) };
-    default:
-      // A primitive: its kind, and the checks that narrow what it accepts.
-      return { kind, checks: (def.checks as { kind: string; value?: unknown }[] | undefined)?.map((c) => [c.kind, c.value ?? null]) ?? [] };
-  }
+    return value === undefined ? null : value;
+  };
+  return plain(def);
 }
 
 let runningFingerprint: string | undefined;

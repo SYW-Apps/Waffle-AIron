@@ -30,12 +30,6 @@ export function designExportJsonSchema(DesignExportSchema, formatVersion) {
     target: 'draft-7',
     io: 'input',
     unrepresentable: 'any',
-    // zod 4 bounds every `int()` to the safe-integer range and says so; the schema
-    // has never carried that bound, and a step number is a small integer.
-    override: ({ jsonSchema }) => {
-      if (jsonSchema.type === 'integer' && jsonSchema.maximum === Number.MAX_SAFE_INTEGER) delete jsonSchema.maximum;
-      if (jsonSchema.type === 'integer' && jsonSchema.minimum === Number.MIN_SAFE_INTEGER) delete jsonSchema.minimum;
-    },
   });
   const generated = { $ref: '#/definitions/DesignExport', definitions: { ...definitions, DesignExport: body } };
   return {
