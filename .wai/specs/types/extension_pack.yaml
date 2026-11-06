@@ -79,6 +79,12 @@ fields:
       imports with, for a driver or SDK the table does not know. Data only, so a declarative pack
       may carry it.
     optional: false
+  - name: practices
+    type: list<PracticeDef>
+    description: >-
+      Practices this pack declares — ways of working and priorities a project selects per scope in
+      its project.yaml `practices` section. Declaring one applies it nowhere: only a selection does.
+    optional: false
 methods:
   - name: settings
     signature: 'settings(profile: string | null): PackSettings'
@@ -108,4 +114,4 @@ methods:
     symbol: doctrineChanges
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:01.915Z'
-updatedAt: '2026-10-07T06:29:17.552Z'
+updatedAt: '2026-11-06T21:43:47.750Z'

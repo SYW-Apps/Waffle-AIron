@@ -218,8 +218,8 @@ methods:
         type: local
       - stepNumber: 11
         description: >-
-          Load the governing packs' instruction blocks; a load that fails leaves the brief without
-          pack guidance rather than failing the brief
+          Load the governing packs' instruction blocks and practices; a load that fails leaves the
+          brief without pack guidance and practices rather than failing the brief
         type: call
         targetComponent: extension_orchestrator
         targetMethod: loadProjectExtensions
@@ -228,7 +228,12 @@ methods:
           Resolve the profile governing this agent — its component's subsystem profile, else the
           project's projectType — and append each block that reaches the brief channel under it
           (loaded_instruction_block.reaches) under an attributed '## From pack "<name>"' heading, in
-          pack load order. They come before the project guidance, which stays the last word
+          pack load order. Then resolve the practices in force for this agent
+          (practice_selection.resolve with its subsystem, its component, its role — the record's
+          template — and the session's practices) and append each declared one's guidance under '##
+          Practice "<id>" (pack "<name>")', in resolved order; an id no loaded pack declares is
+          skipped (validation reports it). All of it comes before the project guidance, which stays
+          the last word
         type: local
       - stepNumber: 13
         description: >-
@@ -347,4 +352,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-06T19:53:11.528Z'
+updatedAt: '2026-11-06T21:45:29.643Z'

@@ -42,7 +42,10 @@ methods:
           directive to read wairon-skill://sdd-architect (and the other listed skills) BEFORE
           authoring, and the delegation directive: delegate implementation by fetching the target
           agent's LIVE brief (sdd_get_agent_brief / wairon-agent://) and spawning a scoped subagent
-          from it — briefs are always current, so no session restart follows a re-lock.
+          from it — briefs are always current, so no session restart follows a re-lock. When the
+          loaded packs declare practices, one short section names the practices the project selects
+          for itself and points at sdd_use_practices, which lists every practice and lets this
+          session pick its own.
         type: local
       - stepNumber: 5
         description: >-
@@ -72,4 +75,4 @@ methods:
     symbol: buildServerInstructions
 status: complete
 createdAt: '2026-07-29T10:50:20.337Z'
-updatedAt: '2026-11-06T19:52:50.112Z'
+updatedAt: '2026-11-06T21:45:46.479Z'

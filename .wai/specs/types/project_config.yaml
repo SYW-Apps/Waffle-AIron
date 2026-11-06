@@ -167,6 +167,12 @@ fields:
       project with none was made before it existed and is read as the oldest major the running
       release upgrades.
     optional: true
+  - name: practices
+    type: PracticeSelection
+    description: >-
+      Which pack practices apply where: the project, subsystems, components and agent roles. Outside
+      the approval: changing it never asks for a re-lock.
+    optional: true
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -267,4 +273,4 @@ methods:
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-18T19:09:06.457Z'
+updatedAt: '2026-11-06T21:43:51.250Z'

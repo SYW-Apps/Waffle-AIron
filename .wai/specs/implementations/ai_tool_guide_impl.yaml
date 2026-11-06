@@ -204,15 +204,16 @@ methods:
         outcome: the global guide body
       - stepNumber: 3
         description: >-
-          Read the bound project's configuration for its governing profile (projectType); an
-          unreadable configuration governs no profile
+          Read the bound project's configuration for its governing profile (projectType) and its
+          practice selection; an unreadable configuration governs no profile and selects no
+          practices
         type: call
         targetComponent: project_config_repository
         targetMethod: load
       - stepNumber: 4
         description: >-
-          Load the governing packs' instruction blocks; a load that fails leaves the guide without
-          pack guidance rather than failing the write
+          Load the governing packs' instruction blocks and practices; a load that fails leaves the
+          guide without pack guidance rather than failing the write
         type: call
         targetComponent: extension_orchestrator
         targetMethod: loadProjectExtensions
@@ -220,7 +221,10 @@ methods:
         description: >-
           Return the local guide body followed by each block that reaches the guide channel under
           that profile (loaded_instruction_block.reaches), each under an attributed '## From pack
-          "<name>"' heading in pack load order, so a pack's delta stays legible as a delta
+          "<name>"' heading in pack load order, so a pack's delta stays legible as a delta; then the
+          guidance of each practice in force for the whole project (practice_selection.resolve with
+          no subsystem, component, role or session) under '## Practice "<id>" (pack "<name>")',
+          skipping an id no loaded pack declares
         type: return
         outcome: the guide body
     symbol: guideBody
@@ -250,4 +254,4 @@ methods:
     symbol: registerProjectServer
 status: complete
 createdAt: '2026-09-23T00:11:34.495Z'
-updatedAt: '2026-11-06T19:53:21.975Z'
+updatedAt: '2026-11-06T21:45:32.550Z'

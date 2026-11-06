@@ -706,6 +706,57 @@ methods:
         type: local
     symbol: check
     exportedVia: packRequirementsRule
+  - name: practiceReferences
+    sourcePath: src/core/rules/extension/practice-references.ts
+    narrative:
+      - stepNumber: 1
+        description: Does the project select any practices?
+        type: branch
+        condition: ctx.practiceSelection is absent
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Nothing to check.
+        type: return
+        outcome: no practice selection
+      - stepNumber: 3
+        label: collect
+        description: >-
+          Collect the declared practice ids from ctx.ext.practices, the subsystem and component ids
+          of the loaded tree, and ctx.knownRoles.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Walk every entry of the selection with the scope it sits in: use, then each subsystems,
+          components and roles key with its entries (a key with no entries is still walked once, as
+          the key).
+        type: loop
+        loopKind: forEach
+        over: the selection's scopes and their entries
+        endStep: 8
+      - stepNumber: 5
+        description: >-
+          At the first entry of a subsystems, components or roles key that names no subsystem,
+          component or known role, report UNKNOWN_PRACTICE_SCOPE (warning) once for that key,
+          listing what that scope may name.
+        type: local
+      - stepNumber: 6
+        description: Does the entry, with a leading `!` stripped, name a declared practice?
+        type: branch
+        condition: the entry's id is not a declared practice id
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report UNKNOWN_PRACTICE (warning) naming the entry, where it is selected, and the
+          practices the loaded packs declare (or that no loaded pack declares any).
+        type: local
+      - stepNumber: 8
+        label: entry_done
+        description: Next entry.
+        type: local
+      - stepNumber: 9
+        description: Every entry checked.
+        type: return
+        outcome: findings reported
 status: complete
 createdAt: '2026-09-14T23:15:33.948Z'
-updatedAt: '2026-10-18T19:03:12.290Z'
+updatedAt: '2026-11-06T21:44:53.541Z'

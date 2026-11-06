@@ -107,8 +107,35 @@ in a practice setting, scoped where it applies, not hard-coded in either directi
 3. **Checks and visibility (6.10).** Rules a practice switches on, and practices shown in the UI.
 4. **A pack that targets another workflow**, outside core, as the first real test of principle 5.
 
+## Stage 2: the practice element
+
+- **Declared by packs.** A pack lists `practices`, each with an `id`, a one-line `description` and
+  the `guidance` an agent receives. Declaring a practice applies it nowhere.
+- **Selected in `.wai/project.yaml`, outside the specs.** Process is not design, so changing a
+  selection never re-opens the approval:
+
+  ```yaml
+  practices:
+    use: [lean-scope, test-first]        # the whole project
+    subsystems:
+      payments: [accuracy-first]
+    components:
+      ledger: ['!lean-scope']            # `!` drops an inherited practice
+    roles:
+      reviewer: [security-review]        # the agent template a brief is composed from
+  ```
+
+  Scopes apply in the order project, subsystem, component, role, then the session; each adds to what
+  it inherits, and `!<id>` drops one.
+- **Picked per session with a tool.** `sdd_use_practices` lists the declared practices and adds or
+  drops practices for the session. A stdio session keeps its picks, and briefs fetched afterwards
+  carry them; the hosted server is built per request, so there the answer covers that call only.
+- **Delivered through the existing channels.** The generated guide carries the project's own
+  practices; each brief carries the practices in force for its subsystem, component and role plus
+  the session's; the server instructions name the project's practices and point at the tool.
+- **Checked where it can be.** `UNKNOWN_PRACTICE` (a selection names a practice no loaded pack
+  declares) and `UNKNOWN_PRACTICE_SCOPE` (a key names no subsystem, component or known role).
+
 ## Open questions
 
-- How a session selects practices: a setting in the MCP server's launch configuration, a tool call at
-  the start of a session, or both.
 - How practices show up in the UI, so a reviewer can see which ones governed a component.

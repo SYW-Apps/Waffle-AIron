@@ -113,8 +113,8 @@ methods:
   - name: getAgentBrief
     description: >-
       The sdd_get_agent_brief tool workflow: compose the live delegation brief for one resolved
-      agent via the core client adapter and shape the tool response — the always-fresh replacement
-      for generated per-component agent files.
+      agent via the core client adapter, carrying the practices this session picked, and shape the
+      tool response — the always-fresh replacement for generated per-component agent files.
     signature: 'getAgentBrief(agentId: string): AgentBrief'
     returns: AgentBrief
     params:
@@ -615,6 +615,23 @@ methods:
         type: bool
         description: Answer the receipt the write would give and write nothing
         optional: true
+  - name: usePractices
+    description: >-
+      The sdd_use_practices tool workflow: apply the session's practice entries (add before drop),
+      keep them for the session when this server holds one, and answer the practices available, the
+      project's, the session's, those now in force and their guidance. With neither add nor drop it
+      only reports.
+    signature: 'usePractices(add?: list<string>, drop?: list<string>): PracticeReport'
+    returns: PracticeReport
+    params:
+      - name: add
+        type: list<string>
+        description: Practice ids to put in force for this session (on top of the project's)
+        optional: true
+      - name: drop
+        type: list<string>
+        description: Practice ids to take out of force for this session, the project's own included
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-30T12:04:00.390Z'
+updatedAt: '2026-11-06T21:47:01.978Z'

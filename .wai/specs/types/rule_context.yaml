@@ -267,6 +267,19 @@ fields:
       shared: true whose component is an Adapter; each is in publicSet too. An edge from another
       subsystem into one is reach shared
     optional: false
+  - name: practiceSelection
+    type: PracticeSelection
+    description: >-
+      The bound project's practice selection (project_config.practices), read by the validator from
+      its configuration, so practice-references judges it without I/O. Absent when the project
+      selects none, when its configuration is unreadable, and on a candidate run.
+    optional: true
+  - name: knownRoles
+    type: list<string>
+    description: >-
+      The agent roles a practice selection may name: the built-in agent templates and the ones in
+      the project's templates directory.
+    optional: false
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -506,4 +519,4 @@ methods:
       which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-31T21:51:48.383Z'
+updatedAt: '2026-11-06T21:44:27.936Z'

@@ -48,11 +48,17 @@ methods:
     description: >-
       Calls composeAgentBrief on core portal — the live per-agent delegation brief for the
       sdd_get_agent_brief tool and the wairon-agent:// resource reads.
-    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    signature: 'composeAgentBrief(agentId: string, sessionPractices?: list<string>): AgentBrief'
     returns: AgentBrief
     params:
       - name: agentId
         type: string
+      - name: sessionPractices
+        type: list<string>
+        description: >-
+          Practice entries the calling session picked, applied after the project's selection. Absent
+          = none.
+        optional: true
   - name: loadProjectConfig
     description: >-
       Calls loadProjectConfig on the core portal: the bound project's configuration, or null when it
@@ -393,6 +399,15 @@ methods:
       Forward to spec_tree_portal.loadGroupSpecs: the type group tree, which the status tool reports
       per group and sdd_add_group checks a new group against
     signatureFrom: spec_tree_portal.loadGroupSpecs
+    effect: read
+  - name: loadProjectExtensions
+    description: >-
+      Forward the governing packs' load to the core extension portal: the bound project's merged
+      extensions, its practices included.
+    signature: 'loadProjectExtensions(): LoadedExtensions'
+    returns: LoadedExtensions
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:34:03.379Z'
+updatedAt: '2026-11-06T21:46:51.226Z'

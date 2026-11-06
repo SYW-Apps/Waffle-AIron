@@ -1408,6 +1408,28 @@ methods:
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_find_references
+  - name: usePractices
+    description: >-
+      Tool: list the practices the loaded packs declare and pick the ones in force for this session
+      — add a practice on top of the project's selection, or drop one, the project's own included.
+      Answers the practices available, the project's, the session's entries, those in force and
+      their guidance. A stdio session keeps its picks, and the briefs it fetches afterwards carry
+      them; the hosted server is built per request, so there the answer applies to that call only.
+      Session picks never change project.yaml.
+    signature: 'usePractices(add?: list<string>, drop?: list<string>): PracticeReport'
+    returns: PracticeReport
+    params:
+      - name: add
+        type: list<string>
+        description: Practice ids to put in force for this session
+        optional: true
+      - name: drop
+        type: list<string>
+        description: Practice ids to take out of force for this session
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_use_practices
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-31T21:52:08.622Z'
+updatedAt: '2026-11-06T21:47:26.222Z'
