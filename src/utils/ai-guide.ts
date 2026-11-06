@@ -16,6 +16,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { versionStamp } from '../core/stamp.js';
 import { writeFile } from './fs.js';
+import { projectConfigRepository } from '../config/project-config.js';
+import { loadProjectExtensions } from '../core/extensions.js';
+import { blockReaches } from '../models/pack-instructions.js';
 
 export const GUIDE_MARKER_START = '<!-- wairon-guide-start -->';
 export const GUIDE_MARKER_END = '<!-- wairon-guide-end -->';
@@ -59,7 +62,7 @@ const GLOBAL_GUIDE_BODY = `\
 If \`.wai/specs/\` exists, the wairon SDD workflow is active; otherwise ignore it. wairon does not orchestrate sessions — it equips yours.
 
 ### In SDD Projects:
-- **Source of Truth**: All architecture lives in the spec tree under \`.wai/specs/\` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → L5 Narrative). Agent files under \`.claude/agents/\` are an opt-in generated view (\`rules.materializeAgentFiles\`) — never edit them; agents are served as live briefs.
+- **Source of Truth**: All architecture lives in the spec tree under \`.wai/specs/\` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → L5 Narrative). It is the design of record: a design or plan written anywhere else is not the project's design until it is in the specs, and the lock is its approval, whatever other workflow runs beside it. Agent files under \`.claude/agents/\` are an opt-in generated view (\`rules.materializeAgentFiles\`) — never edit them; agents are served as live briefs.
 - **Validation**: Conformance checks (stereotype rules, cycle checks, reference integrity) are run via the \`sdd_validate_tree\` MCP tool.
 - **Operating Rules**:
   1. **Skills**: Use \`sdd-architect\` to design (and \`sdd-implement\`, \`sdd-narrative\`, \`sdd-auditor\`). Refer to project's local guide file for detailed constraints.
@@ -89,6 +92,11 @@ This project uses **wairon**. System specs live under \`.wai/specs/\` (L0 System
 
 **Your first move: call the \`sdd_get_status\` MCP tool** (or \`wairon/sdd_get_status\`) to see the spec tree. Do not parse files or run CLI commands manually. If no \`sdd_*\` tools are available, this folder is not the root of the project this guide came from — say so instead of guessing.
 
+### What holds here, whatever else you use
+- **The spec tree is the design of record.** A design, plan or decision written anywhere else — a conversation, a document, another tool's plan — is not this project's design until it is in the specs.
+- **The lock is the approval.** Implement only an approved design; a design change waits for the human's \`wairon lock\` before code follows it.
+- **A design gap goes back to the specs.** When implementing finds something the design must decide — a responsibility, held state, a contract — stop, change the specs, and get the change approved before the code takes it. A detail the design leaves open is the implementer's to choose.
+
 ### How you operate
 - **To design/modify specs**: Use **\`sdd-architect\`** skill (in \`.claude/skills/\` or \`.gemini/skills/\`).
 - **Manage specs via MCP tools only** (namespaced if needed; do not edit specs manually): author with \`sdd_initialize_system\`, \`sdd_add_subsystem\`, \`sdd_add_component\`, \`sdd_define_interface\`, \`sdd_set_endpoints\`, \`sdd_write_narrative\`, \`sdd_add_type\`, \`sdd_add_group\`, \`sdd_set_public_interfaces\`, \`sdd_update_spec\` (a granular delta, with \`dryRun\`) and \`sdd_delete_spec\`; rename and move with traces with \`sdd_rename_component\`, \`sdd_rename_method\` (with \`dryRun\`: it names the consumers a renamed verb breaks), \`sdd_rename_param\`, \`sdd_rename_type\`, \`sdd_rename_field\`, \`sdd_rename_spec\` (a contract, an implementation or a type group on its own) and \`sdd_move_methods\`, and move a component, a type or a type group to another subsystem with \`sdd_move_spec\` (every one with \`dryRun\`; \`sdd_delete_spec\` and a contract method removed through \`sdd_update_spec\` name the consumers they break, as the renames do; a producer rename's or removal's impact covers this family only: when asked who is affected, pass \`search: [<folder holding sibling checkouts>]\` to the dryRun or to \`sdd_list_consumers\`, never answer "no consumers" from a run without it, and say what was searched); read with \`sdd_get_status\`, \`sdd_get_spec\`, \`sdd_validate_tree\`, \`sdd_get_agent_brief\`, \`sdd_get_network_flows\` and \`sdd_explain_flow\` (the network), \`sdd_list_consumers\` and \`sdd_surface_diff\` (who uses this project's exports, method by method, and what its public surface changed since the last approval), \`sdd_search_specs\` (where is X designed, which spec holds this file or symbol), \`sdd_find_references\` (who uses X, what breaks if it changes), \`sdd_get_externals_status\` and \`sdd_pack_impact\`; the network with \`sdd_set_network\`; externals with \`sdd_add_external\`, \`sdd_update_external\`, \`sdd_pin_externals\` and \`sdd_remove_external\`; the family's shape with the member tools below. The legacy topology tools \`getAgent\`, \`getProjectConfig\`, \`listAgents\`, \`listDomains\` and \`validateTopology\` read the generated agent registry only.
@@ -112,7 +120,7 @@ ${HUMAN_COMMANDS}
 1. **Design before code**: Complete spec and pass validator before writing source code.
 2. **Human-in-the-loop**: Ask user approval for each spec layer before proceeding.
 3. **Spec consistency**: If a 1:1 narrative match is incorrect or conflicts with L0 requirements, escalate a spec revision first. Never ship mismatched code.
-4. **No persistence shortcuts & strict layers**: A Portal must never depend directly on a Store, Registry, or Adapter. Portal reads MAY go through a Repository/Index facade (passthrough reads need no per-entity Orchestrator ceremony), but a Portal narrative call or dispatch-table binding that reaches a write-effect facade method is an error (\`PORTAL_WRITE_SHORTCUT\`) — writes always route through an Orchestrator. Held domain state always lives in a dedicated data component, never as fields inside an Orchestrator. Design the SMALLEST sound shape: genuinely simple state (keyed reads and writes) is one standalone Store — the sanctioned shape, with workflow-layer consumers and a lint.allow reason on the UNOWNED_STORE warning — and the Repository pattern (a facade owning Store + Registry + one Index per real lookup) is for state with real lookup or index needs. Never split Store/Registry/Index for simple state, never combine their roles into one component, and never fold state into a consuming component because a link was refused.
+4. **No persistence shortcuts & strict layers**: A Portal must never depend directly on a Store, Registry, or Adapter. Portal reads MAY go through a Repository/Index facade (passthrough reads need no per-entity Orchestrator ceremony), but a Portal narrative call or dispatch-table binding that reaches a write-effect facade method is an error (\`PORTAL_WRITE_SHORTCUT\`) — writes always route through an Orchestrator. Held domain state always lives in a dedicated data component, never as fields inside an Orchestrator. Design the SMALLEST sound shape — smallest in capability (nothing without a caller), never by folding a separate concern into its consumer: a concern keeps its own component even with one consumer. Genuinely simple state (keyed reads and writes) is one standalone Store — the sanctioned shape, with workflow-layer consumers and a lint.allow reason on the UNOWNED_STORE warning — and the Repository pattern (a facade owning Store + Registry + one Index per real lookup) is for state with real lookup or index needs. Never split Store/Registry/Index for simple state, never combine their roles into one component, and never fold state into a consuming component because a link was refused.
 5. **Every Portal verb is reached**: a modelled caller reaches it (a \`call\` step along \`dependsOn\`, \`alias::portal.verb\` across projects), or it is an **entry** — callers outside the design reach it: \`invokedBy: { kind: entry, caller }\` on the Portal (every verb inherits it) or on one verb. Declare an entry only for real outside callers (browsers, a CLI user, an AI tool over stdio, applications linking a library) — **never invent one to silence an \`UNUSED_*\` finding**: model the caller, or remove the verb. A caller that is planned but not built yet keeps its declaration with \`planned: true\` (still reached, with a notice until it exists). A hook the process's own runtime calls (a composition root, timer, framework callback) is \`invokedBy: { kind: runtime, caller }\`, on the method or on the component (every method inherits it). A Portal states one \`transport\` (\`HTTP\`, \`gRPC\`, \`GraphQL\`, \`MessageBus\`, \`CLI\`, \`IPC\`, \`NamedPipe\`, \`JSONRPC\` for stdio JSON-RPC, \`InProcess\` for a library, which binds no endpoint, or \`Custom\` for a network protocol the list does not name, which is read as a network transport). A project may declare a network (\`sdd_set_network\`; the human runs \`wairon network declare\` — never a hand edit of \`project.yaml\`): an entry's \`scope\` is then \`outside\` (default) or \`network\` (sibling services), and inside a network only a \`gateway\` Portal is entered from outside. Another project's \`InProcess\` library is called directly from any component — no client Adapter — within the purity (\`effect\`) and language-bridge (\`abi\`) checks.
 6. **Naming follows the target language**: methods are named in the project's method casing (camelCase for TypeScript/Java, snake_case for Rust/Python, from \`targetLanguage\` unless \`rules.naming\` says otherwise); a wire name that differs (an HTTP path, a CLI command, a JSON-RPC method) belongs on the method's \`endpoint\`, never in the method name.
 
@@ -147,9 +155,25 @@ export function localGuideFilePath(projectRoot: string, targetType: string): str
 export type GuideScope = 'global' | 'local';
 
 /** The guide body for a scope: the global body for a user-level guide file,
- *  the local body for a project's own. */
+ *  the local body for a project's own, followed by the governing packs' blocks
+ *  for the guide channel. The global body never carries pack guidance: it must
+ *  stay inert in projects without a spec tree. */
 export function guideBody(scope: GuideScope): string {
-  return scope === 'global' ? GLOBAL_GUIDE_BODY : LOCAL_GUIDE_BODY;
+  // Steps 1-2: the global body, unchanged.
+  if (scope === 'global') return GLOBAL_GUIDE_BODY;
+  // Steps 3-4: the governing profile and the packs' blocks. A configuration or
+  // pack load that fails leaves the guide without pack guidance.
+  let sections: string[] = [];
+  try {
+    const profile = projectConfigRepository.load()?.projectType ?? null;
+    sections = loadProjectExtensions().instructions
+      .filter((block) => blockReaches(block, 'guide', profile))
+      .map((block) => `## From pack "${block.pack}"\n\n${block.text.trim()}`);
+  } catch {
+    sections = [];
+  }
+  // Step 5: the local body, then each block under its attributed heading.
+  return [LOCAL_GUIDE_BODY, ...sections].join('\n\n');
 }
 
 /**
@@ -240,7 +264,7 @@ function rootPointerOf(projectRoot: string, targetType: string): { file: string;
       // agent actually has it (otherwise it's told "the guide is above" when it isn't).
       return {
         file: path.join(projectRoot, 'GEMINI.md'),
-        body: () => `# Wairon SDD Project\n${GUIDE_MARKER_START}\n${versionStamp()}\n${LOCAL_GUIDE_BODY}\n${GUIDE_MARKER_END}\n`,
+        body: () => `# Wairon SDD Project\n${GUIDE_MARKER_START}\n${versionStamp()}\n${guideBody('local')}\n${GUIDE_MARKER_END}\n`,
       };
     case 'cursor':
       return { file: path.join(projectRoot, '.cursorrules'), body: () => LEGACY_POINTERS['.cursorrules'][0] };

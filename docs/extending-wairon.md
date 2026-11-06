@@ -419,6 +419,36 @@ instructions:
   unrelated project).
 - Because the text is composed **per server construction**, a hosted instance
   reports each request's own bound project — its profile, its packs.
+
+### Where a block is delivered (`channels`)
+
+By default a block reaches the server instructions only. A block may name the
+channels it reaches instead:
+
+```yaml
+instructions:
+  - text: Router branches never appear in a spec.   # server only (the default)
+  - text: Every implementer here writes tests first.
+    channels: [brief]                 # each live agent brief
+  - text: Read wairon-skill://appenser-architect before any design work.
+    channels: [guide]                 # the generated guide
+```
+
+- `server` — the MCP instructions a connecting agent receives.
+- `guide` — the generated in-project guide (`.claude/CLAUDE.md`, `.gemini/GEMINI.md`),
+  appended after wairon's own text under the same attributed heading. Many tools
+  rank this file above their own skills. It is written by `wairon generate`, so a
+  pack change shows there after the next generate. The machine-wide guide never
+  carries pack guidance.
+- `brief` — the live brief of every agent (`sdd_get_agent_brief`), composed per
+  call, before the project's own guidance (`.wai/agents/<id>.md`), which keeps
+  the last word.
+
+`profile` applies in each channel under the profile that governs it: the
+project's for `server` and `guide`; for a `brief`, the profile of the agent's
+subsystem (a subsystem may override the project's profile), else the project's.
+A block meant for a tool that already reads the server instructions does not
+need `guide` as well — naming both shows the text twice there.
 - Pack skills stay the place for depth. `instructions` is the map that makes an
   agent go and read them; keeping it short is the point.
 

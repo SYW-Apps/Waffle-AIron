@@ -192,7 +192,35 @@ methods:
   - name: body
     narrative:
       - stepNumber: 1
-        description: Return the global guide body for the global scope, else the local guide body
+        description: Is this the global scope?
+        type: branch
+        condition: scope is global
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Return the global guide body unchanged. It must stay inert in projects that have no spec
+          tree, so it never carries a pack's guidance
+        type: return
+        outcome: the global guide body
+      - stepNumber: 3
+        description: >-
+          Read the bound project's configuration for its governing profile (projectType); an
+          unreadable configuration governs no profile
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 4
+        description: >-
+          Load the governing packs' instruction blocks; a load that fails leaves the guide without
+          pack guidance rather than failing the write
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadProjectExtensions
+      - stepNumber: 5
+        description: >-
+          Return the local guide body followed by each block that reaches the guide channel under
+          that profile (loaded_instruction_block.reaches), each under an attributed '## From pack
+          "<name>"' heading in pack load order, so a pack's delta stays legible as a delta
         type: return
         outcome: the guide body
     symbol: guideBody
@@ -222,4 +250,4 @@ methods:
     symbol: registerProjectServer
 status: complete
 createdAt: '2026-09-23T00:11:34.495Z'
-updatedAt: '2026-10-08T08:26:17.093Z'
+updatedAt: '2026-11-06T19:53:21.975Z'

@@ -218,18 +218,32 @@ methods:
         type: local
       - stepNumber: 11
         description: >-
+          Load the governing packs' instruction blocks; a load that fails leaves the brief without
+          pack guidance rather than failing the brief
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadProjectExtensions
+      - stepNumber: 12
+        description: >-
+          Resolve the profile governing this agent — its component's subsystem profile, else the
+          project's projectType — and append each block that reaches the brief channel under it
+          (loaded_instruction_block.reaches) under an attributed '## From pack "<name>"' heading, in
+          pack load order. They come before the project guidance, which stays the last word
+        type: local
+      - stepNumber: 13
+        description: >-
           Read the optional per-agent project guidance file (.wai/agents/<agentId>.md) — live, so a
           user edit applies on the next fetch
         type: call
         targetComponent: template_source_adapter
         targetMethod: loadAgentOverride
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           When guidance exists, append it to the rendered instructions under an attributed '##
           Project guidance' section — the user's delta stays legible AS a delta over the inferred
           brief
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
           Fold in the code write fence, the type mapping and the externals. The fence is EXACT
           FILES, never a folder glob: each file the specs name for this record's components alone —
@@ -310,7 +324,7 @@ methods:
           method takes it: taken only as the method needs, and named in the report
           (OPEN_ROUTE_CALL). An agent that implements nothing gets none of these
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: >-
           Return the AgentBrief: rendered instructions plus the structured scope fields (ownedPaths,
           readPaths, codeFence, sharedPaths, domainRoot, template)
@@ -333,4 +347,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-21T21:20:10.692Z'
+updatedAt: '2026-11-06T19:53:11.528Z'

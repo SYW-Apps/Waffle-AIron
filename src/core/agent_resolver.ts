@@ -39,6 +39,8 @@ import { languageOfSourcePath } from '../models/code-model.js';
 import { typeMappingFor } from '../models/type-dialects.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
+import { loadProjectExtensions, type LoadedInstructionBlock } from './extensions.js';
+import { blockReaches } from '../models/pack-instructions.js';
 
 // Cache for project files relative to the system root
 const projectFilesCache = new Map<string, string[]>();
@@ -705,6 +707,11 @@ export function composeAgentBrief(agentId: string): AgentBrief {
   const detail = codeFence ? detailSection(record) : null;
   if (detail) instructions = `${instructions.trimEnd()}\n\n${detail}`;
 
+  // Steps 11-12: the governing packs' guidance for briefs, under the profile
+  // governing this agent, ahead of the project guidance (the last word).
+  const packGuidance = packBriefSections(record, config.projectType ?? null);
+  if (packGuidance) instructions = `${instructions.trimEnd()}\n\n${packGuidance}\n`;
+
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
   // read LIVE — an edit applies on the next call) under an attributed section,
   // so the user's delta stays legible AS a delta over the inferred brief.
@@ -983,6 +990,40 @@ function implementationLanguage(record: AgentRecord): string | undefined {
   const subsystem = loadSubsystemSpecs().find((s) => record.ownedPaths.some((p) => p.includes(`/${s.id}/`) || p.endsWith(`/${s.id}.yaml`)));
   const declared = subsystem?.targetLanguage ?? loadSystemSpec()?.targetLanguage;
   return declared ? declared.toLowerCase() : undefined;
+}
+
+/**
+ * The pack instruction blocks that reach the brief channel for this agent, each
+ * under its attributed heading, in pack load order — or null when none does.
+ * The governing profile is the agent's subsystem profile, else the project's.
+ * A pack load that fails leaves the brief without pack guidance.
+ */
+function packBriefSections(record: AgentRecord, projectProfile: string | null): string | null {
+  let blocks: LoadedInstructionBlock[];
+  try {
+    blocks = loadProjectExtensions().instructions;
+  } catch {
+    return null;
+  }
+  if (blocks.length === 0) return null;
+  const profile = subsystemProfileOf(record) ?? projectProfile;
+  const sections = blocks
+    .filter((block) => blockReaches(block, 'brief', profile))
+    .map((block) => `## From pack "${block.pack}"\n\n${block.text.trim()}`);
+  return sections.length > 0 ? sections.join('\n\n') : null;
+}
+
+/** The profile the subsystem of an implementer's component (or of a subsystem owner) declares for itself, if any. */
+function subsystemProfileOf(record: AgentRecord): string | undefined {
+  let subsystemId: string | undefined;
+  if (record.template === 'implementer') {
+    const componentId = record.id.endsWith('-implementer') ? record.id.slice(0, -'-implementer'.length) : record.id;
+    subsystemId = loadComponentSpecs().find((c) => c.id === componentId)?.subsystem;
+  } else if (isSubsystemOwner(record)) {
+    subsystemId = loadSubsystemSpecs().find((s) => record.ownedPaths.some((p) => p.includes(`/${s.id}/`) || p.endsWith(`/${s.id}.yaml`)))?.id;
+  }
+  if (!subsystemId) return undefined;
+  return loadSubsystemSpecs().find((s) => s.id === subsystemId)?.profile;
 }
 
 /** Whether a record implements components (an implementer, or a subsystem owner inferred from an L1). */

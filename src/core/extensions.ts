@@ -11,6 +11,7 @@ import { compareOrdinal } from '../utils/canonical-json.js';
 import type { SddRule } from './rules/types.js';
 import { RulesConfigSchema, type PackSelection, type ProjectConfig } from '../models/project.js';
 import type { PackCandidate } from '../models/pack-impact.js';
+import { INSTRUCTION_CHANNELS, type InstructionChannel } from '../models/pack-instructions.js';
 // The store is a sibling adapter; both modules reach each other only inside
 // function bodies, so the import cycle never runs at module-init time.
 import { resolveInstalledPack, packStoreDir, listInstalledPacks, computePackDigest } from './packstore.js';
@@ -134,8 +135,9 @@ export const PackSkillSchema = z.object({
 export type PackSkill = z.infer<typeof PackSkillSchema>;
 
 /**
- * One block of connecting-agent guidance contributed by a pack, appended to
- * wairon's OWN MCP `initialize` instructions under an attributed heading.
+ * One block of agent guidance contributed by a pack, delivered under an
+ * attributed heading through the channels it names (wairon's OWN MCP
+ * `initialize` instructions by default, the generated guide, live briefs).
  *
  * The split is deliberate and load-bearing: wairon owns the SDD model, so
  * wairon teaches it by default (see core/instructions.ts). A pack states its
@@ -147,8 +149,10 @@ export type PackSkill = z.infer<typeof PackSkillSchema>;
 export interface PackInstructionBlock {
   /** The guidance itself — the pack's platform delta, never a restatement of wairon's model. */
   text: string;
-  /** Optional scope: apply only when the bound project's governing profile is one of these. */
+  /** Optional scope: deliver only where the governing profile is one of these. */
   profile?: string[];
+  /** Optional: the channels this block reaches. Absent = the server instructions only. */
+  channels?: InstructionChannel[];
 }
 
 // Annotated rather than inferred: the string arm normalizes to the SAME shape as
@@ -160,6 +164,7 @@ export const PackInstructionBlockSchema: z.ZodType<PackInstructionBlock, unknown
   z.object({
     text: z.string().min(1),
     profile: z.array(z.string().min(1)).min(1).optional(),
+    channels: z.array(z.enum(INSTRUCTION_CHANNELS)).min(1).optional(),
   }),
 ]);
 

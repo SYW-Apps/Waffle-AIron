@@ -1,4 +1,5 @@
 import type { LoadedInstructionBlock } from './extensions.js';
+import { blockReaches } from '../models/pack-instructions.js';
 import { listSkillResources, type SkillResourceDescriptor } from './skills.js';
 import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core.js';
 
@@ -40,16 +41,6 @@ function governingProfile(): string | null {
   }
 }
 
-/**
- * Does this block apply to the bound project? An unscoped block always applies;
- * a scoped one only when it names the governing profile. A block scoped to a
- * profile we cannot resolve is withheld — a pack that says "only under my
- * profile" must not leak its platform doctrine into an unrelated project.
- */
-export function blockApplies(block: LoadedInstructionBlock, profile: string | null): boolean {
-  if (!block.profile || block.profile.length === 0) return true;
-  return profile !== null && block.profile.includes(profile);
-}
 
 /** Render the skill pointers an agent should read before authoring. */
 function skillPointers(skills: SkillResourceDescriptor[]): string {
@@ -71,9 +62,10 @@ function waironInstructions(
   return `# wairon — Spec-Driven Development (SDD)
 
 This server owns one system's **spec tree**: its architecture, specified top-down
-and machine-checked. Author it ONLY through this server's \`sdd_*\` tools — never by
-writing spec files directly, and never via the \`wairon\` CLI (that is the human
-developer's tool).
+and machine-checked — the design of record, approved by the human's lock. Plans
+made elsewhere and design gaps found while implementing go into the specs.
+Author it ONLY through this server's \`sdd_*\` tools — never by writing spec files
+directly, and never via the \`wairon\` CLI (the human developer's tool).
 
 ## The tree: L0 → L5
 
@@ -95,34 +87,31 @@ developer's tool).
 
 These stereotypes are not labels — they carry enforced dependency rules (e.g. a
 Portal may not depend on a Store; state lives in a Store, never as fields inside
-an Orchestrator). \`sdd_validate_tree\` is the gate, and it is the authority on
-whether a design is legal.
+an Orchestrator). \`sdd_validate_tree\` is the gate and the authority on whether a
+design is legal.
 
 ## Authoring order
 
 1. \`sdd_initialize_system\` (L0), then \`sdd_add_subsystem\` (L1).
 2. Then, **one subsystem at a time**: \`sdd_add_component\` (L2) → \`sdd_define_interface\`
    (L3) → \`sdd_set_endpoints\` for Portals → \`sdd_write_narrative\` (L4+L5).
-3. Run \`sdd_validate_tree\` as you go — early and per subsystem, not once at the end.
+3. Run \`sdd_validate_tree\` early and per subsystem, not once at the end.
    \`sdd_get_status\` reports completeness; \`sdd_get_spec\` reads any spec back as JSON.
-4. Edit granularly with \`sdd_update_spec\` (it renumbers narrative steps and
-   relocates jump targets for you).
+4. Edit granularly with \`sdd_update_spec\` (it renumbers steps and jump targets).
 
 ## Growing a system: subsystems → parts → projects
 
-Boundaries are earned. Start with subsystems in one folder. When a piece needs its
-own folder or repository but stays the same system, make it a **part**
-(\`sdd_add_member\` creates one by default; \`sdd_externalize_subsystem\` moves a
-subsystem into one): its subsystems stay this project's own — local ids, this
-project's lock. Make it a **project** only when it needs its own team, release,
-approval or public surface: \`sdd_promote_member\` (\`sdd_demote_member\` is the
-inverse) — run it with \`dryRun\` first. A member's location is one key:
+Boundaries are earned. Start with subsystems in one folder. A piece that needs its
+own folder or repository but stays the same system is a **part** (\`sdd_add_member\`;
+\`sdd_externalize_subsystem\` moves a subsystem into one): local ids, this project's
+lock. Make it a **project** only when it needs its own team, release, approval or
+public surface: \`sdd_promote_member\` (\`sdd_demote_member\` back), \`dryRun\` first. A member's location is one key:
 \`services/x\`, \`../x\` or \`git-url#<commit>\`.
 
 ## The tool schemas are the field reference
 
-Every \`sdd_*\` tool's input schema is self-describing and authoritative — read the
-schema rather than guessing field names, and prefer structured \`params\` over prose
+Every \`sdd_*\` tool's input schema is self-describing and authoritative — read it
+rather than guessing field names, and prefer structured \`params\` over prose
 signatures. Specs are ${profile === null ? 'validated against the project\'s configured profile' : `governed by the **\`${profile}\`** profile`}, which decides which stereotypes are legal
 here, which narrative flow constructs the target language supports, and which
 extra rules apply. A subsystem may override the profile for itself.
@@ -198,7 +187,8 @@ export function buildServerInstructions(): string {
 
   const sections = [waironInstructions(profile, packNames, skills, variants)];
   for (const block of blocks) {
-    if (!blockApplies(block, profile)) continue;
+    // Step 5: only blocks that reach the server under the governing profile.
+    if (!blockReaches(block, 'server', profile)) continue;
     // Attribution is what keeps a pack's delta legible AS a delta instead of
     // blending into wairon's own doctrine.
     sections.push(`## From pack "${block.pack}"\n\n${block.text.trim()}`);
