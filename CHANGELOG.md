@@ -4,6 +4,27 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## Unreleased
+
+- **A pack's guidance reaches the guide and the briefs.** An instruction block in a pack may name
+  the channels it reaches: `server` (the MCP instructions a connecting agent receives, the default
+  and the only channel before), `guide` (the generated in-project guide, such as
+  `.claude/CLAUDE.md`, refreshed by `wairon generate`) and `brief` (the live brief of each agent).
+  A block's `profile` scope applies in each: the project's governing profile for the server and the
+  guide, and for a brief the profile of the agent's subsystem, else the project's. A pack that names
+  no channels behaves exactly as before. Pack guidance in a brief comes before the project's own
+  guidance (`.wai/agents/<id>.md`), which keeps the last word. The machine-wide guide never carries
+  pack guidance.
+- **wairon states its own rules where agents read them.** The guides and the MCP instructions now
+  say that the spec tree is the design of record (a plan made elsewhere is not the design until it
+  is in the specs), that the lock is the approval, and that a design gap found while implementing
+  goes back to the specs. These hold whatever other workflow runs beside wairon.
+- **"Smallest" means capability, not structure.** Rule 4 and the `sdd-architect` skill now say that
+  the smallest sound shape builds nothing without a caller, and never folds a separate concern into
+  its consumer: a concern keeps its own component even with one consumer.
+- `sdd-architect` is now described for changes to an existing design as well as new ones, and
+  `sdd-implement` for approved components.
+
 ## v6.7.3 (from v6.7.2)
 
 A fix release. Upgrading:

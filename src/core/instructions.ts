@@ -1,4 +1,5 @@
 import type { LoadedInstructionBlock } from './extensions.js';
+import { blockReaches } from '../models/pack-instructions.js';
 import { listSkillResources, type SkillResourceDescriptor } from './skills.js';
 import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core.js';
 
@@ -40,16 +41,6 @@ function governingProfile(): string | null {
   }
 }
 
-/**
- * Does this block apply to the bound project? An unscoped block always applies;
- * a scoped one only when it names the governing profile. A block scoped to a
- * profile we cannot resolve is withheld — a pack that says "only under my
- * profile" must not leak its platform doctrine into an unrelated project.
- */
-export function blockApplies(block: LoadedInstructionBlock, profile: string | null): boolean {
-  if (!block.profile || block.profile.length === 0) return true;
-  return profile !== null && block.profile.includes(profile);
-}
 
 /** Render the skill pointers an agent should read before authoring. */
 function skillPointers(skills: SkillResourceDescriptor[]): string {
@@ -196,7 +187,8 @@ export function buildServerInstructions(): string {
 
   const sections = [waironInstructions(profile, packNames, skills, variants)];
   for (const block of blocks) {
-    if (!blockApplies(block, profile)) continue;
+    // Step 5: only blocks that reach the server under the governing profile.
+    if (!blockReaches(block, 'server', profile)) continue;
     // Attribution is what keeps a pack's delta legible AS a delta instead of
     // blending into wairon's own doctrine.
     sections.push(`## From pack "${block.pack}"\n\n${block.text.trim()}`);

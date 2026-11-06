@@ -16,6 +16,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { versionStamp } from '../core/stamp.js';
 import { writeFile } from './fs.js';
+import { projectConfigRepository } from '../config/project-config.js';
+import { loadProjectExtensions } from '../core/extensions.js';
+import { blockReaches } from '../models/pack-instructions.js';
 
 export const GUIDE_MARKER_START = '<!-- wairon-guide-start -->';
 export const GUIDE_MARKER_END = '<!-- wairon-guide-end -->';
@@ -152,9 +155,25 @@ export function localGuideFilePath(projectRoot: string, targetType: string): str
 export type GuideScope = 'global' | 'local';
 
 /** The guide body for a scope: the global body for a user-level guide file,
- *  the local body for a project's own. */
+ *  the local body for a project's own, followed by the governing packs' blocks
+ *  for the guide channel. The global body never carries pack guidance: it must
+ *  stay inert in projects without a spec tree. */
 export function guideBody(scope: GuideScope): string {
-  return scope === 'global' ? GLOBAL_GUIDE_BODY : LOCAL_GUIDE_BODY;
+  // Steps 1-2: the global body, unchanged.
+  if (scope === 'global') return GLOBAL_GUIDE_BODY;
+  // Steps 3-4: the governing profile and the packs' blocks. A configuration or
+  // pack load that fails leaves the guide without pack guidance.
+  let sections: string[] = [];
+  try {
+    const profile = projectConfigRepository.load()?.projectType ?? null;
+    sections = loadProjectExtensions().instructions
+      .filter((block) => blockReaches(block, 'guide', profile))
+      .map((block) => `## From pack "${block.pack}"\n\n${block.text.trim()}`);
+  } catch {
+    sections = [];
+  }
+  // Step 5: the local body, then each block under its attributed heading.
+  return [LOCAL_GUIDE_BODY, ...sections].join('\n\n');
 }
 
 /**
@@ -245,7 +264,7 @@ function rootPointerOf(projectRoot: string, targetType: string): { file: string;
       // agent actually has it (otherwise it's told "the guide is above" when it isn't).
       return {
         file: path.join(projectRoot, 'GEMINI.md'),
-        body: () => `# Wairon SDD Project\n${GUIDE_MARKER_START}\n${versionStamp()}\n${LOCAL_GUIDE_BODY}\n${GUIDE_MARKER_END}\n`,
+        body: () => `# Wairon SDD Project\n${GUIDE_MARKER_START}\n${versionStamp()}\n${guideBody('local')}\n${GUIDE_MARKER_END}\n`,
       };
     case 'cursor':
       return { file: path.join(projectRoot, '.cursorrules'), body: () => LEGACY_POINTERS['.cursorrules'][0] };

@@ -8,7 +8,7 @@ description: >-
 subsystem: sdd_core
 fields: []
 methods: []
-sourcePath: src/core/extensions.ts
+sourcePath: src/models/pack-instructions.ts
 values:
   - name: server
     description: The MCP initialize instructions a connecting agent receives at the start of a session
@@ -21,4 +21,4 @@ values:
       A live agent brief, under the profile governing that agent's component: its subsystem's
       profile, else the project's
 createdAt: '2026-11-06T19:52:13.065Z'
-updatedAt: '2026-11-06T19:52:13.947Z'
+updatedAt: '2026-11-06T21:07:19.562Z'

@@ -41,8 +41,8 @@ methods:
       names (none named = server only), and a profile-scoped block applies only when it names the
       given profile. A block scoped to a profile that cannot be resolved is withheld, so a pack that
       says 'only under my profile' never leaks its platform doctrine elsewhere. Pure
-    sourcePath: src/core/extensions.ts
+    sourcePath: src/models/pack-instructions.ts
     symbol: blockReaches
 sourcePath: src/core/extensions.ts
 createdAt: '2026-10-03T17:04:19.739Z'
-updatedAt: '2026-11-06T19:52:46.717Z'
+updatedAt: '2026-11-06T21:07:20.749Z'
