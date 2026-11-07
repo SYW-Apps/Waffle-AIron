@@ -150,29 +150,39 @@ methods:
         outcome: no integrity data
       - stepNumber: 3
         description: >-
+          Does entryDigests name a file the archive does not hold, or does the envelope's overall
+          digest differ from the one recomputed over its sorted entryDigests (when it carries one)?
+        type: branch
+        condition: >-
+          an entryDigests key names no file among the files, or manifest.digest is set and differs
+          from sha256 over the canonical sorted entryDigests
+        onTrueStep: 8
+        onFalseStep: 4
+      - stepNumber: 4
+        description: >-
           Check each PAYLOAD file's digest (the wairon-pack.yaml envelope is skipped — it carries
           the digests, so it can never digest itself).
         type: loop
         loopKind: forEach
         over: files
-        endStep: 5
-      - stepNumber: 4
+        endStep: 6
+      - stepNumber: 5
         description: >-
           Does the recomputed sha256 of this payload file differ from the recorded
           entryDigests[file.path]?
         type: branch
         condition: sha256(file.contents) != entryDigests[file.path]
-        onTrueStep: 7
-        onFalseStep: 5
-      - stepNumber: 5
+        onTrueStep: 8
+        onFalseStep: 6
+      - stepNumber: 6
         label: checkEnd
         description: This file's digest matches.
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: All digests matched — return true.
         type: return
         outcome: verified
-      - stepNumber: 7
+      - stepNumber: 8
         label: mismatch
         description: A digest mismatch means tampering.
         type: throw
@@ -217,7 +227,10 @@ methods:
         onTrueStep: 4
         onFalseStep: 2
       - stepNumber: 2
-        description: Is the running wairon below the pack's minimum?
+        description: >-
+          Is the running wairon below the pack's minimum? Versions compare on their release core
+          (major.minor.patch): a pre-release of a version counts as that version, so a dev build of
+          6.7.4 satisfies a minimum of 6.7.4.
         type: branch
         condition: minWaironVersion is set and the running wairon is below it
         onTrueStep: 4
@@ -281,4 +294,4 @@ methods:
         outcome: the inner pack manifest
 status: complete
 createdAt: '2026-07-21T18:25:00.265Z'
-updatedAt: '2026-11-07T14:25:01.283Z'
+updatedAt: '2026-11-07T17:04:48.856Z'

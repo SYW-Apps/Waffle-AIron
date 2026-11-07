@@ -152,6 +152,10 @@ describe('checkCompatibility', () => {
     expect(checkCompatibility(manifest({ minWaironVersion: '2.0.0' }), '1.0.0')).toBe(false);
   });
 
+  it('a pre-release of the minimum counts as that version', () => {
+    expect(checkCompatibility(manifest({ minWaironVersion: '6.7.4' }), '6.7.4-dev.5')).toBe(true);
+  });
+
   it('true when the running version meets minWaironVersion (range operators tolerated)', () => {
     expect(checkCompatibility(manifest({ minWaironVersion: '^1.0.0' }), '1.4.2')).toBe(true);
   });

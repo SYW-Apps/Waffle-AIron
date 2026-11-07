@@ -14,6 +14,12 @@ npm and the tags carry.
   `DIGEST_MISMATCH`. `inspectArchive` now takes optional limits and vets every entry, the envelope
   included, before inflating anything; `extractPack` now also checks that the envelope's name and
   version match the inner pack manifest before it writes.
+- **`@wairon/sdk` checks the whole envelope and builds reproducibly.** `readPack` and `extractPack`, and so every
+  pack wairon installs, now also fail with `DIGEST_MISMATCH` when the envelope lists a file the archive
+  does not hold, or when its overall digest does not match its file digests. `buildPack` no longer
+  stamps a build time, so the same pack content always builds the same archive. `scaffoldPack` writes
+  a release version as a code pack's `minWaironVersion` (6.7.4, never 6.7.4-dev.5), and a pre-release
+  of a version now meets that version as a minimum.
 - **`wairon dev` is the place to approve.** The page follows the design live: a spec an agent writes
   through `wairon mcp serve`, or a lock from the terminal, shows on the open page without a refresh
   (unsaved edits in an open spec form are kept). A Commands tab runs the CLI's own `lock` (the whole

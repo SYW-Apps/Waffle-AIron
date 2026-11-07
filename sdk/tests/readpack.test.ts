@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { scaffoldPack, buildPack, inspectArchive, extractPack, readPack, PackArchiveError } from '../src/index';
+import { createHash } from 'crypto';
 import { assembleArchive } from '../src/archive';
 
 // readPack + the PackArchiveError codes, through the real portal -> orchestrator -> codec stack.
@@ -129,6 +130,35 @@ describe('readPack', () => {
       { path: 'pack.yaml', contents: innerOk },
     ]);
     expect(codeOf(() => readPack(zip))).toBe('DIGEST_MISMATCH');
+  });
+
+  const sha = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
+
+  it('DIGEST_MISMATCH when entryDigests lists a file the archive does not hold', () => {
+    const entryDigests = `entryDigests:\n  pack.yaml: ${sha(innerOk)}\n  extra.yaml: ${'0'.repeat(64)}\n`;
+    const zip = assembleArchive([
+      { path: 'wairon-pack.yaml', contents: enc(envelope(entryDigests)) },
+      { path: 'pack.yaml', contents: innerOk },
+    ]);
+    expect(codeOf(() => readPack(zip))).toBe('DIGEST_MISMATCH');
+  });
+
+  it('DIGEST_MISMATCH when the overall digest differs from the entry digests', () => {
+    const entryDigests = `entryDigests:\n  pack.yaml: ${sha(innerOk)}\ndigest: ${'f'.repeat(64)}\n`;
+    const zip = assembleArchive([
+      { path: 'wairon-pack.yaml', contents: enc(envelope(entryDigests)) },
+      { path: 'pack.yaml', contents: innerOk },
+    ]);
+    expect(codeOf(() => readPack(zip))).toBe('DIGEST_MISMATCH');
+  });
+
+  it('a built pack carries no build time and rebuilds byte for byte', () => {
+    const srcDir = path.join(mkTmp(), 'demo');
+    scaffoldPack({ name: 'demo', version: '1.2.3', kind: 'declarative', targetDir: srcDir });
+    const first = buildPack(srcDir);
+    const second = buildPack(srcDir);
+    expect(readPack(first.archive).manifest.generatedAt).toBeUndefined();
+    expect(Buffer.from(second.archive).equals(Buffer.from(first.archive))).toBe(true);
   });
 
   it('inspectArchive refuses an oversized envelope before inflating it', () => {

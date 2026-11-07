@@ -62,8 +62,9 @@ export function buildPack(sourceDir: string): PackBuildResult {
   const identity = readInnerIdentity(files, manifest);
   // Step 6: assert the envelope's name/version match the inner pack manifest.
   codec.verifyIdentity(manifest, identity.name, identity.version);
-  // Step 7: seal integrity (entryDigests + digest + generatedBy/generatedAt).
-  const sealed = codec.sealIntegrity(manifest, files, `@wairon/sdk@${SDK_VERSION}`, new Date().toISOString());
+  // Step 7: seal integrity (entryDigests + digest + generatedBy) with no build time,
+  // so the same content always builds the same archive and content digest.
+  const sealed = codec.sealIntegrity(manifest, files, `@wairon/sdk@${SDK_VERSION}`);
   // Step 8: serialize the sealed manifest back to canonical envelope text.
   const sealedText = codec.serializeManifest(sealed);
   // Step 9: upsert wairon-pack.yaml (sealed envelope text) into the file map.

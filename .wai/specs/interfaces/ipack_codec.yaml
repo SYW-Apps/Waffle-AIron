@@ -59,9 +59,10 @@ methods:
         type: string
   - name: verifyIntegrity
     description: >-
-      When the envelope carries integrity data, verify every entry's sha256 against entryDigests;
-      returns true if integrity data was present and matched, false if the archive carried none.
-      Throws on a digest mismatch.
+      Verify a pack's files against its envelope: every file's sha256 against entryDigests, every
+      entryDigests key naming a file the archive holds, and the overall digest (when carried)
+      against the one recomputed over the sorted entryDigests. False when the envelope carries no
+      integrity data; fails with DIGEST_MISMATCH on any difference.
     signature: 'verifyIntegrity(manifest: pack_archive_manifest, files: list<pack_file>): bool'
     returns: bool
     params:
@@ -83,12 +84,13 @@ methods:
   - name: sealIntegrity
     description: >-
       Produce-side partner of verifyIntegrity, used by build: compute a sha256 per file into
-      entryDigests plus an overall manifest digest, stamp generatedBy/generatedAt from the
-      caller-supplied values (time is passed in, keeping the codec pure), and return the sealed
-      PackArchiveManifest.
+      entryDigests plus an overall manifest digest, stamp generatedBy, and stamp generatedAt only
+      when the caller passes one. A pack build passes none, so building the same content twice gives
+      the same envelope and the same content digest (a reproducible build); time is passed in when
+      wanted, keeping the codec pure.
     signature: >-
       sealIntegrity(manifest: pack_archive_manifest, files: list<pack_file>, generatedBy: string,
-      generatedAt: string): PackArchiveManifest
+      generatedAt?: string): PackArchiveManifest
     returns: PackArchiveManifest
     params:
       - name: manifest
@@ -99,6 +101,8 @@ methods:
         type: string
       - name: generatedAt
         type: string
+        description: Stamped when given; a pack build gives none
+        optional: true
   - name: contentDigest
     description: >-
       The content integrity of a pack: sha256 folding each regular file in sorted order as
@@ -130,4 +134,4 @@ methods:
         description: The pack's files
 status: complete
 createdAt: '2026-07-21T18:13:36.380Z'
-updatedAt: '2026-11-07T14:23:13.774Z'
+updatedAt: '2026-11-07T17:04:55.146Z'
