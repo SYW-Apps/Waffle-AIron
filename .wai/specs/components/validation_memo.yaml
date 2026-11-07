@@ -2,11 +2,12 @@ id: validation_memo
 name: Validation Memo
 description: >-
   Answers the owner's gate from the last run with the same options when nothing it reads has
-  changed: the project's .wai/ files and the source files the gate's code model reads, compared by
-  path, size and modification time. Otherwise runs the gate and remembers the result. A full
-  validation of a large tree takes tens of seconds; a page view, a live refresh or an agent's
-  repeated sdd_validate_tree then costs a fingerprint walk instead. The specs are always scanned
-  first, so what the loader reports is this tree's.
+  changed: the project's .wai/ files, each declared member's .wai/ files (the gate reads their
+  export tables) and the source files the gate's code model reads, compared by path, size and
+  modification time. Otherwise runs the gate and remembers the result. A full validation of a large
+  tree takes tens of seconds; a page view, a live refresh or an agent's repeated sdd_validate_tree
+  then costs a fingerprint walk instead. The specs are always scanned first, so what the loader
+  reports is this tree's.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -18,4 +19,4 @@ dependsOn:
   - files_adapter
 status: complete
 createdAt: '2026-11-07T15:06:17.840Z'
-updatedAt: '2026-11-07T15:06:18.698Z'
+updatedAt: '2026-11-07T19:27:04.124Z'
