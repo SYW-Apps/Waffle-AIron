@@ -6,6 +6,10 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **`wairon dev` no longer fails when port 8080 is taken.** Without `--port` it takes the first free
+  port from 8080 upward (to 8099, the admin listener using the next one), so two projects can run
+  `wairon dev` at the same time; it says which port it chose. With `--port` it uses exactly that
+  port and, when it is taken, says so plainly instead of printing a Node `EADDRINUSE` error.
 - **Install packs by name from the wairon pack registry.** `wairon pack install @scope/pack` (also
   `wairon install` and `wairon i`, with an optional `@range`) resolves the name to one exact version
   in the registry, checks the installed content against the integrity the registry reports, and
