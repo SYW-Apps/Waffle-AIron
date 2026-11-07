@@ -258,6 +258,8 @@ lint:
         - mcp_core_adapter.loadGroupSpecs
         - mcp_validator_adapter.adviseNetwork
         - mcp_core_adapter.loadProjectExtensions
+        - mcp_core_adapter.requestReview
+        - mcp_validator_adapter.listRules
       reason: >-
         create is the tool registry: these calls are made by the tool handlers it registers, each
         the tool's own behaviour run when an assistant calls that tool, not calls create makes. Its
@@ -268,10 +270,14 @@ lint:
       at: create
       covers:
         - session_practice_store.replace
+        - review_orchestrator.request
+        - review_orchestrator.status
       reason: >-
         create is the tool registry: the sdd_use_practices handler it registers keeps the session's
-        practice entries — the mcp_orchestrator.usePractices workflow narrates that write — not a
-        call create makes. Remove once the registry is split into per-group registration methods.
+        practice entries (mcp_orchestrator.usePractices narrates that write), and the
+        sdd_request_review and sdd_await_review handlers record and bring up to date a review
+        request (mcp_orchestrator.requestReview and awaitReview narrate them) — not calls create
+        makes. Remove once the registry is split into per-group registration methods.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-06T22:28:03.946Z'
+updatedAt: '2026-11-07T12:00:01.592Z'

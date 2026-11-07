@@ -1651,8 +1651,8 @@ methods:
       output. Mounted only under devMode.
     signature: >-
       decideDevReview(sessionId: string, id: string, outcome: ReviewStatus, comment?: string,
-      notes?: list<ReviewNote>): DevReviewDecision
-    returns: DevReviewDecision
+      notes?: list<ReviewNote>): async DevReviewDecision
+    returns: async DevReviewDecision
     params:
       - name: sessionId
         type: string
@@ -1693,4 +1693,4 @@ methods:
       path: /web/dev/commands
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-07T02:48:09.751Z'
+updatedAt: '2026-11-07T12:19:41.659Z'

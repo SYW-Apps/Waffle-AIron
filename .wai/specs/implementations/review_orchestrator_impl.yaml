@@ -133,9 +133,13 @@ methods:
       - stepNumber: 2
         description: >-
           Only a pending request can be decided, and only to approved (a review request),
-          changes_requested, or locked (a lock request)
+          changes_requested, or locked (a lock request) — except that a lock request the lock
+          already answered (status found it locked) takes locked once more, so the page's lock adds
+          the human's comment and notes to it
         type: branch
-        condition: the request is not pending, or the outcome does not fit its kind
+        condition: >-
+          the request is not pending (other than a locked lock request taking locked), or the
+          outcome does not fit its kind
         onFalseStep: 4
       - stepNumber: 3
         description: Refuse, naming the request's status or the outcomes its kind takes
@@ -147,7 +151,9 @@ methods:
         targetComponent: local_approver
         targetMethod: resolve
       - stepNumber: 5
-        description: Record the outcome with the comment, the notes, the time and that identity
+        description: >-
+          Record the outcome with the comment, the notes, the time and that identity (a request the
+          lock already answered keeps the lock's approver and time, and gains the comment and notes)
         type: call
         targetComponent: review_store
         targetMethod: save
@@ -196,4 +202,4 @@ methods:
         targetMethod: withdrawDevServer
 status: complete
 createdAt: '2026-11-07T02:38:00.333Z'
-updatedAt: '2026-11-07T02:38:27.001Z'
+updatedAt: '2026-11-07T11:59:59.496Z'

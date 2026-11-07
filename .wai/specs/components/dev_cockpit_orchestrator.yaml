@@ -11,6 +11,8 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - host_core_adapter
+  - authentication
+  - project_repository
 status: complete
 createdAt: '2026-11-07T02:41:33.911Z'
-updatedAt: '2026-11-07T02:41:34.730Z'
+updatedAt: '2026-11-07T12:19:33.331Z'

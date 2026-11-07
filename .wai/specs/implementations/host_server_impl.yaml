@@ -67,6 +67,13 @@ methods:
         type: local
       - stepNumber: 9
         description: >-
+          On the local development server only (devMode), resolve the served project's root, whose
+          .wai/ folder the next step watches
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 10
+        description: >-
           On the local development server only (devMode), watch the served project's .wai/ folder: a
           `tree` change nudges the served project's realtime channel, so a spec written by another
           process (an agent's `wairon mcp serve`) or a terminal lock refreshes the open page; a
@@ -74,14 +81,14 @@ methods:
         type: call
         targetComponent: dev_tree_watcher
         targetMethod: watch
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Start the periodic backup schedule (git-bound project sweep + container-level backing
           sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
         targetComponent: backup_schedule
         targetMethod: start
-      - stepNumber: 11
+      - stepNumber: 12
         description: Return the running server handle
         type: return
         outcome: running
@@ -136,4 +143,4 @@ methods:
         outcome: ready or not
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-11-07T02:41:03.918Z'
+updatedAt: '2026-11-07T12:20:16.988Z'

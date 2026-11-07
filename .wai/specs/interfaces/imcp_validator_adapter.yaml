@@ -93,6 +93,11 @@ methods:
         type: list<ValidationIssue>
         description: The findings the member's own gate carried
         optional: true
+  - name: listRules
+    description: >-
+      Calls listRules on the validator portal: the active rule set, each rule saying whether it
+      judges the design or the code.
+    signatureFrom: validator_portal.listRules
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T12:03:56.082Z'
+updatedAt: '2026-11-07T11:59:56.245Z'

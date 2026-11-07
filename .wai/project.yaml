@@ -194,6 +194,7 @@ rules:
       # server registered, and a start that discarded stale data): a SPA view like
       # its siblings here, which are not spec'd as View components.
       - web/src/views/DevBanner.tsx
+      - web/src/views/DevCockpit.tsx
       - web/src/views/Environment.tsx
       - web/src/views/Health.tsx
       - web/src/views/Home.tsx

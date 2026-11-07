@@ -20,8 +20,8 @@ methods:
       per-spec notes) are recorded as given.
     signature: >-
       decide(sessionId: string, id: string, outcome: ReviewStatus, comment?: string, notes?:
-      list<ReviewNote>): DevReviewDecision
-    returns: DevReviewDecision
+      list<ReviewNote>): async DevReviewDecision
+    returns: async DevReviewDecision
     params:
       - name: sessionId
         type: string
@@ -62,4 +62,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-11-07T02:41:40.170Z'
-updatedAt: '2026-11-07T02:41:42.695Z'
+updatedAt: '2026-11-07T12:19:38.637Z'

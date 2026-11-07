@@ -5,6 +5,8 @@ description: >-
   commands the CLI handed the server in its configuration.
 contract: idev_cockpit_orchestrator
 sourcePath: src/server/dev-commands.ts
+injectedParams:
+  - cfg
 methods:
   - name: reviews
     narrative:
@@ -18,11 +20,21 @@ methods:
         type: throw
         error: not the local development server
       - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Resolve the served project's root, which the requests are read under
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
         description: Read the pending review requests
         type: call
         targetComponent: host_core_adapter
         targetMethod: pendingReviews
-      - stepNumber: 4
+      - stepNumber: 6
         description: Return them
         type: return
         outcome: the pending requests
@@ -38,36 +50,46 @@ methods:
         type: throw
         error: not the local development server
       - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Resolve the served project's root, which the request is read and decided under
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
         description: Read the request brought up to date, for its kind and subsystem
         type: call
         targetComponent: host_core_adapter
         targetMethod: reviewStatus
-      - stepNumber: 4
+      - stepNumber: 6
         description: Is the decision to lock?
         type: branch
         condition: the outcome is locked
-        onFalseStep: 8
-      - stepNumber: 5
+        onFalseStep: 10
+      - stepNumber: 7
         description: >-
           Run the CLI's lock (of the request's subsystem when it names one), capturing what it
           prints
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: 'A failed lock leaves the request pending: answer it with the lock''s output'
         type: branch
         condition: the lock failed
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 10
+      - stepNumber: 9
         description: Answer the pending request and the failed lock
         type: return
         outcome: not locked
-      - stepNumber: 8
+      - stepNumber: 10
         label: record
         description: Record the decision with the comment and the notes
         type: call
         targetComponent: host_core_adapter
         targetMethod: decideReview
-      - stepNumber: 9
+      - stepNumber: 11
         description: Answer the decided request and, for a lock, its output
         type: return
         outcome: the decision
@@ -87,14 +109,42 @@ methods:
         type: throw
         error: the command cannot run
       - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
         description: >-
           Run the command the CLI handed over, capturing every line it prints with colour codes
           removed
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Answer whether it succeeded and its output
         type: return
         outcome: the command's result
+lint:
+  allow:
+    - code: HIDDEN_STATE
+      reason: >-
+        The one-command-at-a-time guard: a process-local in-flight flag set and cleared around one
+        command run, never read after it ends, and meaningless across processes. No domain state:
+        nothing to store, list or recover.
+    - code: UNDECLARED_WRITE_CALL
+      at: reviews
+      covers:
+        - review_orchestrator.pending
+      reason: >-
+        Step 5's call to host_core_adapter.pendingReviews is this call: the adapter re-exports the
+        core approval portal, so the analyzer reads the core workflow behind the forward (bringing a
+        pending request up to date saves it).
+    - code: UNDECLARED_WRITE_CALL
+      at: decide
+      covers:
+        - review_orchestrator.status
+        - review_orchestrator.decide
+      reason: >-
+        Steps 5 and 10 call host_core_adapter.reviewStatus and decideReview: the adapter re-exports
+        the core approval portal, so the analyzer reads the core workflow behind each forward.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-07T02:41:57.399Z'
+updatedAt: '2026-11-07T12:20:02.957Z'

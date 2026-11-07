@@ -4481,6 +4481,11 @@ lint:
         them one-to-one onto mcp_install_options (hostedUrl, hostedProject, hostedToken) before the
         command adapter runs — the CLI counterpart of a router unpacking a request, with the flag
         names as the wire names.
+    - code: HIDDEN_STATE
+      reason: >-
+        src/commands/host.ts holds the dev commands' capture guard: a process-local flag set while
+        one handed command's console output is captured and cleared when it ends, so two runs never
+        interleave their output. No domain state: nothing to store, list or recover.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-07T02:43:20.114Z'
+updatedAt: '2026-11-07T12:20:23.476Z'

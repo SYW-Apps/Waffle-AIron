@@ -1101,22 +1101,30 @@ methods:
         targetComponent: mcp_validator_adapter
         targetMethod: validateFamily
       - stepNumber: 2
-        description: Does it have errors?
-        type: branch
-        condition: the validation reports any error
-        onFalseStep: 4
+        description: >-
+          Read the active rules, to keep the design half: a finding of a rule that judges code never
+          refuses the request, as it never refuses the lock — a design is reviewed and approved
+          before its code follows it
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: listRules
       - stepNumber: 3
+        description: Does the design half have errors?
+        type: branch
+        condition: the validation reports any error from a rule that judges the design
+        onFalseStep: 5
+      - stepNumber: 4
         description: >-
           Refuse without recording or showing anything: answer every error, so the agent fixes them
           and asks again
         type: return
         outcome: refused; nothing recorded
-      - stepNumber: 4
+      - stepNumber: 5
         description: Record the request through the core client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: requestReview
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Shape the answer: the request id and kind; the warnings the validation reported, which do
           not block (as they do not block `wairon lock`) but should be fixed or explained in the
@@ -1166,4 +1174,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-07T02:48:00.685Z'
+updatedAt: '2026-11-07T11:59:57.552Z'
