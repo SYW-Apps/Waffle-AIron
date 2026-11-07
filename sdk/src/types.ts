@@ -98,6 +98,19 @@ export interface PackExtractionLimits {
 }
 
 /**
+ * A `.wpack` archive read in memory under the extraction guards, nothing
+ * written: its envelope, its parsed inner pack manifest and its files.
+ */
+export interface PackContents {
+  /** The parsed envelope. */
+  manifest: PackArchiveManifest;
+  /** The inner pack manifest as authored (pack.yaml, or package.json of a code pack). */
+  packManifest: Record<string, unknown>;
+  /** Every approved file, inflated and integrity-checked when digests are carried. */
+  files: PackFile[];
+}
+
+/**
  * Inputs to `wairon pack init`: the identity and variant of the pack project to
  * scaffold, and where to write it.
  */

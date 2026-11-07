@@ -18,8 +18,10 @@ stays in wairon core and runs after extraction.
 import {
   scaffoldPack,   // scaffold a new pack project (declarative | code)
   buildPack,      // build an installable .wpack from a pack directory
-  inspectArchive, // inspect + version-check a .wpack without extracting
+  inspectArchive, // inspect + version-check a .wpack without extracting (entries vetted under limits first)
+  readPack,       // read a .wpack in memory under the guards: envelope, inner manifest, files
   extractPack,    // SAFELY extract a .wpack under enforced limits
+  PackArchiveError, // what every .wpack reader throws; match on its `code`
   packContentDigest, // the content integrity (sha256-<hex>) wairon pins, over a pack's files
 } from '@wairon/sdk';
 ```
@@ -32,6 +34,26 @@ rejects zip-slip (`..`, absolute, backslash, drive-letter paths), symlinks and
 non-regular entries, and anything over the caps (entry count, total inflated
 size, per-entry size, compression ratio, path depth). Integrity is verified
 before the tree is written, so a tampered pack never lands.
+
+`inspectArchive` and `readPack` run the same guards: every entry is vetted under the
+limits (default or yours) before anything, the envelope included, is inflated. `readPack`
+returns `{ manifest, packManifest, files }` and writes nothing: the parsed envelope, the inner
+pack manifest as authored (`pack.yaml`, or `package.json` of a code pack) and every approved
+file, integrity-checked when the envelope carries digests and checked for envelope/inner
+name and version agreement. `extractPack` is `readPack` followed by the write.
+
+Every refusal is a `PackArchiveError` with a stable `code` (match on it, not on the message):
+
+| code | meaning |
+| --- | --- |
+| `NOT_A_PACK` | no `wairon-pack.yaml` envelope |
+| `UNSAFE_PATH` | symlink, non-file kind, or an absolute / backslash / drive-letter / `..` / escaping path |
+| `LIMIT_EXCEEDED` | an entry or the archive is over a cap (entry size, ratio, depth, count, total) |
+| `ENVELOPE_INVALID` | the envelope is not a YAML mapping, or a required field is missing or mistyped |
+| `FORMAT_VERSION_UNSUPPORTED` | the envelope format is newer than this SDK understands |
+| `PACK_MANIFEST_INVALID` | the inner pack manifest is missing, unreadable or not a mapping |
+| `IDENTITY_MISMATCH` | envelope name/version differ from the inner manifest's |
+| `DIGEST_MISMATCH` | a file's bytes do not match the digest the envelope carries |
 
 Whole in-memory buffers only (never streams) — the zip-bomb guard must enumerate
 entry sizes *before* decompression. The `bytes` surface is `Uint8Array` (Node's
