@@ -183,18 +183,30 @@ export function verifyIntegrity(manifest: PackArchiveManifest, files: PackFile[]
     return false;
   }
   const digests = manifest.entryDigests;
-  // Step 3: check each file's digest.
+  // Step 3: does entryDigests name a file the archive does not hold, or does the
+  // envelope's overall digest differ from the one recomputed over entryDigests?
+  const held = new Set(files.map((file) => file.path));
+  const missing = Object.keys(digests).find((path) => !held.has(path));
+  if (missing !== undefined) {
+    // Step 8 (mismatch): the envelope lists a file the archive does not hold.
+    throw new PackArchiveError('DIGEST_MISMATCH', `integrity digest lists "${missing}", which the archive does not hold`);
+  }
+  if (manifest.digest !== undefined && manifest.digest !== sha256(canonicalDigestBytes(digests))) {
+    // Step 8 (mismatch): the overall digest does not match the entry digests.
+    throw new PackArchiveError('DIGEST_MISMATCH', 'integrity digest mismatch for the overall digest');
+  }
+  // Step 4: check each file's digest.
   for (const file of files) {
     // The envelope carries these digests and cannot digest itself — skip it.
     if (file.path === ENVELOPE_FILENAME) continue;
-    // Step 4: does the recomputed sha256 differ from the recorded digest?
+    // Step 5: does the recomputed sha256 differ from the recorded digest?
     if (sha256(file.contents) !== digests[file.path]) {
-      // Step 7: a digest mismatch means tampering.
+      // Step 8 (mismatch): a digest mismatch means tampering.
       throw new PackArchiveError('DIGEST_MISMATCH', `integrity digest mismatch for "${file.path}"`);
     }
-    // Step 5 (checkEnd): this file's digest matches.
+    // Step 6 (checkEnd): this file's digest matches.
   }
-  // Step 6: all digests matched — return true.
+  // Step 7: all digests matched — return true.
   return true;
 }
 
@@ -203,7 +215,7 @@ export function sealIntegrity(
   manifest: PackArchiveManifest,
   files: PackFile[],
   generatedBy: string,
-  generatedAt: string,
+  generatedAt?: string,
 ): PackArchiveManifest {
   // Step 1: initialize an empty entryDigests map.
   const entryDigests: Record<string, string> = {};
@@ -216,9 +228,12 @@ export function sealIntegrity(
   }
   // Step 4: compute an overall manifest digest over the sorted entryDigests.
   const digest = sha256(canonicalDigestBytes(entryDigests));
-  // Step 5: set entryDigests, digest, generatedBy, generatedAt.
+  // Step 5: set entryDigests, digest, generatedBy, and generatedAt when one is given.
+  const sealed: PackArchiveManifest = { ...manifest, entryDigests, digest, generatedBy };
+  if (generatedAt !== undefined) sealed.generatedAt = generatedAt;
+  else delete sealed.generatedAt;
   // Step 6: return the sealed manifest.
-  return { ...manifest, entryDigests, digest, generatedBy, generatedAt };
+  return sealed;
 }
 
 /** Whether the archive's formatVersion + minWaironVersion are compatible with `waironVersion`. */
