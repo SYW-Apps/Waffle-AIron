@@ -1911,7 +1911,7 @@ again.
 
 | Command | Description |
 |---------|-------------|
-| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only). It serves the same project over MCP (streamable HTTP) at `POST http://127.0.0.1:<port>/mcp?project=local` — the current project is registered as `local`; without `?project=local` the endpoint answers 403. For an AI tool on the same machine the stdio server (`wairon mcp serve`, what `wairon mcp install` registers) remains the usual route |
+| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only). Without `--port` it takes the first free port from 8080 upward (to 8099; the dev admin listener uses the next port), so a second project's dev server never collides with the first; it prints the URL it chose. With `--port` it uses exactly that port and says so plainly when it is taken. It serves the same project over MCP (streamable HTTP) at `POST http://127.0.0.1:<port>/mcp?project=local` — the current project is registered as `local`; without `?project=local` the endpoint answers 403. For an AI tool on the same machine the stdio server (`wairon mcp serve`, what `wairon mcp install` registers) remains the usual route |
 | `wairon update [--check] [--channel <name>]` | Check/install the latest release; switch channel |
 | `wairon aliases list` | Show command aliases (`wai`) and their status |
 | `wairon aliases enable <name>` / `disable <name>` | Create / remove an alias |

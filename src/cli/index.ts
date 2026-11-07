@@ -747,7 +747,7 @@ program
 program
   .command('dev')
   .description('Run a local single-project dev server: the wairon web UI over the current project, no login/tenancy (loopback, dev only)')
-  .option('--port <port>', 'web UI port (default 8080)')
+  .option('--port <port>', 'web UI port (default: the first free one from 8080 up)')
   .option('--open', 'open the dev server in your browser')
   .action(async (opts) => {
     await runDev({ port: opts.port, open: opts.open });

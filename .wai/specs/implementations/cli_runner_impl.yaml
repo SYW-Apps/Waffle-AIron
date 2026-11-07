@@ -3133,7 +3133,11 @@ methods:
         description: >-
           Build the ephemeral data dir (per bound root; it is disposable - the registration below
           discards it when it is unversioned or from another major) and the loopback, auth-off,
-          development-mode host configuration
+          development-mode host configuration. The port: without --port, the first port from 8080
+          upward (at most 8099) that is free on 127.0.0.1 together with the next one, which the dev
+          admin listener takes, so a second project's dev server, or anything else on 8080, never
+          stops this one from starting; with --port, exactly that port, refused with a plain message
+          naming it (and the admin port beside it) when either is taken, never a raw listen error
         type: local
       - stepNumber: 5
         description: >-
@@ -4463,4 +4467,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-06T23:43:18.270Z'
+updatedAt: '2026-11-07T01:25:27.233Z'

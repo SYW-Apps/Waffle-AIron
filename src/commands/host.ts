@@ -2,6 +2,7 @@ import { files } from '../io/index.js';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import * as net from 'net';
 import { processes } from '../io/index.js';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -342,6 +343,45 @@ function openBrowser(url: string): void {
   }
 }
 
+/** The first port `wairon dev` tries when no --port is given, and the last. */
+export const DEV_PORT_FIRST = 8080;
+export const DEV_PORT_LAST = 8099;
+
+/** Whether a TCP port is free on 127.0.0.1: a listener can bind it, and is closed again at once. */
+function portIsFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
+/**
+ * The port `wairon dev` serves on; the dev admin listener takes the next one.
+ * Without --port, the first port from 8080 upward (at most 8099) that is free
+ * together with the next, so another project's dev server, or anything else on
+ * 8080, never stops this one. With --port, exactly that port, refused plainly
+ * when it or the next one is taken.
+ */
+export async function chooseDevPort(requested?: string): Promise<number> {
+  const free = async (port: number): Promise<boolean> => (await portIsFree(port)) && (await portIsFree(port + 1));
+  if (requested !== undefined) {
+    const port = Number(requested);
+    if (!Number.isInteger(port) || port < 1 || port > 65534) {
+      throw new WaironError(`--port ${requested} is not a port number (1-65534).`);
+    }
+    if (!(await free(port))) {
+      throw new WaironError(`Port ${port} or ${port + 1} (the dev admin port beside it) is already in use. Choose another --port, or leave it out and wairon dev picks a free one.`);
+    }
+    return port;
+  }
+  for (let port = DEV_PORT_FIRST; port <= DEV_PORT_LAST; port++) {
+    if (await free(port)) return port;
+  }
+  throw new WaironError(`No free port between ${DEV_PORT_FIRST} and ${DEV_PORT_LAST + 1} for the dev server and its admin listener. Stop another wairon dev, or pass --port.`);
+}
+
 export async function runDev(options: HostOptions = {}): Promise<void> {
   // The dev server serves the project the binding rule binds from here — the
   // same root `wairon status` reports and the MCP server attaches to: the
@@ -367,7 +407,8 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   // The directory is not created here: registering the project resets a stale one first (a dev data dir is
   // disposable, never backed up or migrated), and nothing may be written into it before that.
 
-  const port = options.port ? Number(options.port) : 8080;
+  const port = await chooseDevPort(options.port === undefined || options.port === null ? undefined : String(options.port));
+  if (options.port === undefined && port !== DEV_PORT_FIRST) logger.info(chalk.gray(`  (port ${DEV_PORT_FIRST} is taken; serving on ${port})`));
   // A permissive-but-loopback exposure: the web UI on, TLS not required (plain http
   // on 127.0.0.1). devMode independently forces the web UI on in http.ts, so this is
   // belt-and-suspenders; requireTls:false keeps the dev cookie non-Secure over http.
