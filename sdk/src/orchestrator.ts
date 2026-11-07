@@ -5,10 +5,13 @@ import * as treecodec from './treecodec.js';
 import * as scaffold from './scaffold.js';
 import * as packArchive from './archive.js';
 import { SDK_VERSION } from './version.js';
+import { PackArchiveError } from './errors.js';
 import type {
+  ArchiveEntryMeta,
   PackArchiveInfo,
   PackArchiveManifest,
   PackBuildResult,
+  PackContents,
   PackExtractionLimits,
   PackExtractionResult,
   PackFile,
@@ -59,8 +62,9 @@ export function buildPack(sourceDir: string): PackBuildResult {
   const identity = readInnerIdentity(files, manifest);
   // Step 6: assert the envelope's name/version match the inner pack manifest.
   codec.verifyIdentity(manifest, identity.name, identity.version);
-  // Step 7: seal integrity (entryDigests + digest + generatedBy/generatedAt).
-  const sealed = codec.sealIntegrity(manifest, files, `@wairon/sdk@${SDK_VERSION}`, new Date().toISOString());
+  // Step 7: seal integrity (entryDigests + digest + generatedBy) with no build time,
+  // so the same content always builds the same archive and content digest.
+  const sealed = codec.sealIntegrity(manifest, files, `@wairon/sdk@${SDK_VERSION}`);
   // Step 8: serialize the sealed manifest back to canonical envelope text.
   const sealedText = codec.serializeManifest(sealed);
   // Step 9: upsert wairon-pack.yaml (sealed envelope text) into the file map.
@@ -74,22 +78,38 @@ export function buildPack(sourceDir: string): PackBuildResult {
   return { archive: archiveBytes, info, suggestedFileName };
 }
 
-/** Inspect + verify a .wpack archive without extracting it. */
-export function inspectArchive(archive: Uint8Array): PackArchiveInfo {
-  // Step 1: enumerate archive entries without inflating.
-  const entries = packArchive.listEntries(archive);
-  // Step 2: is there no wairon-pack.yaml entry?
-  if (!entries.some((entry) => entry.path === codec.ENVELOPE_FILENAME)) {
-    // Step 3: reject a non-.wpack archive.
-    throw new Error('not a .wpack archive (missing wairon-pack.yaml envelope)');
+/** The archive's entries; bytes that are not a readable ZIP carry no envelope, so they are NOT_A_PACK. */
+function listPackEntries(archive: Uint8Array): ArchiveEntryMeta[] {
+  try {
+    return packArchive.listEntries(archive);
+  } catch (e) {
+    throw new PackArchiveError('NOT_A_PACK', `not a .wpack archive (unreadable ZIP: ${e instanceof Error ? e.message : String(e)})`);
   }
-  // Step 4 (readEnv): inflate just the envelope entry.
+}
+
+/** Inspect + verify a .wpack archive without extracting it; every entry is vetted under the limits before anything is inflated. */
+export function inspectArchive(archive: Uint8Array, limits?: PackExtractionLimits): PackArchiveInfo {
+  // Step 1: did the caller omit limits?
+  const effectiveLimits = limits === undefined
+    // Step 2: fall back to the codec's default limit profile.
+    ? codec.defaultLimits()
+    : limits;
+  // Step 3: enumerate archive entries without inflating.
+  const entries = listPackEntries(archive);
+  // Step 4: vet every entry under the effective limits, the envelope included.
+  codec.planExtraction(entries, effectiveLimits);
+  // Step 5: is there no wairon-pack.yaml entry?
+  if (!entries.some((entry) => entry.path === codec.ENVELOPE_FILENAME)) {
+    // Step 6: reject a non-.wpack archive.
+    throw new PackArchiveError('NOT_A_PACK', 'not a .wpack archive (missing wairon-pack.yaml envelope)');
+  }
+  // Step 7 (readEnv): inflate just the envelope entry.
   const envelopeBytes = packArchive.inflateEntry(archive, codec.ENVELOPE_FILENAME);
-  // Step 5: parse + version-check the envelope text.
+  // Step 8: parse + version-check the envelope text.
   const manifest = codec.parseManifest(decode(envelopeBytes));
-  // Step 6: compute compatibility against the running wairon version.
+  // Step 9: compute compatibility against the running wairon version.
   const compatible = codec.checkCompatibility(manifest, SDK_VERSION);
-  // Step 7: assemble PackArchiveInfo from the manifest + archive stats.
+  // Step 10: assemble PackArchiveInfo from the manifest + archive stats.
   const fileEntries = entries.filter((entry) => entry.kind === 'file');
   const totalUncompressedBytes = entries.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
   const info: PackArchiveInfo = {
@@ -103,8 +123,46 @@ export function inspectArchive(archive: Uint8Array): PackArchiveInfo {
     compatible,
   };
   if (manifest.minWaironVersion !== undefined) info.minWaironVersion = manifest.minWaironVersion;
-  // Step 8: return the PackArchiveInfo (no extraction performed).
+  // Step 11: return the PackArchiveInfo (no extraction performed).
   return info;
+}
+
+/** Read a .wpack archive in memory under the limits: guards, envelope, integrity, inner manifest, identity. */
+export function readPack(archive: Uint8Array, limits?: PackExtractionLimits): PackContents {
+  // Step 1: did the caller omit limits?
+  const effectiveLimits = limits === undefined
+    // Step 2: fall back to the codec's default limit profile.
+    ? codec.defaultLimits()
+    : limits;
+  // Step 3 (list): enumerate archive entries without inflating.
+  const entries = listPackEntries(archive);
+  // Step 4: compute the safe extraction plan under the effective limits.
+  const plan = codec.planExtraction(entries, effectiveLimits);
+  // Step 5: is there no wairon-pack.yaml among the approved paths?
+  if (!plan.paths.includes(codec.ENVELOPE_FILENAME)) {
+    // Step 6: reject a non-.wpack archive.
+    throw new PackArchiveError('NOT_A_PACK', 'not a .wpack archive (missing wairon-pack.yaml envelope)');
+  }
+  // Step 7: initialize an empty file list.
+  const files: PackFile[] = [];
+  // Step 8: inflate each approved path from the plan.
+  for (const approvedPath of plan.paths) {
+    // Step 9: inflate one approved entry.
+    const contents = packArchive.inflateEntry(archive, approvedPath);
+    // Step 10 (inflateEnd): append { path, contents } to the file list.
+    files.push({ path: approvedPath, contents });
+  }
+  // Step 11: parse the wairon-pack.yaml text into the envelope.
+  const envelope = files.find((file) => file.path === codec.ENVELOPE_FILENAME) as PackFile;
+  const manifest = codec.parseManifest(decode(envelope.contents));
+  // Step 12: verify each inflated file against the envelope digests.
+  codec.verifyIntegrity(manifest, files);
+  // Step 13: read the inner pack manifest.
+  const packManifest = codec.parseInnerManifest(manifest, files);
+  // Step 14: verify the envelope's name and version against the inner manifest's.
+  codec.verifyIdentity(manifest, String(packManifest.name), String(packManifest.version));
+  // Step 15: return the envelope, the inner pack manifest and the files.
+  return { manifest, packManifest, files };
 }
 
 /** Safely extract a .wpack archive into a destination directory under enforced limits. */
@@ -113,37 +171,12 @@ export function extractPack(
   destDir: string,
   limits?: PackExtractionLimits,
 ): PackExtractionResult {
-  // Step 1: did the caller omit limits?
-  const effectiveLimits = limits === undefined
-    // Step 2: fall back to the codec's default limit profile.
-    ? codec.defaultLimits()
-    : limits;
-  // Step 3 (list): enumerate archive entries without inflating (caps run pre-decompress).
-  const entries = packArchive.listEntries(archive);
-  // Step 4: compute the safe extraction plan (throws on any unsafe/oversized entry).
-  const plan = codec.planExtraction(entries, effectiveLimits);
-  // Step 5: initialize an empty file list.
-  const files: PackFile[] = [];
-  // Step 6: inflate each approved path from the plan.
-  for (const approvedPath of plan.paths) {
-    // Step 7: inflate one approved entry.
-    const contents = packArchive.inflateEntry(archive, approvedPath);
-    // Step 8 (inflateEnd): append { path, contents } to the file list.
-    files.push({ path: approvedPath, contents });
-  }
-  // Step 9: read the wairon-pack.yaml text from the inflated files.
-  const envelope = files.find((file) => file.path === codec.ENVELOPE_FILENAME);
-  if (!envelope) {
-    throw new Error('not a .wpack archive (missing wairon-pack.yaml envelope)');
-  }
-  // Step 10: parse the envelope into the result manifest.
-  const manifest = codec.parseManifest(decode(envelope.contents));
-  // Step 11: enforce integrity BEFORE writing (throws on mismatch; no-op when none carried).
-  codec.verifyIntegrity(manifest, files);
-  // Step 12: write the approved, integrity-checked files as a directory tree.
+  // Step 1: read the archive in memory under the limits (fails before anything is written).
+  const { manifest, files } = readPack(archive, limits);
+  // Step 2: write the approved, integrity-checked files as a directory tree.
   const directory = path.resolve(destDir);
   packArchive.writeTree(directory, files);
-  // Step 13: assemble PackExtractionResult.
+  // Step 3: assemble PackExtractionResult.
   const result: PackExtractionResult = {
     directory,
     entryPath: manifest.entry,
@@ -152,7 +185,7 @@ export function extractPack(
     kind: manifest.kind,
     entryCount: files.length,
   };
-  // Step 14: return where the pack landed + its parsed manifest.
+  // Step 4: return where the pack landed + its parsed manifest.
   return result;
 }
 

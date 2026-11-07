@@ -3,6 +3,7 @@ import * as codec from './codec.js';
 import type {
   PackArchiveInfo,
   PackBuildResult,
+  PackContents,
   PackExtractionLimits,
   PackExtractionResult,
   PackFile,
@@ -43,9 +44,15 @@ export function packContentDigest(files: readonly PackFile[]): string {
 }
 
 /** Inspect + verify a .wpack archive without extracting it. */
-export function inspectArchive(archive: Uint8Array): PackArchiveInfo {
+export function inspectArchive(archive: Uint8Array, limits?: PackExtractionLimits): PackArchiveInfo {
   // Step 1: forward to the SDK orchestrator.
-  return orchestrator.inspectArchive(archive);
+  return orchestrator.inspectArchive(archive, limits);
+}
+
+/** Read a .wpack archive in memory under the extraction guards; nothing is written. */
+export function readPack(archive: Uint8Array, limits?: PackExtractionLimits): PackContents {
+  // Step 1: forward to the SDK orchestrator.
+  return orchestrator.readPack(archive, limits);
 }
 
 /** Safely extract a .wpack archive into a destination directory under enforced limits. */
@@ -90,3 +97,6 @@ export function extractTreeArchive(
 export * from './types.js';
 // ...and the rule-authoring contract (SddRule + stable RuleContext/Finding facade + defineRule).
 export * from './authoring.js';
+// ...and the one error every .wpack reader fails with, plus its code union.
+export { PackArchiveError } from './errors.js';
+export type { PackArchiveErrorCode } from './errors.js';

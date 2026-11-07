@@ -1,5 +1,6 @@
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml';
 import { createHash } from 'crypto';
+import { PackArchiveError } from './errors.js';
 import type {
   ArchiveEntryMeta,
   PackArchiveManifest,
@@ -62,14 +63,22 @@ const DEFAULTS = {
 
 /** Parse + validate the envelope text into a PackArchiveManifest; throws on malformed/newer-major. */
 export function parseManifest(text: string): PackArchiveManifest {
-  // Step 1: parse the envelope YAML text (throws on malformed YAML).
-  const raw = yamlLoad(text);
+  // Step 1: parse the envelope YAML text (ENVELOPE_INVALID on malformed YAML).
+  let raw: unknown;
+  try {
+    raw = yamlLoad(text);
+  } catch (err) {
+    throw new PackArchiveError('ENVELOPE_INVALID', `malformed pack envelope (not valid YAML): ${(err as Error).message}`);
+  }
   // Step 2: validate the required fields are present and well-typed.
   const manifest = validateEnvelope(raw);
   // Step 3: is the format major newer than this wairon supports?
   if (Math.trunc(manifest.formatVersion) > SUPPORTED_FORMAT_VERSION) {
     // Step 4: fail loudly rather than silently mis-read a newer format.
-    throw new Error('unsupported pack-archive formatVersion (newer than this wairon understands)');
+    throw new PackArchiveError(
+      'FORMAT_VERSION_UNSUPPORTED',
+      `unsupported pack-archive formatVersion ${manifest.formatVersion} (newer than this wairon understands)`,
+    );
   }
   // Step 5: return the parsed manifest.
   return manifest;
@@ -117,7 +126,7 @@ export function planExtraction(entries: ArchiveEntryMeta[], limits: PackExtracti
   for (const entry of entries) {
     // Step 4: reject symlinks/non-regular entries and structurally unsafe paths.
     if (isSymlinkOrNonRegular(entry.kind) || isStructurallyUnsafePath(entry.path)) {
-      rejectUnsafe();
+      rejectUnsafe(entry.path);
     }
     // Directory entries are structural (writeTree recreates them from file
     // paths) — skip without approving, never inflate a 0-byte dir marker.
@@ -125,20 +134,29 @@ export function planExtraction(entries: ArchiveEntryMeta[], limits: PackExtracti
     // Step 5: normalize the entry path to a destination-relative POSIX path.
     const normalized = normalizeRelPath(entry.path);
     // Step 6: reject zip-slip and over-deep paths.
-    if (escapesDestination(normalized) || pathDepth(normalized) > caps.maxDepth) {
-      rejectUnsafe();
+    if (escapesDestination(normalized)) {
+      rejectUnsafe(entry.path);
+    }
+    if (pathDepth(normalized) > caps.maxDepth) {
+      rejectLimit(`entry "${entry.path}" is nested deeper than maxDepth (${caps.maxDepth})`);
     }
     // Step 7: reject oversized entries and zip bombs.
-    if (entry.uncompressedSize > caps.maxEntryBytes || compressionRatio(entry) > caps.maxCompressionRatio) {
-      rejectUnsafe();
+    if (entry.uncompressedSize > caps.maxEntryBytes) {
+      rejectLimit(`entry "${entry.path}" is larger than maxEntryBytes (${caps.maxEntryBytes})`);
+    }
+    if (compressionRatio(entry) > caps.maxCompressionRatio) {
+      rejectLimit(`entry "${entry.path}" exceeds maxCompressionRatio (${caps.maxCompressionRatio}:1)`);
     }
     // Step 8 (vetEnd): accept — append the path and add its inflated size.
     approved.push(normalized);
     total += entry.uncompressedSize;
   }
   // Step 9: reject archives exceeding the aggregate caps.
-  if (approved.length > caps.maxEntries || total > caps.maxTotalUncompressedBytes) {
-    rejectUnsafe();
+  if (approved.length > caps.maxEntries) {
+    rejectLimit(`archive holds more than maxEntries (${caps.maxEntries}) files`);
+  }
+  if (total > caps.maxTotalUncompressedBytes) {
+    rejectLimit(`archive inflates beyond maxTotalUncompressedBytes (${caps.maxTotalUncompressedBytes})`);
   }
   // Step 11: return the approved plan.
   return { paths: approved, totalUncompressedBytes: total };
@@ -149,7 +167,10 @@ export function verifyIdentity(manifest: PackArchiveManifest, packName: string, 
   // Step 1: do envelope name/version differ from the inner pack manifest?
   if (manifest.name !== packName || manifest.version !== packVersion) {
     // Step 2: reject a tampered/mis-assembled archive.
-    throw new Error('envelope identity mismatch (envelope name/version differ from the inner pack manifest)');
+    throw new PackArchiveError(
+      'IDENTITY_MISMATCH',
+      `envelope identity mismatch: envelope says ${manifest.name}@${manifest.version}, inner pack manifest says ${packName}@${packVersion}`,
+    );
   }
   // Step 3: identity verified.
 }
@@ -162,18 +183,30 @@ export function verifyIntegrity(manifest: PackArchiveManifest, files: PackFile[]
     return false;
   }
   const digests = manifest.entryDigests;
-  // Step 3: check each file's digest.
+  // Step 3: does entryDigests name a file the archive does not hold, or does the
+  // envelope's overall digest differ from the one recomputed over entryDigests?
+  const held = new Set(files.map((file) => file.path));
+  const missing = Object.keys(digests).find((path) => !held.has(path));
+  if (missing !== undefined) {
+    // Step 8 (mismatch): the envelope lists a file the archive does not hold.
+    throw new PackArchiveError('DIGEST_MISMATCH', `integrity digest lists "${missing}", which the archive does not hold`);
+  }
+  if (manifest.digest !== undefined && manifest.digest !== sha256(canonicalDigestBytes(digests))) {
+    // Step 8 (mismatch): the overall digest does not match the entry digests.
+    throw new PackArchiveError('DIGEST_MISMATCH', 'integrity digest mismatch for the overall digest');
+  }
+  // Step 4: check each file's digest.
   for (const file of files) {
     // The envelope carries these digests and cannot digest itself — skip it.
     if (file.path === ENVELOPE_FILENAME) continue;
-    // Step 4: does the recomputed sha256 differ from the recorded digest?
+    // Step 5: does the recomputed sha256 differ from the recorded digest?
     if (sha256(file.contents) !== digests[file.path]) {
-      // Step 7: a digest mismatch means tampering.
-      throw new Error('integrity digest mismatch');
+      // Step 8 (mismatch): a digest mismatch means tampering.
+      throw new PackArchiveError('DIGEST_MISMATCH', `integrity digest mismatch for "${file.path}"`);
     }
-    // Step 5 (checkEnd): this file's digest matches.
+    // Step 6 (checkEnd): this file's digest matches.
   }
-  // Step 6: all digests matched — return true.
+  // Step 7: all digests matched — return true.
   return true;
 }
 
@@ -182,7 +215,7 @@ export function sealIntegrity(
   manifest: PackArchiveManifest,
   files: PackFile[],
   generatedBy: string,
-  generatedAt: string,
+  generatedAt?: string,
 ): PackArchiveManifest {
   // Step 1: initialize an empty entryDigests map.
   const entryDigests: Record<string, string> = {};
@@ -195,9 +228,12 @@ export function sealIntegrity(
   }
   // Step 4: compute an overall manifest digest over the sorted entryDigests.
   const digest = sha256(canonicalDigestBytes(entryDigests));
-  // Step 5: set entryDigests, digest, generatedBy, generatedAt.
+  // Step 5: set entryDigests, digest, generatedBy, and generatedAt when one is given.
+  const sealed: PackArchiveManifest = { ...manifest, entryDigests, digest, generatedBy };
+  if (generatedAt !== undefined) sealed.generatedAt = generatedAt;
+  else delete sealed.generatedAt;
   // Step 6: return the sealed manifest.
-  return { ...manifest, entryDigests, digest, generatedBy, generatedAt };
+  return sealed;
 }
 
 /** Whether the archive's formatVersion + minWaironVersion are compatible with `waironVersion`. */
@@ -216,24 +252,61 @@ export function checkCompatibility(manifest: PackArchiveManifest, waironVersion:
   return true;
 }
 
+/**
+ * Read the inner pack manifest from the inflated files: package.json of a code
+ * pack, the envelope's entry (pack.yaml) of a declarative pack. Throws
+ * PACK_MANIFEST_INVALID when it is missing, unparseable or not a mapping.
+ */
+export function parseInnerManifest(manifest: PackArchiveManifest, files: readonly PackFile[]): Record<string, unknown> {
+  // Step 1: pick the inner manifest's path.
+  const innerPath = manifest.kind === 'code' ? 'package.json' : manifest.entry;
+  // Step 2: is it missing among the files?
+  const inner = files.find((file) => file.path === innerPath);
+  if (!inner) {
+    throw new PackArchiveError('PACK_MANIFEST_INVALID', `inner pack manifest "${innerPath}" is missing`);
+  }
+  // Step 3: parse it — JSON for package.json, YAML for pack.yaml.
+  const text = new TextDecoder().decode(inner.contents);
+  let parsed: unknown;
+  try {
+    parsed = manifest.kind === 'code' ? JSON.parse(text) : yamlLoad(text);
+  } catch {
+    parsed = undefined;
+  }
+  // Step 4-5: unparseable or not a mapping — refuse, naming the path.
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new PackArchiveError('PACK_MANIFEST_INVALID', `inner pack manifest "${innerPath}" is not a readable mapping`);
+  }
+  // Step 6: return the mapping as authored.
+  return parsed as Record<string, unknown>;
+}
+
 // --- helpers ---------------------------------------------------------------
 
-function rejectUnsafe(): never {
-  throw new Error('reject: unsafe or oversized archive entry (zip-slip / size / ratio / depth guard)');
+function rejectUnsafe(entryPath: string): never {
+  throw new PackArchiveError('UNSAFE_PATH', `unsafe archive entry "${entryPath}" (symlink, non-file kind, or an unsafe or escaping path)`);
+}
+
+function rejectLimit(what: string): never {
+  throw new PackArchiveError('LIMIT_EXCEEDED', `archive over a cap: ${what}`);
+}
+
+function invalidEnvelope(message: string): never {
+  throw new PackArchiveError('ENVELOPE_INVALID', message);
 }
 
 function validateEnvelope(raw: unknown): PackArchiveManifest {
-  if (!raw || typeof raw !== 'object') {
-    throw new Error('malformed pack envelope (not a YAML mapping)');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return invalidEnvelope('malformed pack envelope (not a YAML mapping)');
   }
   const o = raw as Record<string, unknown>;
-  if (typeof o.formatVersion !== 'number') throw new Error('pack envelope: formatVersion must be a number');
-  if (typeof o.name !== 'string' || !o.name) throw new Error('pack envelope: name is required');
-  if (typeof o.version !== 'string' || !o.version) throw new Error('pack envelope: version is required');
+  if (typeof o.formatVersion !== 'number') invalidEnvelope('pack envelope: formatVersion must be a number');
+  if (typeof o.name !== 'string' || !o.name) invalidEnvelope('pack envelope: name is required');
+  if (typeof o.version !== 'string' || !o.version) invalidEnvelope('pack envelope: version is required');
   if (typeof o.kind !== 'string' || (o.kind !== 'declarative' && o.kind !== 'code')) {
-    throw new Error('pack envelope: kind must be "declarative" or "code"');
+    invalidEnvelope('pack envelope: kind must be "declarative" or "code"');
   }
-  if (typeof o.entry !== 'string' || !o.entry) throw new Error('pack envelope: entry is required');
+  if (typeof o.entry !== 'string' || !o.entry) invalidEnvelope('pack envelope: entry is required');
   const manifest: PackArchiveManifest = {
     formatVersion: o.formatVersion,
     name: o.name,
