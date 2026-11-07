@@ -1,0 +1,21 @@
+kind: value-object
+id: pack_archive_error
+name: PackArchiveError
+description: >-
+  The one error every .wpack reader of the SDK fails with (inspectArchive, readPack, extractPack): a
+  stable code beside a human message. Exported as an error class, so a caller matches on code and
+  never on message text.
+fields:
+  - name: code
+    type: pack_archive_error_code
+    description: Why the archive was refused
+    optional: false
+  - name: message
+    type: string
+    description: A human sentence naming what failed (an entry path, a field, a cap); wording may change
+    optional: false
+methods: []
+componentClass: pack_codec
+sourcePath: sdk/src/errors.ts
+createdAt: '2026-11-07T14:23:05.140Z'
+updatedAt: '2026-11-07T14:23:05.987Z'

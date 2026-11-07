@@ -6,6 +6,14 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **`@wairon/sdk` reads a pack in memory and fails with stable codes.** New `readPack(archive, limits?)`
+  returns the envelope, the inner pack manifest (`pack.yaml`, or `package.json` of a code pack) and the
+  files without writing anything. Every .wpack reader (`readPack`, `inspectArchive`, `extractPack`) throws
+  a `PackArchiveError` whose `code` is one of `NOT_A_PACK`, `UNSAFE_PATH`, `LIMIT_EXCEEDED`,
+  `ENVELOPE_INVALID`, `FORMAT_VERSION_UNSUPPORTED`, `PACK_MANIFEST_INVALID`, `IDENTITY_MISMATCH` and
+  `DIGEST_MISMATCH`. `inspectArchive` now takes optional limits and vets every entry, the envelope
+  included, before inflating anything; `extractPack` now also checks that the envelope's name and
+  version match the inner pack manifest before it writes.
 - **`wairon dev` is the place to approve.** The page follows the design live: a spec an agent writes
   through `wairon mcp serve`, or a lock from the terminal, shows on the open page without a refresh
   (unsaved edits in an open spec form are kept). A Commands tab runs the CLI's own `lock` (the whole

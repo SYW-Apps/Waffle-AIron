@@ -112,6 +112,22 @@ methods:
       - name: files
         type: list<pack_file>
         description: The pack's files as extracted, paths relative to the pack root
+  - name: parseInnerManifest
+    description: >-
+      Read the inner pack manifest out of a pack's files: pack.yaml (the envelope's entry) of a
+      declarative pack, package.json of a code pack, parsed into a mapping as authored. Fails with
+      PACK_MANIFEST_INVALID when it is missing, unreadable or not a mapping. Pure.
+    signature: >-
+      parseInnerManifest(manifest: pack_archive_manifest, files: list<pack_file>):
+      result<map<string, any>, pack_archive_error>
+    returns: result<map<string, any>, pack_archive_error>
+    params:
+      - name: manifest
+        type: pack_archive_manifest
+        description: The parsed envelope, for the pack's kind and entry
+      - name: files
+        type: list<pack_file>
+        description: The pack's files
 status: complete
 createdAt: '2026-07-21T18:13:36.380Z'
-updatedAt: '2026-11-06T23:40:23.775Z'
+updatedAt: '2026-11-07T14:23:13.774Z'

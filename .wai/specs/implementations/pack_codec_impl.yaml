@@ -9,12 +9,15 @@ methods:
   - name: parseManifest
     narrative:
       - stepNumber: 1
-        description: Parse the envelope YAML text (throw on malformed YAML).
+        description: >-
+          Parse the envelope YAML text (fail with PackArchiveError ENVELOPE_INVALID on malformed
+          YAML or a non-mapping).
         type: local
       - stepNumber: 2
         description: >-
           Validate the required fields (formatVersion, name, version, kind, entry) are present and
-          well-typed; throw on any missing/invalid.
+          well-typed; fail with PackArchiveError ENVELOPE_INVALID naming the field on any
+          missing/invalid.
         type: local
       - stepNumber: 3
         description: Is the format major newer than this wairon supports?
@@ -25,7 +28,7 @@ methods:
       - stepNumber: 4
         description: Fail loudly on a newer format rather than silently mis-read it.
         type: throw
-        error: unsupported pack-archive formatVersion (newer than this wairon understands)
+        error: PackArchiveError FORMAT_VERSION_UNSUPPORTED
       - stepNumber: 5
         description: Return the parsed PackArchiveManifest.
         type: return
@@ -76,18 +79,18 @@ methods:
         description: Normalize the entry path to a destination-relative POSIX path.
         type: local
       - stepNumber: 6
-        description: Reject zip-slip and over-deep paths.
+        description: Reject zip-slip paths.
         type: branch
-        condition: the normalized path escapes the destination (zip-slip) or its depth exceeds maxDepth
+        condition: the normalized path escapes the destination (zip-slip)
         onTrueStep: 10
         onFalseStep: 7
       - stepNumber: 7
-        description: Reject oversized entries and zip bombs.
+        description: Reject over-deep paths, oversized entries and zip bombs.
         type: branch
         condition: >-
-          uncompressedSize exceeds maxEntryBytes, or uncompressedSize/compressedSize exceeds
-          maxCompressionRatio
-        onTrueStep: 10
+          the path's depth exceeds maxDepth, uncompressedSize exceeds maxEntryBytes, or
+          uncompressedSize/compressedSize exceeds maxCompressionRatio
+        onTrueStep: 11
         onFalseStep: 8
       - stepNumber: 8
         label: vetEnd
@@ -99,14 +102,21 @@ methods:
         description: Reject archives exceeding the aggregate caps.
         type: branch
         condition: approved length exceeds maxEntries, or total exceeds maxTotalUncompressedBytes
-        onTrueStep: 10
-        onFalseStep: 11
+        onTrueStep: 11
+        onFalseStep: 12
       - stepNumber: 10
-        label: reject
-        description: Shared rejection for any failed safety check.
+        label: unsafe
+        description: >-
+          Reject an unsafe entry: a symlink or non-file kind, or an unsafe or escaping path, naming
+          the entry.
         type: throw
-        error: 'reject: unsafe or oversized archive entry (zip-slip / size / ratio / depth guard)'
+        error: PackArchiveError UNSAFE_PATH
       - stepNumber: 11
+        label: limit
+        description: Reject an entry or an archive over a cap, naming the cap and the entry when there is one.
+        type: throw
+        error: PackArchiveError LIMIT_EXCEEDED
+      - stepNumber: 12
         description: Return the PackExtractionPlan (approved paths + total).
         type: return
         outcome: success
@@ -121,7 +131,7 @@ methods:
       - stepNumber: 2
         description: Reject a tampered/mis-assembled archive.
         type: throw
-        error: envelope identity mismatch (envelope name/version differ from the inner pack manifest)
+        error: PackArchiveError IDENTITY_MISMATCH
       - stepNumber: 3
         description: Identity verified.
         type: return
@@ -166,7 +176,7 @@ methods:
         label: mismatch
         description: A digest mismatch means tampering.
         type: throw
-        error: integrity digest mismatch
+        error: PackArchiveError DIGEST_MISMATCH
   - name: sealIntegrity
     narrative:
       - stepNumber: 1
@@ -238,6 +248,37 @@ methods:
         description: Return the digest as sha256-<lowercase hex>
         type: return
         outcome: the content integrity
+  - name: parseInnerManifest
+    sourcePath: sdk/src/codec.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Pick the inner manifest's path: package.json for a code pack, the envelope's entry
+          (pack.yaml) for a declarative pack
+        type: local
+      - stepNumber: 2
+        description: Is it missing among the files?
+        type: branch
+        condition: no file has that path
+        onTrueStep: 5
+        onFalseStep: 3
+      - stepNumber: 3
+        description: 'Parse it: JSON for package.json, YAML for pack.yaml'
+        type: local
+      - stepNumber: 4
+        description: Unparseable or not a mapping?
+        type: branch
+        condition: the text does not parse, or parses to something other than a mapping
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse, naming the path
+        type: throw
+        error: PackArchiveError PACK_MANIFEST_INVALID
+      - stepNumber: 6
+        description: Return the mapping as authored
+        type: return
+        outcome: the inner pack manifest
 status: complete
 createdAt: '2026-07-21T18:25:00.265Z'
-updatedAt: '2026-11-06T23:40:24.839Z'
+updatedAt: '2026-11-07T14:25:01.283Z'

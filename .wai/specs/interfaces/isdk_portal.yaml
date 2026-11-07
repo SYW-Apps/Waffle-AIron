@@ -25,18 +25,28 @@ methods:
       - name: sourceDir
         type: string
   - name: inspectArchive
-    description: Inspect + verify a .wpack archive without extracting it.
-    signature: 'inspectArchive(archive: bytes): PackArchiveInfo'
-    returns: PackArchiveInfo
+    description: >-
+      Inspect a .wpack archive without extracting it: its envelope identity, entry stats and
+      compatibility, with the entries vetted under limits before anything is inflated. Fails with a
+      PackArchiveError.
+    signature: >-
+      inspectArchive(archive: bytes, limits?: pack_extraction_limits): result<PackArchiveInfo,
+      pack_archive_error>
+    returns: result<PackArchiveInfo, pack_archive_error>
     params:
       - name: archive
         type: bytes
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
   - name: extractPack
-    description: Safely extract a .wpack archive into a destination directory under enforced limits.
+    description: >-
+      Safely extract a .wpack archive into a destination directory under enforced limits, after
+      reading it as readPack does. Fails with a PackArchiveError.
     signature: >-
       extractPack(archive: bytes, destDir: string, limits?: pack_extraction_limits):
-      PackExtractionResult
-    returns: PackExtractionResult
+      result<PackExtractionResult, pack_archive_error>
+    returns: result<PackExtractionResult, pack_archive_error>
     params:
       - name: archive
         type: bytes
@@ -110,6 +120,21 @@ methods:
       - name: files
         type: list<pack_file>
         description: The pack's files, paths relative to the pack root
+  - name: readPack
+    description: >-
+      Read a .wpack archive in memory under the extraction guards, writing nothing: its envelope,
+      its parsed inner pack manifest and its integrity-checked files. Fails with a PackArchiveError
+      carrying a stable code.
+    signature: >-
+      readPack(archive: bytes, limits?: pack_extraction_limits): result<pack_contents,
+      pack_archive_error>
+    returns: result<pack_contents, pack_archive_error>
+    params:
+      - name: archive
+        type: bytes
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
 status: complete
 createdAt: '2026-07-21T18:13:58.018Z'
-updatedAt: '2026-11-06T23:40:30.304Z'
+updatedAt: '2026-11-07T14:23:34.047Z'
