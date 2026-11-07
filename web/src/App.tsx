@@ -6,7 +6,6 @@ import { RealtimeProvider } from './realtime';
 import { RealtimeStatus } from './RealtimeStatus';
 import { ToastProvider } from './ui';
 import { HeaderMenu } from './HeaderMenu';
-import { ThemeCog } from './ThemeControls';
 import { Login } from './views/Login';
 import { Home } from './views/Home';
 import { Users } from './views/Users';
@@ -26,7 +25,8 @@ import { ThemeBuilder } from './views/ThemeBuilder';
 import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
 import { DevBanner } from './views/DevBanner';
-import { CommandsPanel, ReviewHost } from './views/DevCockpit';
+import { CockpitProvider, LockInPlaceButton, SettingsCog, useScopeNodes } from './views/DevCockpit';
+import { subsystemOfRoute, subsystemOfSpec } from './views/devCockpitLogic';
 import { Tabs } from './ui';
 import { post, raw } from './api';
 
@@ -111,7 +111,6 @@ function Sidebar(props: { adminVisible: boolean; collapsed: boolean; onToggle: (
 const DEV_TABS = [
   { id: 'canvas', label: 'Canvas' },
   { id: 'specs', label: 'Specs' },
-  { id: 'commands', label: 'Commands' },
 ];
 
 /** `/canvas/[local/]<engine route>` — the local project's live canvas, mounted
@@ -123,8 +122,12 @@ function DevCanvas() {
   const splat = useParams()['*'] ?? '';
   const segments = splat.split('/').filter(Boolean);
   const route = (segments[0] === DEV_PROJECT_ID ? segments.slice(1) : segments).join('/');
+  const nodes = useScopeNodes();
   return (
     <div className="canvas-view">
+      <div className="lock-inplace">
+        <LockInPlaceButton viewSubsystem={subsystemOfRoute(route, nodes)} />
+      </div>
       <CanvasView projectId={DEV_PROJECT_ID} route={route} />
     </div>
   );
@@ -148,8 +151,13 @@ function DevSpecs() {
     const idPath = sel.id.split('::').map(encodeURIComponent).join('/');
     nav(`/specs/${sel.kind}/${idPath}`);
   };
+  const nodes = useScopeNodes();
+  const viewSubsystem = selection ? subsystemOfSpec(selection.kind, selection.id, nodes) : undefined;
   return (
     <div className="view-pad view-pad-wide">
+      <div className="lock-inplace-row">
+        <LockInPlaceButton viewSubsystem={viewSubsystem} />
+      </div>
       <SpecsTab projectId={DEV_PROJECT_ID} selection={selection} onSelectSpec={selectSpec} />
     </div>
   );
@@ -158,9 +166,10 @@ function DevSpecs() {
 function DevShell() {
   const nav = useNavigate();
   const { pathname } = useLocation();
-  const tab = pathname.startsWith('/specs') ? 'specs' : pathname.startsWith('/commands') ? 'commands' : 'canvas';
+  const tab = pathname.startsWith('/specs') ? 'specs' : 'canvas';
 
   return (
+    <CockpitProvider>
     <div className="shell">
       <div className="main-col">
         <header className="topbar dev-bar">
@@ -168,23 +177,22 @@ function DevShell() {
           <span className="dev-tag" title="Local developer server — this project only">
             dev
           </span>
-          <Tabs tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : id === 'commands' ? '/commands' : '/canvas')} />
+          <Tabs tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : '/canvas')} />
           <span className="spacer" />
           <RealtimeStatus />
-          <ThemeCog />
+          <SettingsCog />
         </header>
         <DevBanner />
-        <ReviewHost />
         <main className="view">
           <Routes>
             <Route path="/canvas/*" element={<DevCanvas />} />
             <Route path="/specs/*" element={<DevSpecs />} />
-            <Route path="/commands" element={<CommandsPanel />} />
             <Route path="*" element={<Navigate to="/canvas" replace />} />
           </Routes>
         </main>
       </div>
     </div>
+    </CockpitProvider>
   );
 }
 

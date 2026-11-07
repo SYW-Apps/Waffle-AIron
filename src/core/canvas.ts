@@ -504,19 +504,16 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
   const knownGroups = new Set(groupSpecs.map((g) => g.id));
   const pathOfGroup = new Map(groupSpecs.map((g) => [g.id, groupChain(g, groupSpecs)] as const));
   // Usage trace: every interface method whose params/returns reference a type.
+  // Each method's references are parsed once, not once per type.
+  const methodRefs = interfaces.flatMap((intf) => intf.methods.map((m) => ({ component: intf.component, method: m.name, refs: methodTypeRefs(m) })));
   const usedByFor = (t: (typeof typeSpecs)[number]): { component: string; method: string }[] => {
     const qualified = t.subsystem && !t.id.startsWith(`${t.subsystem}::`) ? `${t.subsystem}::${t.id}` : t.id;
     const seen = new Set<string>();
     const out: { component: string; method: string }[] = [];
-    for (const intf of interfaces) {
-      for (const m of intf.methods) {
-        for (const ref of methodTypeRefs(m)) {
-          if (!matchTypeRef(ref, qualified)) continue;
-          const k = `${intf.component}#${m.name}`;
-          if (!seen.has(k)) { seen.add(k); out.push({ component: intf.component, method: m.name }); }
-          break;
-        }
-      }
+    for (const { component, method, refs } of methodRefs) {
+      if (!refs.some((ref) => matchTypeRef(ref, qualified))) continue;
+      const k = `${component}#${method}`;
+      if (!seen.has(k)) { seen.add(k); out.push({ component, method }); }
     }
     return out;
   };

@@ -31,7 +31,7 @@ import * as shareadmin from './shareadmin.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import * as devCockpit from './dev-commands.js';
-import type { DevCommandResult, DevReviewDecision } from './dev-commands.js';
+import type { DevApproval, DevCommandResult, DevReviewDecision } from './dev-commands.js';
 import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import * as hostNetwork from './adapters/network.js';
@@ -561,6 +561,11 @@ export function decideDevReview(
   notes?: ReviewNote[],
 ): Promise<DevReviewDecision> {
   return devCockpit.decide(cfg, sessionId, id, outcome, comment, notes); // step 1 (call)
+}
+
+/** Forward the session to the dev cockpit orchestrator: the served project's approval state. */
+export function getDevApproval(cfg: HostConfig, sessionId: string): DevApproval {
+  return devCockpit.approval(cfg, sessionId); // step 1 (call)
 }
 
 /** Forward the session and the decoded arguments to the dev cockpit orchestrator: run one command the CLI handed the server. */
@@ -3645,6 +3650,10 @@ export async function handleWebRequest(
     // GET /web/dev/reviews → the pending review requests.
     if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'reviews') {
       return sendJson(res, 200, getDevReviews(cfg, sessionId));
+    }
+    // GET /web/dev/approval → the served project's approval state (the lock bar and the lock confirmation).
+    if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'approval') {
+      return sendJson(res, 200, getDevApproval(cfg, sessionId));
     }
     // POST /web/dev/reviews/decide { id, outcome, comment?, notes? } → { request, lock? }.
     if (cfg.devMode === true && req.method === 'POST' && parts.length === 4 && parts[1] === 'dev' && parts[2] === 'reviews' && parts[3] === 'decide') {

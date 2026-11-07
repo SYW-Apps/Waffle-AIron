@@ -61,6 +61,10 @@ export {
   pendingReviews,
   reviewStatus,
   decideReview,
+  // The dev page's approval state: the bound project's lock record, and what that lock says
+  // about the tree as it stands.
+  approvalRecord,
+  approvalVerdict,
 } from '../../core/index.js';
 
 /**

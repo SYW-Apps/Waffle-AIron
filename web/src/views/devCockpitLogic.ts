@@ -1,0 +1,149 @@
+/**
+ * Pure logic behind the `wairon dev` cockpit's action bar and lock confirmation: when there is something
+ * to approve, which specs moved and which subsystem they belong to. Kept free of React so it is testable
+ * on its own.
+ */
+
+/** What the server's GET /web/dev/approval answers (the DevApproval type). */
+export interface ApprovalVerdictData {
+  text: string;
+  drifted: boolean;
+  moved?: string[];
+}
+export interface DevApprovalData {
+  approved: boolean;
+  approvedAt?: string;
+  approvedBy?: string;
+  verdict: ApprovalVerdictData;
+}
+
+/** The part of a graph node this logic reads. */
+export interface ScopeNode {
+  id: string;
+  kind: string;
+  parentId?: string;
+}
+
+export interface MovedSpec {
+  mark: '~' | '+' | '-';
+  path: string;
+  /** The folder under .wai/specs (components, subsystems, ...) when the path has one. */
+  folder?: string;
+  /** The spec id: the file's base name. */
+  id: string;
+}
+
+/** Parse the verdict's `~ path` / `+ path` / `- path` entries. */
+export function parseMoved(moved: string[] | undefined): MovedSpec[] {
+  const out: MovedSpec[] = [];
+  for (const raw of moved ?? []) {
+    const m = /^([~+-])\s+(.+?)\s*$/.exec(raw);
+    if (!m) continue;
+    // A renamed or relocated entry reads "old -> new": the new place is the spec.
+    const path = m[2].split(' -> ').pop()!.replace(/[\\]/g, '/');
+    const parts = path.split('/');
+    const base = parts[parts.length - 1].replace(/\.(ya?ml|json)$/i, '');
+    const at = parts.lastIndexOf('specs');
+    const folder = at >= 0 && at < parts.length - 2 ? parts[at + 1] : undefined;
+    out.push({ mark: m[1] as MovedSpec['mark'], path, folder, id: base });
+  }
+  return out;
+}
+
+const FOLDER_KIND: Record<string, string> = {
+  subsystems: 'subsystem',
+  components: 'component',
+  interfaces: 'interface',
+  implementations: 'implementation',
+  types: 'type',
+};
+
+/** The subsystem a spec belongs to, walking the graph's parent chain; undefined when the data cannot say. */
+export function subsystemOfSpec(kind: string, id: string, nodes: ScopeNode[]): string | undefined {
+  if (kind === 'subsystem') return nodes.some((n) => n.kind === 'subsystem' && n.id === id) ? id : undefined;
+  const byId = new Map<string, ScopeNode>();
+  for (const n of nodes) if (!byId.has(n.id)) byId.set(n.id, n);
+  let cur = nodes.find((n) => n.kind === kind && n.id === id) ?? byId.get(id);
+  for (let hops = 0; cur && hops < 8; hops++) {
+    if (cur.kind === 'subsystem') return cur.id;
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return undefined;
+}
+
+export interface MovedScope {
+  moved: MovedSpec[];
+  /** The one subsystem every moved spec belongs to; undefined when several, none, or one cannot be placed. */
+  subsystem?: string;
+  /** Every subsystem the placeable moved specs belong to. */
+  subsystems: string[];
+}
+
+/** Which subsystem(s) the moved specs fall in. A spec the data cannot place makes the move whole-design. */
+export function movedScope(moved: string[] | undefined, nodes: ScopeNode[]): MovedScope {
+  const specs = parseMoved(moved);
+  const subs = new Set<string>();
+  let unplaced = false;
+  for (const s of specs) {
+    const kind = s.folder ? FOLDER_KIND[s.folder] : undefined;
+    const sub = kind ? subsystemOfSpec(kind, s.id, nodes) : undefined;
+    if (sub) subs.add(sub);
+    else unplaced = true;
+  }
+  const subsystems = [...subs].sort();
+  return { moved: specs, subsystems, subsystem: !unplaced && subsystems.length === 1 ? subsystems[0] : undefined };
+}
+
+export interface BarState {
+  show: boolean;
+  /** What the bar offers: Review for a pending request, else Lock. */
+  action: 'review' | 'lock' | 'none';
+  /** The line to show. */
+  line: string;
+}
+
+/** Whether the floating bar shows, what it offers and what it says. */
+export function barState(approval: DevApprovalData | undefined, pendingCount: number, pendingKind?: string): BarState {
+  if (pendingCount > 0) {
+    const what = pendingKind === 'lock' ? 'Lock requested' : 'Review requested';
+    return { show: true, action: 'review', line: pendingCount > 1 ? `${what} (${pendingCount} pending)` : what };
+  }
+  if (!approval) return { show: false, action: 'none', line: '' };
+  if (!approval.approved) return { show: true, action: 'lock', line: 'This design has not been locked yet.' };
+  if (approval.verdict.drifted) {
+    const stamp = approval.approvedBy || approval.approvedAt
+      ? `Last locked${approval.approvedBy ? ` by ${approval.approvedBy}` : ''}${approval.approvedAt ? ` ${new Date(approval.approvedAt).toLocaleString()}` : ''}. `
+      : '';
+    const n = approval.verdict.moved?.length ?? 0;
+    return { show: true, action: 'lock', line: `${stamp}${n > 0 ? `${n} spec${n === 1 ? '' : 's'} changed since.` : 'The design changed since.'}` };
+  }
+  return { show: false, action: 'none', line: '' };
+}
+
+/** Whether a Lock action belongs in place (specs / diagrams view). */
+export function offersLockInPlace(approval: DevApprovalData | undefined): boolean {
+  return !!approval && (!approval.approved || approval.verdict.drifted);
+}
+
+/**
+ * The subsystem an in-place Lock is scoped to: the one being looked at, only when it is the only one that
+ * moved. Otherwise the lock is whole-design.
+ */
+export function inPlaceScope(viewSubsystem: string | undefined, scope: MovedScope): string | undefined {
+  return viewSubsystem && scope.subsystem === viewSubsystem ? viewSubsystem : undefined;
+}
+
+/** The subsystem a canvas route is inside: the first route segment naming a known subsystem. */
+export function subsystemOfRoute(route: string, nodes: ScopeNode[]): string | undefined {
+  const subs = new Set(nodes.filter((n) => n.kind === 'subsystem').map((n) => n.id));
+  for (const seg of route.split('/').filter(Boolean)) {
+    const id = decodeURIComponent(seg);
+    if (subs.has(id)) return id;
+  }
+  return undefined;
+}
+
+/** The request body of POST /web/dev/commands for a lock. */
+export function lockBody(subsystem: string | undefined): { command: 'lock'; subsystem?: string } {
+  return subsystem ? { command: 'lock', subsystem } : { command: 'lock' };
+}

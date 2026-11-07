@@ -22,9 +22,20 @@ npm and the tags carry.
   of a version now meets that version as a minimum.
 - **`wairon dev` is the place to approve.** The page follows the design live: a spec an agent writes
   through `wairon mcp serve`, or a lock from the terminal, shows on the open page without a refresh
-  (unsaved edits in an open spec form are kept). A Commands tab runs the CLI's own `lock` (the whole
-  design or one subsystem, with this machine's git identity as approver), `generate` and
-  `doctor --fix`, and shows what they printed.
+  (unsaved edits in an open spec form are kept). The whole page is the cockpit: while there is
+  something to approve (a pending request, or a design that moved since the last lock) a floating bar
+  offers Lock, or Review for a request, and the specs view and the diagrams offer Lock in place. Every
+  lock opens a confirmation that shows what moved, the current warnings and the choice of the whole
+  design or one subsystem, then runs the CLI's own `lock` (with this machine's git identity as
+  approver) and shows what it printed. The header cog opens the settings: appearance, plus
+  `generate` and `doctor --fix` with their output.
+- **Validation is remembered, and the dev page is much faster.** A validation run with the same
+  options is answered from the last one while nothing it reads has changed (the `.wai/` files, each
+  member's `.wai/` files, and the source files the code checks read, compared by size and
+  modification time), so the dev page, the hosted server and an agent's repeated
+  `sdd_validate_tree` no longer run a full validation each time. On a large tree a repeat went from
+  about 40 seconds to under half a second. Building the diagram data no longer re-reads every method
+  signature once per type, which took a repeat canvas load from about 11 seconds to under 2.
 - **An agent asks for a review or a lock instead of the human saying "specs are locked".**
   `sdd_request_review` (`kind: review` for feedback, `kind: lock` for approval, optionally of one
   subsystem) validates first: a design with errors is refused with every finding and nobody is

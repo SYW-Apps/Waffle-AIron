@@ -4,6 +4,8 @@ import { runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import { ForbiddenError, UnauthenticatedError } from './errors.js';
 import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
+import type { ApprovalVerdict } from '../core/approval.js';
+import { describeApprover } from '../models/lock.js';
 import type { HostConfig } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -42,6 +44,18 @@ export interface DevReviewDecision {
   request: ReviewRequest;
   /** The lock's result, when the decision was to lock. */
   lock?: DevCommandResult;
+}
+
+/** The served project's approval state for the dev page: whether it carries a lock, who locked it when, and what the lock says about the tree now. */
+export interface DevApproval {
+  /** Whether the project carries a lock record at all. */
+  approved: boolean;
+  /** When the last lock was taken. */
+  approvedAt?: string;
+  /** Who took the last lock. */
+  approvedBy?: string;
+  /** What the lock says about the tree now: drifted, the moved specs, the line to show. */
+  verdict: ApprovalVerdict;
 }
 
 /** The id of the one project the development server serves. */
@@ -128,6 +142,24 @@ export async function decide(
   const decided = runWithProjectRoot(root, () => hostCore.decideReview(id, outcome, comment, notes));
   // Step 9.
   return lock ? { request: decided, lock } : { request: decided };
+}
+
+/** dev_cockpit_orchestrator.approval — the served project's approval state, which drives the page's lock bar and lock confirmation. */
+export function approval(cfg: HostConfig, sessionId: string): DevApproval {
+  // Steps 1-4: refused outside the local development server; the session authenticated; the served root.
+  const root = servedRoot(cfg, sessionId);
+  return runWithProjectRoot(root, () => {
+    // Step 5: the lock record, for who locked and when.
+    const record = hostCore.approvalRecord();
+    // Step 6: what the lock says about the tree now.
+    const verdict = hostCore.approvalVerdict();
+    // Step 7.
+    if (!record) return { approved: false, verdict };
+    const state: DevApproval = { approved: true, verdict };
+    if (typeof record.lockedAt === 'string' && record.lockedAt !== '') state.approvedAt = record.lockedAt;
+    if (record.lockedBy && record.lockedBy.id && record.lockedBy.id !== 'unknown') state.approvedBy = describeApprover(record.lockedBy);
+    return state;
+  });
 }
 
 /** dev_cockpit_orchestrator.run — one human command the CLI handed the server, and what it printed. */
