@@ -307,12 +307,27 @@ packCmd
     await runPack('build', source, { out: opts.out });
   });
 
+const INSTALL_DESCRIPTION = 'Install a pack into this wairon install\'s store: from the wairon pack registry by name (@scope/pack or @scope/pack@range), or from a .wpack/.zip, a pack directory or a URL. Applies to NOTHING until a project selects it — unless this project selects it floating, then its impact is shown first';
+
+/** `pack install` and its top-level twins `wairon install` / `wairon i`: one action, one set of options. */
+function installOptions(cmd: Command): Command {
+  return cmd
+    .option('-y, --yes', 'install without showing the impact report (an update of a floating selection); not consent to unverified code')
+    .option('--registry', 'read the source as a registry pack name even when a path of that name exists')
+    .option('--allow-unverified-code', 'consent to install a code pack whose publisher is not verified')
+    .action(async (source: string, opts) => {
+      await runPack('install', source, { yes: opts.yes, registry: opts.registry, allowUnverifiedCode: opts.allowUnverifiedCode });
+    });
+}
+
+installOptions(packCmd.command('install <source>').description(INSTALL_DESCRIPTION));
+installOptions(program.command('install <source>').alias('i').description(`${INSTALL_DESCRIPTION} (same as \`wairon pack install\`)`));
+
 packCmd
-  .command('install <source>')
-  .description('Install a pack into this wairon install\'s store (a .wpack/.zip or a pack directory). Applies to NOTHING until a project selects it — unless this project selects it floating, then its impact is shown first')
-  .option('-y, --yes', 'install without showing the impact report (an update of a floating selection)')
-  .action(async (source: string, opts) => {
-    await runPack('install', source, { yes: opts.yes });
+  .command('publish [source]')
+  .description('Publish a pack directory (built first) or a .wpack archive to the wairon pack registry, with the token in WAIRON_REGISTRY_TOKEN')
+  .action(async (source: string | undefined) => {
+    await runPack('publish', source);
   });
 
 packCmd
@@ -343,8 +358,9 @@ packCmd
 packCmd
   .command('sync')
   .description('Install every declared-but-missing pack from the source its selection records — the one command a fresh machine or CI runner needs')
-  .action(async () => {
-    await runPack('sync');
+  .option('--allow-unverified-code', 'consent to registry code packs from unverified publishers whose selection pins no integrity')
+  .action(async (opts) => {
+    await runPack('sync', undefined, { allowUnverifiedCode: opts.allowUnverifiedCode });
   });
 
 packCmd

@@ -6,6 +6,21 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **Install packs by name from the wairon pack registry.** `wairon pack install @scope/pack` (also
+  `wairon install` and `wairon i`, with an optional `@range`) resolves the name to one exact version
+  in the registry, checks the installed content against the integrity the registry reports, and
+  records the registry as the pack's source, so `pack use --pin` and `pack sync` work on any machine.
+  A code pack from a publisher who is not verified is installed only after
+  `--allow-unverified-code` or a yes to the question (`-y` is not that consent); `pack sync` asks the
+  same for a selection without an integrity pin. `wairon pack publish` uploads a pack with the token
+  in `WAIRON_REGISTRY_TOKEN`. `WAIRON_REGISTRY` points at another registry. A name that is also a
+  folder in the current directory still installs the folder; `--registry` picks the registry pack.
+- **Scoped pack names.** A pack named `@scope/pack` installs under `@scope/pack/<version>/` in the
+  store; its finding codes read `SCOPE__PACK_<CODE>` and its skill ids `scope__pack-<skill>`, so a
+  scoped pack never collides with a flat one. Flat names keep their codes and ids.
+- Pack manifests may carry `description`, `homepage`, `repository` and `license`.
+- `@wairon/sdk` exports `packContentDigest(files)`: the content integrity wairon pins, computed by the
+  one implementation the registry uses too.
 - **Practices.** A pack can declare practices: ways of working or priorities (tests first, build
   only what has a caller, a security review before approval). A project selects them in
   `.wai/project.yaml` under `practices`, for the whole project (`use`), per subsystem, per component

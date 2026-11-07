@@ -20,6 +20,7 @@ import {
   buildPack,      // build an installable .wpack from a pack directory
   inspectArchive, // inspect + version-check a .wpack without extracting
   extractPack,    // SAFELY extract a .wpack under enforced limits
+  packContentDigest, // the content integrity (sha256-<hex>) wairon pins, over a pack's files
 } from '@wairon/sdk';
 ```
 

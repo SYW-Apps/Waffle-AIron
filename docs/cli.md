@@ -1094,7 +1094,8 @@ rules (see [Extending wairon](extending-wairon.md)).
 |---------|-------------|
 | `wairon pack init <name> [--kind declarative\|code] [--dir <path>] [--skill]` | Scaffold a new pack project |
 | `wairon pack build [source] [--out <file>]` | Build an installable `.wpack` archive from a pack directory |
-| `wairon pack install <source> [-y]` | Install a pack (`.wpack`/`.zip` or a directory) into this machine's pack store. It applies to nothing until a project selects it |
+| `wairon pack install <source> [-y] [--registry] [--allow-unverified-code]` | Install a pack into this machine's pack store: from the wairon pack registry by name (`@scope/pack`, `@scope/pack@^1.2`), or from a `.wpack`/`.zip`, a directory or a URL. It applies to nothing until a project selects it. `wairon install` and `wairon i` do the same. A code pack from a publisher who is not verified needs `--allow-unverified-code` or a yes to the question; `-y` is not that consent |
+| `wairon pack publish [source]` | Publish a pack directory (built first) or a `.wpack` to the wairon pack registry, with the token in `WAIRON_REGISTRY_TOKEN` |
 | `wairon pack uninstall <name>[@version]` | Remove a pack from the store |
 | `wairon pack use <name>[@version] [--source <url>] [--pin] [--bundle] [-y]` | Select an installed pack for this project, recorded in `.wai/project.yaml` |
 | `wairon pack unuse <name> [-y]` | Deselect a pack for this project (it stays installed) |

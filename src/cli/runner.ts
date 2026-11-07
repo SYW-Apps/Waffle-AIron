@@ -29,7 +29,7 @@ import { recover as recoverMigrations } from '../commands/adapters/migrations.js
 import { listRules } from '../commands/rules.js';
 import { listPatterns } from '../commands/patterns.js';
 import { listVariants } from '../commands/adapters/variants.js';
-import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks, impactPack, type PackCommandOptions } from '../commands/packs.js';
+import { addPack, listPacks, removePack, initPack, buildPack, installPack, publishPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks, impactPack, type PackCommandOptions } from '../commands/packs.js';
 import {
   resolveTarget,
   validateAttached,
@@ -325,15 +325,16 @@ export async function runPack(
   else if (action === 'add') await addPack(arg!, options.global, options.yes);
   else if (action === 'list') listPacks();
   else if (action === 'remove') await removePack(arg!, options.global, options.yes);
-  else if (action === 'install') await installPack(arg!, options.yes);
+  else if (action === 'install') await installPack(arg!, options.yes, { registry: options.registry, allowUnverifiedCode: options.allowUnverifiedCode });
+  else if (action === 'publish') await publishPack(arg);
   else if (action === 'uninstall') uninstallStorePack(arg!);
   else if (action === 'which') whichPack(arg!);
   else if (action === 'use') await usePack(arg!, { source: options.source, bundle: options.bundle, pin: options.pin, yes: options.yes });
   else if (action === 'unuse') await unusePack(arg!, options.yes);
   else if (action === 'bundle') bundlePack(arg, { all: options.all });
-  else if (action === 'sync') await syncPacks();
+  else if (action === 'sync') await syncPacks(options.allowUnverifiedCode);
   else if (action === 'impact') impactPack(arg!);
-  else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | impact | bundle | sync | add | list | remove)');
+  else throw new WaironError('unknown pack action (expected init | build | install | publish | uninstall | which | use | unuse | impact | bundle | sync | add | list | remove)');
 }
 
 // ---------------------------------------------------------------------------

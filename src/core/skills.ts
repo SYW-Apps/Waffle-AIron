@@ -30,7 +30,11 @@ function packSkillId(skill: LoadedPackSkill): string {
 
 /** A pack's name reduced to an id-safe namespace. */
 function packNamespace(pack: string): string {
-  return pack.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const slug = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  // A scoped name keeps its scope apart with a double underscore, so
+  // `@acme/sec-lint` (acme__sec-lint) never shares a namespace with a flat `acme-sec-lint`.
+  const scoped = /^@([^/]+)\/(.+)$/.exec(pack);
+  return scoped ? `${slug(scoped[1])}__${slug(scoped[2])}` : slug(pack);
 }
 
 // ---------------------------------------------------------------------------

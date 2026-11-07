@@ -196,6 +196,20 @@ function storeEntryPacks(store: string, entry: files.DirEntry): InstalledPack[] 
   }
   if (!entry.isDirectory()) return [];
 
+  // A scoped name (`@scope/pack`) is stored nested: a top-level `@` folder is a
+  // scope, and each folder in it is a pack name read like a top-level one.
+  if (entry.name.startsWith('@')) {
+    let scoped: files.DirEntry[];
+    try {
+      scoped = files.listEntries(full);
+    } catch {
+      return [];
+    }
+    return scoped
+      .filter((inner) => inner.isDirectory())
+      .flatMap((inner) => versionedEntries(path.join(full, inner.name), `${entry.name}/${inner.name}`));
+  }
+
   const directEntry = packDirEntry(full);
   if (directEntry) return [installedFrom(full, declaredName(directEntry) ?? entry.name, UNVERSIONED)];
 

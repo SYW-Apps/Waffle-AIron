@@ -264,15 +264,30 @@ export type PackAssertion = z.infer<typeof PackAssertionSchema>;
 /** A pack assertion tagged with provenance and its namespaced finding code. */
 export type LoadedAssertion = PackAssertion & { pack: string; fullCode: string };
 
-/** <PACK_NAME>_<CODE>, upper-snake, non-alphanumerics collapsed — collision-free across packs, provenance legible in every finding. */
+/**
+ * <PACK_NAME>_<CODE>, upper-snake, non-alphanumerics collapsed — collision-free
+ * across packs, provenance legible in every finding. The scope of a scoped name
+ * is written with a double underscore (`@acme/sec-lint` → `ACME__SEC_LINT_<CODE>`),
+ * so it never collides with a flat `acme-sec-lint`; a flat name is unchanged.
+ */
 export function assertionFullCode(packName: string, code: string): string {
   const norm = (s: string): string => s.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  return `${norm(packName)}_${norm(code)}`;
+  const scoped = /^@([^/]+)\/(.+)$/.exec(packName);
+  const prefix = scoped ? `${norm(scoped[1])}__${norm(scoped[2])}` : norm(packName);
+  return `${prefix}_${norm(code)}`;
 }
 
 export const DeclarativePackSchema = z.object({
   name: z.string().min(1),
   version: z.string().optional(),
+  /** One line saying what the pack is for, shown where packs are listed. */
+  description: z.string().min(1).optional(),
+  /** The pack's home page URL. */
+  homepage: z.string().min(1).optional(),
+  /** The URL of the pack's source repository. */
+  repository: z.string().min(1).optional(),
+  /** The pack's license, as an SPDX identifier. */
+  license: z.string().min(1).optional(),
   profiles: z.record(z.string(), ProfileDefSchema).default({}),
   languages: z.record(z.string(), LanguagePackDefSchema).default({}),
   skills: z.array(PackSkillSchema).default([]),
@@ -537,7 +552,10 @@ export function discoverPacks(dir: string): string[] {
   const refs: string[] = [];
   for (const e of entries.sort((a, b) => compareOrdinal(a.name, b.name))) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) {
+    if (e.isDirectory() && e.name.startsWith('@')) {
+      // A scope folder (`@scope/pack/<version>/`): each pack in it, latest version.
+      refs.push(...discoverPacks(full).filter((ref) => !/\.(ya?ml|cjs|js)$/i.test(ref)));
+    } else if (e.isDirectory()) {
       if (packDirEntry(full)) refs.push(full);
       else {
         const latest = latestVersionDir(full);
@@ -683,6 +701,10 @@ export function readManifest(target: string, resolveFrom: string): ExtensionPack
   const parsed = DeclarativePackSchema.parse({
     name: mod.name ?? target,
     version: mod.version,
+    description: mod.description,
+    homepage: mod.homepage,
+    repository: mod.repository,
+    license: mod.license,
     profiles: mod.profiles ?? {},
     languages: mod.languages ?? {},
     skills: mod.skills ?? [],

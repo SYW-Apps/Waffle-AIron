@@ -1,9 +1,11 @@
 import * as orchestrator from './orchestrator.js';
+import * as codec from './codec.js';
 import type {
   PackArchiveInfo,
   PackBuildResult,
   PackExtractionLimits,
   PackExtractionResult,
+  PackFile,
   PackScaffoldRequest,
   TreeArchiveInfo,
   TreeBuildResult,
@@ -28,6 +30,16 @@ export function scaffoldPack(request: PackScaffoldRequest): string[] {
 export function buildPack(sourceDir: string): PackBuildResult {
   // Step 1: forward to the SDK orchestrator.
   return orchestrator.buildPack(sourceDir);
+}
+
+/**
+ * A pack's content integrity (`sha256-<hex>`) over its files as extracted —
+ * the digest project.yaml pins and a registry publishes, one implementation
+ * for every consumer.
+ */
+export function packContentDigest(files: readonly PackFile[]): string {
+  // Step 1: forward to the pack codec.
+  return codec.contentDigest(files);
 }
 
 /** Inspect + verify a .wpack archive without extracting it. */
