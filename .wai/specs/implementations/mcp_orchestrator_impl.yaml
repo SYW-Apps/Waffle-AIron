@@ -1093,16 +1093,36 @@ methods:
   - name: requestReview
     narrative:
       - stepNumber: 1
+        description: >-
+          Gate the request on validation first, so the human is only ever asked to review a design
+          that validates: a lock request validates as the lock will (treatAllAsComplete, the bound
+          project's family), a review request as the tree stands
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: validateFamily
+      - stepNumber: 2
+        description: Does it have errors?
+        type: branch
+        condition: the validation reports any error
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse without recording or showing anything: answer every error, so the agent fixes them
+          and asks again
+        type: return
+        outcome: refused; nothing recorded
+      - stepNumber: 4
         description: Record the request through the core client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: requestReview
-      - stepNumber: 2
+      - stepNumber: 5
         description: >-
-          Shape the answer: the request id and kind; when a dev server runs, its URL and that the
-          page shows the request now; otherwise that no dev server runs for this project, so the
-          agent should ask the human to open `wairon dev` or run `wairon lock`; and that
-          sdd_await_review waits for the answer
+          Shape the answer: the request id and kind; the warnings the validation reported, which do
+          not block (as they do not block `wairon lock`) but should be fixed or explained in the
+          note; when a dev server runs, its URL and that the page shows the request now; otherwise
+          that no dev server runs for this project, so the agent should ask the human to open
+          `wairon dev` or run `wairon lock`; and that sdd_await_review waits for the answer
         type: return
         outcome: the receipt
     symbol: sdd_request_review
@@ -1146,4 +1166,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-07T02:45:43.100Z'
+updatedAt: '2026-11-07T02:48:00.685Z'

@@ -1632,8 +1632,9 @@ methods:
       (dev_cockpit_orchestrator.reviews). Mounted only under devMode. CLIENT CONTRACT: the app reads
       this on start and on every `reviews` realtime nudge; a new pending request pops up a notice
       wherever the human is, opening the review screen — the agent's note, every spec changed since
-      the last approval (sdd_get_status), a comment box and a note box per spec — with Lock (a lock
-      request), Approve (a review request) and Request changes.
+      the last approval (sdd_get_status), the current warnings (sdd_validate_tree; a request with
+      errors is never made), a comment box and a note box per spec — with Lock (a lock request),
+      Approve (a review request) and Request changes.
     signature: 'getDevReviews(sessionId: string): list<ReviewRequest>'
     returns: list<ReviewRequest>
     params:
@@ -1692,4 +1693,4 @@ methods:
       path: /web/dev/commands
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-07T02:42:55.670Z'
+updatedAt: '2026-11-07T02:48:09.751Z'

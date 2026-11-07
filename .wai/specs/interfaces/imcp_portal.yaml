@@ -1434,11 +1434,13 @@ methods:
     description: >-
       Tool: ask the human to review the design (`kind: review`) or to approve it with a lock (`kind:
       lock`, optionally of one subsystem), with a note saying what changed and what to look at. It
-      never locks: the human decides, in the `wairon dev` page (which shows the request at once when
-      it runs) or by running `wairon lock`. Answers the request id, and the dev page's URL when one
-      runs, else that the human should open `wairon dev` or lock in the terminal. Wait for the
-      answer with sdd_await_review. On a hosted server a lock request is the hosted approval
-      request.
+      validates first: a design with errors is refused with every error and nothing is shown to the
+      human (a lock request is validated as the lock will validate it), so the human only ever
+      reviews a design that validates; warnings are answered but do not block. It never locks: the
+      human decides, in the `wairon dev` page (which shows the request at once when it runs) or by
+      running `wairon lock`. Answers the request id, and the dev page's URL when one runs, else that
+      the human should open `wairon dev` or lock in the terminal. Wait for the answer with
+      sdd_await_review. On a hosted server a lock request is the hosted approval request.
     signature: 'requestReview(kind: string, note: string, subsystem?: string): ReviewReceipt'
     returns: ReviewReceipt
     params:
@@ -1479,4 +1481,4 @@ methods:
       method: tools/call sdd_await_review
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T02:39:36.953Z'
+updatedAt: '2026-11-07T02:48:06.212Z'
