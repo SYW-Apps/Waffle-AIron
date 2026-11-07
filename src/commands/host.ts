@@ -540,7 +540,7 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   try { runWithProjectRoot(cwd, () => announceDevServer(url, process.pid)); } catch { /* an unwritable announcement never stops the server */ }
 
   logger.blank();
-  logger.info('The page follows the specs live and shows an agent's review and lock requests. Press Ctrl+C to stop.');
+  logger.info("The page follows the specs live and shows an agent's review and lock requests. Press Ctrl+C to stop.");
 
   if (options.open) openBrowser(url);
 
