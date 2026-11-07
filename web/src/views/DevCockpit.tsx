@@ -1,101 +1,300 @@
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { asList, get, mcpCall, post } from '../api';
 import { AsyncButton, AsyncView, Badge, Button, ErrorNote, Field, Modal, Select, Spinner, useAsync, useToast } from '../ui';
-import type { DevCommandResult, DevReviewDecision, ReviewNote, ReviewRequest, ReviewStatus } from '../types';
+import { ThemeSections } from '../ThemeControls';
+import type { DevCommandResult, DevReviewDecision, DevStatus, ReviewNote, ReviewRequest, ReviewStatus } from '../types';
+import {
+  barState,
+  inPlaceScope,
+  lockBody,
+  movedScope,
+  offersLockInPlace,
+  parseMoved,
+  type DevApprovalData,
+  type MovedScope,
+  type ScopeNode,
+} from './devCockpitLogic';
 
 /**
  * The `wairon dev` cockpit, browser side. Mounted only by the local dev shell (the session context says
- * `local`), because the server mounts /web/dev/reviews, /web/dev/reviews/decide and /web/dev/commands only
- * under dev mode.
+ * `local`), because the server mounts the /web/dev/* routes only under dev mode. The whole page is the cockpit:
  *
- *  - ReviewHost: reads the pending review requests on load and on every `reviews` realtime nudge, pops up a
- *    non-blocking notice for a pending request and opens the review screen from it.
- *  - ReviewScreen: the agent's note, the specs changed since the last approval, the current validation
- *    findings, a comment box, a note box per changed spec, and Lock / Approve / Request changes.
- *  - CommandsPanel: the CLI's own lock (whole design or one subsystem), generate and doctor --fix.
+ *  - CockpitProvider: reads the approval state (GET /web/dev/approval) and the pending review requests on
+ *    load and on every `project:<id>` / `reviews` realtime nudge (no polling), and shows the floating action
+ *    bar on every view while there is something to approve: Lock, or Review for a pending request.
+ *  - LockModal: every lock is confirmed here - what moved since the last lock, the current warnings, whole
+ *    design or one subsystem - then runs and shows the output. Nothing locks without the confirm.
+ *  - ReviewScreen: the agent's note, the specs changed since the last lock, the warnings, notes, and
+ *    Lock / Approve / Request changes.
+ *  - LockInPlaceButton: the Lock action the specs and diagrams views carry.
+ *  - SettingsCog: the header cog; appearance, plus Generate and Doctor --fix.
  */
 
 const DEV_PROJECT_ID = 'local';
-
-/** One spec changed since the last approval, as `sdd_get_status` names it. */
-interface ChangedSpec {
-  /** The id a note is pinned to: the spec file's base name. */
-  specId: string;
-  /** What the status printed for it (a project-relative path). */
-  path: string;
-}
-
-/**
- * Pull the changed specs out of sdd_get_status' prose. Its approval section lists them as two-space
- * indented lines under a "... since approval" / "differ in bytes" headline. The list can be cut ("... and N
- * more"), so the screen also shows the section itself and lets a note be pinned to any spec id.
- */
-function parseChangedSpecs(status: string): { specs: ChangedSpec[]; section: string } {
-  const lines = status.split(/\r?\n/);
-  const start = lines.findIndex((l) => /\d+ specs? .*(since approval|differ)/.test(l));
-  if (start < 0) return { specs: [], section: '' };
-  const section: string[] = [lines[start].trim()];
-  const specs: ChangedSpec[] = [];
-  for (let i = start + 1; i < lines.length; i++) {
-    const l = lines[i];
-    if (!/^\s{2}\S/.test(l)) break;
-    section.push(l);
-    const m = /^\s{2}(?:[~+-]\s+)?(\S.*?)\s*$/.exec(l);
-    if (m && !m[1].startsWith('…')) {
-      const path = m[1];
-      const base = path.split(/[\\/]/).pop() ?? path;
-      specs.push({ specId: base.replace(/\.(ya?ml|json)$/i, ''), path });
-    }
-  }
-  return { specs, section: section.join('\n') };
-}
 
 interface Findings {
   errors: any[];
   warnings: any[];
 }
 
-// ── Listing + popup ──────────────────────────────────────────────────────────
+interface Cockpit {
+  approval?: DevApprovalData;
+  nodes: ScopeNode[];
+  scope: MovedScope;
+  /** Open the lock confirmation; `subsystem` preselects the scope. */
+  openLock: (subsystem?: string) => void;
+}
 
-export function ReviewHost() {
+const CockpitContext = createContext<Cockpit | null>(null);
+
+function useCockpit(): Cockpit {
+  const c = useContext(CockpitContext);
+  if (!c) throw new Error('useCockpit outside CockpitProvider');
+  return c;
+}
+
+// ── Provider, bar ────────────────────────────────────────────────────────────
+
+export function CockpitProvider(props: { children: ReactNode }) {
+  const approvalState = useAsync<DevApprovalData | null>(
+    () => get<DevApprovalData>('/web/dev/approval').catch(() => null),
+    [],
+    [`project:${DEV_PROJECT_ID}`, 'reviews'],
+  );
   const reviews = useAsync<ReviewRequest[]>(
     async () => asList<ReviewRequest>(await get('/web/dev/reviews'), 'reviews'),
     [],
     ['reviews'],
   );
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
-
+  const approval = approvalState.data ?? undefined;
   const pending = (reviews.data ?? []).filter((r) => r.status === 'pending');
-  const open = openId ? pending.find((r) => r.id === openId) : undefined;
-  const popup = pending.find((r) => r.id !== openId && !dismissed.has(r.id));
 
+  // The spec tree is only needed to place moved specs in a subsystem, i.e. while something moved.
+  const need = !!approval && (!approval.approved || approval.verdict.drifted);
+  const graph = useAsync<{ nodes: ScopeNode[] }>(
+    async () => (need ? get<{ nodes: ScopeNode[] }>(`/web/graph?tier=project&projectId=${DEV_PROJECT_ID}&level=4`) : { nodes: [] }),
+    [need],
+    need ? [`project:${DEV_PROJECT_ID}`] : [],
+  );
+  const nodes = useMemo(() => graph.data?.nodes ?? [], [graph.data]);
+  const scope = useMemo(() => movedScope(approval?.verdict.moved, nodes), [approval, nodes]);
+
+  const [lock, setLock] = useState<{ subsystem?: string } | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const open = openId ? pending.find((r) => r.id === openId) : undefined;
   // A request decided elsewhere (the terminal's lock) leaves the pending list: close its screen.
   useEffect(() => {
     if (openId && reviews.data && !open) setOpenId(null);
   }, [openId, reviews.data, open]);
 
+  const ctx: Cockpit = { approval, nodes, scope, openLock: (subsystem) => setLock({ subsystem }) };
+  const bar = barState(approval, pending.length, pending[0]?.kind);
+
   return (
-    <>
-      {popup && !open && (
-        <div className="review-popup" role="status">
-          <div className="review-popup-head">
-            <strong>{popup.kind === 'lock' ? 'Lock requested' : 'Review requested'}</strong>
-            {pending.length > 1 && <Badge tone="neutral">{pending.length} pending</Badge>}
+    <CockpitContext.Provider value={ctx}>
+      {props.children}
+      {bar.show && !open && !lock && (
+        <div className="cockpit-bar" role="status">
+          <div className="cockpit-bar-text">
+            <strong>{bar.line}</strong>
+            {bar.action === 'review' && pending[0] && <span className="dim"> {pending[0].note}</span>}
+            {bar.action !== 'review' && approval?.verdict.text && approval.verdict.drifted && (
+              <span className="dim"> {firstLine(approval.verdict.text)}</span>
+            )}
           </div>
-          <p className="review-popup-note">{popup.note}</p>
-          <div className="row-actions">
-            <Button size="sm" variant="ghost" onClick={() => setDismissed((s) => new Set(s).add(popup.id))}>
-              Later
-            </Button>
-            <Button size="sm" variant="primary" onClick={() => setOpenId(popup.id)}>
+          {bar.action === 'review' && pending[0] ? (
+            <Button size="sm" variant="primary" onClick={() => setOpenId(pending[0].id)}>
               Review
             </Button>
-          </div>
+          ) : (
+            <Button size="sm" variant="primary" onClick={() => ctx.openLock(scope.subsystem)}>
+              Lock
+            </Button>
+          )}
         </div>
       )}
-      {open && <ReviewScreen request={open} onClose={() => setOpenId(null)} onDecided={() => reviews.reload()} />}
-    </>
+      {open && (
+        <ReviewScreen
+          request={open}
+          onClose={() => setOpenId(null)}
+          onDecided={() => {
+            reviews.reload();
+            approvalState.reload();
+          }}
+        />
+      )}
+      {lock && (
+        <LockModal
+          initialSubsystem={lock.subsystem}
+          run={async (subsystem) => {
+            const res = await post<DevCommandResult>('/web/dev/commands', lockBody(subsystem));
+            approvalState.reload();
+            reviews.reload();
+            return res;
+          }}
+          onClose={() => setLock(null)}
+        />
+      )}
+    </CockpitContext.Provider>
+  );
+}
+
+function firstLine(text: string): string {
+  return text.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) ?? '';
+}
+
+// ── Lock in place ────────────────────────────────────────────────────────────
+
+/**
+ * The Lock action of the specs and diagrams views. Shows only while the design is unlocked or moved; scoped
+ * to `viewSubsystem` when that is the only subsystem that moved, otherwise a whole-design lock. The
+ * confirmation still lets the human change the scope.
+ */
+export function LockInPlaceButton(props: { viewSubsystem?: string }) {
+  const { approval, scope, openLock } = useCockpit();
+  if (!offersLockInPlace(approval)) return null;
+  const sub = inPlaceScope(props.viewSubsystem, scope);
+  return (
+    <Button size="sm" variant="primary" title={sub ? `Approve ${sub}` : 'Approve the whole design'} onClick={() => openLock(sub)}>
+      {sub ? `Lock ${sub}` : 'Lock'}
+    </Button>
+  );
+}
+
+/** The spec-tree nodes the cockpit holds (loaded while something moved), for placing a view in a subsystem. */
+export function useScopeNodes(): ScopeNode[] {
+  return useCockpit().nodes;
+}
+
+// ── Lock confirmation ────────────────────────────────────────────────────────
+
+export function LockModal(props: {
+  initialSubsystem?: string;
+  /** Pin the scope (a lock request that names its subsystem). */
+  fixedSubsystem?: string;
+  run: (subsystem?: string) => Promise<DevCommandResult>;
+  onClose: () => void;
+  /** Called when the modal is closed after a lock that succeeded. */
+  onLocked?: () => void;
+}) {
+  const { approval, nodes } = useCockpit();
+  const [subsystem, setSubsystem] = useState(props.fixedSubsystem ?? props.initialSubsystem ?? '');
+  const [phase, setPhase] = useState<'confirm' | 'running' | 'done'>('confirm');
+  const [result, setResult] = useState<DevCommandResult | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const findings = useAsync<Findings>(async () => {
+    const r = await mcpCall<Findings>(DEV_PROJECT_ID, 'sdd_validate_tree', {});
+    return { errors: r.errors ?? [], warnings: r.warnings ?? [] };
+  }, []);
+  const moved = parseMoved(approval?.verdict.moved);
+  const subsystems = nodes.filter((n) => n.kind === 'subsystem').map((n) => n.id).sort();
+  if (subsystem && !subsystems.includes(subsystem)) subsystems.push(subsystem);
+
+  async function confirm() {
+    setPhase('running');
+    setFailure(null);
+    try {
+      setResult(await props.run(subsystem || undefined));
+    } catch (e) {
+      setFailure(e instanceof Error ? e.message : String(e));
+    }
+    setPhase('done');
+  }
+  const close = () => {
+    if (phase === 'running') return;
+    if (result?.ok) props.onLocked?.();
+    props.onClose();
+  };
+
+  return (
+    <Modal
+      wide
+      title={subsystem ? `Lock ${subsystem}` : 'Lock the design'}
+      onClose={close}
+      footer={
+        <>
+          <Button onClick={close} disabled={phase === 'running'}>
+            {phase === 'done' ? 'Close' : 'Cancel'}
+          </Button>
+          {phase !== 'done' && (
+            <Button variant="primary" onClick={confirm} disabled={phase === 'running'}>
+              {phase === 'running' ? <Spinner inline /> : 'Confirm lock'}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="stack-lg">
+        {phase === 'confirm' && (
+          <>
+            <p className="hint">
+              Locking approves the design as it is now and records your git identity as the approver. Nothing is locked
+              until you confirm.
+              {approval?.approvedAt
+                ? ` Last locked ${approval.approvedBy ? `by ${approval.approvedBy} ` : ''}${new Date(approval.approvedAt).toLocaleString()}.`
+                : ''}
+            </p>
+            <Field label="Scope">
+              <Select
+                value={subsystem}
+                disabled={!!props.fixedSubsystem}
+                onChange={setSubsystem}
+                options={[{ value: '', label: 'Whole design' }, ...subsystems.map((s) => ({ value: s, label: `Subsystem ${s}` }))]}
+              />
+            </Field>
+            <section className="stack-sm">
+              <h4>Changed since the last lock</h4>
+              {moved.length === 0 ? (
+                <p className="hint">{approval?.approved ? 'No spec has changed since the last lock.' : 'The design has no lock yet.'}</p>
+              ) : (
+                <pre className="cmd-output">{moved.map((m) => `${m.mark} ${m.path}`).join('\n')}</pre>
+              )}
+            </section>
+            <section className="stack-sm">
+              <h4>Current findings</h4>
+              <FindingsList state={findings} />
+            </section>
+          </>
+        )}
+        {phase === 'running' && (
+          <p>
+            <Spinner inline /> Running the lock...
+          </p>
+        )}
+        {phase === 'done' && (
+          <section className="stack-sm">
+            {failure ? (
+              <ErrorNote>{failure}</ErrorNote>
+            ) : (
+              <h4>
+                lock <Badge tone={result?.ok ? 'ok' : 'bad'}>{result?.ok ? 'locked' : 'failed'}</Badge>
+              </h4>
+            )}
+            {result && <pre className="cmd-output">{result.output.join('\n') || '(no output)'}</pre>}
+          </section>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function FindingsList(props: { state: ReturnType<typeof useAsync<Findings>> }) {
+  return (
+    <AsyncView state={props.state}>
+      {(f) => (
+        <>
+          <p>
+            <Badge tone={f.errors.length ? 'bad' : 'ok'}>{f.errors.length} errors</Badge>{' '}
+            <Badge tone={f.warnings.length ? 'warn' : 'ok'}>{f.warnings.length} warnings</Badge>
+          </p>
+          {[...f.errors, ...f.warnings].slice(0, 30).map((i, n) => (
+            <div key={n} className="review-finding">
+              {i.code ? <code className="subtle">{i.code}</code> : null} {i.specId ? <code>{i.specId}</code> : null} {i.message}
+            </div>
+          ))}
+        </>
+      )}
+    </AsyncView>
   );
 }
 
@@ -104,15 +303,8 @@ export function ReviewHost() {
 function ReviewScreen(props: { request: ReviewRequest; onClose: () => void; onDecided: () => void }) {
   const { request } = props;
   const toast = useToast();
+  const { approval } = useCockpit();
   const isLock = request.kind === 'lock';
-  const status = useAsync<string>(
-    async () => {
-      const r = await mcpCall<unknown>(DEV_PROJECT_ID, 'sdd_get_status', {});
-      return typeof r === 'string' ? r : JSON.stringify(r);
-    },
-    [request.id],
-    [`project:${DEV_PROJECT_ID}`],
-  );
   const findings = useAsync<Findings>(
     async () => {
       const r = await mcpCall<Findings>(DEV_PROJECT_ID, 'sdd_validate_tree', {});
@@ -121,226 +313,211 @@ function ReviewScreen(props: { request: ReviewRequest; onClose: () => void; onDe
     [request.id],
     [`project:${DEV_PROJECT_ID}`],
   );
-  const changed = useMemo(() => parseChangedSpecs(status.data ?? ''), [status.data]);
+  const moved = parseMoved(approval?.verdict.moved);
 
   const [comment, setComment] = useState('');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [extraId, setExtraId] = useState('');
-  const [lockOutput, setLockOutput] = useState<DevCommandResult | null>(null);
+  const [lockOpen, setLockOpen] = useState(false);
 
-  const noteIds = [...new Set([...changed.specs.map((s) => s.specId), ...Object.keys(notes)])];
+  const noteIds = [...new Set([...moved.map((s) => s.id), ...Object.keys(notes)])];
 
-  async function decide(outcome: ReviewStatus) {
+  function decideBody(outcome: ReviewStatus) {
     const pinned: ReviewNote[] = Object.entries(notes)
       .map(([specId, note]) => ({ specId, note: note.trim() }))
       .filter((n) => n.note.length > 0);
     const body: { id: string; outcome: ReviewStatus; comment?: string; notes?: ReviewNote[] } = { id: request.id, outcome };
     if (comment.trim()) body.comment = comment.trim();
     if (pinned.length > 0) body.notes = pinned;
-    const res = await post<DevReviewDecision>('/web/dev/reviews/decide', body);
-    if (res.lock && !res.lock.ok) {
-      // The lock failed: the request stays pending and the human sees what the lock printed.
-      setLockOutput(res.lock);
-      props.onDecided();
-      return;
-    }
-    toast.ok(outcome === 'locked' ? 'Locked' : outcome === 'approved' ? 'Approved' : 'Changes requested');
+    return body;
+  }
+
+  async function decide(outcome: ReviewStatus) {
+    await post<DevReviewDecision>('/web/dev/reviews/decide', decideBody(outcome));
+    toast.ok(outcome === 'approved' ? 'Approved' : 'Changes requested');
     props.onDecided();
     props.onClose();
   }
 
   return (
-    <Modal
-      wide
-      title={isLock ? 'Lock request' : 'Review request'}
-      onClose={props.onClose}
-      footer={
-        <>
-          <AsyncButton variant="danger" action={() => decide('changes_requested')} onError={toast.bad}>
-            Request changes
-          </AsyncButton>
-          {isLock ? (
-            <AsyncButton variant="primary" action={() => decide('locked')} onError={toast.bad}>
-              {request.subsystem ? `Lock ${request.subsystem}` : 'Lock'}
+    <>
+      <Modal
+        wide
+        title={isLock ? 'Lock request' : 'Review request'}
+        onClose={props.onClose}
+        footer={
+          <>
+            <AsyncButton variant="danger" action={() => decide('changes_requested')} onError={toast.bad}>
+              Request changes
             </AsyncButton>
-          ) : (
-            <AsyncButton variant="primary" action={() => decide('approved')} onError={toast.bad}>
-              Approve
-            </AsyncButton>
-          )}
-        </>
-      }
-    >
-      <div className="stack-lg">
-        <section className="stack-sm">
-          <h4>The agent's note</h4>
-          <p className="review-note">{request.note}</p>
-          <p className="hint">
-            Requested {new Date(request.requestedAt).toLocaleString()}
-            {request.subsystem ? ` · subsystem ${request.subsystem}` : ''}
-          </p>
-        </section>
-
-        {lockOutput && (
+            {isLock ? (
+              <Button variant="primary" onClick={() => setLockOpen(true)}>
+                {request.subsystem ? `Lock ${request.subsystem}` : 'Lock'}
+              </Button>
+            ) : (
+              <AsyncButton variant="primary" action={() => decide('approved')} onError={toast.bad}>
+                Approve
+              </AsyncButton>
+            )}
+          </>
+        }
+      >
+        <div className="stack-lg">
           <section className="stack-sm">
-            <ErrorNote>The lock failed; the request is still pending.</ErrorNote>
-            <pre className="cmd-output">{lockOutput.output.join('\n')}</pre>
+            <h4>The agent's note</h4>
+            <p className="review-note">{request.note}</p>
+            <p className="hint">
+              Requested {new Date(request.requestedAt).toLocaleString()}
+              {request.subsystem ? ` · subsystem ${request.subsystem}` : ''}
+            </p>
           </section>
-        )}
 
-        <section className="stack-sm">
-          <h4>Changed since the last approval</h4>
-          <AsyncView state={status}>
-            {() =>
-              changed.specs.length === 0 && !changed.section ? (
-                <p className="hint">No spec has changed since the last approval.</p>
-              ) : (
-                <>
-                  <pre className="cmd-output">{changed.section}</pre>
-                  {noteIds.map((id) => (
-                    <Field key={id} label={`Note on ${id}`}>
-                      <textarea
-                        className="input"
-                        rows={2}
-                        value={notes[id] ?? ''}
-                        onChange={(e) => setNotes((n) => ({ ...n, [id]: e.target.value }))}
-                      />
-                    </Field>
-                  ))}
-                </>
-              )
-            }
-          </AsyncView>
-          <div className="list-line">
-            <input
-              className="input"
-              placeholder="Pin a note to another spec id"
-              value={extraId}
-              onChange={(e) => setExtraId(e.target.value)}
-            />
-            <Button
-              size="sm"
-              disabled={!extraId.trim()}
-              onClick={() => {
-                const id = extraId.trim();
-                setNotes((n) => (id in n ? n : { ...n, [id]: '' }));
-                setExtraId('');
-              }}
-            >
-              Add note
-            </Button>
-          </div>
-        </section>
-
-        <section className="stack-sm">
-          <h4>Current findings</h4>
-          <AsyncView state={findings}>
-            {(f) => (
+          <section className="stack-sm">
+            <h4>Changed since the last lock</h4>
+            {moved.length === 0 ? (
+              <p className="hint">No spec has changed since the last lock.</p>
+            ) : (
               <>
-                <p>
-                  <Badge tone={f.errors.length ? 'bad' : 'ok'}>{f.errors.length} errors</Badge>{' '}
-                  <Badge tone={f.warnings.length ? 'warn' : 'ok'}>{f.warnings.length} warnings</Badge>
-                </p>
-                {[...f.errors, ...f.warnings].slice(0, 30).map((i, n) => (
-                  <div key={n} className="review-finding">
-                    {i.code ? <code className="subtle">{i.code}</code> : null} {i.specId ? <code>{i.specId}</code> : null}{' '}
-                    {i.message}
-                  </div>
+                <pre className="cmd-output">{moved.map((m) => `${m.mark} ${m.path}`).join('\n')}</pre>
+                {noteIds.map((id) => (
+                  <Field key={id} label={`Note on ${id}`}>
+                    <textarea
+                      className="input"
+                      rows={2}
+                      value={notes[id] ?? ''}
+                      onChange={(e) => setNotes((n) => ({ ...n, [id]: e.target.value }))}
+                    />
+                  </Field>
                 ))}
               </>
             )}
-          </AsyncView>
-        </section>
+            <div className="list-line">
+              <input
+                className="input"
+                placeholder="Pin a note to another spec id"
+                value={extraId}
+                onChange={(e) => setExtraId(e.target.value)}
+              />
+              <Button
+                size="sm"
+                disabled={!extraId.trim()}
+                onClick={() => {
+                  const id = extraId.trim();
+                  setNotes((n) => (id in n ? n : { ...n, [id]: '' }));
+                  setExtraId('');
+                }}
+              >
+                Add note
+              </Button>
+            </div>
+          </section>
 
-        <Field label="Comment">
-          <textarea className="input" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
-        </Field>
-      </div>
-    </Modal>
+          <section className="stack-sm">
+            <h4>Current findings</h4>
+            <FindingsList state={findings} />
+          </section>
+
+          <Field label="Comment">
+            <textarea className="input" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+          </Field>
+        </div>
+      </Modal>
+      {lockOpen && (
+        <LockModal
+          fixedSubsystem={request.subsystem}
+          run={async () => {
+            // The decision runs the CLI's own lock first; a failed lock leaves the request pending.
+            const res = await post<DevReviewDecision>('/web/dev/reviews/decide', decideBody('locked'));
+            props.onDecided();
+            return res.lock ?? { command: 'lock', ok: res.request.status === 'locked', output: [] };
+          }}
+          onLocked={() => {
+            toast.ok('Locked');
+            props.onClose();
+          }}
+          onClose={() => setLockOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
-// ── Commands panel ───────────────────────────────────────────────────────────
+// ── Settings cog ─────────────────────────────────────────────────────────────
 
-const COMMANDS: { id: 'lock' | 'generate' | 'doctor'; label: string; explain: string }[] = [
-  {
-    id: 'lock',
-    label: 'Lock',
-    explain:
-      'Approves the design as it is now (wairon lock) and records your git identity as the approver. Pick a subsystem to re-approve just that one.',
-  },
-  { id: 'generate', label: 'Generate', explain: 'Refreshes the generated guides, skills and context files from the specs (wairon generate).' },
-  {
-    id: 'doctor',
-    label: 'Doctor --fix',
-    explain: 'Finishes unfinished transactions and repairs signatures, type spellings and stale guides (wairon doctor --fix).',
-  },
+const SETTINGS_COMMANDS: { id: 'generate' | 'doctor'; label: string; explain: string }[] = [
+  { id: 'generate', label: 'Generate', explain: 'Refreshes the generated guides, skills and context files from the specs.' },
+  { id: 'doctor', label: 'Doctor --fix', explain: 'Finishes unfinished transactions and repairs signatures, type spellings and stale guides.' },
 ];
 
-export function CommandsPanel() {
+function CommandRunner(props: { id: 'generate' | 'doctor'; label: string; explain: string; busy: string | null; setBusy: (id: string | null) => void }) {
   const toast = useToast();
-  const graph = useAsync<{ nodes: { id: string; kind: string }[] }>(
-    () => get(`/web/graph?tier=project&projectId=${DEV_PROJECT_ID}&level=1`),
-    [],
-    [`project:${DEV_PROJECT_ID}`],
-  );
-  const [subsystem, setSubsystem] = useState('');
-  const [running, setRunning] = useState<string | null>(null);
   const [result, setResult] = useState<DevCommandResult | null>(null);
 
-  const subsystems = (graph.data?.nodes ?? []).filter((n) => n.kind === 'subsystem').map((n) => n.id);
-
-  async function run(command: 'lock' | 'generate' | 'doctor') {
-    setRunning(command);
+  async function run() {
+    props.setBusy(props.id);
     setResult(null);
     try {
-      const body: { command: string; subsystem?: string } = { command };
-      if (command === 'lock' && subsystem) body.subsystem = subsystem;
-      const res = await post<DevCommandResult>('/web/dev/commands', body);
+      const res = await post<DevCommandResult>('/web/dev/commands', { command: props.id });
       setResult(res);
-      if (res.ok) toast.ok(`${command} finished`);
-      else toast.bad(`${command} failed`);
+      if (res.ok) toast.ok(`${props.label} finished`);
+      else toast.bad(`${props.label} failed`);
     } catch (e) {
       toast.bad(e instanceof Error ? e.message : String(e));
     } finally {
-      setRunning(null);
+      props.setBusy(null);
     }
   }
 
   return (
-    <div className="view-pad stack-lg">
-      <div className="view-head">
-        <div>
-          <h2>Commands</h2>
-          <p className="hint">The CLI's own commands, run here. One at a time.</p>
-        </div>
+    <section className="stack-sm">
+      <div className="list-line">
+        <Button disabled={props.busy !== null} onClick={run}>
+          {props.busy === props.id ? <Spinner inline /> : props.label}
+        </Button>
       </div>
-      {COMMANDS.map((c) => (
-        <section key={c.id} className="stack-sm">
-          <div className="list-line">
-            <Button variant={c.id === 'lock' ? 'primary' : 'default'} disabled={running !== null} onClick={() => run(c.id)}>
-              {running === c.id ? <Spinner inline /> : c.label}
-            </Button>
-            {c.id === 'lock' && (
-              <Select
-                value={subsystem}
-                disabled={running !== null}
-                onChange={setSubsystem}
-                options={[{ value: '', label: 'Whole design' }, ...subsystems.map((s) => ({ value: s, label: s }))]}
-              />
-            )}
-          </div>
-          <p className="hint">{c.explain}</p>
-        </section>
-      ))}
+      <p className="hint">{props.explain}</p>
       {result && (
-        <section className="stack-sm">
-          <h4>
-            {result.command} <Badge tone={result.ok ? 'ok' : 'bad'}>{result.ok ? 'ok' : 'failed'}</Badge>
-          </h4>
+        <>
+          <Badge tone={result.ok ? 'ok' : 'bad'}>{result.ok ? 'ok' : 'failed'}</Badge>
           <pre className="cmd-output">{result.output.join('\n') || '(no output)'}</pre>
-        </section>
+        </>
       )}
-    </div>
+    </section>
+  );
+}
+
+/** The header cog: opens the settings panel (appearance; Generate and Doctor --fix in dev mode). */
+export function SettingsCog() {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  // Fetched once the panel opens: nothing to read while it is closed.
+  const status = useAsync<DevStatus | null>(
+    () => (open ? get<DevStatus>('/web/dev/status').catch(() => null) : Promise.resolve(null)),
+    [open],
+  );
+  const dev = !!status.data?.devMode;
+
+  return (
+    <>
+      <button
+        className={`hmenu-trigger settings-cog ${open ? 'is-open' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Settings"
+        title="Settings"
+      >
+        <span className="cog">⚙</span>
+      </button>
+      {open && (
+        <Modal title="Settings" onClose={() => (busy ? undefined : setOpen(false))}>
+          <div className="stack-lg">
+            <section className="stack-sm">
+              <h4>Appearance</h4>
+              <ThemeSections />
+            </section>
+            {dev && SETTINGS_COMMANDS.map((c) => <CommandRunner key={c.id} {...c} busy={busy} setBusy={setBusy} />)}
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }

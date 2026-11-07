@@ -1,0 +1,30 @@
+kind: value-object
+id: validation_memo_entry
+name: ValidationMemoEntry
+description: >-
+  One remembered owner's-gate run: the options it ran with, the fingerprints of what it read, and
+  its result. Trusted only while both fingerprints still match.
+fields:
+  - name: optionsKey
+    type: string
+    description: The run's options in a stable spelling (rules, project type, scope, strictness, member depth)
+    optional: false
+  - name: treeFingerprint
+    type: string
+    description: >-
+      Every file under the project's .wai/ folder: path, size and modification time, folded in a
+      stable order
+    optional: false
+  - name: codeFingerprint
+    type: string
+    description: The source files the gate's code model reads, as the source analysis fingerprints them
+    optional: false
+  - name: result
+    type: ValidationResult
+    description: The run's result as it was answered
+    optional: false
+methods: []
+componentClass: validation_memo_cache
+sourcePath: src/core/validation-memo.ts
+createdAt: '2026-11-07T15:06:12.244Z'
+updatedAt: '2026-11-07T15:06:13.304Z'

@@ -638,7 +638,7 @@ function isAtOrBelow(outer: string, inner: string): boolean {
  * under the declaring folder). Read leniently — an unreadable configuration
  * declares nothing — because binding must never fail on someone else's file.
  */
-function declaredMemberDirs(projectRoot: string): string[] {
+export function declaredMemberDirs(projectRoot: string): string[] {
   let parsed: unknown;
   try {
     const text = fileIo.readText(path.join(projectRoot, '.wai', 'project.yaml'));

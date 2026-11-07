@@ -307,6 +307,20 @@ function validateEnvelope(raw: unknown): PackArchiveManifest {
     invalidEnvelope('pack envelope: kind must be "declarative" or "code"');
   }
   if (typeof o.entry !== 'string' || !o.entry) invalidEnvelope('pack envelope: entry is required');
+  // The integrity fields, when present, must be well-typed: an unquoted all-digit digest reads as
+  // a YAML number, and skipping it would accept the archive unchecked.
+  if (o.digest !== undefined && typeof o.digest !== 'string') {
+    invalidEnvelope('pack envelope: digest must be a string (quote an all-digit digest)');
+  }
+  if (o.entryDigests !== undefined) {
+    const digests = o.entryDigests;
+    if (!digests || typeof digests !== 'object' || Array.isArray(digests)) {
+      invalidEnvelope('pack envelope: entryDigests must be a mapping of path to digest');
+    }
+    for (const [entryPath, value] of Object.entries(digests as Record<string, unknown>)) {
+      if (typeof value !== 'string') invalidEnvelope(`pack envelope: entryDigests["${entryPath}"] must be a string (quote an all-digit digest)`);
+    }
+  }
   const manifest: PackArchiveManifest = {
     formatVersion: o.formatVersion,
     name: o.name,

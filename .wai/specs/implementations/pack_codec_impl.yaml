@@ -16,8 +16,10 @@ methods:
       - stepNumber: 2
         description: >-
           Validate the required fields (formatVersion, name, version, kind, entry) are present and
-          well-typed; fail with PackArchiveError ENVELOPE_INVALID naming the field on any
-          missing/invalid.
+          well-typed, and the integrity fields well-typed when present (digest a string,
+          entryDigests a mapping of path to string, so an all-digit digest YAML reads as a number is
+          refused rather than skipped); fail with PackArchiveError ENVELOPE_INVALID naming the field
+          on any missing/invalid.
         type: local
       - stepNumber: 3
         description: Is the format major newer than this wairon supports?
@@ -294,4 +296,4 @@ methods:
         outcome: the inner pack manifest
 status: complete
 createdAt: '2026-07-21T18:25:00.265Z'
-updatedAt: '2026-11-07T17:04:48.856Z'
+updatedAt: '2026-11-07T20:04:02.131Z'

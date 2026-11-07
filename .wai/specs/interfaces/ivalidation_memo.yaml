@@ -1,0 +1,17 @@
+id: ivalidation_memo
+name: Validation Memo Interface
+description: The owner's gate, answered from the last identical run while nothing it reads has changed.
+component: validation_memo
+methods:
+  - name: validateProject
+    description: >-
+      The owner's gate (spec_validator.validateProject) for the bound project: the remembered result
+      of the last run with the same options when the project's .wai/ files and the gate's source
+      files are unchanged by path, size and modification time; otherwise a fresh run, remembered.
+      The answer is a copy, so a caller changing it never changes what is remembered. An edit that
+      keeps a file's size and time within the clock's resolution is not seen, as with the code model
+      cache.
+    signatureFrom: spec_validator.validateProject
+status: complete
+createdAt: '2026-11-07T15:06:32.115Z'
+updatedAt: '2026-11-07T15:06:34.682Z'

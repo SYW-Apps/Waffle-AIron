@@ -44,6 +44,7 @@ import { listSnapshots, listPinnedExternals, memberApprovedSurfaces, pinnedParen
 import { readBindingModules } from './binding-modules.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
+import * as validationMemo from './validation-memo.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { project as projectReach } from './rules/reach-model-projector.js';
 import type { ReachModel } from '../models/reach.js';
@@ -581,6 +582,19 @@ function memberOwning(owners: Map<string, string>, memberKeys: string[], key: st
  * are never judged here: its gate judges them under its own configuration.
  */
 export function validateProject(
+  options?: RulesConfig | ValidationOptions,
+  projectType: string = 'backend'
+): ValidationResult {
+  // validator_portal Step 1: the validation memo answers the last identical run
+  // while nothing the gate reads has changed, and otherwise runs the gate.
+  return validationMemo.validateProject(options, projectType);
+}
+
+/**
+ * spec_validator.validateProject: the owner's gate, run now. Callers outside
+ * the validator reach it through validateProject, which remembers its runs.
+ */
+export function validateProjectFresh(
   options?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
 ): ValidationResult {

@@ -264,6 +264,20 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: reviewStatus
+  - name: approvalVerdict
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalVerdict
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalRecord
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-11-07T02:41:30.476Z'
+updatedAt: '2026-11-07T15:07:24.696Z'

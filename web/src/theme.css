@@ -1061,3 +1061,19 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-soft);
   font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 12.5px; line-height: 1.45;
 }
+
+/* Dev cockpit: floating action bar and in-place lock. */
+.cockpit-bar {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 390;
+  width: min(640px, calc(100vw - 40px)); display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 10px 14px; border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); background: var(--panel); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.cockpit-bar-text { min-width: 0; font-size: 13px; max-height: 4.5em; overflow: hidden; }
+.cockpit-bar-text .dim { color: var(--ink-dim); }
+.canvas-view { position: relative; }
+.lock-inplace { position: absolute; top: 10px; right: 12px; z-index: 20; }
+.lock-inplace-row { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.lock-inplace-row:empty, .lock-inplace:empty { display: none; }
+.settings-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
+.settings-cog:hover .cog, .settings-cog.is-open .cog { color: var(--ink); }

@@ -1,0 +1,28 @@
+kind: value-object
+id: dev_approval
+name: DevApproval
+description: >-
+  The served project's approval state for the dev page: whether the design moved since the last lock
+  and which specs, and who locked it when. Drives the page's lock bar and the lock confirmation.
+fields:
+  - name: approved
+    type: bool
+    description: Whether the project carries a lock record at all
+    optional: false
+  - name: approvedAt
+    type: string
+    description: When the last lock was taken
+    optional: true
+  - name: approvedBy
+    type: string
+    description: Who took the last lock
+    optional: true
+  - name: verdict
+    type: ApprovalVerdict
+    description: 'What the lock says about the tree now: drifted, the moved specs, the line to show'
+    optional: false
+methods: []
+componentClass: dev_cockpit_orchestrator
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-07T15:07:10.520Z'
+updatedAt: '2026-11-07T15:07:11.408Z'

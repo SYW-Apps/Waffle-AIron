@@ -8,7 +8,7 @@ import { routeData } from '../../src/server/http.js';
 import { registerLocalDevProject } from '../../src/server/admin.js';
 import { bootstrapInstance } from '../../src/server/instance-bootstrap.js';
 import { startDevSession } from '../../src/server/web.js';
-import { decide, reviews, run } from '../../src/server/dev-commands.js';
+import { approval, decide, reviews, run } from '../../src/server/dev-commands.js';
 import type { DevCommandResult, DevCommands } from '../../src/server/dev-commands.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, saveSystemSpec, saveSpec, saveComponentSpec } from '../../src/core/specs.js';
@@ -228,6 +228,38 @@ describe('dev cockpit (sdd_host)', () => {
     });
   });
 
+  describe('approval', () => {
+    it('answers an unlocked project as not approved', () => {
+      const state = approval(cfg, session);
+      expect(state.approved).toBe(false);
+      expect(state.approvedAt).toBeUndefined();
+      expect(state.verdict.drifted).toBe(false);
+    });
+
+    it('answers who locked when, and the specs that moved since', () => {
+      writeLock(root);
+      const locked = approval(cfg, session);
+      expect(locked.approved).toBe(true);
+      expect(locked.approvedAt).toBe('2026-09-12T08:00:00Z');
+      expect(locked.approvedBy).toContain('locker');
+      expect(locked.verdict.drifted).toBe(false);
+      runWithProjectRoot(root, () => {
+        saveComponentSpec({
+          id: 'worker', name: 'Worker', description: 'a worker component that changed', subsystem: 'dom',
+          componentType: 'Orchestrator', dependsOn: [], owns: [], status: 'draft', createdAt: now, updatedAt: now,
+        } as ComponentSpec);
+      });
+      invalidateSpecCache();
+      const moved = approval(cfg, session);
+      expect(moved.verdict.drifted).toBe(true);
+      expect((moved.verdict.moved ?? []).some((m) => m.includes('worker'))).toBe(true);
+    });
+
+    it('is refused outside the local development server', () => {
+      expect(() => approval({ ...cfg, devMode: false }, session)).toThrow(/not the local development server/);
+    });
+  });
+
   describe('routes', () => {
     let server: http.Server;
     let base: string;
@@ -271,6 +303,17 @@ describe('dev cockpit (sdd_host)', () => {
       const cmd = await call('POST', '/web/dev/commands', { command: 'generate' });
       expect(cmd.status).toBe(200);
       expect(cmd.json).toEqual({ command: 'generate', ok: true, output: ['generated'] });
+    });
+
+    it('serves the approval state in dev mode only', async () => {
+      await startServer(cfg);
+      const state = await call('GET', '/web/dev/approval');
+      expect(state.status).toBe(200);
+      expect(state.json.approved).toBe(false);
+      expect(state.json.verdict).toBeDefined();
+      server.close();
+      await startServer({ ...cfg, devMode: false, devCommands: undefined, authEnabled: true });
+      expect((await call('GET', '/web/dev/approval')).status).not.toBe(200);
     });
 
     it('locks through the decide route and answers the lock result', async () => {

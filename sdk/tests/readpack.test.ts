@@ -124,7 +124,7 @@ describe('readPack', () => {
   });
 
   it('DIGEST_MISMATCH for tampered content', () => {
-    const entryDigests = `entryDigests:\n  pack.yaml: ${'0'.repeat(64)}\n`;
+    const entryDigests = `entryDigests:\n  pack.yaml: ${'f'.repeat(64)}\n`;
     const zip = assembleArchive([
       { path: 'wairon-pack.yaml', contents: enc(envelope(entryDigests)) },
       { path: 'pack.yaml', contents: innerOk },
@@ -135,7 +135,7 @@ describe('readPack', () => {
   const sha = (b: Uint8Array): string => createHash('sha256').update(b).digest('hex');
 
   it('DIGEST_MISMATCH when entryDigests lists a file the archive does not hold', () => {
-    const entryDigests = `entryDigests:\n  pack.yaml: ${sha(innerOk)}\n  extra.yaml: ${'0'.repeat(64)}\n`;
+    const entryDigests = `entryDigests:\n  pack.yaml: ${sha(innerOk)}\n  extra.yaml: ${'f'.repeat(64)}\n`;
     const zip = assembleArchive([
       { path: 'wairon-pack.yaml', contents: enc(envelope(entryDigests)) },
       { path: 'pack.yaml', contents: innerOk },
@@ -159,6 +159,24 @@ describe('readPack', () => {
     const second = buildPack(srcDir);
     expect(readPack(first.archive).manifest.generatedAt).toBeUndefined();
     expect(Buffer.from(second.archive).equals(Buffer.from(first.archive))).toBe(true);
+  });
+
+  it('ENVELOPE_INVALID for an integrity field that is not a string', () => {
+    const numericDigest = assembleArchive([
+      { path: 'wairon-pack.yaml', contents: enc(envelope(`digest: ${'0'.repeat(64)}\n`)) },
+      { path: 'pack.yaml', contents: innerOk },
+    ]);
+    expect(codeOf(() => readPack(numericDigest))).toBe('ENVELOPE_INVALID');
+    const numericEntry = assembleArchive([
+      { path: 'wairon-pack.yaml', contents: enc(envelope(`entryDigests:\n  pack.yaml: ${'0'.repeat(64)}\n`)) },
+      { path: 'pack.yaml', contents: innerOk },
+    ]);
+    expect(codeOf(() => readPack(numericEntry))).toBe('ENVELOPE_INVALID');
+    const listed = assembleArchive([
+      { path: 'wairon-pack.yaml', contents: enc(envelope('entryDigests:\n  - pack.yaml\n')) },
+      { path: 'pack.yaml', contents: innerOk },
+    ]);
+    expect(codeOf(() => readPack(listed))).toBe('ENVELOPE_INVALID');
   });
 
   it('inspectArchive refuses an oversized envelope before inflating it', () => {
