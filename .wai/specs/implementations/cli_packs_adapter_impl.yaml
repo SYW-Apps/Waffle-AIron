@@ -972,7 +972,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the unresolvable selections
-        endStep: 16
+        endStep: 17
       - stepNumber: 12
         description: Label the selection by name and version, for the messages about fetching it
         type: call
@@ -992,13 +992,18 @@ methods:
           its yank reason printed.
         type: local
       - stepNumber: 14
+        description: Is the selection's source this registry's archive template?
+        type: call
+        targetComponent: pack_registry_adapter
+        targetMethod: isRegistrySource
+      - stepNumber: 15
         description: >-
           For a registry source whose selection pins no integrity, resolve its exact version for the
           trust check above
         type: call
         targetComponent: pack_registry_adapter
         targetMethod: resolve
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Download the archive to a temporary file and extract it, held two levels down in a fresh
           temporary folder so no packs folder lists it, through the SDK portal's hardened path — the
@@ -1007,7 +1012,7 @@ methods:
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
-      - stepNumber: 16
+      - stepNumber: 17
         label: sync_done
         description: >-
           Install into the store via the core surface, recording the ORIGINAL source template rather
@@ -1017,7 +1022,7 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: installPackFromDirectory
-      - stepNumber: 17
+      - stepNumber: 18
         description: Report how many packs were synced.
         type: return
         outcome: the synced count
@@ -1108,19 +1113,34 @@ methods:
           registry's account page where a token is created
         type: local
       - stepNumber: 2
-        description: Is the source a pack directory?
-        type: branch
-        condition: the source (the current directory when absent) is not a directory
-        onTrueStep: 4
-        onFalseStep: 3
+        description: Does the source (the current directory when absent) exist?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
       - stepNumber: 3
+        description: Is it a directory?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: stat
+      - stepNumber: 4
+        description: A directory is built; anything else is read as an archive
+        type: branch
+        condition: the source is not an existing directory
+        onTrueStep: 6
+        onFalseStep: 5
+      - stepNumber: 5
         description: >-
           Build the directory into a .wpack in memory, so what is published is exactly what `wairon
           pack build` writes
         type: call
         targetComponent: sdk_portal
         targetMethod: buildPack
-      - stepNumber: 4
+      - stepNumber: 6
+        description: Read the .wpack file's bytes (skipped for a directory, which was built)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readBytes
+      - stepNumber: 7
         label: inspect
         description: >-
           Read the archive's envelope for its name, version and kind, and refuse an archive the SDK
@@ -1128,17 +1148,17 @@ methods:
         type: call
         targetComponent: sdk_portal
         targetMethod: inspectArchive
-      - stepNumber: 5
+      - stepNumber: 8
         description: Send the archive under its name and version, with the token
         type: call
         targetComponent: pack_registry_adapter
         targetMethod: publish
-      - stepNumber: 6
+      - stepNumber: 9
         description: >-
           Report the result: published, with the version's page; already published, saying whether
           the stored integrity equals this archive's content or differs (a version is never reused,
-          so a change needs a new version); refused, with the registry's reason and each finding,
-          and a non-zero exit
+          and a rebuilt archive differs by its build time); refused, with the registry's reason and
+          each finding, and a non-zero exit
         type: local
     detail: calls-only
 detail: calls-only
@@ -1161,4 +1181,4 @@ lint:
         hosted server.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-11-06T23:43:53.923Z'
+updatedAt: '2026-11-07T00:41:13.761Z'

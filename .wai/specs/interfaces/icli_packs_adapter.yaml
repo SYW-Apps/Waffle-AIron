@@ -205,9 +205,15 @@ methods:
       naming the manual route. A pinned integrity digest is verified at install time rather than
       being discovered later by the gate. Fetching happens ONLY here and in `pack install <url>` —
       never during validation — because the core workflow must work offline.
-    signature: 'syncPacks(): async void'
+    signature: 'syncPacks(allowUnverifiedCode?: bool): async void'
     returns: async void
-    params: []
+    params:
+      - name: allowUnverifiedCode
+        type: bool
+        description: >-
+          Consent to a registry code pack from an unverified publisher whose selection pins no
+          integrity (--allow-unverified-code)
+        optional: true
   - name: impactPack
     description: >-
       `wairon pack impact <name>[@version]` — show, on demand and writing nothing, what the pack
@@ -240,4 +246,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-11-06T23:42:31.108Z'
+updatedAt: '2026-11-07T00:23:14.106Z'

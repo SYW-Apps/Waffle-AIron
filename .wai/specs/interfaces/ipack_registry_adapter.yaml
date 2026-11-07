@@ -46,6 +46,17 @@ methods:
         type: string
         description: A registry API token (WAIRON_REGISTRY_TOKEN)
     effect: io
+  - name: isRegistrySource
+    description: >-
+      Whether a recorded pack source is this registry's archive template
+      (`<registry>/v1/packs/...`), so sync knows to resolve it for the trust check. Pure over the
+      configured registry URL
+    signature: 'isRegistrySource(source: string): bool'
+    returns: bool
+    params:
+      - name: source
+        type: string
+        description: A selection's recorded source
 status: complete
 createdAt: '2026-11-06T23:41:18.799Z'
-updatedAt: '2026-11-06T23:41:21.288Z'
+updatedAt: '2026-11-07T00:40:59.232Z'
