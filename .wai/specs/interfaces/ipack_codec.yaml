@@ -99,6 +99,19 @@ methods:
         type: string
       - name: generatedAt
         type: string
+  - name: contentDigest
+    description: >-
+      The content integrity of a pack: sha256 folding each regular file in sorted order as
+      `<forward-slash relative path> NUL <bytes> NUL`, skipping `.install.yaml` and anything under
+      `.git`, `node_modules` or a `.DS_Store`, written `sha256-<lowercase hex>`. The same digest
+      wairon's pack store computes over an installed pack directory and project.yaml pins, so a
+      registry, an archive install and a directory install of the same pack compare equal. Pure
+    signature: 'contentDigest(files: list<pack_file>): string'
+    returns: string
+    params:
+      - name: files
+        type: list<pack_file>
+        description: The pack's files as extracted, paths relative to the pack root
 status: complete
 createdAt: '2026-07-21T18:13:36.380Z'
-updatedAt: '2026-10-04T10:19:10.163Z'
+updatedAt: '2026-11-06T23:40:23.775Z'

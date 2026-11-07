@@ -18,9 +18,11 @@ methods:
     intent: >-
       Scans the store one level for pack names, then a second level for version directories, reading
       each pack's install record for its digest, origin, and provenance (recomputing the digest when
-      the record is missing or unreadable). Entries are grouped by name and ordered newest version
-      first. A legacy flat entry — a bare *.yaml/*.cjs pack file, or a pack directory holding an
-      entry file directly rather than version subdirectories — is reported at version
+      the record is missing or unreadable). A scoped name (`@scope/pack`) is stored nested, so a
+      top-level folder starting with `@` is a scope: its subfolders are the pack names, each read
+      like a top-level one under the name `@scope/<folder>`. Entries are grouped by name and ordered
+      newest version first. A legacy flat entry — a bare *.yaml/*.cjs pack file, or a pack directory
+      holding an entry file directly rather than version subdirectories — is reported at version
       "0.0.0-unversioned". A missing or unreadable store is an empty list, never an error: having no
       packs installed is a normal state.
   - name: resolveInstalledPack
@@ -86,4 +88,4 @@ lint:
         of the hosted server.
 status: complete
 createdAt: '2026-07-29T17:42:12.283Z'
-updatedAt: '2026-11-04T10:26:04.362Z'
+updatedAt: '2026-11-06T23:39:46.621Z'

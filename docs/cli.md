@@ -1094,7 +1094,8 @@ rules (see [Extending wairon](extending-wairon.md)).
 |---------|-------------|
 | `wairon pack init <name> [--kind declarative\|code] [--dir <path>] [--skill]` | Scaffold a new pack project |
 | `wairon pack build [source] [--out <file>]` | Build an installable `.wpack` archive from a pack directory |
-| `wairon pack install <source> [-y]` | Install a pack (`.wpack`/`.zip` or a directory) into this machine's pack store. It applies to nothing until a project selects it |
+| `wairon pack install <source> [-y] [--registry] [--allow-unverified-code]` | Install a pack into this machine's pack store: from the wairon pack registry by name (`@scope/pack`, `@scope/pack@^1.2`), or from a `.wpack`/`.zip`, a directory or a URL. It applies to nothing until a project selects it. `wairon install` and `wairon i` do the same. A code pack from a publisher who is not verified needs `--allow-unverified-code` or a yes to the question; `-y` is not that consent |
+| `wairon pack publish [source]` | Publish a pack directory (built first) or a `.wpack` to the wairon pack registry, with the token in `WAIRON_REGISTRY_TOKEN` |
 | `wairon pack uninstall <name>[@version]` | Remove a pack from the store |
 | `wairon pack use <name>[@version] [--source <url>] [--pin] [--bundle] [-y]` | Select an installed pack for this project, recorded in `.wai/project.yaml` |
 | `wairon pack unuse <name> [-y]` | Deselect a pack for this project (it stays installed) |
@@ -1910,7 +1911,7 @@ again.
 
 | Command | Description |
 |---------|-------------|
-| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only). It serves the same project over MCP (streamable HTTP) at `POST http://127.0.0.1:<port>/mcp?project=local` — the current project is registered as `local`; without `?project=local` the endpoint answers 403. For an AI tool on the same machine the stdio server (`wairon mcp serve`, what `wairon mcp install` registers) remains the usual route |
+| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only). Without `--port` it takes the first free port from 8080 upward (to 8099; the dev admin listener uses the next port), so a second project's dev server never collides with the first; it prints the URL it chose. With `--port` it uses exactly that port and says so plainly when it is taken. It serves the same project over MCP (streamable HTTP) at `POST http://127.0.0.1:<port>/mcp?project=local` — the current project is registered as `local`; without `?project=local` the endpoint answers 403. For an AI tool on the same machine the stdio server (`wairon mcp serve`, what `wairon mcp install` registers) remains the usual route |
 | `wairon update [--check] [--channel <name>]` | Check/install the latest release; switch channel |
 | `wairon aliases list` | Show command aliases (`wai`) and their status |
 | `wairon aliases enable <name>` / `disable <name>` | Create / remove an alias |

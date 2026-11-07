@@ -221,6 +221,23 @@ methods:
         description: Incompatible.
         type: return
         outcome: incompatible
+  - name: contentDigest
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Normalize each path to forward slashes and drop the files the digest skips (.install.yaml,
+          anything under .git or node_modules, .DS_Store)
+        type: local
+      - stepNumber: 2
+        description: Sort the remaining files by path, ordinal
+        type: local
+      - stepNumber: 3
+        description: 'Fold each file into one sha256: its path, a NUL byte, its bytes, a NUL byte'
+        type: local
+      - stepNumber: 4
+        description: Return the digest as sha256-<lowercase hex>
+        type: return
+        outcome: the content integrity
 status: complete
 createdAt: '2026-07-21T18:25:00.265Z'
-updatedAt: '2026-07-21T20:43:26.036Z'
+updatedAt: '2026-11-06T23:40:24.839Z'

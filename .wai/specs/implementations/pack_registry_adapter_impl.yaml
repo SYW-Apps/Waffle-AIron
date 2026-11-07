@@ -1,0 +1,68 @@
+id: pack_registry_adapter_impl
+name: Pack Registry Adapter Implementation
+description: 'src/commands/registry.ts: the registry v1 client over the shared HTTP client.'
+contract: ipack_registry_adapter
+sourcePath: src/commands/registry.ts
+methods:
+  - name: resolve
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the URL: the registry base (WAIRON_REGISTRY, else the default) +
+          /v1/packs/<name>/resolve, the name's scope and package as two path segments, with range
+          and wairon as query parameters
+        type: local
+      - stepNumber: 2
+        description: Send the GET
+        type: call
+        targetComponent: http_client_adapter
+        targetMethod: request
+      - stepNumber: 3
+        description: Did the registry answer with a resolution?
+        type: branch
+        condition: the status is not 200
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse: a 404 names the pack or range that resolved to nothing (PACK_NOT_FOUND,
+          NO_MATCHING_VERSION) with the registry's message; any other status says the registry could
+          not answer, with its code
+        type: throw
+        error: the registry could not resolve the pack
+      - stepNumber: 5
+        description: Return the parsed resolution
+        type: return
+        outcome: the resolution
+  - name: publish
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the URL /v1/packs/<name>/<version> on the registry base, the name as one or two path
+          segments
+        type: local
+      - stepNumber: 2
+        description: 'Send a PUT with the archive bytes (application/zip) and `Authorization: Bearer <token>`'
+        type: call
+        targetComponent: http_client_adapter
+        targetMethod: request
+      - stepNumber: 3
+        description: >-
+          Read the answer: 201 is published (with its integrity and url); 409 VERSION_EXISTS is
+          exists, carrying the stored integrity; any other 4xx is refused with the error's code and
+          message, each `details.findings` entry appended; a 5xx says the registry failed
+        type: local
+      - stepNumber: 4
+        description: Return the result
+        type: return
+        outcome: the publish result
+  - name: isRegistrySource
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer whether the source starts with the registry base (WAIRON_REGISTRY, else the
+          default) followed by /v1/packs/
+        type: return
+        outcome: whether it is a registry source
+status: complete
+createdAt: '2026-11-06T23:41:25.877Z'
+updatedAt: '2026-11-07T00:41:00.612Z'

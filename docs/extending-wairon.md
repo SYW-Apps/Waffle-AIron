@@ -38,6 +38,34 @@ extensions:
       source: https://…/appenser-{version}.wpack
 ```
 
+### From the wairon pack registry
+
+```sh
+wairon pack install @acme/sec-lint          # the newest version
+wairon i @acme/sec-lint@^1.2                # any semver range; `wairon install` too
+wairon pack publish ./sec-lint              # needs WAIRON_REGISTRY_TOKEN
+```
+
+A registry name is scoped (`@scope/pack`); flat names are kept for wairon and
+trusted publishers. The registry resolves the range to one exact version, the
+installed content must hash to the integrity the registry reports, and the
+recorded source is the registry's archive URL, so `pack use --pin` and
+`pack sync` work on any machine. `WAIRON_REGISTRY` points at another registry. A
+name that is also a folder in the current directory installs the folder; add
+`--registry` for the registry pack.
+
+A **code** pack (one that runs its own JavaScript rules inside wairon) shows
+who published it. When its publisher is not verified, both when it published
+and now, wairon warns and installs it only after `--allow-unverified-code` or a
+yes to its question; `-y` does not count. `pack sync` asks the same for a
+selection that pins no integrity; a pinned integrity is already the consent.
+Declarative packs never ask.
+
+Scoped packs install under `@scope/pack/<version>/` in the store. Their finding
+codes keep the scope apart with a double underscore (`ACME__SEC_LINT_<CODE>`)
+and so do their skill ids (`acme__sec-lint-<skill>`). A pack manifest may carry
+`description`, `homepage`, `repository` and `license`, which the registry shows.
+
 - `--pin` freezes the resolved version **and** its content digest.
 - `--source <url>` records an explicit fetch URL (overriding the install origin).
 - `--bundle` marks the pack for committing under `.wai/packs/`, so the repo needs

@@ -362,12 +362,54 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          An HTTP(S) source is downloaded to a temporary archive first, so a remote pack rejoins the
-          identical local-archive path below instead of getting its own validation route.
+          Classify the source. `--registry` makes it a registry name. Otherwise a scheme, a `/` or
+          `\` (except in a scoped name `@scope/pack`, optionally `@range`), a leading `.`, or a
+          .wpack/.zip suffix makes it a path or URL; a name that exists on disk stays a path, with a
+          hint that `--registry` installs the registry pack of that name; anything else is a
+          registry name, `name` or `name@range`
+        type: local
+      - stepNumber: 2
+        description: Is it a registry name?
+        type: branch
+        condition: the source is a path or URL
+        onTrueStep: 7
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Resolve the name and range (`*` when none) to one exact version, sending the running
+          wairon's version so versions needing a later wairon are skipped
+        type: call
+        targetComponent: pack_registry_adapter
+        targetMethod: resolve
+      - stepNumber: 4
+        description: >-
+          Report the resolution: the version chosen and its kind; a yanked version (only an exact
+          version resolves to one) with its reason; a newer version skipped because it needs a later
+          wairon. A code pack from a publisher verified both when it published and now is labelled
+          'runs code'. A code pack whose publisher is not verified at both times gets a risk warning
+          naming the publisher and both verification facts: it runs code inside wairon with full
+          access to this machine. Its install needs explicit consent: --allow-unverified-code, or a
+          yes to an interactive question; --yes does not count, and a run with no terminal and no
+          flag refuses. A declarative pack asks nothing
+        type: local
+      - stepNumber: 5
+        description: Was the consent a code pack needs refused or missing?
+        type: branch
+        condition: the pack needs consent and did not get it
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Stop before downloading, naming --allow-unverified-code
+        type: return
+        outcome: refused; nothing downloaded
+      - stepNumber: 7
+        description: >-
+          An HTTP(S) source — or a registry resolution's archiveUrl — is downloaded to a temporary
+          archive first, so a remote pack rejoins the identical local-archive path below instead of
+          getting its own validation route.
         type: call
         targetComponent: http_client_adapter
         targetMethod: download
-      - stepNumber: 2
+      - stepNumber: 8
         description: >-
           A .wpack/.zip source is extracted, held two levels down in a fresh temporary folder so no
           packs folder lists it (the store included, even when it is the temporary folder), through
@@ -377,21 +419,21 @@ methods:
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
-      - stepNumber: 3
+      - stepNumber: 9
         description: >-
           Read the bound project's configuration, when the command runs inside one: does it select
           this pack's name without a version pin?
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-      - stepNumber: 4
+      - stepNumber: 10
         description: >-
           Read the latest version of the name installed now: the one a floating selection resolves
           to today
         type: call
         targetComponent: extension_portal
         targetMethod: resolveInstalledPack
-      - stepNumber: 5
+      - stepNumber: 11
         description: >-
           Only an install that moves this project's floating selection is an update; and an
           unattended run (--yes, or no terminal) applies without the report
@@ -399,9 +441,9 @@ methods:
         condition: >-
           not inside a project, or the project does not select the name floating, or the new version
           would not become the latest installed, or the run is unattended
-        onTrueStep: 11
-        onFalseStep: 6
-      - stepNumber: 6
+        onTrueStep: 17
+        onFalseStep: 12
+      - stepNumber: 12
         label: measure-update
         description: >-
           Measure the update before the store write: the project's floating selection as the
@@ -410,32 +452,42 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
-      - stepNumber: 7
+      - stepNumber: 13
         description: Print the impact report and ask whether to install
         type: local
-      - stepNumber: 8
+      - stepNumber: 14
         description: Installing a pack that changes a project's doctrine is intentional
         type: branch
         condition: the answer is not yes
-        onFalseStep: 11
-      - stepNumber: 9
+        onFalseStep: 17
+      - stepNumber: 15
         description: Remove the temporary extraction
         type: call
         targetComponent: files_adapter
         targetMethod: remove
-      - stepNumber: 10
+      - stepNumber: 16
         description: 'Stop without installing: remove the temporary extraction and write nothing to the store'
         type: return
         outcome: declined; nothing installed
-      - stepNumber: 11
+      - stepNumber: 17
         label: install
         description: >-
           Install the materialized directory into the pack store via the core surface, recording the
-          origin it came from.
+          origin it came from — for a registry install, the resolution's source template (with its
+          `{version}` placeholder), so `wairon pack use` records a selection `wairon pack sync` can
+          fetch on any machine.
         type: call
         targetComponent: extension_portal
         targetMethod: installPackFromDirectory
-      - stepNumber: 12
+      - stepNumber: 18
+        description: >-
+          For a registry install, compare the installed pack's digest with the resolution's
+          integrity: on a mismatch the archive is not the pack the registry describes, so uninstall
+          that version again and refuse, naming both digests
+        type: call
+        targetComponent: extension_portal
+        targetMethod: uninstallPack
+      - stepNumber: 19
         description: >-
           Report what was installed (name, version, path, digest) and state plainly that it applies
           to NOTHING until a project selects it — the distinction the old --global install never
@@ -443,14 +495,14 @@ methods:
           resolves to this version; an unattended run adds that the impact was not shown and names
           `wairon pack impact <name>`.
         type: local
-      - stepNumber: 13
+      - stepNumber: 20
         description: >-
           Whether the install ran or not, remove the temporary download folder and the extracted
           directory
         type: call
         targetComponent: files_adapter
         targetMethod: remove
-      - stepNumber: 14
+      - stepNumber: 21
         description: >-
           Warn when the origin is a local path rather than a fetchable URL: a selection recorded
           from it cannot be resolved by CI or a fresh clone.
@@ -920,7 +972,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the unresolvable selections
-        endStep: 15
+        endStep: 17
       - stepNumber: 12
         description: Label the selection by name and version, for the messages about fetching it
         type: call
@@ -931,9 +983,27 @@ methods:
           Refuse this selection when it records no source, carries a {version} placeholder but pins
           no version, or expands to something that is not a fetchable URL — each naming the manual
           route. Otherwise expand {version} and ${VAR}, so a private URL takes its token from a CI
-          secret without ever being committed.
+          secret without ever being committed. A registry source whose selection pins no integrity
+          is resolved for its exact version first (pack_registry_adapter.resolve): a code pack whose
+          publisher is not verified both at publish time and now needs the same consent an install
+          does (--allow-unverified-code, or an interactive yes), and without it this selection is
+          refused and the others go on. A selection that pins integrity needs no consent: the pin is
+          the consent, and the content must match it. A yanked pinned version is still fetched, with
+          its yank reason printed.
         type: local
       - stepNumber: 14
+        description: Is the selection's source this registry's archive template?
+        type: call
+        targetComponent: pack_registry_adapter
+        targetMethod: isRegistrySource
+      - stepNumber: 15
+        description: >-
+          For a registry source whose selection pins no integrity, resolve its exact version for the
+          trust check above
+        type: call
+        targetComponent: pack_registry_adapter
+        targetMethod: resolve
+      - stepNumber: 16
         description: >-
           Download the archive to a temporary file and extract it, held two levels down in a fresh
           temporary folder so no packs folder lists it, through the SDK portal's hardened path — the
@@ -942,7 +1012,7 @@ methods:
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
-      - stepNumber: 15
+      - stepNumber: 17
         label: sync_done
         description: >-
           Install into the store via the core surface, recording the ORIGINAL source template rather
@@ -952,7 +1022,7 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: installPackFromDirectory
-      - stepNumber: 16
+      - stepNumber: 18
         description: Report how many packs were synced.
         type: return
         outcome: the synced count
@@ -1035,6 +1105,62 @@ methods:
         type: return
         outcome: impact shown; nothing written
     detail: calls-only
+  - name: publishPack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the registry token from WAIRON_REGISTRY_TOKEN; without one, refuse, naming the
+          registry's account page where a token is created
+        type: local
+      - stepNumber: 2
+        description: Does the source (the current directory when absent) exist?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 3
+        description: Is it a directory?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: stat
+      - stepNumber: 4
+        description: A directory is built; anything else is read as an archive
+        type: branch
+        condition: the source is not an existing directory
+        onTrueStep: 6
+        onFalseStep: 5
+      - stepNumber: 5
+        description: >-
+          Build the directory into a .wpack in memory, so what is published is exactly what `wairon
+          pack build` writes
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: buildPack
+      - stepNumber: 6
+        description: Read the .wpack file's bytes (skipped for a directory, which was built)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readBytes
+      - stepNumber: 7
+        label: inspect
+        description: >-
+          Read the archive's envelope for its name, version and kind, and refuse an archive the SDK
+          rejects before anything is sent
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: inspectArchive
+      - stepNumber: 8
+        description: Send the archive under its name and version, with the token
+        type: call
+        targetComponent: pack_registry_adapter
+        targetMethod: publish
+      - stepNumber: 9
+        description: >-
+          Report the result: published, with the version's page; already published, saying whether
+          the stored integrity equals this archive's content or differs (a version is never reused,
+          and a rebuilt archive differs by its build time); refused, with the registry's reason and
+          each finding, and a non-zero exit
+        type: local
+    detail: calls-only
 detail: calls-only
 lint:
   allow:
@@ -1055,4 +1181,4 @@ lint:
         hosted server.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-11-04T10:26:08.383Z'
+updatedAt: '2026-11-07T00:41:13.761Z'

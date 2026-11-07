@@ -18,7 +18,11 @@ fields:
     optional: false
   - name: code
     type: string
-    description: Pack-local finding code; surfaced namespaced as <PACK_NAME>_<CODE> (upper-snake).
+    description: >-
+      Pack-local finding code; surfaced namespaced as <PACK_NAME>_<CODE> (upper-snake, every run of
+      non-alphanumerics written `_`). The scope of a scoped pack name is written with a double
+      underscore, so `@acme/sec-lint` gives `ACME__SEC_LINT_<CODE>` and never collides with a flat
+      `acme-sec-lint`; a flat name's codes are unchanged.
     optional: false
   - name: severity
     type: string
@@ -43,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-18T22:42:18.586Z'
-updatedAt: '2026-09-19T11:07:12.093Z'
+updatedAt: '2026-11-06T23:39:59.781Z'

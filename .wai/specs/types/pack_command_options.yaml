@@ -46,7 +46,17 @@ fields:
     type: bool
     description: Apply without showing the impact report first
     optional: true
+  - name: registry
+    type: bool
+    description: 'install: read the source as a registry name even when a path of that name exists (--registry).'
+    optional: true
+  - name: allowUnverifiedCode
+    type: bool
+    description: >-
+      install, sync: consent to a code pack whose publisher is not verified
+      (--allow-unverified-code); --yes is not this consent.
+    optional: true
 methods: []
 sourcePath: src/commands/packs.ts
 createdAt: '2026-10-03T16:49:18.609Z'
-updatedAt: '2026-10-04T10:20:37.356Z'
+updatedAt: '2026-11-06T23:43:10.828Z'

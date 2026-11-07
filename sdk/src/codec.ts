@@ -17,6 +17,34 @@ import type {
 // passed in, never read here.
 // ---------------------------------------------------------------------------
 
+/** Never part of a pack's content integrity: any path segment with one of these names. */
+const DIGEST_EXCLUDED = new Set(['.install.yaml', '.git', 'node_modules', '.DS_Store']);
+
+/**
+ * pack_codec.contentDigest — a pack's content integrity: sha256 folding each
+ * file in sorted order as `<forward-slash path> NUL <bytes> NUL`, skipping
+ * `.install.yaml`, `.git`, `node_modules` and `.DS_Store` wherever they sit,
+ * written `sha256-<lowercase hex>`. The digest wairon's pack store computes
+ * over an installed pack directory and project.yaml pins. Pure.
+ */
+export function contentDigest(files: readonly PackFile[]): string {
+  // Steps 1-2: normalized paths, the skipped ones dropped, in sorted order.
+  const kept = files
+    .map((file) => ({ path: file.path.replace(/\\/g, '/').replace(/^\/+/, ''), contents: file.contents }))
+    .filter((file) => !file.path.split('/').some((segment) => DIGEST_EXCLUDED.has(segment)))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  // Step 3: path NUL bytes NUL, folded in order.
+  const hash = createHash('sha256');
+  for (const file of kept) {
+    hash.update(file.path);
+    hash.update('\0');
+    hash.update(file.contents);
+    hash.update('\0');
+  }
+  // Step 4.
+  return `sha256-${hash.digest('hex')}`;
+}
+
 /** The archive-root envelope filename. */
 export const ENVELOPE_FILENAME = 'wairon-pack.yaml';
 

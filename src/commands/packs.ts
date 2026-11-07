@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
-import { scaffoldPack, buildPack as sdkBuildPack, extractPack } from '@wairon/sdk';
+import { scaffoldPack, buildPack as sdkBuildPack, extractPack, inspectArchive, packContentDigest } from '@wairon/sdk';
 import type { PackScaffoldRequest, PackBuildResult, PackExtractionResult } from '@wairon/sdk';
 import { logger } from '../utils/logger.js';
 import { getProjectRoot } from '../utils/fs.js';
@@ -12,6 +12,9 @@ import { ProjectNotInitializedError } from '../utils/errors.js';
 import type { PackSelection } from '../models/project.js';
 import { isNewerVersion } from '../utils/version.js';
 import { withFileLock } from '../utils/file-lock.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
+import * as registry from './registry.js';
+import type { RegistryResolution } from './registry.js';
 // validator_portal: the pack impact every pack-selecting command shows before it writes.
 import { measurePackImpact } from '../core/validation.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
@@ -73,6 +76,18 @@ export interface PackCommandOptions {
    *  ignores it: scaffolding never prompts, and a script passing -y to every
    *  pack command must not be refused. */
   yes?: boolean;
+  /** install: read the source as a registry name even when a path of that name exists. */
+  registry?: boolean;
+  /** install, sync: consent to a code pack whose publisher is not verified (--yes is not this consent). */
+  allowUnverifiedCode?: boolean;
+}
+
+/** pack_install_options — the switches of `wairon pack install` that concern the registry. */
+export interface PackInstallOptions {
+  /** Read the source as a registry name even when a path of that name exists (--registry). */
+  registry?: boolean;
+  /** Consent, given up front, to install a code pack whose publisher is not verified (--allow-unverified-code). */
+  allowUnverifiedCode?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -444,8 +459,129 @@ async function fetchArchive(url: string): Promise<string> {
   return dest;
 }
 
+/** A registry reference: a pack name and the range asked for (`*` when none). */
+interface RegistryRef {
+  name: string;
+  range: string;
+}
+
+/** Split `name@range` (a scoped name keeps its leading `@`). */
+function splitNameRange(source: string): RegistryRef {
+  const at = source.indexOf('@', source.startsWith('@') ? 1 : 0);
+  return at < 0 ? { name: source, range: '*' } : { name: source.slice(0, at), range: source.slice(at + 1) || '*' };
+}
+
+/**
+ * installPack steps 1-2: read an install source as a registry reference, or
+ * null for a path or URL. `--registry` forces a registry name. A scoped name
+ * (`@scope/pack[@range]`) is a registry name despite its `/`; otherwise a
+ * scheme, a `/` or `\`, a leading `.` or a .wpack/.zip suffix is a path or URL,
+ * and a name that exists on disk stays a path, with a hint.
+ */
+function registryReference(source: string, force?: boolean): RegistryRef | null {
+  if (force) return splitNameRange(source);
+  if (/^@[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*(@\S+)?$/i.test(source)) return splitNameRange(source);
+  if (isUrl(source) || isArchiveRef(source) || /[\\/]/.test(source) || source.startsWith('.')) return null;
+  if (files.exists(path.resolve(source))) {
+    if (/^[a-z][a-z0-9-]*(@\S+)?$/.test(source)) {
+      logger.info(`Installing the local folder "${source}". To install the registry pack of that name, add ${chalk.cyan('--registry')}.`);
+    }
+    return null;
+  }
+  return /^[a-z][a-z0-9-]*(@\S+)?$/.test(source) ? splitNameRange(source) : null;
+}
+
+/**
+ * installPack steps 4-6 (and syncPacks' trust rule): report a resolution and
+ * decide whether it may be installed. A code pack whose publisher is not
+ * verified both at publish time and now needs explicit consent:
+ * --allow-unverified-code, or a yes to an interactive question. --yes is not
+ * consent, and a run with no terminal and no flag refuses.
+ */
+async function consentTo(resolution: RegistryResolution, allowUnverifiedCode?: boolean): Promise<boolean> {
+  const label = `${resolution.name}@${resolution.version}`;
+  logger.info(`Resolved ${resolution.name}${resolution.range && resolution.range !== '*' ? `@${resolution.range}` : ''} to ${label} (${resolution.kind}).`);
+  if (resolution.yanked) logger.warn(`${label} is yanked${resolution.yankReason ? `: ${resolution.yankReason}` : '.'}`);
+  if (resolution.newerIncompatible) logger.info(`A newer version, ${resolution.newerIncompatible}, needs a later wairon than ${WAIRON_VERSION}.`);
+  if (resolution.kind !== 'code') return true;
+  const trusted = resolution.verifiedAtPublish && resolution.publisher.verified;
+  if (trusted) {
+    logger.info(`${label} runs code; it is published by the verified publisher ${resolution.publisher.handle}.`);
+    return true;
+  }
+  logger.warn(
+    `${label} RUNS CODE inside wairon, with full access to this machine, and its publisher "${resolution.publisher.handle}" is not verified ` +
+    `(verified when it published: ${resolution.verifiedAtPublish ? 'yes' : 'no'}; verified now: ${resolution.publisher.verified ? 'yes' : 'no'}).`,
+  );
+  if (allowUnverifiedCode) return true;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    logger.error(`Not installed: a code pack from an unverified publisher needs ${chalk.cyan('--allow-unverified-code')} when there is no terminal to ask (--yes is not that consent).`);
+    return false;
+  }
+  const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
+    { type: 'confirm', name: 'proceed', message: `Install ${label}, which runs code from an unverified publisher?`, default: false },
+  ]);
+  if (!proceed) logger.info('Nothing was installed.');
+  return proceed;
+}
+
+/** installPack steps 3-21 for a registry reference. */
+async function installFromRegistry(ref: RegistryRef, yes: boolean | undefined, options: PackInstallOptions): Promise<void> {
+  // Step 3: one exact version.
+  let resolution: RegistryResolution;
+  try {
+    resolution = await registry.resolve(ref.name, ref.range, WAIRON_VERSION);
+  } catch (e) {
+    logger.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 1;
+    return;
+  }
+  // Steps 4-6: the report and the consent a code pack needs.
+  if (!(await consentTo(resolution, options.allowUnverifiedCode))) {
+    process.exitCode = 1;
+    return;
+  }
+  // Step 7: download, then the identical archive path.
+  let archive: string;
+  try {
+    archive = await fetchArchive(resolution.archiveUrl);
+  } catch (e) {
+    logger.error(`Could not download ${resolution.name}@${resolution.version}: ${e instanceof Error ? e.message : String(e)}`);
+    process.exitCode = 1;
+    return;
+  }
+  const extracted = extractArchiveToTemp(archive);
+  try { files.remove(path.dirname(archive)); } catch { /* temp */ }
+  if (!extracted) return;
+  try {
+    const update = await confirmFloatingUpdate(extracted.dir, yes);
+    if (update === 'declined') return;
+    // Step 17: recorded under the registry's source template.
+    const installed = installPackFromDirectory(extracted.dir, resolution.source);
+    // Step 18: the content must be the pack the registry describes.
+    if (installed.digest !== resolution.integrity) {
+      uninstallPack(installed.name, installed.version);
+      logger.error(`Not installed: the downloaded ${resolution.name}@${resolution.version} hashes to ${installed.digest}, but the registry reports ${resolution.integrity}.`);
+      process.exitCode = 1;
+      return;
+    }
+    reportInstalled(installed, resolution.source, update, yes);
+  } catch (e) {
+    logger.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 1;
+  } finally {
+    try { files.remove(extracted.root); } catch { /* temp */ }
+  }
+}
+
 /** `wairon pack install <source>` — install into the store; applies to nothing until selected. */
-export async function installPack(source: string, yes?: boolean): Promise<void> {
+export async function installPack(source: string, yes?: boolean, options: PackInstallOptions = {}): Promise<void> {
+  // Steps 1-2: a registry name goes through the registry first.
+  const ref = registryReference(source, options.registry);
+  if (ref) {
+    await installFromRegistry(ref, yes, options);
+    return;
+  }
   let sourceDir: string;
   let origin: string;
   let cleanup: string | null = null;
@@ -799,7 +935,7 @@ function warnIfUnobtainable(selection: PackSelection, recorded: string | undefin
  * selected. Nothing here is implicit — resolution never fetches, so `sync` is the
  * only place the network is touched.
  */
-export async function syncPacks(): Promise<void> {
+export async function syncPacks(allowUnverifiedCode?: boolean): Promise<void> {
   if (!projectConfigExists()) {
     logger.error('Not inside a wairon project — run `wairon init` first.');
     process.exitCode = 1;
@@ -832,6 +968,29 @@ export async function syncPacks(): Promise<void> {
       continue;
     }
     const url = expandSource(selection.source!, selection.version);
+    // Step 13 (trust) and step 14: a registry source is resolved for its exact
+    // version. Without an integrity pin, a code pack from an unverified publisher
+    // needs the consent an install does; a pin is the consent.
+    if (selection.version && registry.isRegistrySource(selection.source!)) {
+      let resolution: RegistryResolution | null = null;
+      try {
+        resolution = await registry.resolve(selection.name, selection.version, WAIRON_VERSION);
+      } catch (e) {
+        if (!selection.integrity) {
+          logger.error(`Could not sync "${label}": ${e instanceof Error ? e.message : String(e)}`);
+          process.exitCode = 1;
+          continue;
+        }
+      }
+      if (resolution) {
+        if (selection.integrity) {
+          if (resolution.yanked) logger.warn(`${label} is yanked${resolution.yankReason ? `: ${resolution.yankReason}` : '.'} Its pin still fetches it.`);
+        } else if (!(await consentTo(resolution, allowUnverifiedCode))) {
+          process.exitCode = 1;
+          continue;
+        }
+      }
+    }
     try {
       const pack = await fetchAndInstall(selection, url);
       if (!pack) continue;
@@ -844,6 +1003,92 @@ export async function syncPacks(): Promise<void> {
   }
 
   if (installed > 0) logger.success(`Synced ${installed} pack(s) into the pack store.`);
+}
+
+/**
+ * `wairon pack publish [source]` — publish a pack directory (built first) or a
+ * .wpack archive to the wairon pack registry with WAIRON_REGISTRY_TOKEN.
+ */
+export async function publishPack(source: string = '.'): Promise<void> {
+  // Step 1: the token.
+  const token = process.env.WAIRON_REGISTRY_TOKEN?.trim();
+  if (!token) {
+    logger.error(`Publishing needs a registry token in WAIRON_REGISTRY_TOKEN. Create one on your account page in the wairon pack registry.`);
+    process.exitCode = 1;
+    return;
+  }
+  // Steps 2-4: a directory is built in memory; either way the envelope is read first.
+  let archive: Uint8Array;
+  let name: string;
+  let version: string;
+  try {
+    const abs = path.resolve(source);
+    if (files.exists(abs) && files.stat(abs).isDirectory()) {
+      archive = sdkBuildPack(abs).archive;
+    } else {
+      archive = new Uint8Array(files.readBytes(abs));
+    }
+    const info = inspectArchive(archive);
+    name = info.name;
+    version = info.version;
+  } catch (e) {
+    logger.error(`Cannot publish "${source}": ${e instanceof Error ? e.message : String(e)}`);
+    process.exitCode = 1;
+    return;
+  }
+  // Step 5: send it.
+  let result;
+  try {
+    result = await registry.publish(name, version, archive, token);
+  } catch (e) {
+    logger.error(e instanceof Error ? e.message : String(e));
+    process.exitCode = 1;
+    return;
+  }
+  // Step 6: the report.
+  if (result.status === 'published') {
+    logger.success(`Published ${name}@${version}.${result.url ? ` ${result.url}` : ''}`);
+    if (result.integrity) console.log(`  ${chalk.dim(result.integrity)}`);
+    return;
+  }
+  if (result.status === 'exists') {
+    const ours = sdkContentDigestOf(archive);
+    const same = result.integrity !== undefined && ours !== null && result.integrity === ours;
+    logger.error(same
+      ? `${name}@${version} is already published with this same content. Nothing to do.`
+      : `${name}@${version} is already published${result.integrity ? ` with different content (${result.integrity}; a rebuilt archive differs by its build time)` : ''}. A version is never reused: publish this as a new version.`);
+    if (!same) process.exitCode = 1;
+    return;
+  }
+  logger.error(`The registry refused ${name}@${version} (${result.code}): ${result.message}`);
+  process.exitCode = 1;
+}
+
+/** The content integrity of an archive as the registry computes it, or null when it cannot be read. */
+function sdkContentDigestOf(archive: Uint8Array): string | null {
+  const root = files.makeTempDir(path.join(os.tmpdir(), 'wairon-packpub-'));
+  try {
+    const held = path.join(root, 'held', 'pack');
+    files.ensureDir(held);
+    extractPack(archive, held);
+    return packContentDigest(filesUnder(held));
+  } catch {
+    return null;
+  } finally {
+    try { files.remove(root); } catch { /* temp */ }
+  }
+}
+
+/** Every regular file under a directory as SDK pack files (forward-slash paths relative to it). */
+function filesUnder(dir: string, prefix = ''): { path: string; contents: Uint8Array }[] {
+  const out: { path: string; contents: Uint8Array }[] = [];
+  for (const entry of files.listEntries(dir)) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...filesUnder(full, rel));
+    else if (entry.isFile()) out.push({ path: rel, contents: new Uint8Array(files.readBytes(full)) });
+  }
+  return out;
 }
 
 /** Why a selection cannot be synced (a sentence completing `"<label>" …`), or null when it can. */

@@ -16,8 +16,10 @@ fields:
   - name: id
     type: string
     description: >-
-      Skill id within the pack (e.g. domain-implementer), installed as <pack-id>-<id>. Present for a
-      NEW skill; absent when extending.
+      Skill id within the pack (e.g. domain-implementer), installed as <pack-id>-<id>. <pack-id> is
+      the pack name in lower case with the scope of a scoped name (`@acme/sec-lint`) written
+      `acme__` and every other run of non-alphanumerics written `-`: `acme__sec-lint`, so a scoped
+      pack never shares a namespace with a flat one. Present for a NEW skill; absent when extending.
     optional: true
   - name: source
     type: string
@@ -37,4 +39,4 @@ fields:
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:18.960Z'
-updatedAt: '2026-10-04T10:20:41.378Z'
+updatedAt: '2026-11-06T23:39:58.092Z'

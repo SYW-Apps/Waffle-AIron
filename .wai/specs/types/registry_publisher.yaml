@@ -1,0 +1,18 @@
+kind: value-object
+id: registry_publisher
+name: RegistryPublisher
+description: The account that published a pack version in the wairon pack registry, as the registry reports it.
+subsystem: sdd_cli
+fields:
+  - name: handle
+    type: string
+    description: The publisher's account handle (also its personal scope).
+    optional: false
+  - name: verified
+    type: bool
+    description: Whether the registry marks the publisher verified NOW (trusted by a registry admin).
+    optional: false
+methods: []
+sourcePath: src/commands/registry.ts
+createdAt: '2026-11-06T23:40:55.409Z'
+updatedAt: '2026-11-06T23:40:56.221Z'

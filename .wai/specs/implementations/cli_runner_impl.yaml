@@ -923,6 +923,8 @@ methods:
             step: 25
           - value: impact
             step: 27
+          - value: publish
+            step: 29
         defaultStep: 12
       - stepNumber: 2
         label: doInit
@@ -984,8 +986,10 @@ methods:
       - stepNumber: 13
         label: doInstall
         description: >-
-          Install a pack into this wairon install's store (applies to nothing until a project
-          selects it).
+          Install a pack into this wairon install's store — from the registry by name, or from a
+          directory, archive or URL — passing --yes, --registry and --allow-unverified-code (applies
+          to nothing until a project selects it). `wairon install` and `wairon i` run the same
+          action.
         type: call
         targetComponent: cli_packs_adapter
         targetMethod: installPack
@@ -1063,6 +1067,16 @@ methods:
         description: Done.
         type: return
         outcome: impact done
+      - stepNumber: 29
+        label: doPublish
+        description: Publish a pack directory or .wpack archive to the wairon pack registry.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: publishPack
+      - stepNumber: 30
+        description: Done.
+        type: return
+        outcome: publish done
   - name: runLock
     narrative:
       - stepNumber: 1
@@ -3119,7 +3133,11 @@ methods:
         description: >-
           Build the ephemeral data dir (per bound root; it is disposable - the registration below
           discards it when it is unversioned or from another major) and the loopback, auth-off,
-          development-mode host configuration
+          development-mode host configuration. The port: without --port, the first port from 8080
+          upward (at most 8099) that is free on 127.0.0.1 together with the next one, which the dev
+          admin listener takes, so a second project's dev server, or anything else on 8080, never
+          stops this one from starting; with --port, exactly that port, refused with a plain message
+          naming it (and the admin port beside it) when either is taken, never a raw listen error
         type: local
       - stepNumber: 5
         description: >-
@@ -4449,4 +4467,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-31T23:49:15.889Z'
+updatedAt: '2026-11-07T01:25:27.233Z'
