@@ -471,3 +471,46 @@ export interface DevStatus {
   devMode: boolean;
   problems: DevStartProblem[];
 }
+
+// ── Dev cockpit (`wairon dev`): review requests and page-run commands ─────────
+
+export type ReviewStatus = 'pending' | 'locked' | 'approved' | 'changes_requested' | 'superseded' | 'withdrawn';
+
+/** A reviewer's note pinned to one spec. */
+export interface ReviewNote {
+  specId: string;
+  note: string;
+}
+
+/** How the human answered a review request. */
+export interface ReviewDecision {
+  comment?: string;
+  notes: ReviewNote[];
+  decidedAt: string;
+  decidedBy: string;
+}
+
+/** An agent's request that the human review the design (`review`) or approve it with a lock (`lock`). */
+export interface ReviewRequest {
+  id: string;
+  kind: 'review' | 'lock' | string;
+  subsystem?: string;
+  note: string;
+  designId: string;
+  requestedAt: string;
+  status: ReviewStatus;
+  decision?: ReviewDecision;
+}
+
+/** What a human command run from the dev page printed. */
+export interface DevCommandResult {
+  command: string;
+  ok: boolean;
+  output: string[];
+}
+
+/** The answer to deciding a review request; the request stays pending when its lock failed. */
+export interface DevReviewDecision {
+  request: ReviewRequest;
+  lock?: DevCommandResult;
+}

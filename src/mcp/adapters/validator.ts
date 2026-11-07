@@ -14,3 +14,6 @@ export { searchSpecs, findReferences } from '../../core/validation.js';
 // adviseNetwork: the family root's network findings on a member validated on
 // its own, each marked advisory — what sdd_validate_tree appends beside them.
 export { adviseNetwork } from '../../core/validation.js';
+// listRules: the active rule set, each rule saying whether it judges the design or
+// the code — sdd_request_review keeps the design half, as the lock does.
+export { listRules } from '../../core/validation.js';

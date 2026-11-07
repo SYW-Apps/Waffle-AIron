@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import * as net from 'net';
+import * as util from 'util';
 import { processes } from '../io/index.js';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -15,10 +16,14 @@ import { adminTokenProblem } from '../utils/admin-token.js';
 import * as localAdmin from './adapters/host.js';
 import { runWithProjectRoot, resolveProjectBinding } from '../utils/fs.js';
 import { loadProjectConfig, seedDemoTree, buildCanvasDataModel } from './adapters/core.js';
+import { announceDevServer, withdrawDevServer } from './adapters/core.js';
+import { runGenerate } from './generate.js';
+import { runDoctor } from './doctor.js';
 import { effectiveProjectId } from '../models/project.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
+import type { DevCommand, DevCommands, DevCommandResult } from '../server/dev-commands.js';
 import type {
   AuditRetentionPolicy,
   Capability,
@@ -382,6 +387,73 @@ export async function chooseDevPort(requested?: string): Promise<number> {
   throw new WaironError(`No free port between ${DEV_PORT_FIRST} and ${DEV_PORT_LAST + 1} for the dev server and its admin listener. Stop another wairon dev, or pass --port.`);
 }
 
+// eslint-disable-next-line no-control-regex
+const ANSI_CODES = /\u001b\[[0-9;]*[A-Za-z]/g;
+
+/** Thrown in place of process.exit while a dev-page command runs, so a failing command never ends the dev server. */
+class CommandExit extends Error {
+  constructor(readonly code: number) { super(`exited with code ${code}`); }
+}
+
+/** Whether a dev-page command is capturing the console (the page runs one at a time). */
+let capturing = false;
+
+/**
+ * Run one of the CLI's own commands for the dev page: everything it prints is captured, colour codes
+ * removed, one line per entry; a thrown error or an exit with a non-zero code is a failed result with
+ * the reason as its last line, never an ended process. One at a time.
+ */
+async function captureCommand(name: string, root: string, body: () => Promise<void>): Promise<DevCommandResult> {
+  if (capturing) throw new Error('another command is running');
+  capturing = true;
+  const lines: string[] = [];
+  const take = (...args: unknown[]): void => {
+    const text = args.map((a) => (typeof a === 'string' ? a : util.inspect(a))).join(' ').replace(ANSI_CODES, '');
+    for (const line of text.split(/\r?\n/)) lines.push(line);
+  };
+  const saved = { log: console.log, info: console.info, warn: console.warn, error: console.error, exit: process.exit };
+  console.log = take;
+  console.info = take;
+  console.warn = take;
+  console.error = take;
+  process.exit = ((code?: number | string | null) => { throw new CommandExit(Number(code ?? 0)); }) as typeof process.exit;
+  let ok = true;
+  try {
+    await runWithProjectRoot(root, body);
+  } catch (e) {
+    if (e instanceof CommandExit) {
+      ok = e.code === 0;
+    } else {
+      ok = false;
+      take(e instanceof Error ? e.message : String(e));
+    }
+  } finally {
+    console.log = saved.log;
+    console.info = saved.info;
+    console.warn = saved.warn;
+    console.error = saved.error;
+    process.exit = saved.exit;
+    capturing = false;
+  }
+  return { command: name, ok, output: lines };
+}
+
+/**
+ * The human commands `wairon dev` hands its server so the page runs exactly what the terminal runs:
+ * the CLI's lock (unattended, of one subsystem when named, this machine's git identity as approver
+ * exactly as `wairon lock` records it), generate, and doctor --fix.
+ */
+export function devCommandsFor(root: string): DevCommands {
+  const lock: DevCommand = (subsystem) => captureCommand('lock', root, async () => {
+    // Imported on use: the runner imports this module's siblings.
+    const { lockCommand } = await import('../cli/runner.js');
+    await lockCommand({ yes: true, subsystem: subsystem ?? undefined });
+  });
+  const generate: DevCommand = () => captureCommand('generate', root, async () => { await runGenerate({}); });
+  const doctor: DevCommand = () => captureCommand('doctor', root, async () => { await runDoctor({ fix: true }); });
+  return { lock, generate, doctor };
+}
+
 export async function runDev(options: HostOptions = {}): Promise<void> {
   // The dev server serves the project the binding rule binds from here — the
   // same root `wairon status` reports and the MCP server attaches to: the
@@ -432,6 +504,8 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
     authEnabled: false,
     devMode: true,
     exposurePolicy,
+    // This CLI's own human commands, so the page runs exactly what the terminal runs.
+    devCommands: devCommandsFor(cwd),
   };
 
   // Register the cwd as the single local project 'local' (idempotent upsert). Its
@@ -462,8 +536,11 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
       logger.warn(`  ${m.qualifier}${m.record.memberPath ? chalk.gray(` (${m.record.memberPath})`) : ''}: ${m.reason ?? 'it cannot be read'}`);
     }
   }
+  // Say where the page is shown, so an agent's review request can name it.
+  try { runWithProjectRoot(cwd, () => announceDevServer(url, process.pid)); } catch { /* an unwritable announcement never stops the server */ }
+
   logger.blank();
-  logger.info('An agent edits specs; refresh the page to see the live graph. Press Ctrl+C to stop.');
+  logger.info('The page follows the specs live and shows an agent's review and lock requests. Press Ctrl+C to stop.');
 
   if (options.open) openBrowser(url);
 
@@ -476,6 +553,8 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
   });
+  // On shutdown, the announcement is withdrawn (the page is gone with the server).
+  try { runWithProjectRoot(cwd, () => withdrawDevServer(process.pid)); } catch { /* nothing left to withdraw */ }
 }
 
 // ── wairon host project <action> ──────────────────────────────────────────────

@@ -26,6 +26,7 @@ import { ThemeBuilder } from './views/ThemeBuilder';
 import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
 import { DevBanner } from './views/DevBanner';
+import { CommandsPanel, ReviewHost } from './views/DevCockpit';
 import { Tabs } from './ui';
 import { post, raw } from './api';
 
@@ -110,6 +111,7 @@ function Sidebar(props: { adminVisible: boolean; collapsed: boolean; onToggle: (
 const DEV_TABS = [
   { id: 'canvas', label: 'Canvas' },
   { id: 'specs', label: 'Specs' },
+  { id: 'commands', label: 'Commands' },
 ];
 
 /** `/canvas/[local/]<engine route>` — the local project's live canvas, mounted
@@ -156,7 +158,7 @@ function DevSpecs() {
 function DevShell() {
   const nav = useNavigate();
   const { pathname } = useLocation();
-  const tab = pathname.startsWith('/specs') ? 'specs' : 'canvas';
+  const tab = pathname.startsWith('/specs') ? 'specs' : pathname.startsWith('/commands') ? 'commands' : 'canvas';
 
   return (
     <div className="shell">
@@ -166,16 +168,18 @@ function DevShell() {
           <span className="dev-tag" title="Local developer server — this project only">
             dev
           </span>
-          <Tabs tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : '/canvas')} />
+          <Tabs tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : id === 'commands' ? '/commands' : '/canvas')} />
           <span className="spacer" />
           <RealtimeStatus />
           <ThemeCog />
         </header>
         <DevBanner />
+        <ReviewHost />
         <main className="view">
           <Routes>
             <Route path="/canvas/*" element={<DevCanvas />} />
             <Route path="/specs/*" element={<DevSpecs />} />
+            <Route path="/commands" element={<CommandsPanel />} />
             <Route path="*" element={<Navigate to="/canvas" replace />} />
           </Routes>
         </main>

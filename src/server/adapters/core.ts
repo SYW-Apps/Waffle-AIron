@@ -56,6 +56,11 @@ export {
   // A member's path resolved within the root that declares it — the hosted
   // member-resolution seam. The adapter names it for what it answers.
   assertContainedProjectPath as resolveContainedProjectPath,
+  // The dev cockpit's review requests: the served project's pending requests, one request
+  // brought up to date, and the human's decision.
+  pendingReviews,
+  reviewStatus,
+  decideReview,
 } from '../../core/index.js';
 
 /**

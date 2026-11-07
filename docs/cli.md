@@ -1610,7 +1610,7 @@ its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in 
 content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
 `which -a wairon` elsewhere), then reconnect the assistant.
 
-The local server offers 53 tools:
+The local server offers 55 tools:
 
 | Group | Tools |
 |-------|-------|
@@ -1625,6 +1625,7 @@ The local server offers 53 tools:
 | Network | `sdd_set_network`, `sdd_get_network_flows`, `sdd_explain_flow` |
 | Packs | `sdd_pack_impact` |
 | Delegation | `sdd_get_agent_brief` (the live brief for one agent; also served as the `wairon-agent://` resource) |
+| Review | `sdd_request_review` (ask the human to review the design, or to approve it with a lock; validates first, records the request under `.wai/.local/reviews/`), `sdd_await_review` (wait for the answer: the decision, its comment and the notes pinned to specs) |
 | Practices | `sdd_use_practices` (list the practices the loaded packs declare; add or drop practices for this session, which later briefs carry) |
 
 Every tool description ends with its argument names (`Arguments: id, newId, dryRun?.`). Every write

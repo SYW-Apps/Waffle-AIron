@@ -87,6 +87,15 @@ describe('data-plane tool classification', () => {
     expect(toolScope('sdd_get_externals_status')).toBe('tree');
   });
 
+  it('classifies the review tools on purpose: the request on the bound tree, the wait on the record, both writes', () => {
+    expect(toolScope('sdd_request_review')).toBe('tree');
+    expect(toolScope('sdd_await_review')).toBe('record');
+    for (const name of ['sdd_request_review', 'sdd_await_review']) {
+      expect(isExplicitlyClassifiedTool(name), name).toBe(true);
+      expect(requiredDataPlaneCapability(name), name).toBe('project:write');
+    }
+  });
+
   it('gates a never-listed rename tool as a tree-scoped write by its sdd_rename_ prefix alone, not a hand-kept name list', () => {
     expect(requiredDataPlaneCapability('sdd_rename_anything')).toBe('project:write');
     expect(toolScope('sdd_rename_anything')).toBe('tree');

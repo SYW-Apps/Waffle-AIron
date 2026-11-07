@@ -66,6 +66,8 @@ import {
   renameParam,
   loadProjectConfig,
   loadProjectExtensions,
+  requestReview as recordReviewRequest,
+  reviewStatus as readReviewRequest,
   getStatusReport,
   approvalVerdict,
   composeAgentBrief,
@@ -99,7 +101,7 @@ import { listConsumers as externalConsumers, diffSurface as surfaceDiff } from '
 import { flows as networkFlows, explain as explainNetworkFlow, declare as declareNetwork } from './network.js';
 import type { NetworkFlow } from './adapters/network.js';
 import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
-import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork } from './adapters/validator.js';
+import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork, listRules } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredExternals, declaredMembers } from '../models/project.js';
@@ -1665,9 +1667,9 @@ function reg<Args extends Record<string, unknown>>(
      */
     outputSchema?: Record<string, z.ZodTypeAny>;
   },
-  cb: (args: Args) => CallToolResult,
+  cb: (args: Args, extra: ToolExtra) => CallToolResult | Promise<CallToolResult>,
 ): void {
-  const guarded = (args: Args): CallToolResult => {
+  const guarded = (args: Args, extra: ToolExtra): CallToolResult | Promise<CallToolResult> => {
     // The standing guard. A tree an older major wrote must be upgraded by the
     // human first: the tool runs nothing and answers why.
     const refusal = standingRefusal(name);
@@ -1683,7 +1685,11 @@ function reg<Args extends Record<string, unknown>>(
     // A spec write is a read-modify-write of the tree: serialized across
     // processes by the tree's write lock (which also re-reads the tree), so two
     // sessions writing one spec land both writes instead of losing one.
-    const answered = SPEC_WRITE_TOOLS.has(name) ? underTreeLock(() => cb(args)) : cb(args);
+    const answered = SPEC_WRITE_TOOLS.has(name) ? underTreeLock(() => cb(args, extra) as CallToolResult) : cb(args, extra);
+    if (answered instanceof Promise) return answered.then((r) => finish(r, freshness));
+    return finish(answered, freshness);
+  };
+  const finish = (answered: CallToolResult, freshness: BuildFreshness): CallToolResult => {
     const fresh = freshness.state === 'fresh'
       ? answered
       : markStale(answered, freshness, name === 'sdd_get_status' ? 'lead' : 'trail');
@@ -1755,6 +1761,68 @@ const statusInput = z.enum(STATUS_VALUES).optional().describe(
 // ---------------------------------------------------------------------------
 
 const SKILL_RESOURCE_MIME = 'text/markdown';
+
+/** What the SDK hands a tool handler beside its arguments: the cancel signal, the call's metadata and the way to notify the client. */
+interface ToolExtra {
+  signal?: AbortSignal;
+  _meta?: { progressToken?: string | number };
+  sendNotification?: (notification: { method: string; params?: Record<string, unknown> }) => Promise<void>;
+}
+
+/** How a review wait polls and reports; the defaults are the tool's, a test passes shorter ones. */
+export interface ReviewWaitTiming {
+  /** Milliseconds between two reads of the request. */
+  pollMs: number;
+  /** Milliseconds between two progress notifications. */
+  progressMs: number;
+}
+
+const REVIEW_WAIT_TIMING: ReviewWaitTiming = { pollMs: 2000, progressMs: 3 * 60 * 1000 };
+
+/**
+ * mcp_orchestrator.awaitReview: wait for a review request to be decided and
+ * answer it as it stands. While it is pending, read it every `pollMs`; every
+ * `progressMs` send a progress notification on the call's progress token (when
+ * the client sent one) so a long wait is never cut off as idle.
+ */
+export async function awaitReview(
+  id: string,
+  timeoutSeconds: number,
+  extra: ToolExtra = {},
+  timing: ReviewWaitTiming = REVIEW_WAIT_TIMING,
+): Promise<CallToolResult> {
+  try {
+    const started = Date.now();
+    let lastProgress = started;
+    let request = readReviewRequest(id);
+    while (request.status === 'pending' && Date.now() - started < timeoutSeconds * 1000 && !extra.signal?.aborted) {
+      await new Promise((resolve) => setTimeout(resolve, timing.pollMs));
+      request = readReviewRequest(id);
+      const token = extra._meta?.progressToken;
+      if (request.status === 'pending' && token !== undefined && extra.sendNotification && Date.now() - lastProgress >= timing.progressMs) {
+        lastProgress = Date.now();
+        try {
+          await extra.sendNotification({
+            method: 'notifications/progress',
+            params: { progressToken: token, progress: Math.round((lastProgress - started) / 1000), message: `Still waiting for the human to answer review request ${id}` },
+          });
+        } catch { /* a notification that cannot be sent never ends the wait */ }
+      }
+    }
+    if (request.status === 'pending') {
+      return structured(`Review request ${id} is still pending after ${timeoutSeconds} seconds: the human has not answered. Call sdd_await_review again to keep waiting.`, { request, timedOut: true });
+    }
+    const d = request.decision;
+    const lines = [`Review request ${id} (${request.kind}) is ${request.status}${d ? `, decided by ${d.decidedBy} at ${d.decidedAt}` : ''}.`];
+    if (request.status === 'superseded') lines.push('The design changed after the request was made, so it no longer describes what the human would approve: ask again for the design as it stands.');
+    if (d?.comment) lines.push(`Comment: ${d.comment}`);
+    for (const n of d?.notes ?? []) lines.push(`Note on ${n.specId}: ${n.note}`);
+    return structured(lines.join('\n'), { request, timedOut: false });
+  } catch (e) {
+    return errMessage(e);
+  }
+}
+
 
 
 /** Resolve an MCP resource URI (wairon-skill://<id>) back to its skill id. */
@@ -4068,6 +4136,68 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         return errText(String(e));
       }
     },
+  );
+
+  // ── The review handshake: the agent asks, the human decides ─────────────
+  reg<{ kind: 'review' | 'lock'; note: string; subsystem?: string }>(server,
+    'sdd_request_review',
+    {
+      description: 'Ask the human to review the design (kind "review": feedback only) or to approve it with a lock (kind "lock"; optionally one subsystem), with a note saying what changed and what to look at. Validates first and refuses, recording nothing, while the design has errors; otherwise records the request and answers where the human sees it (the running `wairon dev` page, or a line to ask the human to open it or run `wairon lock`). Never locks: only the human approves. Follow with sdd_await_review to hear the answer.',
+      inputSchema: {
+        kind: z.enum(['review', 'lock']).describe('"review" for feedback only, "lock" to ask for approval'),
+        note: z.string().min(1).describe('What changed and what to review, shown to the human'),
+        subsystem: z.string().min(1).optional().describe('For a lock request: the one subsystem to re-approve'),
+      },
+    },
+    ({ kind, note, subsystem }) => {
+      try {
+        if (kind === 'review' && subsystem) return errText('sdd_request_review: a subsystem goes with kind "lock"; a review request covers the whole design.');
+        // Step 1: the validation gate. A lock request is judged as the lock will judge it.
+        const config = loadProjectConfig();
+        if (!config) throw new ProjectNotInitializedError();
+        const result = validateFamily({
+          rules: config.rules,
+          projectType: config.projectType,
+          ...(kind === 'lock' ? { treatAllAsComplete: true } : {}),
+          ...(subsystem ? { scopeSubsystem: subsystem } : {}),
+        });
+        // Step 2: the design half — a finding of a rule that judges code never refuses the request, as it never refuses the lock.
+        const codeCodes = new Set(listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
+        const design = result.issues.filter((i) => !codeCodes.has(i.code));
+        // Steps 3-4: every error is answered, nothing is recorded.
+        const errors = design.filter((i) => i.severity === 'error');
+        if (errors.length > 0) {
+          const listed = errors.map((i) => `- [${i.code}] ${i.message}`).join('\n');
+          return errText(`sdd_request_review refused: the design has ${errors.length} error(s), so the human is not asked yet. Fix them and ask again; nothing was recorded.\n${listed}`);
+        }
+        const warnings = design.filter((i) => i.severity === 'warning');
+        // Step 5: record.
+        const receipt = recordReviewRequest(kind, note, subsystem);
+        // Step 6: the answer.
+        const where = receipt.shownAt
+          ? `The \`wairon dev\` page at ${receipt.shownAt} shows it now.`
+          : 'No dev server runs for this project: ask the human to open `wairon dev` (it shows the request) or to run `wairon lock`.';
+        const warned = warnings.length > 0
+          ? ` ${warnings.length} warning(s) do not block the request (as they do not block \`wairon lock\`); fix them or explain them in the note:\n${warnings.map((i) => `- [${i.code}] ${i.message}`).join('\n')}\n`
+          : '';
+        const text = `Requested a ${kind}${subsystem ? ` of subsystem "${subsystem}"` : ''} (request ${receipt.request.id}).${warned} ${where} Call sdd_await_review with id "${receipt.request.id}" to wait for the answer.`;
+        return structured(text, { ...receipt, warnings: warnings.length });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ id: string; timeoutSeconds?: number }>(server,
+    'sdd_await_review',
+    {
+      description: 'Wait for the human to answer a review request made with sdd_request_review: blocks until it is decided (locked, approved or changes_requested, with the human\'s comment and the notes pinned to specs), superseded (the design changed after the request) or withdrawn, or until the timeout (default 3600 seconds), when it answers pending and you wait again. A lock made anywhere (the terminal included) that covers the requested design answers a lock request.',
+      inputSchema: {
+        id: z.string().min(1).describe('The request id sdd_request_review answered'),
+        timeoutSeconds: z.number().int().positive().optional().describe('How long to wait; default 3600'),
+      },
+    },
+    ({ id, timeoutSeconds }, extra) => awaitReview(id, timeoutSeconds ?? 3600, extra),
   );
 
   // ── Chained-subproject bind-time announcement ─────────────────────────────
