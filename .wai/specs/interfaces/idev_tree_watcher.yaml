@@ -1,0 +1,23 @@
+id: idev_tree_watcher
+name: Dev Tree Watcher Interface
+description: Watch the served project's .wai/ folder and nudge the page.
+component: dev_tree_watcher
+methods:
+  - name: watch
+    description: >-
+      Start watching root's .wai/ folder; on changes (coalesced over a quarter of a second) call
+      onChange with the kind of change: `reviews` for a review request, `tree` for anything else
+      (specs, lock record, configuration). Answers the function that stops watching.
+    signature: 'watch(root: string, onChange: ChangeListener): StopWatching'
+    returns: StopWatching
+    params:
+      - name: root
+        type: string
+        description: The served project's root
+      - name: onChange
+        type: ChangeListener
+        description: Called with `reviews` or `tree`
+    effect: io
+status: complete
+createdAt: '2026-11-07T02:40:40.169Z'
+updatedAt: '2026-11-07T02:40:42.759Z'

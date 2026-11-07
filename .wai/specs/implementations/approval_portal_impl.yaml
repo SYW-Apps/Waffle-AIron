@@ -130,6 +130,55 @@ methods:
         type: call
         targetComponent: approval_comparison
         targetMethod: approvedStatuses
+  - name: requestReview
+    narrative:
+      - stepNumber: 1
+        description: Forward to the review orchestrator
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: request
+  - name: reviewStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the review orchestrator
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: status
+  - name: pendingReviews
+    narrative:
+      - stepNumber: 1
+        description: Forward to the review orchestrator
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: pending
+  - name: decideReview
+    narrative:
+      - stepNumber: 1
+        description: Forward to the review orchestrator
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: decide
+  - name: withdrawReview
+    narrative:
+      - stepNumber: 1
+        description: Forward to the review orchestrator
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: withdraw
+  - name: announceDevServer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the review orchestrator
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: announceDevServer
+  - name: withdrawDevServer
+    narrative:
+      - stepNumber: 1
+        description: Forward to the review orchestrator
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: withdrawDevServer
 status: complete
 createdAt: '2026-09-25T17:32:26.946Z'
-updatedAt: '2026-10-06T23:05:08.534Z'
+updatedAt: '2026-11-07T02:38:30.328Z'

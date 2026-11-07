@@ -1,0 +1,27 @@
+kind: enum
+id: review_status
+name: ReviewStatus
+description: Where an agent's review request stands.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/core/reviews.ts
+values:
+  - name: pending
+    description: Waiting for the human
+  - name: locked
+    description: >-
+      A lock request whose design the human approved: a lock now covers the design it was made
+      against (from the page or the terminal)
+  - name: approved
+    description: A review request the human accepted, without a lock
+  - name: changes_requested
+    description: The human sent it back with a comment and notes
+  - name: superseded
+    description: >-
+      The design changed after the request was made and before a decision, so it no longer describes
+      what the human would approve
+  - name: withdrawn
+    description: The requester took it back
+createdAt: '2026-11-07T02:36:30.405Z'
+updatedAt: '2026-11-07T02:36:31.563Z'

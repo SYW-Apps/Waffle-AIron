@@ -12,6 +12,8 @@ import { handleShareRequest } from './sharehttp.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as backupSchedule from './backup-schedule.js';
+import * as devTreeWatcher from './dev-watcher.js';
+import { existingProjectRoot } from './projects.js';
 import { bootstrapInstance } from './instance-bootstrap.js';
 import * as identityPortal from './identity-portal.js';
 import * as projectlifecycle from './projectlifecycle.js';
@@ -798,6 +800,19 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   // never commits noise) AND the container-level backup bindings whose interval
   // has elapsed. Both sweeps are pre-authorized internals; per-item failures
   // are recorded inside them and never abort the other.
+  // On the local development server only: watch the served project's .wai/ folder, so a spec written
+  // by another process (an agent's MCP server) or a terminal lock refreshes the open page and a new
+  // review request pops up. A change is a bare nudge; the page refetches through its own session.
+  let stopWatching: devTreeWatcher.DevStopWatching | undefined;
+  if (cfg.devMode === true) {
+    const servedRoot = existingProjectRoot(cfg.dataDir, 'local');
+    if (servedRoot) {
+      stopWatching = devTreeWatcher.watch(servedRoot, (kind) => {
+        publishChange(kind === 'reviews' ? 'reviews' : 'project:local');
+      });
+    }
+  }
+
   backupSchedule.start(cfg);
 
   return {
@@ -807,6 +822,7 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
     },
     close() {
       backupSchedule.stop();
+      stopWatching?.();
       getRealtimeHub().closeAll();
       dataServer.close();
       adminServer.close();

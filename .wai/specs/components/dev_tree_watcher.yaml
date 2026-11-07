@@ -1,0 +1,15 @@
+id: dev_tree_watcher
+name: Dev Tree Watcher
+description: >-
+  On the local development server only: watches the served project's .wai/ folder, so a change made
+  by any process — an agent's spec write through `wairon mcp serve`, a lock in the terminal, a new
+  review request — reaches the open dev page at once instead of on the next manual refresh. Changes
+  are coalesced (a burst of writes is one nudge) and the watch stops with the server.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - files_adapter
+status: complete
+createdAt: '2026-11-07T02:40:37.337Z'
+updatedAt: '2026-11-07T02:41:00.492Z'

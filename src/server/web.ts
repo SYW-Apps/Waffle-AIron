@@ -30,6 +30,9 @@ import { existingProjectRoot, listFamilyRecords, resolveProjectRoot } from './pr
 import * as shareadmin from './shareadmin.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
+import * as devCockpit from './dev-commands.js';
+import type { DevCommandResult, DevReviewDecision } from './dev-commands.js';
+import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import * as hostNetwork from './adapters/network.js';
 import { validateAsComplete } from './adapters/validator.js';
@@ -541,6 +544,28 @@ export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projec
  */
 export function getDevStatus(cfg: HostConfig, sessionId: string): DevStatus {
   return webproject.devStatus(cfg, sessionId); // step 1 (delegate)
+}
+
+/** Forward the session to the dev cockpit orchestrator: the served project's pending review requests. */
+export function getDevReviews(cfg: HostConfig, sessionId: string): ReviewRequest[] {
+  return devCockpit.reviews(cfg, sessionId); // step 1 (call)
+}
+
+/** Forward the session and the decoded arguments to the dev cockpit orchestrator: the human's decision on a review request. */
+export function decideDevReview(
+  cfg: HostConfig,
+  sessionId: string,
+  id: string,
+  outcome: ReviewStatus,
+  comment?: string,
+  notes?: ReviewNote[],
+): Promise<DevReviewDecision> {
+  return devCockpit.decide(cfg, sessionId, id, outcome, comment, notes); // step 1 (call)
+}
+
+/** Forward the session and the decoded arguments to the dev cockpit orchestrator: run one command the CLI handed the server. */
+export function runDevCommand(cfg: HostConfig, sessionId: string, command: string, subsystem?: string): Promise<DevCommandResult> {
+  return devCockpit.run(cfg, sessionId, command, subsystem); // step 1 (call)
 }
 
 /**
@@ -3612,6 +3637,34 @@ export async function handleWebRequest(
     // route does not exist.
     if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'status') {
       return sendJson(res, 200, getDevStatus(cfg, sessionId));
+    }
+
+    // The dev cockpit's routes — DEV MODE ONLY, mounted nowhere else: the served project's pending
+    // review requests, the human's decision on one, and the commands the CLI handed the server.
+    // The session is authenticated by the orchestrator exactly as the other /web routes are.
+    // GET /web/dev/reviews → the pending review requests.
+    if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'reviews') {
+      return sendJson(res, 200, getDevReviews(cfg, sessionId));
+    }
+    // POST /web/dev/reviews/decide { id, outcome, comment?, notes? } → { request, lock? }.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 4 && parts[1] === 'dev' && parts[2] === 'reviews' && parts[3] === 'decide') {
+      return sendJson(res, 200, await decideDevReview(
+        cfg,
+        sessionId,
+        String(body?.id ?? ''),
+        String(body?.outcome ?? '') as ReviewStatus,
+        typeof body?.comment === 'string' ? body.comment : undefined,
+        Array.isArray(body?.notes) ? (body.notes as ReviewNote[]) : undefined,
+      ));
+    }
+    // POST /web/dev/commands { command, subsystem? } → { command, ok, output }.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'commands') {
+      return sendJson(res, 200, await runDevCommand(
+        cfg,
+        sessionId,
+        String(body?.command ?? ''),
+        typeof body?.subsystem === 'string' && body.subsystem !== '' ? body.subsystem : undefined,
+      ));
     }
 
     // GET /web/projects/externals?projectId= → one authorized project's relation

@@ -164,6 +164,13 @@ const PROJECT_LIFECYCLE_TOOLS = new Set<string>([
   'sdd_host_withdraw_request',
 ]);
 
+/** The two review tools: on the hosted data plane an agent's lock request is the hosted lock request
+ *  and its wait is the wait on the approval request, so an agent uses the same two tools everywhere. */
+const REVIEW_TOOLS = new Set<string>([
+  'sdd_request_review',
+  'sdd_await_review',
+]);
+
 /** The four hosted landscape tools the data plane handles directly, routing
  *  them to the surface exchange orchestrator with currentProjectId = the BOUND
  *  project (never a project id taken from the tool arguments). */
@@ -206,6 +213,7 @@ const PROJECT_RECORD_TOOLS = new Set<string>([
   'sdd_host_get_approval_status',
   'sdd_host_await_approval',
   'sdd_host_withdraw_request',
+  'sdd_await_review',
   ...PROJECT_OPS_TOOLS,
   ...LANDSCAPE_DISCOVERY_TOOLS,
 ]);
@@ -367,6 +375,7 @@ export type ToolScope = 'tree' | 'record';
 /** The TREE-scoped hosted tools the data plane dispatches itself. */
 const TREE_SCOPED_HOST_TOOLS = new Set<string>([
   'sdd_host_lock_project',
+  'sdd_request_review',
   ...TREE_TRANSFER_TOOLS,
 ]);
 
@@ -407,6 +416,8 @@ export function isExplicitlyClassifiedTool(toolName: string): boolean {
 const MUTATING_HOST_TOOLS = new Set([
   'sdd_host_initialize_project',
   'sdd_host_lock_project',
+  'sdd_request_review', // a lock request executes or requests the hosted lock
+  'sdd_await_review',
   'sdd_host_await_approval', // a decided approval may have executed the action
   'sdd_host_withdraw_request', // a withdrawn request leaves the pending lists
   'sdd_host_policy_reconcile',
@@ -516,6 +527,7 @@ export async function dispatchProjectLifecycleTool(
     typeof name !== 'string' ||
     !(
       PROJECT_LIFECYCLE_TOOLS.has(name) ||
+      REVIEW_TOOLS.has(name) ||
       LANDSCAPE_DISCOVERY_TOOLS.has(name) ||
       PROJECT_OPS_TOOLS.has(name) ||
       TREE_TRANSFER_TOOLS.has(name)
@@ -537,6 +549,24 @@ export async function dispatchProjectLifecycleTool(
         // The BOUND record (args ignored): a member's own lock request,
         // approval page and status when a member is bound.
         value = lockProject(cfg, credential, projectId);
+        break;
+      case 'sdd_request_review':
+        // A review-only request is local: hosted approval is a lock decision. A lock
+        // request is the hosted lock request on the BOUND record; the agent's note is
+        // not part of a hosted request.
+        if (args.kind !== 'lock') {
+          throw new Error('sdd_request_review: kind "review" is local only; on the hosted data plane request a lock (kind: "lock"), which is sdd_host_lock_project');
+        }
+        value = lockProject(cfg, credential, projectId);
+        break;
+      case 'sdd_await_review':
+        // The request id is the hosted approval request's id.
+        value = await awaitApproval(
+          cfg,
+          credential,
+          String(args.id ?? ''),
+          Number(args.timeoutSeconds ?? 3600),
+        );
         break;
       case 'sdd_host_await_approval':
         // Long-poll for a decision on the caller's own approval request.

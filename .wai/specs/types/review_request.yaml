@@ -1,0 +1,49 @@
+kind: entity
+id: review_request
+name: ReviewRequest
+description: >-
+  An agent's request that the human review the design, or approve it with a lock. It lives in the
+  project's .wai/.local/reviews/ folder, which git ignores, so it is local to this checkout and
+  works whether or not a dev server runs.
+subsystem: sdd_core
+fields:
+  - name: id
+    type: string
+    description: The request id.
+    optional: false
+  - name: kind
+    type: string
+    description: '`review` (feedback only) or `lock` (approve the design with a lock).'
+    optional: false
+  - name: subsystem
+    type: string
+    description: >-
+      For a lock request, the one subsystem to re-approve, as `wairon lock --subsystem` does; absent
+      = the whole design.
+    optional: true
+  - name: note
+    type: string
+    description: 'What the agent asks to be reviewed and why: the change it made and what to look at.'
+    optional: false
+  - name: designId
+    type: string
+    description: >-
+      The design identity of the bound project's own specs when the request was made
+      (approval_portal.computeOwnDesignId).
+    optional: false
+  - name: requestedAt
+    type: string
+    description: When it was made (ISO-8601).
+    optional: false
+  - name: status
+    type: ReviewStatus
+    description: Where it stands.
+    optional: false
+  - name: decision
+    type: ReviewDecision
+    description: The human's answer, once decided.
+    optional: true
+methods: []
+sourcePath: src/core/reviews.ts
+createdAt: '2026-11-07T02:36:39.520Z'
+updatedAt: '2026-11-07T02:36:40.728Z'

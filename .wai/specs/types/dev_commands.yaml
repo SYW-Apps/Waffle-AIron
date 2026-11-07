@@ -1,0 +1,25 @@
+kind: value-object
+id: dev_commands
+name: DevCommands
+description: >-
+  The human commands `wairon dev` hands its server, so the page runs exactly what the terminal runs:
+  the CLI's own lock (this machine's git identity as approver, whole design or one subsystem),
+  generate and doctor --fix. Only the local development server has them; a hosted server never does.
+subsystem: sdd_host
+fields:
+  - name: lock
+    type: DevCommand
+    description: '`wairon lock` (with `--subsystem` when given), unattended.'
+    optional: false
+  - name: generate
+    type: DevCommand
+    description: '`wairon generate`.'
+    optional: false
+  - name: doctor
+    type: DevCommand
+    description: '`wairon doctor --fix`.'
+    optional: false
+methods: []
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-07T02:41:16.714Z'
+updatedAt: '2026-11-07T02:41:17.536Z'

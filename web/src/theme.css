@@ -1044,3 +1044,20 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   .tb-layout { grid-template-columns: 1fr; }
   .tb-side { position: static; }
 }
+
+/* Dev cockpit: review popup, review screen, command output. */
+.review-popup {
+  position: fixed; bottom: 20px; left: 20px; z-index: 390; width: min(360px, calc(100vw - 40px));
+  display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
+  border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
+  border-radius: var(--radius); background: var(--panel); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.review-popup-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.review-popup-note { margin: 0; font-size: 13px; max-height: 6.5em; overflow: hidden; }
+.review-note { margin: 0; white-space: pre-wrap; }
+.review-finding { font-size: 12.5px; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.cmd-output {
+  margin: 0; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-soft);
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 12.5px; line-height: 1.45;
+}

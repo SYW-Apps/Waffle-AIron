@@ -1,0 +1,205 @@
+id: review_orchestrator_impl
+name: Review Orchestrator Implementation
+description: 'src/core/reviews.ts: the review handshake over the review store and the approval identity.'
+contract: ireview_orchestrator
+sourcePath: src/core/reviews.ts
+methods:
+  - name: request
+    narrative:
+      - stepNumber: 1
+        description: Refuse a kind other than review or lock, and a subsystem on a review request
+        type: branch
+        condition: the kind is not review or lock, or a review request names a subsystem
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming the two kinds
+        type: throw
+        error: invalid review request
+      - stepNumber: 3
+        description: Take the design identity of the bound project's own specs as it stands
+        type: call
+        targetComponent: state_hash
+        targetMethod: ownDesign
+      - stepNumber: 4
+        description: >-
+          Record a new pending request with a fresh id, the kind, subsystem, note, that identity and
+          the time
+        type: call
+        targetComponent: review_store
+        targetMethod: save
+      - stepNumber: 5
+        description: Look up the dev server announced for this project
+        type: call
+        targetComponent: review_store
+        targetMethod: devServer
+      - stepNumber: 6
+        description: Return the request and, when a dev server runs, the URL that shows it
+        type: return
+        outcome: the receipt
+  - name: status
+    narrative:
+      - stepNumber: 1
+        description: Read the request
+        type: call
+        targetComponent: review_store
+        targetMethod: load
+      - stepNumber: 2
+        description: Unknown id?
+        type: branch
+        condition: no request has this id
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming the id
+        type: throw
+        error: unknown review request
+      - stepNumber: 4
+        description: A request already decided is answered as it stands
+        type: branch
+        condition: the request is not pending
+        onTrueStep: 13
+        onFalseStep: 5
+      - stepNumber: 5
+        description: Take the design identity as it stands now
+        type: call
+        targetComponent: state_hash
+        targetMethod: ownDesign
+      - stepNumber: 6
+        description: Read what the lock says about the tree now
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: verdict
+      - stepNumber: 7
+        description: >-
+          A lock request whose design is approved: the identity is the one requested and the verdict
+          shows nothing moved since a lock
+        type: branch
+        condition: >-
+          the request is a lock request, the identity equals the requested one, and the tree is
+          approved
+        onFalseStep: 11
+      - stepNumber: 8
+        description: Read the lock record for its approver and time
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: approvalRecord
+      - stepNumber: 9
+        description: Mark it locked, decided by the lock's approver at the lock's time, and save it
+        type: call
+        targetComponent: review_store
+        targetMethod: save
+      - stepNumber: 10
+        description: 'Locked: answer it'
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        description: >-
+          Mark it superseded and save it when the design changed since the request; otherwise it
+          stays pending
+        type: call
+        targetComponent: review_store
+        targetMethod: save
+      - stepNumber: 12
+        description: Return the request as it now stands
+        type: return
+        outcome: the up-to-date request
+      - stepNumber: 13
+        label: decided
+        description: Return the decided request unchanged
+        type: return
+        outcome: the request
+  - name: pending
+    narrative:
+      - stepNumber: 1
+        description: Read every request
+        type: call
+        targetComponent: review_store
+        targetMethod: list
+      - stepNumber: 2
+        description: Bring each pending one up to date
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: status
+      - stepNumber: 3
+        description: Return those still pending, newest first
+        type: return
+        outcome: the pending requests
+  - name: decide
+    narrative:
+      - stepNumber: 1
+        description: Bring the request up to date
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: status
+      - stepNumber: 2
+        description: >-
+          Only a pending request can be decided, and only to approved (a review request),
+          changes_requested, or locked (a lock request) — except that a lock request the lock
+          already answered (status found it locked) takes locked once more, so the page's lock adds
+          the human's comment and notes to it
+        type: branch
+        condition: >-
+          the request is not pending (other than a locked lock request taking locked), or the
+          outcome does not fit its kind
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming the request's status or the outcomes its kind takes
+        type: throw
+        error: the request cannot take this decision
+      - stepNumber: 4
+        description: Resolve this machine's approver identity (git user, else the OS user)
+        type: call
+        targetComponent: local_approver
+        targetMethod: resolve
+      - stepNumber: 5
+        description: >-
+          Record the outcome with the comment, the notes, the time and that identity (a request the
+          lock already answered keeps the lock's approver and time, and gains the comment and notes)
+        type: call
+        targetComponent: review_store
+        targetMethod: save
+      - stepNumber: 6
+        description: Return the decided request
+        type: return
+        outcome: the decided request
+  - name: withdraw
+    narrative:
+      - stepNumber: 1
+        description: Bring the request up to date
+        type: call
+        targetComponent: review_orchestrator
+        targetMethod: status
+      - stepNumber: 2
+        description: Only a pending request can be withdrawn
+        type: branch
+        condition: the request is not pending
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming its status
+        type: throw
+        error: the request is no longer pending
+      - stepNumber: 4
+        description: Mark it withdrawn and save it
+        type: call
+        targetComponent: review_store
+        targetMethod: save
+      - stepNumber: 5
+        description: Return it
+        type: return
+        outcome: the withdrawn request
+  - name: announceDevServer
+    narrative:
+      - stepNumber: 1
+        description: Record the announcement in the review store
+        type: call
+        targetComponent: review_store
+        targetMethod: announceDevServer
+  - name: withdrawDevServer
+    narrative:
+      - stepNumber: 1
+        description: Remove the announcement when it is this process's
+        type: call
+        targetComponent: review_store
+        targetMethod: withdrawDevServer
+status: complete
+createdAt: '2026-11-07T02:38:00.333Z'
+updatedAt: '2026-11-07T11:59:59.496Z'

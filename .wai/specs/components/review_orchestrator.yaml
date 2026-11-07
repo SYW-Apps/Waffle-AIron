@@ -1,0 +1,18 @@
+id: review_orchestrator
+name: Review Orchestrator
+description: >-
+  The review handshake between an agent and the human: an agent requests a review or a lock against
+  the design as it stands; the human decides it (in the dev page) or simply locks (anywhere); every
+  read brings a pending request up to date, so a lock made in the terminal answers it and a design
+  changed since supersedes it. The agent only ever asks: nothing here locks.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - review_store
+  - state_hash
+  - approval_comparison
+  - local_approver
+status: complete
+createdAt: '2026-11-07T02:37:25.763Z'
+updatedAt: '2026-11-07T02:37:26.717Z'

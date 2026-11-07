@@ -56,13 +56,18 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
-          Only the execute-primary project-lifecycle tools, the hosted landscape tools and the
-          hosted project-ops tools (packs/policy/producer/commit) are served here; every other tool
-          belongs to the scoped MCP server
+          Only the execute-primary project-lifecycle tools, the hosted landscape tools, the hosted
+          project-ops tools (packs/policy/producer/commit) and the two review tools are served here;
+          every other tool belongs to the scoped MCP server. On the hosted data plane an agent's
+          sdd_request_review (kind lock) is the hosted lock request and sdd_await_review waits on
+          it, so an agent uses the same two tools locally and hosted; a review-only request (kind
+          review) is refused here, naming sdd_host_lock_project, because hosted approval is a lock
+          decision
         type: branch
         condition: >-
           the message is not a tools/call, or the called tool is not one of the sdd_host_*
-          project-lifecycle or project-ops tools or the hosted landscape tools
+          project-lifecycle or project-ops tools, the hosted landscape tools, sdd_request_review or
+          sdd_await_review
         onTrueStep: 3
         onFalseStep: 4
       - stepNumber: 3
@@ -110,6 +115,10 @@ methods:
             step: 37
           - value: sdd_host_withdraw_request
             step: 39
+          - value: sdd_request_review
+            step: 7
+          - value: sdd_await_review
+            step: 11
         defaultStep: 5
       - stepNumber: 5
         description: >-
@@ -126,7 +135,10 @@ methods:
         description: >-
           Execute-or-request a project lock on the BOUND record — a member's own record when a
           member is bound, so its lock request, approval page and status are its own; the qualifier
-          argument is no longer passed (a member is never reached through its parent)
+          argument is no longer passed (a member is never reached through its parent).
+          sdd_request_review arrives here with kind lock: a caller who may approve gets the lock
+          executed, as sdd_host_lock_project does; the agent's note is not part of a hosted request,
+          and the answer says so
         type: call
         targetComponent: project_lifecycle_orchestrator
         targetMethod: lockProject
@@ -146,7 +158,7 @@ methods:
       - stepNumber: 11
         description: >-
           Long-poll for a decision on the caller's approval request, passing the credential, request
-          id, and timeout
+          id, and timeout (sdd_await_review's id is the request id)
         type: call
         targetComponent: project_lifecycle_orchestrator
         targetMethod: awaitApproval
@@ -685,4 +697,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-30T12:07:00.576Z'
+updatedAt: '2026-11-07T02:39:21.140Z'

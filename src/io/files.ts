@@ -236,3 +236,35 @@ export type WriteStream = fs.WriteStream;
 export function openWriteStream(path: string): WriteStream {
   return fs.createWriteStream(path);
 }
+
+// -- Watching -----------------------------------------------------------------
+
+/** Told that a file below a watched directory was created, changed or removed (path relative to the directory, forward slashes). */
+export type ChangeListener = (path: string) => void;
+
+/** Ends a watch; calling it again does nothing. */
+export type StopWatching = () => void;
+
+/**
+ * Watch a directory and everything below it (fs.watch, recursive). Each event
+ * calls `onChange` with the changed path relative to `dir`, forward-slashed. A
+ * watch that cannot start answers a stop function that does nothing.
+ */
+export function watchTree(dir: string, onChange: ChangeListener): StopWatching {
+  let watcher: fs.FSWatcher;
+  try {
+    watcher = fs.watch(dir, { recursive: true }, (_event, name) => {
+      onChange(name === null || name === undefined ? '' : String(name).split('\\').join('/'));
+    });
+  } catch {
+    return () => {};
+  }
+  // An error after start (the folder removed) ends the watch quietly.
+  watcher.on('error', () => { try { watcher.close(); } catch { /* already closed */ } });
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    try { watcher.close(); } catch { /* already closed */ }
+  };
+}
