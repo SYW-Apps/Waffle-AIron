@@ -84,6 +84,9 @@ function prettyPage(specJson: string, title: string): string {
     '<!doctype html><meta charset="utf-8">' +
     `<title>${esc(title)} — OpenAPI</title>` +
     '<body style="font:13px/1.5 ui-monospace,monospace;margin:0;background:#0b1120;color:#e8e8f0">' +
+    '<p style="margin:0;padding:12px 20px;background:#1e293b;color:#fbbf24;font-family:system-ui,sans-serif">' +
+    'This is the plain OpenAPI document: the interactive viewer’s files are missing from this ' +
+    'wairon installation. Run <code>wairon update</code> (or reinstall wairon) to get the viewer.</p>' +
     '<pre style="padding:20px;white-space:pre-wrap;word-break:break-word">' +
     esc(pretty) +
     '</pre></body>'

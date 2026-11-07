@@ -1,0 +1,102 @@
+id: ireview_orchestrator
+name: Review Orchestrator Interface
+description: Request, read and decide reviews of the bound project's design.
+component: review_orchestrator
+methods:
+  - name: request
+    description: >-
+      Record a review request (`review`, or `lock` for approval, optionally of one subsystem) with
+      the agent's note, against the design identity as it stands. Answers the request and, when a
+      dev server announces itself for this project, its URL.
+    signature: 'request(kind: string, note: string, subsystem?: string): ReviewReceipt'
+    returns: ReviewReceipt
+    params:
+      - name: kind
+        type: string
+        description: '`review` or `lock`'
+      - name: note
+        type: string
+        description: What to review and why
+      - name: subsystem
+        type: string
+        description: For a lock request, the one subsystem to re-approve
+        optional: true
+    effect: write
+  - name: status
+    description: >-
+      One request, brought up to date: a pending lock request whose design is now approved by a lock
+      is `locked` (decided by the lock record's approver); a pending request whose design changed
+      since is `superseded`. Unknown id throws.
+    signature: 'status(id: string): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+    effect: write
+  - name: pending
+    description: >-
+      Every request still pending after being brought up to date, newest first: what the dev page
+      shows.
+    signature: 'pending(): list<ReviewRequest>'
+    returns: list<ReviewRequest>
+    params: []
+    effect: write
+  - name: decide
+    description: >-
+      The human's answer to a pending request: `approved` (a review request), `changes_requested`
+      with a comment and per-spec notes, or `locked` after the caller's lock succeeded. Decided by
+      this machine's git identity. A request no longer pending is refused, naming its status.
+    signature: >-
+      decide(id: string, outcome: ReviewStatus, comment?: string, notes?: list<ReviewNote>):
+      ReviewRequest
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+      - name: outcome
+        type: ReviewStatus
+        description: approved, changes_requested or locked
+      - name: comment
+        type: string
+        description: The reviewer's comment
+        optional: true
+      - name: notes
+        type: list<ReviewNote>
+        description: Notes pinned to specs
+        optional: true
+    effect: write
+  - name: withdraw
+    description: The requester takes a pending request back.
+    signature: 'withdraw(id: string): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+    effect: write
+  - name: announceDevServer
+    description: Record where a starting dev server serves this project.
+    signature: 'announceDevServer(url: string, pid: int): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+        description: The dev page's URL
+      - name: pid
+        type: int
+        description: The dev server's process id
+    effect: write
+  - name: withdrawDevServer
+    description: Remove a stopping dev server's announcement.
+    signature: 'withdrawDevServer(pid: int): void'
+    returns: void
+    params:
+      - name: pid
+        type: int
+        description: The process id that announced it
+    effect: write
+status: complete
+createdAt: '2026-11-07T02:37:33.473Z'
+updatedAt: '2026-11-07T02:38:25.961Z'

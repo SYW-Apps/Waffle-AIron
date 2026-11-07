@@ -1,0 +1,65 @@
+id: ireview_store
+name: Review Store Interface
+description: Read and write the local review requests and the dev server's announced address.
+component: review_store
+methods:
+  - name: save
+    description: >-
+      Write one review request to .wai/.local/reviews/<id>.yaml, creating the folder (and the
+      .wai/.gitignore line that keeps .local/ out of git) when absent.
+    signature: 'save(request: ReviewRequest): void'
+    returns: void
+    params:
+      - name: request
+        type: ReviewRequest
+        description: The request to write
+    effect: write
+  - name: load
+    description: One review request by id, or none.
+    signature: 'load(id: string): ReviewRequest?'
+    returns: ReviewRequest?
+    params:
+      - name: id
+        type: string
+        description: The request id
+    effect: read
+  - name: list
+    description: Every review request, newest first; an unreadable file is skipped.
+    signature: 'list(): list<ReviewRequest>'
+    returns: list<ReviewRequest>
+    params: []
+    effect: read
+  - name: announceDevServer
+    description: >-
+      Record the URL of the dev server now serving this project (.wai/.local/dev-server.json, with
+      its process id).
+    signature: 'announceDevServer(url: string, pid: int): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+        description: The dev page's URL
+      - name: pid
+        type: int
+        description: The dev server's process id
+    effect: write
+  - name: withdrawDevServer
+    description: Remove the announcement, when it is this process's.
+    signature: 'withdrawDevServer(pid: int): void'
+    returns: void
+    params:
+      - name: pid
+        type: int
+        description: The process id that announced it
+    effect: write
+  - name: devServer
+    description: >-
+      The announced dev server's URL when its process is still alive, else none (a stale
+      announcement from a crashed server is ignored).
+    signature: 'devServer(): string?'
+    returns: string?
+    params: []
+    effect: read
+status: complete
+createdAt: '2026-11-07T02:36:54.020Z'
+updatedAt: '2026-11-07T02:36:56.532Z'

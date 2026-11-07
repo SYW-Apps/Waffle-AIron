@@ -128,6 +128,12 @@ methods:
   - name: openWriteStream
     narrative: []
     intent: A stream that writes a file, creating or emptying it.
+  - name: watchTree
+    narrative: []
+    intent: >-
+      fs.watch on the directory with recursive: true (supported on Windows and macOS, and on Linux
+      by current Node); a watch that cannot start answers a stop function that does nothing. Each
+      event calls onChange with the forward-slash relative path.
 status: draft
 createdAt: '2026-10-31T23:15:19.163Z'
-updatedAt: '2026-10-31T23:15:20.228Z'
+updatedAt: '2026-11-07T02:40:34.598Z'

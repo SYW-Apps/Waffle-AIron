@@ -78,6 +78,13 @@ fields:
     type: string
     description: Bind host for the admin plane (default 127.0.0.1)
     optional: false
+  - name: devCommands
+    type: DevCommands
+    description: >-
+      Only on the local development server: the human commands the starting CLI hands the server,
+      which the dev page runs (lock, generate, doctor). Absent on a hosted server, where the page
+      offers none of them.
+    optional: true
 methods:
   - name: effectiveAuditPolicy
     signature: 'effectiveAuditPolicy(): AuditRetentionPolicy'
@@ -99,4 +106,4 @@ methods:
     sourcePath: src/server/operations.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:58:10.758Z'
-updatedAt: '2026-10-19T06:12:21.455Z'
+updatedAt: '2026-11-07T02:41:18.383Z'

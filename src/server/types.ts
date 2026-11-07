@@ -4,6 +4,7 @@ import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ProfileFamily } from '../core/extensions.js';
 import type { GitPublish } from '../git/types.js';
 import type { MigrationPlan, TransactionOutcome } from '../migrations/types.js';
+import type { DevCommands } from './dev-commands.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -1501,6 +1502,10 @@ export interface HostConfig {
    *  working directory. NEVER set by the hosted `serve` command, so the dev-only
    *  auto-session path can never appear in a real deployment. */
   devMode?: boolean;
+  /** Only on the local development server: the human commands the starting CLI hands the server,
+   *  which the dev page runs (lock, generate, doctor). Absent on a hosted server, where the page
+   *  offers none of them. */
+  devCommands?: DevCommands;
   /** Built-in super-admin web-login username, read from WAIRON_ADMIN_USER by the
    *  serve command. When this or builtinAdminPassword is unset, password login is
    *  disabled (SSO-only) — the server still starts. */

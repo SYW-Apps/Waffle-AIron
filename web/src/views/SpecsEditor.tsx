@@ -737,9 +737,18 @@ function SpecForm(props: {
   const fieldFlags = props.fieldFlags ?? EMPTY_FIELD_FLAGS;
   const flagFor = (field: string) => fieldFlags.get(field);
 
-  // Re-sync when a fresh load arrives (useAsync mints a new object on reload).
+  // Re-sync when a fresh load arrives (useAsync mints a new object on reload) —
+  // unless the form holds unsaved edits: an outside write (an agent, the CLI)
+  // reloads the spec live, and must not wipe what the human is typing.
+  // After this form's own save, the reload is adopted whatever it normalized.
+  const syncedRef = useRef<any>(spec);
+  const adoptNextRef = useRef(false);
   useEffect(() => {
-    setDraft(clone(spec));
+    const previous = syncedRef.current;
+    syncedRef.current = spec;
+    const adopt = adoptNextRef.current;
+    adoptNextRef.current = false;
+    setDraft((d: any) => (adopt || JSON.stringify(d) === JSON.stringify(previous) ? clone(spec) : d));
   }, [spec]);
 
   // Scroll to + (via the field's own `highlight` prop) flash the field a
@@ -802,6 +811,7 @@ function SpecForm(props: {
     }
 
     await mcpCall(projectId, 'sdd_update_spec', { kind: sel.kind, id: sel.id, delta });
+    adoptNextRef.current = true;
     toast.ok(adoptedPackName
       ? `Saved ${sel.kind} “${sel.label}” — adopted pack “${adoptedPackName}” so this profile applies.`
       : `Saved ${sel.kind} “${sel.label}”`);
@@ -1125,7 +1135,7 @@ function SpecEditor(props: {
   scrollRequest?: { field: string; nonce: number } | null;
 }) {
   const { projectId, sel } = props;
-  const spec = useAsync<any>(() => mcpCall(projectId, 'sdd_get_spec', { kind: sel.kind, id: sel.id }), [projectId, sel.kind, sel.id]);
+  const spec = useAsync<any>(() => mcpCall(projectId, 'sdd_get_spec', { kind: sel.kind, id: sel.id }), [projectId, sel.kind, sel.id], [`project:${projectId}`]);
   return (
     <AsyncView state={spec}>
       {(data) => (

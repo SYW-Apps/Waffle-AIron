@@ -38,6 +38,7 @@ methods:
       The root path of the hosted project registered under this id, or null. Pure 1:1 forward to the
       index; unscoped, for callers that authorized the operation it serves.
     signatureFrom: project_index.existingRoot
+    effect: read
   - name: register
     description: >-
       Upsert a project record at an existing directory instead of allocating one under the data
@@ -86,4 +87,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-10-19T06:11:16.827Z'
+updatedAt: '2026-11-07T12:21:29.767Z'

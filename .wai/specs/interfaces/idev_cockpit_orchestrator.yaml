@@ -1,0 +1,65 @@
+id: idev_cockpit_orchestrator
+name: Dev Cockpit Orchestrator Interface
+description: Reviews and human commands on the local development server.
+component: dev_cockpit_orchestrator
+methods:
+  - name: reviews
+    description: The served project's pending review requests, newest first.
+    signature: 'reviews(sessionId: string): list<ReviewRequest>'
+    returns: list<ReviewRequest>
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+    effect: write
+  - name: decide
+    description: >-
+      The human's answer to a pending request: `locked` runs the CLI's lock (of the request's
+      subsystem when it names one) and records the request locked only when the lock succeeded,
+      answering the lock's output either way; `approved` and `changes_requested` (with a comment and
+      per-spec notes) are recorded as given.
+    signature: >-
+      decide(sessionId: string, id: string, outcome: ReviewStatus, comment?: string, notes?:
+      list<ReviewNote>): async DevReviewDecision
+    returns: async DevReviewDecision
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: id
+        type: string
+        description: The request id
+      - name: outcome
+        type: ReviewStatus
+        description: locked, approved or changes_requested
+      - name: comment
+        type: string
+        description: The reviewer's comment
+        optional: true
+      - name: notes
+        type: list<ReviewNote>
+        description: Notes pinned to specs
+        optional: true
+    effect: write
+  - name: run
+    description: >-
+      Run one human command the CLI handed the server (`lock`, optionally of one subsystem,
+      `generate`, or `doctor`) and answer what it printed. One command runs at a time: a second one
+      while another runs is refused.
+    signature: 'run(sessionId: string, command: string, subsystem?: string): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: command
+        type: string
+        description: '`lock`, `generate` or `doctor`'
+      - name: subsystem
+        type: string
+        description: For lock, the one subsystem to re-approve
+        optional: true
+    effect: write
+status: complete
+createdAt: '2026-11-07T02:41:40.170Z'
+updatedAt: '2026-11-07T12:19:38.637Z'

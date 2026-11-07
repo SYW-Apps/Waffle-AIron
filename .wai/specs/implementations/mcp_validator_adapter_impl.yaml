@@ -71,6 +71,14 @@ methods:
         targetComponent: validator_portal
         targetMethod: adviseNetwork
     symbol: adviseNetwork
+  - name: listRules
+    sourcePath: src/mcp/adapters/validator.ts
+    narrative:
+      - stepNumber: 1
+        description: Call listRules on the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: listRules
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T12:03:57.198Z'
+updatedAt: '2026-11-07T12:00:37.808Z'

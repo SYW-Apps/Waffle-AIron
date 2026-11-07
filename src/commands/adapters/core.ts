@@ -7,6 +7,9 @@
 // a command file, which is what this used to be (src/commands/subsystem.ts).
 // ---------------------------------------------------------------------------
 export {
+  // `wairon dev` tells the project where its page is shown, so an agent's review request can say.
+  announceDevServer,
+  withdrawDevServer,
   loadSystemSpec,
   createMember,
   moveMember,

@@ -638,3 +638,15 @@ export type { SyncResult } from './context.js';
 // did not, so it exited 0 over a tree that would not parse.
 export { getStatusReport } from './status.js';
 export type { StatusDecor, StatusOptions, StatusReport } from './status.js';
+
+// approval_portal requestReview … withdrawDevServer — the review handshake between an agent and the human.
+export {
+  requestReview,
+  reviewStatus,
+  pendingReviews,
+  decideReview,
+  withdrawReview,
+  announceDevServer,
+  withdrawDevServer,
+} from './reviews.js';
+export type { ReviewStatus, ReviewNote, ReviewDecision, ReviewRequest, ReviewReceipt } from './reviews.js';

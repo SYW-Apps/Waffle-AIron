@@ -408,6 +408,31 @@ methods:
     returns: LoadedExtensions
     params: []
     effect: read
+  - name: requestReview
+    description: Forward an agent's review or lock request to the core approval portal.
+    signature: 'requestReview(kind: string, note: string, subsystem?: string): ReviewReceipt'
+    returns: ReviewReceipt
+    params:
+      - name: kind
+        type: string
+        description: '`review` or `lock`'
+      - name: note
+        type: string
+        description: What to review and why
+      - name: subsystem
+        type: string
+        description: For a lock request, the one subsystem to re-approve
+        optional: true
+    effect: write
+  - name: reviewStatus
+    description: Forward a review request's up-to-date read to the core approval portal.
+    signature: 'reviewStatus(id: string): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-06T21:46:51.226Z'
+updatedAt: '2026-11-07T02:39:28.607Z'

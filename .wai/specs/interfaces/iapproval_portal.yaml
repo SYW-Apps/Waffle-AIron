@@ -160,6 +160,93 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: requestReview
+    description: >-
+      An agent asks the human to review the design, or to approve it with a lock
+      (review_orchestrator.request). Never locks.
+    signature: 'requestReview(kind: string, note: string, subsystem?: string): ReviewReceipt'
+    returns: ReviewReceipt
+    params:
+      - name: kind
+        type: string
+        description: '`review` or `lock`'
+      - name: note
+        type: string
+        description: What to review and why
+      - name: subsystem
+        type: string
+        description: For a lock request, the one subsystem to re-approve
+        optional: true
+    effect: write
+  - name: reviewStatus
+    description: One review request, brought up to date (review_orchestrator.status).
+    signature: 'reviewStatus(id: string): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+    effect: write
+  - name: pendingReviews
+    description: The review requests still pending (review_orchestrator.pending).
+    signature: 'pendingReviews(): list<ReviewRequest>'
+    returns: list<ReviewRequest>
+    params: []
+    effect: write
+  - name: decideReview
+    description: The human's answer to a review request (review_orchestrator.decide).
+    signature: >-
+      decideReview(id: string, outcome: ReviewStatus, comment?: string, notes?: list<ReviewNote>):
+      ReviewRequest
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+      - name: outcome
+        type: ReviewStatus
+        description: approved, changes_requested or locked
+      - name: comment
+        type: string
+        description: The reviewer's comment
+        optional: true
+      - name: notes
+        type: list<ReviewNote>
+        description: Notes pinned to specs
+        optional: true
+    effect: write
+  - name: withdrawReview
+    description: The requester takes a pending review request back (review_orchestrator.withdraw).
+    signature: 'withdrawReview(id: string): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+    effect: write
+  - name: announceDevServer
+    description: >-
+      A starting dev server records where it serves this project, so review requests can say where
+      they are shown (review_store.announceDevServer).
+    signature: 'announceDevServer(url: string, pid: int): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+        description: The dev page's URL
+      - name: pid
+        type: int
+        description: The dev server's process id
+    effect: write
+  - name: withdrawDevServer
+    description: A stopping dev server removes its announcement (review_store.withdrawDevServer).
+    signature: 'withdrawDevServer(pid: int): void'
+    returns: void
+    params:
+      - name: pid
+        type: int
+        description: The process id that announced it
+    effect: write
 status: complete
 createdAt: '2026-09-25T17:32:24.931Z'
-updatedAt: '2026-10-06T23:05:06.470Z'
+updatedAt: '2026-11-07T02:38:18.670Z'

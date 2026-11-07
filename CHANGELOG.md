@@ -14,6 +14,26 @@ npm and the tags carry.
   `DIGEST_MISMATCH`. `inspectArchive` now takes optional limits and vets every entry, the envelope
   included, before inflating anything; `extractPack` now also checks that the envelope's name and
   version match the inner pack manifest before it writes.
+- **`wairon dev` is the place to approve.** The page follows the design live: a spec an agent writes
+  through `wairon mcp serve`, or a lock from the terminal, shows on the open page without a refresh
+  (unsaved edits in an open spec form are kept). A Commands tab runs the CLI's own `lock` (the whole
+  design or one subsystem, with this machine's git identity as approver), `generate` and
+  `doctor --fix`, and shows what they printed.
+- **An agent asks for a review or a lock instead of the human saying "specs are locked".**
+  `sdd_request_review` (`kind: review` for feedback, `kind: lock` for approval, optionally of one
+  subsystem) validates first: a design with errors is refused with every finding and nobody is
+  asked, so the human only reviews a design that validates (code-conformance findings never refuse
+  it, as they never refuse `wairon lock`). Otherwise the request pops up on the running `wairon dev`
+  page, whose review screen shows the agent's note, the specs changed since the last approval and
+  the current warnings. The human locks or approves, or requests changes with a comment and notes
+  pinned to individual specs. `sdd_await_review` waits for the answer (keeping a long wait alive with
+  progress notifications) and returns the decision in full. A lock from the terminal answers a lock
+  request too, and a design that changed after the request supersedes it. With no dev server
+  running, the tool tells the agent to ask the human to open `wairon dev` or run `wairon lock`. On a
+  hosted server a lock request is the hosted approval request. Requests live in `.wai/.local/`,
+  which git ignores.
+- The OpenAPI viewer's fallback page says why it shows the plain document (the viewer's files are
+  missing from the installation) and that `wairon update` restores them.
 - **`wairon dev` no longer fails when port 8080 is taken.** Without `--port` it takes the first free
   port from 8080 upward (to 8099, the admin listener using the next one), so two projects can run
   `wairon dev` at the same time; it says which port it chose. With `--port` it uses exactly that
