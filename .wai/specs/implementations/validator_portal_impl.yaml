@@ -8,9 +8,11 @@ methods:
   - name: validateProject
     narrative:
       - stepNumber: 1
-        description: Forward validateProject to the spec validator
+        description: >-
+          Forward validateProject to the validation memo, which answers the last identical run while
+          nothing the gate reads has changed and otherwise runs the spec validator
         type: call
-        targetComponent: spec_validator
+        targetComponent: validation_memo
         targetMethod: validateProject
   - name: validateRegistry
     narrative:
@@ -178,4 +180,4 @@ methods:
     symbol: adviseNetwork
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T12:03:47.399Z'
+updatedAt: '2026-11-07T15:06:53.728Z'

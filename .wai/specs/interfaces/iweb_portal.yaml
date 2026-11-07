@@ -1630,11 +1630,12 @@ methods:
     description: >-
       Local development server only: the served project's pending review requests
       (dev_cockpit_orchestrator.reviews). Mounted only under devMode. CLIENT CONTRACT: the app reads
-      this on start and on every `reviews` realtime nudge; a new pending request pops up a notice
-      wherever the human is, opening the review screen — the agent's note, every spec changed since
-      the last approval (sdd_get_status), the current warnings (sdd_validate_tree; a request with
-      errors is never made), a comment box and a note box per spec — with Lock (a lock request),
-      Approve (a review request) and Request changes.
+      this on start and on every `reviews` realtime nudge; a pending request shows in the floating
+      action bar wherever the human is, and Review opens the review screen: the agent's note, every
+      spec changed since the last approval (getDevApproval), the current warnings
+      (sdd_validate_tree; a request with errors is never made), a comment box and a note box per
+      spec, with Lock (a lock request, through the lock confirmation), Approve (a review request)
+      and Request changes.
     signature: 'getDevReviews(sessionId: string): list<ReviewRequest>'
     returns: list<ReviewRequest>
     params:
@@ -1691,6 +1692,28 @@ methods:
       transport: HTTP
       method: POST
       path: /web/dev/commands
+  - name: getDevApproval
+    description: >-
+      Local development server only: the served project's approval state
+      (dev_cockpit_orchestrator.approval). Mounted only under devMode. CLIENT CONTRACT: the whole
+      dev page is the cockpit, with no separate commands tab. A floating action bar shows on every
+      view while there is something to approve: a pending review or lock request, or a design that
+      moved since the last lock (read on start and on every `project:<id>` and `reviews` nudge). It
+      offers Lock, or Review for a pending request. The specs view and the diagrams offer Lock in
+      place, scoped to the subsystem being looked at when only that subsystem moved. Every Lock
+      opens a confirmation modal: what moved since the last lock, the current warnings, and whole
+      design or one subsystem; Confirm runs the lock (runDevCommand) and the modal shows it running
+      and then its output, success or failure. The header cog opens the settings panel: appearance,
+      plus Generate and Doctor --fix with what each does, each showing its output.
+    signature: 'getDevApproval(sessionId: string): dev_approval'
+    returns: dev_approval
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev/approval
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-07T12:19:41.659Z'
+updatedAt: '2026-11-07T15:07:42.617Z'

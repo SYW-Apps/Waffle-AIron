@@ -1080,7 +1080,16 @@ methods:
         targetComponent: dev_cockpit_orchestrator
         targetMethod: run
     detail: calls-only
+  - name: getDevApproval
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session the router decoded to dev_cockpit_orchestrator.approval, and hand back
+          its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: approval
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-11-07T02:42:57.052Z'
+updatedAt: '2026-11-07T15:07:39.406Z'

@@ -48,6 +48,31 @@ it back with comments. The agent hears the answer without the human typing "spec
    pending approval request and `sdd_await_review` waits on it, so an agent uses the same two tools
    everywhere; the hosted approval rights decide who may approve. `kind: review` is local only.
 
+## Revision after the first look: the whole page is the cockpit
+
+The first build put the commands on their own tab. The human wants the page itself to be the
+cockpit, and it was slow.
+
+7. **No commands tab.** A floating action bar shows on every view while there is something to
+   approve: a pending request, or a design that moved since the last lock. It offers Lock (or
+   Review for a request). The specs view and the diagrams offer Lock in place, scoped to the
+   subsystem in view when only that subsystem moved.
+8. **Every lock is confirmed.** Lock opens a modal: what moved since the last lock, the current
+   warnings, whole design or one subsystem. Confirm runs the CLI's lock and the modal shows it
+   running, then its output.
+9. **Generate and doctor in the settings panel.** The header cog opens the settings panel
+   (appearance, Generate, Doctor --fix, each explained and showing its output).
+10. **The approval state is served as data** (`GET /web/dev/approval`: the lock verdict with the
+    moved specs, who locked and when), so the bar and the modal never parse status text.
+11. **Validation is remembered.** On this repository the owner's gate takes about 25 seconds and the
+    page ran it twice per view (the canvas's findings overlay and the validation rail), every view.
+    A validation memo answers the last run with the same options while nothing the gate reads has
+    changed: the `.wai/` files and the gate's source files, compared by path, size and modification
+    time (as the code model cache already does). It sits behind the validator portal, so the dev
+    page, the hosted server and an agent's repeated `sdd_validate_tree` all gain from it.
+
+The SYW Design System adoption (every view, bundled at build) is a separate PR after this one.
+
 ## Second PR: family and externals panel
 
 Externals status and pins, network declare and member migrations in the page, each explained in

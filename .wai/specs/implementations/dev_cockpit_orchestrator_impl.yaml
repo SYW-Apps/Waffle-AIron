@@ -122,6 +122,41 @@ methods:
         description: Answer whether it succeeded and its output
         type: return
         outcome: the command's result
+  - name: approval
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server
+        type: branch
+        condition: the server is not the local development server
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Refuse: the approval state is a local development server''s'
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Resolve the served project's root, which the approval is read under
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
+        description: Read the lock record, for who locked and when
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 6
+        description: 'Read what the lock says about the tree now: drifted and the moved specs'
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: approvalVerdict
+      - stepNumber: 7
+        description: Answer the approval state
+        type: return
+        outcome: the approval state
 lint:
   allow:
     - code: HIDDEN_STATE
@@ -147,4 +182,4 @@ lint:
         the core approval portal, so the analyzer reads the core workflow behind each forward.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-07T12:20:02.957Z'
+updatedAt: '2026-11-07T15:07:28.395Z'

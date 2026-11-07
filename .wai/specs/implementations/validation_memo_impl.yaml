@@ -1,0 +1,69 @@
+id: validation_memo_impl
+name: Validation Memo Implementation
+description: >-
+  src/core/validation-memo.ts: fingerprint what the gate reads, answer the remembered run when both
+  fingerprints match, otherwise run the gate and remember it.
+contract: ivalidation_memo
+sourcePath: src/core/validation-memo.ts
+methods:
+  - name: validateProject
+    narrative:
+      - stepNumber: 1
+        description: Scan the specs, so the loader's issues are this tree's whether or not the gate runs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 2
+        description: Read the project configuration for its source roots and exclusions
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: Spell the options as a stable key (rules, project type, scope, strictness, member depth)
+        type: local
+      - stepNumber: 4
+        description: List every file under the project's .wai/ folder, recursively
+        type: call
+        targetComponent: files_adapter
+        targetMethod: listEntries
+      - stepNumber: 5
+        description: Fold each file's path, size and modification time into the tree fingerprint
+        type: call
+        targetComponent: files_adapter
+        targetMethod: statOrNull
+      - stepNumber: 6
+        description: Fingerprint the source files the gate's code model reads
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: fingerprintSources
+      - stepNumber: 7
+        description: Read the remembered run for this root and options
+        type: call
+        targetComponent: validation_memo_cache
+        targetMethod: get
+      - stepNumber: 8
+        description: Is it a run of the same files?
+        type: branch
+        condition: an entry is held and both its fingerprints equal the ones just taken
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Answer a copy of the remembered result
+        type: return
+        outcome: the remembered result
+      - stepNumber: 10
+        description: Run the owner's gate
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateProject
+      - stepNumber: 11
+        description: Remember the result with the options key and both fingerprints
+        type: call
+        targetComponent: validation_memo_cache
+        targetMethod: put
+      - stepNumber: 12
+        description: Answer a copy of the result
+        type: return
+        outcome: the fresh result
+status: complete
+createdAt: '2026-11-07T15:06:46.318Z'
+updatedAt: '2026-11-07T15:06:47.350Z'

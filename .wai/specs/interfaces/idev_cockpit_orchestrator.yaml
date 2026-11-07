@@ -60,6 +60,15 @@ methods:
         description: For lock, the one subsystem to re-approve
         optional: true
     effect: write
+  - name: approval
+    description: >-
+      The served project's approval state: whether the design moved since the last lock, the moved
+      specs, and who locked it when. Refused outside the local development server.
+    signature: 'approval(sessionId: string): dev_approval'
+    returns: dev_approval
+    params:
+      - name: sessionId
+        type: string
 status: complete
 createdAt: '2026-11-07T02:41:40.170Z'
-updatedAt: '2026-11-07T12:19:38.637Z'
+updatedAt: '2026-11-07T15:07:16.978Z'

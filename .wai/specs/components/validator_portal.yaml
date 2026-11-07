@@ -16,6 +16,7 @@ dependsOn:
   - pack_impact
   - spec_search
   - reference_finder
+  - validation_memo
 transport: InProcess
 invokedBy:
   kind: entry
@@ -25,4 +26,4 @@ invokedBy:
     own process
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T18:58:03.191Z'
+updatedAt: '2026-11-07T15:06:52.817Z'
