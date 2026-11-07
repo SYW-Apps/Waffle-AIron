@@ -67,12 +67,21 @@ methods:
         type: local
       - stepNumber: 9
         description: >-
+          On the local development server only (devMode), watch the served project's .wai/ folder: a
+          `tree` change nudges the served project's realtime channel, so a spec written by another
+          process (an agent's `wairon mcp serve`) or a terminal lock refreshes the open page; a
+          `reviews` change nudges the reviews channel, so a new review request pops up
+        type: call
+        targetComponent: dev_tree_watcher
+        targetMethod: watch
+      - stepNumber: 10
+        description: >-
           Start the periodic backup schedule (git-bound project sweep + container-level backing
           sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
         targetComponent: backup_schedule
         targetMethod: start
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the running server handle
         type: return
         outcome: running
@@ -85,12 +94,15 @@ methods:
         targetComponent: backup_schedule
         targetMethod: stop
       - stepNumber: 2
-        description: Stop accepting new connections and drain in-flight requests
+        description: Stop watching the served project's tree, when watching
         type: local
       - stepNumber: 3
-        description: Close the data-plane and admin-plane listeners
+        description: Stop accepting new connections and drain in-flight requests
         type: local
       - stepNumber: 4
+        description: Close the data-plane and admin-plane listeners
+        type: local
+      - stepNumber: 5
         description: Return once stopped
         type: return
         outcome: stopped
@@ -124,4 +136,4 @@ methods:
         outcome: ready or not
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-10-31T23:46:11.135Z'
+updatedAt: '2026-11-07T02:41:03.918Z'

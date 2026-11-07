@@ -324,8 +324,45 @@ methods:
         description: >-
           Paths whose packs are not another pack: the install's own target, its source or staging
           folder.
+  - name: pendingReviews
+    description: 'Forward to the core approval portal: the served project''s pending review requests.'
+    signature: 'pendingReviews(): list<ReviewRequest>'
+    returns: list<ReviewRequest>
+    params: []
+    effect: write
+  - name: decideReview
+    description: 'Forward to the core approval portal: the human''s answer to a review request.'
+    signature: >-
+      decideReview(id: string, outcome: ReviewStatus, comment?: string, notes?: list<ReviewNote>):
+      ReviewRequest
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+      - name: outcome
+        type: ReviewStatus
+        description: approved, changes_requested or locked
+      - name: comment
+        type: string
+        description: The reviewer's comment
+        optional: true
+      - name: notes
+        type: list<ReviewNote>
+        description: Notes pinned to specs
+        optional: true
+    effect: write
+  - name: reviewStatus
+    description: 'Forward to the core approval portal: one review request, brought up to date.'
+    signature: 'reviewStatus(id: string): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id
+    effect: write
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-11-03T14:59:27.528Z'
+updatedAt: '2026-11-07T02:41:26.028Z'

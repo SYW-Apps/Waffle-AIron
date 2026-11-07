@@ -1,0 +1,24 @@
+id: review_store
+name: Review Store
+description: >-
+  The local review handshake between an agent and the human, held in the bound project's
+  .wai/.local/ folder (kept out of git by .wai/.gitignore): the review requests, one file each under
+  reviews/, and the address a running `wairon dev` server announces in dev-server.json so a request
+  can say where it is shown. Read from disk on every call, so a request written by one process (the
+  MCP server) is seen by another (the dev server) at once.
+subsystem: sdd_core
+componentType: Store
+owns: []
+dependsOn:
+  - files_adapter
+durability: read-through
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Simple keyed state: review requests by id and one dev-server address, each a file replaced
+        whole and read by its key; its one reader and writer is the workflow review_orchestrator. No
+        lookup beyond the key needs a Registry or Index.
+status: complete
+createdAt: '2026-11-07T02:36:46.573Z'
+updatedAt: '2026-11-07T02:36:50.066Z'

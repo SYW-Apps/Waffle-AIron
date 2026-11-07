@@ -338,6 +338,21 @@ methods:
       - name: path
         type: string
     effect: io
+  - name: watchTree
+    description: >-
+      Watch a directory tree and call onChange with the changed path (relative to it) whenever a
+      file below it is created, changed or removed. Answers the function that stops watching. Where
+      the platform cannot watch recursively it watches what it can, and it never throws for that.
+    signature: 'watchTree(dir: string, onChange: ChangeListener): StopWatching'
+    returns: StopWatching
+    params:
+      - name: dir
+        type: string
+        description: The directory to watch
+      - name: onChange
+        type: ChangeListener
+        description: Called with each changed path
+    effect: io
 status: draft
 createdAt: '2026-10-31T23:15:13.122Z'
-updatedAt: '2026-10-31T23:15:16.755Z'
+updatedAt: '2026-11-07T02:40:33.538Z'

@@ -1,0 +1,100 @@
+id: dev_cockpit_orchestrator_impl
+name: Dev Cockpit Orchestrator Implementation
+description: >-
+  src/server/dev-commands.ts: the dev page's reviews and commands, over the core adapter and the
+  commands the CLI handed the server in its configuration.
+contract: idev_cockpit_orchestrator
+sourcePath: src/server/dev-commands.ts
+methods:
+  - name: reviews
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server
+        type: branch
+        condition: the server is not the local development server
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Refuse: reviews are a local development server''s'
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Read the pending review requests
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: pendingReviews
+      - stepNumber: 4
+        description: Return them
+        type: return
+        outcome: the pending requests
+  - name: decide
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server, or without the commands the CLI hands it
+        type: branch
+        condition: the server is not the local development server or has no dev commands
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Refuse: deciding is a local development server''s'
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Read the request brought up to date, for its kind and subsystem
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: reviewStatus
+      - stepNumber: 4
+        description: Is the decision to lock?
+        type: branch
+        condition: the outcome is locked
+        onFalseStep: 8
+      - stepNumber: 5
+        description: >-
+          Run the CLI's lock (of the request's subsystem when it names one), capturing what it
+          prints
+        type: local
+      - stepNumber: 6
+        description: 'A failed lock leaves the request pending: answer it with the lock''s output'
+        type: branch
+        condition: the lock failed
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Answer the pending request and the failed lock
+        type: return
+        outcome: not locked
+      - stepNumber: 8
+        label: record
+        description: Record the decision with the comment and the notes
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: decideReview
+      - stepNumber: 9
+        description: Answer the decided request and, for a lock, its output
+        type: return
+        outcome: the decision
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse outside the local development server, a command it was not handed, or while another
+          command runs
+        type: branch
+        condition: >-
+          the server has no dev commands, the command is not lock, generate or doctor, or a command
+          is already running
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming the reason
+        type: throw
+        error: the command cannot run
+      - stepNumber: 3
+        description: >-
+          Run the command the CLI handed over, capturing every line it prints with colour codes
+          removed
+        type: local
+      - stepNumber: 4
+        description: Answer whether it succeeded and its output
+        type: return
+        outcome: the command's result
+status: complete
+createdAt: '2026-11-07T02:41:56.569Z'
+updatedAt: '2026-11-07T02:41:57.399Z'

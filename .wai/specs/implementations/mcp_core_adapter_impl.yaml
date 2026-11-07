@@ -267,7 +267,21 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: loadProjectExtensions
+  - name: requestReview
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: requestReview
+  - name: reviewStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: reviewStatus
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-06T21:46:52.645Z'
+updatedAt: '2026-11-07T02:39:29.672Z'

@@ -1,0 +1,27 @@
+id: dev_tree_watcher_impl
+name: Dev Tree Watcher Implementation
+description: 'src/server/dev-watcher.ts: one recursive watch on the served project''s .wai/ folder, debounced.'
+contract: idev_tree_watcher
+sourcePath: src/server/dev-watcher.ts
+methods:
+  - name: watch
+    narrative:
+      - stepNumber: 1
+        description: Watch <root>/.wai recursively
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchTree
+      - stepNumber: 2
+        description: >-
+          On each change, ignore the spec tree's own write lock and other lock files, note whether
+          the path is under .local/reviews/, and (re)start a 250 ms timer; when it fires, call
+          onChange once with `reviews` when any noted change was a review request and once with
+          `tree` when any other was
+        type: local
+      - stepNumber: 3
+        description: Return the function that clears the timer and stops the watch
+        type: return
+        outcome: the stop function
+status: complete
+createdAt: '2026-11-07T02:40:44.472Z'
+updatedAt: '2026-11-07T02:40:45.337Z'

@@ -1626,6 +1626,70 @@ methods:
       transport: HTTP
       method: GET
       path: /web/dev/status
+  - name: getDevReviews
+    description: >-
+      Local development server only: the served project's pending review requests
+      (dev_cockpit_orchestrator.reviews). Mounted only under devMode. CLIENT CONTRACT: the app reads
+      this on start and on every `reviews` realtime nudge; a new pending request pops up a notice
+      wherever the human is, opening the review screen — the agent's note, every spec changed since
+      the last approval (sdd_get_status), a comment box and a note box per spec — with Lock (a lock
+      request), Approve (a review request) and Request changes.
+    signature: 'getDevReviews(sessionId: string): list<ReviewRequest>'
+    returns: list<ReviewRequest>
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev/reviews
+  - name: decideDevReview
+    description: >-
+      Local development server only: the human's decision on a review request
+      (dev_cockpit_orchestrator.decide); locking runs the CLI's own lock first and answers its
+      output. Mounted only under devMode.
+    signature: >-
+      decideDevReview(sessionId: string, id: string, outcome: ReviewStatus, comment?: string,
+      notes?: list<ReviewNote>): DevReviewDecision
+    returns: DevReviewDecision
+    params:
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
+      - name: outcome
+        type: ReviewStatus
+      - name: comment
+        type: string
+        optional: true
+      - name: notes
+        type: list<ReviewNote>
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/reviews/decide
+  - name: runDevCommand
+    description: >-
+      Local development server only: run a human command the CLI handed the server — `lock` (whole
+      design, or one subsystem), `generate` or `doctor` (with --fix) — and answer what it printed
+      (dev_cockpit_orchestrator.run). Mounted only under devMode. CLIENT CONTRACT: the dev page
+      offers these in a Commands panel, each with a one-line explanation of what it does, and shows
+      the output when it finishes.
+    signature: 'runDevCommand(sessionId: string, command: string, subsystem?: string): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+      - name: command
+        type: string
+      - name: subsystem
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/commands
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-30T12:10:51.907Z'
+updatedAt: '2026-11-07T02:42:55.670Z'

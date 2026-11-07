@@ -3137,7 +3137,11 @@ methods:
           upward (at most 8099) that is free on 127.0.0.1 together with the next one, which the dev
           admin listener takes, so a second project's dev server, or anything else on 8080, never
           stops this one from starting; with --port, exactly that port, refused with a plain message
-          naming it (and the admin port beside it) when either is taken, never a raw listen error
+          naming it (and the admin port beside it) when either is taken, never a raw listen error.
+          The configuration hands the server this CLI's own human commands as its dev commands, so
+          the page runs exactly what the terminal runs: lock (unattended, of one subsystem when the
+          page names one, this machine's git identity as approver), generate and doctor --fix, each
+          with what it prints captured for the page
         type: local
       - stepNumber: 5
         description: >-
@@ -3156,11 +3160,23 @@ methods:
         targetComponent: cli_host_adapter
         targetMethod: startHostServer
       - stepNumber: 7
+        description: >-
+          Announce the page's URL in the project, so an agent's review request says where it is
+          shown
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: announceDevServer
+      - stepNumber: 8
         description: Optionally open the browser, and run until signalled
         type: call
         targetComponent: process_adapter
         targetMethod: start
-      - stepNumber: 8
+      - stepNumber: 9
+        description: On shutdown, withdraw the announcement before stopping the server
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: withdrawDevServer
+      - stepNumber: 10
         description: Return on shutdown
         type: return
         outcome: stopped
@@ -4467,4 +4483,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-07T01:25:27.233Z'
+updatedAt: '2026-11-07T02:43:20.114Z'

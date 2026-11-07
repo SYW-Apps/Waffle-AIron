@@ -1430,6 +1430,53 @@ methods:
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_use_practices
+  - name: requestReview
+    description: >-
+      Tool: ask the human to review the design (`kind: review`) or to approve it with a lock (`kind:
+      lock`, optionally of one subsystem), with a note saying what changed and what to look at. It
+      never locks: the human decides, in the `wairon dev` page (which shows the request at once when
+      it runs) or by running `wairon lock`. Answers the request id, and the dev page's URL when one
+      runs, else that the human should open `wairon dev` or lock in the terminal. Wait for the
+      answer with sdd_await_review. On a hosted server a lock request is the hosted approval
+      request.
+    signature: 'requestReview(kind: string, note: string, subsystem?: string): ReviewReceipt'
+    returns: ReviewReceipt
+    params:
+      - name: kind
+        type: string
+        description: '`review` or `lock`'
+      - name: note
+        type: string
+        description: What changed and what the human should look at
+      - name: subsystem
+        type: string
+        description: For a lock request, the one subsystem to re-approve
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_request_review
+  - name: awaitReview
+    description: >-
+      Tool: wait for the human's answer to a review request — locked, approved, changes requested
+      (with the comment and every note pinned to a spec), superseded (the design changed after the
+      request) or withdrawn. It blocks until decided or until timeoutSeconds pass (default one
+      hour), sending a progress notification every few minutes so a long wait stays alive; a timeout
+      answers `pending` and the agent may wait again. A lock made in the terminal answers it too.
+      Claude Code moves a long call to the background, so the agent can keep working and is told
+      when the answer arrives.
+    signature: 'awaitReview(id: string, timeoutSeconds?: int): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id sdd_request_review answered
+      - name: timeoutSeconds
+        type: int
+        description: How long to wait at most (default 3600); 0 reads the status once
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_await_review
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-06T21:47:26.222Z'
+updatedAt: '2026-11-07T02:39:36.953Z'

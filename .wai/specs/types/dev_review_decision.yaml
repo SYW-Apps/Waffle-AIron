@@ -1,0 +1,20 @@
+kind: value-object
+id: dev_review_decision
+name: DevReviewDecision
+description: >-
+  What the dev page gets back when the human decides a review request: the request as it now stands
+  and, for a lock, what the lock printed.
+subsystem: sdd_host
+fields:
+  - name: request
+    type: ReviewRequest
+    description: The request after the decision (still pending when the lock failed).
+    optional: false
+  - name: lock
+    type: DevCommandResult
+    description: The lock's result, when the decision was to lock.
+    optional: true
+methods: []
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-07T02:41:46.934Z'
+updatedAt: '2026-11-07T02:41:47.769Z'

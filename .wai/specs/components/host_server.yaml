@@ -18,8 +18,9 @@ dependsOn:
   - policy_repository
   - instance_upgrade
   - files_adapter
+  - dev_tree_watcher
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-10-31T23:25:37.490Z'
+updatedAt: '2026-11-07T02:41:03.043Z'
