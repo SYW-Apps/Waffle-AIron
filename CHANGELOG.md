@@ -19,7 +19,9 @@ npm and the tags carry.
   does not hold, or when its overall digest does not match its file digests. `buildPack` no longer
   stamps a build time, so the same pack content always builds the same archive. `scaffoldPack` writes
   a release version as a code pack's `minWaironVersion` (6.7.4, never 6.7.4-dev.5), and a pre-release
-  of a version now meets that version as a minimum.
+  of a version now meets that version as a minimum. An envelope whose `digest` or `entryDigests` values are not strings
+  (an unquoted all-digit digest reads as a YAML number) is refused with `ENVELOPE_INVALID` instead of
+  being read as carrying no digest.
 - **`wairon dev` is the place to approve.** The page follows the design live: a spec an agent writes
   through `wairon mcp serve`, or a lock from the terminal, shows on the open page without a refresh
   (unsaved edits in an open spec form are kept). The whole page is the cockpit: while there is
