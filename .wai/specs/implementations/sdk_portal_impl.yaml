@@ -70,7 +70,15 @@ methods:
         type: call
         targetComponent: pack_codec
         targetMethod: contentDigest
+  - name: readPack
+    sourcePath: sdk/src/index.ts
+    narrative:
+      - stepNumber: 1
+        description: Forward to the SDK orchestrator.
+        type: call
+        targetComponent: sdk_orchestrator
+        targetMethod: readPack
 conformance: declared
 status: complete
 createdAt: '2026-07-21T18:23:33.249Z'
-updatedAt: '2026-11-06T23:40:31.520Z'
+updatedAt: '2026-11-07T14:24:03.094Z'

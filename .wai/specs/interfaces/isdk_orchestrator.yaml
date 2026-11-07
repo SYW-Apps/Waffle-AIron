@@ -27,15 +27,22 @@ methods:
         type: string
   - name: inspectArchive
     description: >-
-      Enumerate entries (adapter), parse + version-check the envelope (codec), and return a
-      PackArchiveInfo WITHOUT extracting anything. Identity is verified at BUILD time (where the
-      author's files are authoritative), not on inspect — inspect deliberately never inflates the
-      inner pack manifest.
-    signature: 'inspectArchive(archive: bytes): PackArchiveInfo'
-    returns: PackArchiveInfo
+      Enumerate entries (adapter), vet them under `limits` before anything is inflated (codec),
+      inflate only the envelope, parse + version-check it (codec), and return a PackArchiveInfo
+      WITHOUT extracting anything. Identity and integrity are verified at BUILD time and by
+      readPack, not on inspect — inspect deliberately never inflates the inner pack manifest. Fails
+      with a PackArchiveError.
+    signature: >-
+      inspectArchive(archive: bytes, limits?: pack_extraction_limits): result<PackArchiveInfo,
+      pack_archive_error>
+    returns: result<PackArchiveInfo, pack_archive_error>
     params:
       - name: archive
         type: bytes
+      - name: limits
+        type: pack_extraction_limits
+        description: The caps the entries are vetted under; the default profile when omitted
+        optional: true
   - name: extractPack
     description: >-
       Enumerate entries (adapter), compute a safe extraction plan under `limits` (codec — rejecting
@@ -44,8 +51,8 @@ methods:
       codec default profile.
     signature: >-
       extractPack(archive: bytes, destDir: string, limits?: pack_extraction_limits):
-      PackExtractionResult
-    returns: PackExtractionResult
+      result<PackExtractionResult, pack_archive_error>
+    returns: result<PackExtractionResult, pack_archive_error>
     params:
       - name: archive
         type: bytes
@@ -113,6 +120,23 @@ methods:
         type: bool
         description: Apply the portable-path guard — set by any surface accepting an archive over the wire
         optional: true
+  - name: readPack
+    description: >-
+      Read a .wpack in memory under the extraction guards, writing nothing: vet the entries under
+      `limits` before inflating, inflate the approved ones, parse the envelope, verify integrity
+      (when digests are carried), read the inner pack manifest and verify the envelope's identity
+      against it. Fails with a PackArchiveError.
+    signature: >-
+      readPack(archive: bytes, limits?: pack_extraction_limits): result<pack_contents,
+      pack_archive_error>
+    returns: result<pack_contents, pack_archive_error>
+    params:
+      - name: archive
+        type: bytes
+      - name: limits
+        type: pack_extraction_limits
+        description: The caps; the default profile when omitted
+        optional: true
 status: complete
 createdAt: '2026-07-21T18:13:51.375Z'
-updatedAt: '2026-10-04T10:19:27.757Z'
+updatedAt: '2026-11-07T14:23:30.609Z'
