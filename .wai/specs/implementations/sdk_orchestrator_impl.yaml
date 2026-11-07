@@ -58,8 +58,8 @@ methods:
         targetMethod: verifyIdentity
       - stepNumber: 7
         description: >-
-          Seal integrity: fill entryDigests + digest and stamp generatedBy '@wairon/sdk@<version>'
-          and the current generatedAt ISO time.
+          Seal integrity: fill entryDigests + digest and stamp generatedBy '@wairon/sdk@<version>',
+          with no build time, so the same content always builds the same archive and content digest.
         type: call
         targetComponent: pack_codec
         targetMethod: sealIntegrity
@@ -459,4 +459,4 @@ methods:
         outcome: success
 status: complete
 createdAt: '2026-07-21T18:23:59.148Z'
-updatedAt: '2026-11-07T14:24:01.495Z'
+updatedAt: '2026-11-07T17:04:57.248Z'
