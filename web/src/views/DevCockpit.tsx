@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { asList, get, mcpCall, post } from '../api';
 import { AsyncButton, AsyncView, Badge, Button, ErrorNote, Field, Modal, Select, Spinner, useAsync, useToast } from '../ui';
 import { ThemeSections } from '../ThemeControls';
@@ -496,30 +496,57 @@ export function SettingsCog() {
     [open],
   );
   const dev = !!status.data?.devMode;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // A sticky panel: it stays open while the page is used (so a theme change shows on
+  // the page behind it) and closes only from the cog, its close button or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
 
   return (
-    <>
+    <div className="hmenu">
       <button
         type="button"
+        ref={triggerRef}
         className={`syw-button syw-button--ghost hmenu-trigger settings-cog ${open ? 'is-open' : ''}`}
         onClick={() => setOpen((o) => !o)}
         aria-label="Settings"
-        aria-haspopup="dialog"
+        aria-haspopup="true"
+        aria-expanded={open}
         data-tip="Settings"
       >
         <span className="cog" aria-hidden="true">⚙</span>
       </button>
       {open && (
-        <Modal title="Settings" onClose={() => (busy ? undefined : setOpen(false))}>
-          <div className="stack-lg">
-            <section className="stack-sm">
-              <h4>Appearance</h4>
-              <ThemeSections />
-            </section>
+        <div className="syw-popover hmenu-pop settings-pop" role="group" aria-label="Settings">
+          <div className="settings-pop-head">
+            <strong>Settings</strong>
+            <button
+              type="button"
+              className="syw-button syw-button--ghost btn-sm"
+              aria-label="Close settings"
+              onClick={() => {
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="settings-pop-body stack-lg">
+            <ThemeSections />
             {dev && SETTINGS_COMMANDS.map((c) => <CommandRunner key={c.id} {...c} busy={busy} setBusy={setBusy} />)}
           </div>
-        </Modal>
+        </div>
       )}
-    </>
+    </div>
   );
 }

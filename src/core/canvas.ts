@@ -2926,6 +2926,7 @@ var MODEL = __MODEL_JSON__;
   }
 
   // ---- cytoscape init ----------------------------------------------------------
+  var WHEEL_SENSITIVITY = 2;
   document.body.setAttribute('data-theme', state.theme);
   renderLegend();
 
@@ -2936,6 +2937,8 @@ var MODEL = __MODEL_JSON__;
     layout: { name: 'preset' },
     minZoom: 0.05,
     maxZoom: 4,
+    // Faster wheel zoom than cytoscape's default, which feels sluggish on a mouse wheel.
+    wheelSensitivity: WHEEL_SENSITIVITY,
     boxSelectionEnabled: false,
     autounselectify: true,
   });
@@ -4474,7 +4477,7 @@ var MODEL = __MODEL_JSON__;
     ];
 
     if (!flowCy) {
-      flowCy = cytoscape({ container: document.getElementById('flowCy'), elements: eles, style: style, layout: { name: 'preset' }, boxSelectionEnabled: false, autounselectify: true });
+      flowCy = cytoscape({ container: document.getElementById('flowCy'), elements: eles, style: style, layout: { name: 'preset' }, wheelSensitivity: WHEEL_SENSITIVITY, boxSelectionEnabled: false, autounselectify: true });
       // Flowcharts are fixed documentation — never rearrangeable.
       flowCy.autolock(true);
       // Drill on DOUBLE-click only — single taps in a dense flowchart are

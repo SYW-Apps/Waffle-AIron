@@ -373,6 +373,22 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .theme-cog .hmenu-trigger { padding: 8px 10px; }
 .theme-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
 .theme-cog .hmenu-trigger:hover .cog, .theme-cog .hmenu-trigger.is-open .cog { color: var(--ink); }
+/* The dev settings cog's sticky panel: anchored under the cog, scrolls its body. */
+.syw-popover.settings-pop {
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--header-h) - 24px);
+}
+.settings-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-pop-body { padding: 0 0 12px; overflow-y: auto; }
+.settings-pop-body > section { padding: 0 14px; }
 .settings-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
 .settings-cog:hover .cog, .settings-cog.is-open .cog { color: var(--ink); }
 
