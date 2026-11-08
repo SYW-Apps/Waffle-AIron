@@ -1360,7 +1360,17 @@ export function validateDesign(options?: ValidationOptions): ValidationResult {
   return { ...result, validatorVersion: WAIRON_VERSION, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
 }
 
+/**
+ * validator_portal.validateAsComplete — the as-complete gate, answered by the
+ * validation memo from the last identical as-complete run while nothing it
+ * reads has changed, otherwise run fresh.
+ */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
+  return validationMemo.validateAsComplete(options);
+}
+
+/** spec_validator.validateAsComplete — the as-complete gate, always run. */
+export function validateAsCompleteFresh(options?: ValidationOptions): ValidationResult {
   const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: true });
   // Steps 15-16: the code half summarized apart, with the analyzer that took
   // it — never removed from the issues; the lock partitions with designOnly.
