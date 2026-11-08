@@ -21,7 +21,7 @@ export function DevBanner() {
   const problems = status.data?.devMode ? status.data.problems : [];
   if (problems.length === 0) return null;
   return (
-    <div className="lock-banner dev-banner" role="alert">
+    <div className="syw-alert syw-alert--warning lock-banner dev-banner" role="alert">
       <strong>
         {problems.length === 1 ? '1 member of this project could not be loaded' : problems.length + ' members of this project could not be loaded'}
       </strong>{' '}

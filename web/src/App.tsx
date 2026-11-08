@@ -5,6 +5,7 @@ import { SettingsProvider, useSettings } from './settings';
 import { RealtimeProvider } from './realtime';
 import { RealtimeStatus } from './RealtimeStatus';
 import { ToastProvider } from './ui';
+import { TooltipLayer } from './components/TooltipLayer';
 import { HeaderMenu } from './HeaderMenu';
 import { Login } from './views/Login';
 import { Home } from './views/Home';
@@ -62,7 +63,7 @@ function NavList(props: { items: NavItem[]; collapsed: boolean }) {
   return (
     <nav className="nav-group">
       {props.items.map((n) => (
-        <NavLink key={n.to} to={n.to} end={n.end} className="nav-item" title={props.collapsed ? n.label : undefined}>
+        <NavLink key={n.to} to={n.to} end={n.end} className="nav-item" data-tip={props.collapsed ? n.label : undefined} aria-label={props.collapsed ? n.label : undefined}>
           <span className="nav-icon">{n.icon}</span>
           {!props.collapsed && <span className="nav-text">{n.label}</span>}
         </NavLink>
@@ -75,12 +76,14 @@ function Sidebar(props: { adminVisible: boolean; collapsed: boolean; onToggle: (
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
-        {!props.collapsed && <span className="brand syw-gradient-text">wairon</span>}
+        {!props.collapsed && <span className="brand brand-gradient-text">wairon</span>}
         <button
-          className="icon-btn sidebar-toggle"
+          type="button"
+          className="syw-button syw-button--ghost icon-btn sidebar-toggle"
           onClick={props.onToggle}
           aria-label={props.collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={props.collapsed ? 'Expand' : 'Collapse'}
+          aria-expanded={!props.collapsed}
+          data-tip={props.collapsed ? 'Expand' : 'Collapse'}
         >
           ☰
         </button>
@@ -172,13 +175,13 @@ function DevShell() {
     <CockpitProvider>
     <div className="shell">
       <div className="main-col">
-        <header className="topbar dev-bar">
-          <span className="brand syw-gradient-text">wairon</span>
-          <span className="dev-tag" title="Local developer server — this project only">
+        <header className="syw-header topbar dev-bar">
+          <span className="brand brand-gradient-text">wairon</span>
+          <span className="dev-tag" data-tip="Local developer server — this project only" tabIndex={0}>
             dev
           </span>
-          <Tabs tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : '/canvas')} />
-          <span className="spacer" />
+          <Tabs label="Workspace" className="dev-tabs" tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : '/canvas')} />
+          <span className="syw-header__spacer" />
           <RealtimeStatus />
           <SettingsCog />
         </header>
@@ -216,8 +219,8 @@ function Shell() {
     <div className={`shell ${sidebarCollapsed ? 'is-collapsed' : ''}`}>
       <Sidebar adminVisible={adminVisible} collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div className="main-col">
-        <header className="topbar">
-          <span className="spacer" />
+        <header className="syw-header topbar">
+          <span className="syw-header__spacer" />
           <RealtimeStatus />
           {ctx && <HeaderMenu ctx={ctx} onSignOut={signOut} />}
         </header>
@@ -302,7 +305,7 @@ function Anonymous({ onSignedIn }: { onSignedIn: () => void }) {
           This is a local <code>wairon dev</code> server — it has no sign-in. Stop it, clear this site's cookies, and
           run <code>wairon dev</code> again.
         </p>
-        <button className="btn" onClick={onSignedIn}>
+        <button type="button" className="syw-button" onClick={onSignedIn}>
           Retry
         </button>
       </div>
@@ -319,7 +322,7 @@ function Gate() {
     return (
       <div className="boot">
         <p className="err">Could not reach the server.</p>
-        <button className="btn" onClick={reload}>
+        <button type="button" className="syw-button" onClick={reload}>
           Retry
         </button>
         {error && <p className="hint">{error}</p>}
@@ -340,6 +343,7 @@ export function App() {
         <SessionProvider>
           <ToastProvider>
             <Gate />
+            <TooltipLayer />
           </ToastProvider>
         </SessionProvider>
       </BrowserRouter>

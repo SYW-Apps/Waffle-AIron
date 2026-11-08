@@ -61,7 +61,7 @@ function networkCaption(n: NetworkBoundary): string {
 function WorkloadChip({ party, networks }: { party: FlowParty; networks: NetworkBoundary[] }) {
   const gateway = isGateway(party, networks);
   return (
-    <span className={`net-chip${gateway ? ' net-gateway' : ''}${party.scope ? ' net-scope' : ''}`} title={gateway ? 'Gateway: the only Portal callers from outside this network may enter' : undefined}>
+    <span className={`net-chip${gateway ? ' net-gateway' : ''}${party.scope ? ' net-scope' : ''}`} data-tip={gateway ? 'Gateway: the only Portal callers from outside this network may enter' : undefined}>
       {gateway ? '⬡ ' : ''}
       {nameOf(party, networks)}
     </span>
@@ -106,7 +106,7 @@ export function NetworkView({ projectId, onComponents }: { projectId: string; on
   return (
     <div className="net-view">
       <div className="canvas-bar">
-        <button className="btn btn-ghost btn-sm" onClick={onComponents} title="Back to the component architecture">
+        <button className="syw-button syw-button--ghost btn-sm" onClick={onComponents} data-tip="Back to the component architecture">
           ← Components
         </button>
         <span className="crumb-sep">/</span>
@@ -145,7 +145,7 @@ function NetworkPicture({ vm }: { vm: NetworkViewModel }) {
         ))}
       <h3>Flows ({vm.edges.length})</h3>
       {vm.edges.map((e, i) => (
-        <details key={i} className="panel">
+        <details key={i} className="syw-card">
           <summary>
             <strong>{nameOf(e.from, vm.networks)}</strong> → <strong>{nameOf(e.to, vm.networks)}</strong>{' '}
             <Badge tone="accent">{e.transport}</Badge> <span className="subtle">{e.verbs?.length ?? 1} verb(s)</span>

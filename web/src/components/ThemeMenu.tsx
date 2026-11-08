@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { SywSegmented } from '@syw/design-react';
 
 /**
  * ThemeMenu — the compact palette + appearance picker used across SYW apps
@@ -12,9 +13,10 @@ import { useEffect, useRef, useState } from 'react';
  *   app binds its own state (wairon: ThemeControls.tsx) and passes plain
  *   option/mode lists; `ThemeOption`/`APPEARANCE_OPTIONS` shapes fit
  *   structurally.
- * - Visuals come only from the `.tmenu-*` semantic classes (styled from the
- *   app's own tokens; wairon's block lives in theme.css under "Theme menu").
- *   Porting = copy this file + restyle that block from the target app's vars.
+ * - Visuals come from the DS surfaces (`.syw-menu`, `.syw-segmented`,
+ *   `.syw-button`) plus a few `.tmenu-*` layout classes (theme.css, "Theme menu").
+ *   The menu follows the listbox pattern: opening focuses the active option,
+ *   Arrow/Home/End move, Enter/Space select, Escape closes and returns focus.
  * - `onCreateTheme` / `onManageThemes` are optional: omit them on surfaces
  *   where a theme-builder route is not reachable and those affordances vanish.
  */
@@ -59,20 +61,54 @@ export function ThemeMenu(props: {
 }) {
   const [open, setOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  function close(returnFocus: boolean) {
+    setOpen(false);
+    if (returnFocus) triggerRef.current?.focus();
+  }
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (!pickerRef.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Consume it: an enclosing modal <dialog> must not also treat it as its own.
+      e.preventDefault();
+      e.stopPropagation();
+      close(true);
+    };
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey, true);
     };
   }, [open]);
+
+  // Opening moves focus onto the active option (or the first), per listbox practice.
+  useEffect(() => {
+    if (!open) return;
+    const rows = listRef.current?.querySelectorAll<HTMLElement>('[role="option"]');
+    const active = listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    (active ?? rows?.[0])?.focus();
+  }, [open]);
+
+  function onListKey(e: ReactKeyboardEvent) {
+    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? []);
+    const at = rows.indexOf(document.activeElement as HTMLElement);
+    let next = -1;
+    if (e.key === 'ArrowDown') next = (at + 1) % rows.length;
+    else if (e.key === 'ArrowUp') next = (at - 1 + rows.length) % rows.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = rows.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    rows[next]?.focus();
+  }
 
   const active = props.options.find((o) => o.id === props.themeId) ?? props.options[0];
 
@@ -81,7 +117,7 @@ export function ThemeMenu(props: {
       <div className="tmenu-head">
         <span className="tmenu-label">{props.label ?? 'Appearance'}</span>
         {props.onManageThemes && (
-          <button className="tmenu-manage" onClick={props.onManageThemes}>
+          <button type="button" className="syw-button syw-button--ghost btn-sm tmenu-manage" onClick={props.onManageThemes}>
             Theme builder ↗
           </button>
         )}
@@ -90,43 +126,51 @@ export function ThemeMenu(props: {
 
       <div className="tmenu-picker" ref={pickerRef}>
         <button
-          className={`tmenu-trigger ${open ? 'is-open' : ''}`}
+          type="button"
+          ref={triggerRef}
+          className={`syw-button tmenu-trigger ${open ? 'is-open' : ''}`}
           onClick={() => setOpen((o) => !o)}
           aria-haspopup="listbox"
           aria-expanded={open}
+          aria-label={`Theme: ${active?.label ?? 'none'}`}
         >
           {active && <SwatchPill swatches={active.swatches} />}
           <span className="tmenu-opt-text">
             <span className="tmenu-opt-name">{active?.label ?? '—'}</span>
             {active?.description && <span className="tmenu-opt-desc">{active.description}</span>}
           </span>
-          <span className="tmenu-caret">▾</span>
+          <span className="tmenu-caret" aria-hidden="true">▾</span>
         </button>
 
         {open && (
-          <div className="tmenu-panel" role="listbox">
-            {props.options.map((o) => (
-              <button
-                key={o.id}
-                className={`tmenu-row ${o.id === props.themeId ? 'is-active' : ''}`}
-                role="option"
-                aria-selected={o.id === props.themeId}
-                onClick={() => {
-                  props.onSelectTheme(o.id);
-                  setOpen(false);
-                }}
-              >
-                <SwatchPill swatches={o.swatches} />
-                <span className="tmenu-opt-text">
-                  <span className="tmenu-opt-name">{o.label}</span>
-                  {o.description && <span className="tmenu-opt-desc">{o.description}</span>}
-                </span>
-                {o.id === props.themeId && <span className="tmenu-check">✓</span>}
-              </button>
-            ))}
+          <div className="syw-menu tmenu-panel">
+            <div role="listbox" aria-label="Themes" ref={listRef} onKeyDown={onListKey}>
+              {props.options.map((o) => (
+                <button
+                  type="button"
+                  key={o.id}
+                  className={`syw-menu__item tmenu-row ${o.id === props.themeId ? 'is-active' : ''}`}
+                  role="option"
+                  aria-selected={o.id === props.themeId}
+                  tabIndex={o.id === props.themeId ? 0 : -1}
+                  onClick={() => {
+                    props.onSelectTheme(o.id);
+                    close(true);
+                  }}
+                >
+                  <SwatchPill swatches={o.swatches} />
+                  <span className="tmenu-opt-text">
+                    <span className="tmenu-opt-name">{o.label}</span>
+                    {o.description && <span className="tmenu-opt-desc">{o.description}</span>}
+                  </span>
+                  {o.id === props.themeId && <span className="tmenu-check" aria-hidden="true">✓</span>}
+                </button>
+              ))}
+            </div>
             {props.onCreateTheme && (
               <button
-                className="tmenu-create"
+                type="button"
+                className="syw-button tmenu-create"
                 onClick={() => {
                   setOpen(false);
                   props.onCreateTheme?.();
@@ -139,18 +183,13 @@ export function ThemeMenu(props: {
         )}
       </div>
 
-      <div className="tmenu-modes">
-        {props.modes.map((m) => (
-          <button
-            key={m.id}
-            className={`tmenu-mode ${m.id === props.appearance ? 'is-active' : ''}`}
-            title={m.description}
-            onClick={() => props.onSelectMode(m.id)}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      <SywSegmented
+        className="tmenu-modes"
+        aria-label="Appearance mode"
+        value={props.appearance}
+        options={props.modes.map((m) => ({ value: m.id, label: m.label }))}
+        onChange={(v) => props.onSelectMode(v)}
+      />
     </div>
   );
 }

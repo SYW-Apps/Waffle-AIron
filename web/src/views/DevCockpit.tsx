@@ -94,7 +94,7 @@ export function CockpitProvider(props: { children: ReactNode }) {
     <CockpitContext.Provider value={ctx}>
       {props.children}
       {bar.show && !open && !lock && (
-        <div className="cockpit-bar" role="status">
+        <div className="syw-card cockpit-bar" role="status">
           <div className="cockpit-bar-text">
             <strong>{bar.line}</strong>
             {bar.action === 'review' && pending[0] && <span className="dim"> {pending[0].note}</span>}
@@ -382,7 +382,7 @@ function ReviewScreen(props: { request: ReviewRequest; onClose: () => void; onDe
                 {noteIds.map((id) => (
                   <Field key={id} label={`Note on ${id}`}>
                     <textarea
-                      className="input"
+                      className="syw-textarea"
                       rows={2}
                       value={notes[id] ?? ''}
                       onChange={(e) => setNotes((n) => ({ ...n, [id]: e.target.value }))}
@@ -393,7 +393,7 @@ function ReviewScreen(props: { request: ReviewRequest; onClose: () => void; onDe
             )}
             <div className="list-line">
               <input
-                className="input"
+                className="syw-input"
                 placeholder="Pin a note to another spec id"
                 value={extraId}
                 onChange={(e) => setExtraId(e.target.value)}
@@ -418,7 +418,7 @@ function ReviewScreen(props: { request: ReviewRequest; onClose: () => void; onDe
           </section>
 
           <Field label="Comment">
-            <textarea className="input" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+            <textarea className="syw-textarea" rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
           </Field>
         </div>
       </Modal>
@@ -500,12 +500,14 @@ export function SettingsCog() {
   return (
     <>
       <button
-        className={`hmenu-trigger settings-cog ${open ? 'is-open' : ''}`}
+        type="button"
+        className={`syw-button syw-button--ghost hmenu-trigger settings-cog ${open ? 'is-open' : ''}`}
         onClick={() => setOpen((o) => !o)}
         aria-label="Settings"
-        title="Settings"
+        aria-haspopup="dialog"
+        data-tip="Settings"
       >
-        <span className="cog">⚙</span>
+        <span className="cog" aria-hidden="true">⚙</span>
       </button>
       {open && (
         <Modal title="Settings" onClose={() => (busy ? undefined : setOpen(false))}>

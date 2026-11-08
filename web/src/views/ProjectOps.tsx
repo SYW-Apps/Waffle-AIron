@@ -17,6 +17,7 @@ import {
   TextInput,
   useAsync,
   useToast,
+  TabPanel,
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { SharingTab } from './Sharing';
@@ -100,7 +101,7 @@ export function PackImpactReport({ impact }: { impact: PackImpact }) {
             : 'Measured as applied. Nothing has been written. Changes are stated, never judged.'}
         </span>
       </div>
-      <div className="panel">
+      <div className="syw-card">
         <h4>What it changes against wairon's defaults</h4>
         <DoctrineList changes={impact.doctrine} />
         {impact.previousDoctrine && (
@@ -118,7 +119,7 @@ export function PackImpactReport({ impact }: { impact: PackImpact }) {
         <dt>After</dt>
         <dd>{totalsLine(impact.after)}</dd>
       </dl>
-      <div className="panel">
+      <div className="syw-card">
         <h4>
           Findings on this project{removal ? ' once it no longer applies' : ''}: {f.introduced.length} introduced, {f.resolved.length} resolved,{' '}
           {f.regraded.length} regraded
@@ -141,7 +142,7 @@ export function PackImpactReport({ impact }: { impact: PackImpact }) {
 export function PackImpactSummary({ impact }: { impact: PackImpact }) {
   const f = impact.findings;
   return (
-    <details className="panel">
+    <details className="syw-card">
       <summary>
         <strong>{impact.pack}{impact.version ? ` v${impact.version}` : ''}</strong>
         <span className="hint">
@@ -458,7 +459,7 @@ function PacksTab({ projectId }: { projectId: string }) {
           <div className="stack-lg">
             <p className="hint">Prefer “Add from available” for catalog packs. Upload is for a pack not yet on this server.</p>
             <Field label="Pack archive (.wpack)" hint="Declarative packs only — code packs are installed via the filesystem tier.">
-              <input className="input" type="file" accept=".wpack,.zip,application/zip"
+              <input className="syw-input" type="file" accept=".wpack,.zip,application/zip"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </Field>
             <Field label="Name override (optional)" hint="Defaults to the pack name in the archive's manifest.">
@@ -492,7 +493,7 @@ function PacksTab({ projectId }: { projectId: string }) {
               <TextInput value={yamlName} onChange={setYamlName} placeholder="my-org-conventions" />
             </Field>
             <Field label="Pack YAML">
-              <textarea className="input" rows={12} value={yamlContent} onChange={(e) => setYamlContent(e.target.value)} placeholder={'name: my-org-conventions\nprofiles:\n  backend:\n    rules: {}'} />
+              <textarea className="syw-textarea" rows={12} value={yamlContent} onChange={(e) => setYamlContent(e.target.value)} placeholder={'name: my-org-conventions\nprofiles:\n  backend:\n    rules: {}'} />
             </Field>
           </div>
         </Modal>
@@ -546,7 +547,7 @@ function PolicyTab({ projectId }: { projectId: string }) {
             </AsyncButton>
           </div>
           {d.impacts && d.impacts.length > 0 && (
-            <div className="panel">
+            <div className="syw-card">
               <h4>Reconcile would apply</h4>
               <p className="hint">
                 The instance policy's required and default packs this project does not have yet, each measured against the project as it
@@ -560,7 +561,7 @@ function PolicyTab({ projectId }: { projectId: string }) {
             </div>
           )}
           {applied && (
-            <div className="panel">
+            <div className="syw-card">
               <h4>Last reconcile applied</h4>
               {applied.impacts && applied.impacts.length > 0 ? (
                 <div className="stack-sm">
@@ -574,7 +575,7 @@ function PolicyTab({ projectId }: { projectId: string }) {
             </div>
           )}
           {d.messages.length > 0 ? (
-            <div className="panel">
+            <div className="syw-card">
               <h4>Findings</h4>
               <ul className="finding-list">
                 {d.messages.map((m, i) => (
@@ -583,7 +584,7 @@ function PolicyTab({ projectId }: { projectId: string }) {
               </ul>
             </div>
           ) : (
-            <div className="empty-state">No policy findings — this project matches its pack/profile policy.</div>
+            <div className="syw-empty">No policy findings — this project matches its pack/profile policy.</div>
           )}
           {(d.missingPackNames.length > 0 || d.blockedPackNames.length > 0 || d.missingProfileIds.length > 0) && (
             <div className="chip-row">
@@ -658,7 +659,7 @@ function ProducersTab({ projectId }: { projectId: string }) {
           />
         )}
       </AsyncView>
-      <div className="panel">
+      <div className="syw-card">
         <h4>Configure a producer</h4>
         <div className="row-form">
           <Field label="Target">
@@ -713,7 +714,7 @@ function GitTab({ projectId }: { projectId: string }) {
           <GitCredentialCard />
 
           {s.enabled ? (
-            <div className="panel">
+            <div className="syw-card">
               <h4>
                 Backing repository <Badge tone="ok">enabled</Badge> {s.dirty && <Badge tone="warn">.wai/ dirty</Badge>}{' '}
                 {s.credentialRef ? <Badge tone="ok">own PAT</Badge> : <Badge tone="neutral">shared token</Badge>}
@@ -751,7 +752,7 @@ function GitTab({ projectId }: { projectId: string }) {
               </div>
             </div>
           ) : (
-            <div className="panel">
+            <div className="syw-card">
               <h4>Bind the project repository</h4>
               <p>
                 <Badge tone="warn">not git-backed</Badge>{' '}
@@ -825,7 +826,7 @@ function TransferTab({ projectId }: { projectId: string }) {
         <code> .waitree</code> archive. This is the migration path between a local checkout and this instance.
       </p>
 
-      <div className="panel">
+      <div className="syw-card">
         <h4>Export</h4>
         <p className="hint">
           Downloads the authored design: specs, lock, rules, variants, surfaces and packs. Regenerable artifacts
@@ -845,7 +846,7 @@ function TransferTab({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      <div className="panel">
+      <div className="syw-card">
         <h4>Import</h4>
         <p className="hint">
           Replaces this project's spec tree from an archive. Requires <code>project:admin</code>. Executable content is
@@ -853,7 +854,7 @@ function TransferTab({ projectId }: { projectId: string }) {
         </p>
         <Field label="Spec-tree archive (.waitree)" hint="Produced by an export here, or by `wairon remote pull`.">
           <input
-            className="input"
+            className="syw-input"
             type="file"
             accept=".waitree,.zip,application/zip"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
@@ -938,7 +939,7 @@ export function ParentCrumb(props: { project: ProjectRecord; projects: ProjectRe
   if (!parentId) return null;
   const visible = props.projects.some((p) => p.id === parentId);
   return visible ? (
-    <button className="btn btn-ghost btn-sm back-link" onClick={() => nav(`/projects/${encodeURIComponent(parentId)}`)}>
+    <button className="syw-button syw-button--ghost btn-sm back-link" onClick={() => nav(`/projects/${encodeURIComponent(parentId)}`)}>
       ↑ member of {parentId}
     </button>
   ) : (
@@ -955,7 +956,7 @@ export function MemberLinks(props: { projectId: string; projects: ProjectRecord[
     <div className="row-actions" style={{ justifyContent: 'flex-start' }}>
       <span className="hint">Members:</span>
       {members.map((m) => (
-        <button key={m.id} className="btn btn-ghost btn-sm" onClick={() => nav(`/projects/${encodeURIComponent(m.id)}`)}>
+        <button key={m.id} className="syw-button syw-button--ghost btn-sm" onClick={() => nav(`/projects/${encodeURIComponent(m.id)}`)}>
           {m.id}
           {m.memberPath ? <code className="subtle"> {m.memberPath}</code> : null}
         </button>
@@ -996,7 +997,7 @@ export function RelationsPanel(props: { projectId: string }) {
             {d.externals.map((s) => {
               const health = externalTone(s);
               return (
-                <details key={s.alias} className="panel">
+                <details key={s.alias} className="syw-card">
                   <summary>
                     <strong>{s.alias}</strong> <span className="subtle">→ {s.project}</span>{' '}
                     <Badge tone={health.tone}>{health.label}</Badge> <span className="hint">{s.sourceKind}</span>
@@ -1069,7 +1070,7 @@ export function ProjectOps() {
     <div className={`view-pad ${tab === 'specs' ? 'view-pad-wide' : ''}`}>
       <div className="view-head">
         <div className="cell-stack">
-          <button className="btn btn-ghost btn-sm back-link" onClick={() => nav('/projects')}>
+          <button className="syw-button syw-button--ghost btn-sm back-link" onClick={() => nav('/projects')}>
             ← Projects
           </button>
           {self && <ParentCrumb project={self} projects={listed} />}
@@ -1080,8 +1081,8 @@ export function ProjectOps() {
           Open canvas
         </Button>
       </div>
-      <Tabs tabs={OPS_TABS} active={tab} onSelect={selectTab} />
-      <div className="tab-panel">
+      <Tabs idBase="project-ops" label="Project sections" tabs={OPS_TABS} active={tab} onSelect={selectTab} />
+      <TabPanel idBase="project-ops" id={tab}>
         {tab === 'specs' && <SpecsTab projectId={projectId} selection={selection} onSelectSpec={selectSpec} />}
         {tab === 'packs' && <PacksTab projectId={projectId} />}
         {tab === 'policy' && <PolicyTab projectId={projectId} />}
@@ -1090,7 +1091,7 @@ export function ProjectOps() {
         {tab === 'transfer' && <TransferTab projectId={projectId} />}
         {tab === 'sharing' && <SharingTab projectId={projectId} />}
         {tab === 'relations' && <RelationsPanel projectId={projectId} />}
-      </div>
+      </TabPanel>
     </div>
   );
 }

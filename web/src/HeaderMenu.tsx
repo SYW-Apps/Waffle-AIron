@@ -8,11 +8,14 @@ import type { WebContext } from './session';
  * The header account + settings menu, adapted from the SYW Apps shell's
  * HeaderMenu: a cog button opening a dropdown with the signed-in identity, the
  * appearance controls (color palette picker + light/dark/high-contrast mode),
- * and sign out. Native (no FontAwesome / ui-sdk) — closes on outside click / Esc.
+ * and sign out. The surface is the DS `.syw-popover` (it holds forms, so it is a
+ * popover, not an ARIA menu); it closes on outside click / Escape and Escape
+ * returns focus to the trigger.
  */
 export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,7 +23,11 @@ export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -34,15 +41,23 @@ export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
 
   return (
     <div className="hmenu" ref={ref}>
-      <button className={`hmenu-trigger ${open ? 'is-open' : ''}`} onClick={() => setOpen((o) => !o)} aria-label="Account & settings">
+      <button
+        type="button"
+        ref={triggerRef}
+        className={`syw-button syw-button--ghost hmenu-trigger ${open ? 'is-open' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Account & settings"
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
         <span className="avatar">{initial}</span>
         <span className="hmenu-who">{who}</span>
-        {props.ctx.isAdmin && <span className="badge badge-accent">admin</span>}
-        <span className="chevron">▾</span>
+        {props.ctx.isAdmin && <span className="syw-chip badge badge-accent">admin</span>}
+        <span className="chevron" aria-hidden="true">▾</span>
       </button>
 
       {open && (
-        <div className="hmenu-pop" role="menu">
+        <div className="syw-popover hmenu-pop" role="group" aria-label="Account and settings">
           <div className="hmenu-head">
             <span className="avatar avatar-lg">{initial}</span>
             <div className="cell-stack">
@@ -60,7 +75,7 @@ export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
           />
 
           <div className="hmenu-foot">
-            <button className="btn btn-ghost btn-sm" onClick={props.onSignOut}>
+            <button type="button" className="syw-button syw-button--ghost btn-sm" onClick={props.onSignOut}>
               Sign out
             </button>
           </div>

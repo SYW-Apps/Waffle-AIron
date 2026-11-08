@@ -14,6 +14,8 @@ import {
   useAsync,
   useToast,
   type Async,
+  Tabs,
+  TabPanel,
 } from '../ui';
 import type { AvailableProfile } from '../types';
 import { buildDelta, type SpecKind } from './specDelta';
@@ -211,7 +213,7 @@ function Combobox(props: {
   return (
     <>
       <input
-        className="input"
+        className="syw-input"
         list={listId}
         value={props.value ?? ''}
         placeholder={props.placeholder}
@@ -257,7 +259,7 @@ function TagInput(props: {
         </span>
       )}
       <input
-        className="input"
+        className="syw-input"
         value={text}
         placeholder={props.placeholder ?? 'Type and press Enter…'}
         disabled={props.disabled}
@@ -272,7 +274,7 @@ function TagInput(props: {
       {unused.length > 0 && !props.disabled && (
         <div className="chip-row">
           {unused.map((s) => (
-            <button key={s} type="button" className="btn btn-ghost btn-sm" onClick={() => add(s)}>+ {s}</button>
+            <button key={s} type="button" className="syw-button syw-button--ghost btn-sm" onClick={() => add(s)}>+ {s}</button>
           ))}
         </div>
       )}
@@ -301,19 +303,19 @@ function TextListEditor(props: {
       {items.map((it, i) => (
         <div key={i} className="list-line">
           <input
-            className="input"
+            className="syw-input"
             value={props.getText(it)}
             placeholder={props.placeholder}
             disabled={props.disabled}
             onChange={(e) => update(i, e.target.value)}
           />
           {!props.disabled && (
-            <button type="button" className="icon-btn" aria-label="Remove" title="Remove" onClick={() => remove(i)}>×</button>
+            <button type="button" className="syw-button syw-button--ghost icon-btn" aria-label="Remove" data-tip="Remove" onClick={() => remove(i)}>×</button>
           )}
         </div>
       ))}
       {!props.disabled && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => props.onChange([...items, ''])}>
+        <button type="button" className="syw-button syw-button--ghost btn-sm" onClick={() => props.onChange([...items, ''])}>
           + {props.addLabel ?? 'Add'}
         </button>
       )}
@@ -340,12 +342,12 @@ function ExternalLinksEditor(props: { links: any[]; onChange: (links: any[]) => 
             </Field>
             <Field label="Label"><TextInput value={l.label ?? ''} onChange={(v) => update(i, { label: v })} placeholder="(optional)" /></Field>
             <div className="row-form-action">
-              <button type="button" className="icon-btn" aria-label="Remove link" title="Remove" onClick={() => remove(i)}>×</button>
+              <button type="button" className="syw-button syw-button--ghost icon-btn" aria-label="Remove link" data-tip="Remove" onClick={() => remove(i)}>×</button>
             </div>
           </div>
         </div>
       ))}
-      <button type="button" className="btn btn-ghost btn-sm" onClick={() => props.onChange([...links, { url: '', type: 'informative' }])}>
+      <button type="button" className="syw-button syw-button--ghost btn-sm" onClick={() => props.onChange([...links, { url: '', type: 'informative' }])}>
         + external link
       </button>
     </div>
@@ -382,15 +384,15 @@ function PortalAuthEditor(props: { auth: any; onChange: (auth: any) => void }) {
           <Field label="Authorization URL"><TextInput value={a.authorizationUrl ?? ''} onChange={(v) => set({ authorizationUrl: v })} placeholder="https://…/authorize" /></Field>
           <Field label="Token URL"><TextInput value={a.tokenUrl ?? ''} onChange={(v) => set({ tokenUrl: v })} placeholder="https://…/token" /></Field>
           <Field label="Refresh URL"><TextInput value={a.refreshUrl ?? ''} onChange={(v) => set({ refreshUrl: v })} placeholder="(optional)" /></Field>
-          <span className="field-label">Scopes</span>
+          <span className="syw-field__label">Scopes</span>
           {scopes.map((s, i) => (
             <div key={i} className="row-form">
               <Field label="Scope"><TextInput value={s.name ?? ''} onChange={(v) => setScopes(scopes.map((x, j) => (j === i ? { ...x, name: v } : x)))} /></Field>
               <Field label="Description"><TextInput value={s.description ?? ''} onChange={(v) => setScopes(scopes.map((x, j) => (j === i ? { ...x, description: v } : x)))} /></Field>
-              <div className="row-form-action"><button type="button" className="icon-btn" aria-label="Remove scope" onClick={() => setScopes(scopes.filter((_, j) => j !== i))}>×</button></div>
+              <div className="row-form-action"><button type="button" className="syw-button syw-button--ghost icon-btn" aria-label="Remove scope" onClick={() => setScopes(scopes.filter((_, j) => j !== i))}>×</button></div>
             </div>
           ))}
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setScopes([...scopes, { name: '', description: '' }])}>+ scope</button>
+          <button type="button" className="syw-button syw-button--ghost btn-sm" onClick={() => setScopes([...scopes, { name: '', description: '' }])}>+ scope</button>
         </>
       )}
       {scheme === 'openIdConnect' && (
@@ -464,13 +466,13 @@ function resolveSpecRef(
 function IssueSpecChip(props: { specId: string; nodes: GraphNode[]; onSelectSpec: (sel: { kind: string; id: string }) => void }) {
   const ref = resolveSpecRef(props.specId, props.nodes);
   if (!ref) {
-    return <span className="badge badge-neutral finding-chip-unresolved" title={props.specId}>id · {props.specId}</span>;
+    return <span className="syw-chip badge badge-neutral finding-chip-unresolved" data-tip={props.specId}>id · {props.specId}</span>;
   }
   return (
     <button
       type="button"
-      className="badge badge-accent finding-chip"
-      title={props.specId}
+      className="syw-chip badge badge-accent finding-chip"
+      data-tip={props.specId}
       onClick={() => props.onSelectSpec({ kind: ref.kind, id: ref.id })}
     >
       {ref.kind} · {ref.label}{ref.suffix ? ` · ${ref.suffix}` : ''}
@@ -541,7 +543,7 @@ function ValidationRail(props: {
           className={scrollable ? 'finding-msg finding-msg-clickable' : 'finding-msg'}
           role={scrollable ? 'button' : undefined}
           onClick={scrollable ? () => props.onRequestScroll(field) : undefined}
-          title={scrollable ? 'Jump to this field' : undefined}
+          data-tip={scrollable ? 'Jump to this field' : undefined}
         >
           {i.message}
         </div>
@@ -557,7 +559,7 @@ function ValidationRail(props: {
   return (
     <aside className="spec-validation">
       <div className="spec-validation-head">
-        <span className="field-label">Validation</span>
+        <span className="syw-field__label">Validation</span>
         <AsyncButton variant="ghost" action={props.onValidate} onError={toast.bad}>Validate tree</AsyncButton>
       </div>
       {!v && <p className="hint">Run a tree validation to list this project's errors, warnings and notices here.</p>}
@@ -569,7 +571,7 @@ function ValidationRail(props: {
               <span className="hint">
                 {inScopeCount} on this {SCOPE_NOUN_LABEL[props.scope.noun]} · {elsewhereCount} elsewhere
               </span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={props.onToggleShowAll}>
+              <button type="button" className="syw-button syw-button--ghost btn-sm" onClick={props.onToggleShowAll}>
                 {props.showAll ? 'Show scoped' : 'Show all'}
               </button>
             </div>
@@ -611,7 +613,7 @@ function GroupedSelect(props: {
   disabled?: boolean;
 }) {
   return (
-    <select className="input" value={props.value} disabled={props.disabled} onChange={(e) => props.onChange(e.target.value)}>
+    <select className="syw-select" value={props.value} disabled={props.disabled} onChange={(e) => props.onChange(e.target.value)}>
       {props.includeNone && <option value="">{props.noneLabel ?? '(none)'}</option>}
       {props.groups.map((g) => (
         <optgroup key={g.label} label={g.label}>
@@ -846,9 +848,9 @@ function SpecForm(props: {
 
       {/* ── System (L0) ── */}
       {sel.kind === 'system' && (
-        <div className="panel stack-lg">
+        <div className="syw-card stack-lg">
           <Field label="Vision" hint="The system's vision, mission, and core goals.">
-            <textarea className="input" rows={4} value={draft.vision ?? ''} onChange={(e) => set('vision', e.target.value)} />
+            <textarea className="syw-textarea" rows={4} value={draft.vision ?? ''} onChange={(e) => set('vision', e.target.value)} />
           </Field>
           <Field label="Boundaries" hint="In / out-of-scope statements that bound the system.">
             <TextListEditor
@@ -872,7 +874,7 @@ function SpecForm(props: {
           </Field>
           {(draft.publicInterfaces ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Public surface entries</span>
+              <span className="syw-field__label">Public surface entries</span>
               {draft.publicInterfaces.map((pi: any, i: number) => (
                 <div key={i} className="sub-card">
                   <code className="subtle">{pi.id ?? pi.component ?? `entry ${i + 1}`}</code>
@@ -891,12 +893,12 @@ function SpecForm(props: {
 
       {/* ── Subsystem (L1) ── */}
       {sel.kind === 'subsystem' && (
-        <div className="panel stack-lg">
+        <div className="syw-card stack-lg">
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Status"><EnumSelect value={draft.status} onChange={(v) => set('status', v)} options={STATUS} /></Field>
           </div>
-          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="syw-textarea" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
             <Field label="Profile" hint={profileHint} fieldKey="profile" highlight={flagFor('profile')}>
               <GroupedSelect value={draft.profile ?? ''} onChange={(v) => set('profile', v)} groups={profGroups} includeNone noneLabel="(inherit)" />
@@ -906,7 +908,7 @@ function SpecForm(props: {
           </div>
           {(draft.publicInterfaces ?? []).length > 0 && (
             <div className={`stack-lg${flagFor('publicInterfaces') ? ` field-flag field-flag-${flagFor('publicInterfaces')}` : ''}`} data-field="publicInterfaces">
-              <span className="field-label">Public interfaces</span>
+              <span className="syw-field__label">Public interfaces</span>
               {draft.publicInterfaces.map((pi: any, i: number) => (
                 <div key={i} className="sub-card">
                   <code className="subtle">{pi.component ? `${pi.component}${pi.interface ? ` · ${pi.interface}` : ''}` : `entry ${i + 1}`}</code>
@@ -920,7 +922,7 @@ function SpecForm(props: {
           )}
           {(draft.lifecycle ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Lifecycle entrypoints</span>
+              <span className="syw-field__label">Lifecycle entrypoints</span>
               {draft.lifecycle.map((le: any, i: number) => (
                 <div key={i} className="sub-card">
                   <div className="row-form">
@@ -937,12 +939,12 @@ function SpecForm(props: {
 
       {/* ── Component (L2) ── */}
       {sel.kind === 'component' && (
-        <div className="panel stack-lg">
+        <div className="syw-card stack-lg">
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Status"><EnumSelect value={draft.status} onChange={(v) => set('status', v)} options={STATUS} /></Field>
           </div>
-          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="syw-textarea" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
             <Field label="Component type" fieldKey="componentType" highlight={flagFor('componentType')}><Select value={draft.componentType ?? ''} onChange={(v) => set('componentType', v)} options={componentTypeOptions(draft.componentType)} /></Field>
             {draft.componentType === 'Portal' && (
@@ -968,14 +970,14 @@ function SpecForm(props: {
 
       {/* ── Interface (L3) ── */}
       {sel.kind === 'interface' && (
-        <div className="panel stack-lg">
+        <div className="syw-card stack-lg">
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
           </div>
-          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="syw-textarea" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           {(draft.methods ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Methods</span>
+              <span className="syw-field__label">Methods</span>
               {draft.methods.map((m: any, i: number) => (
                 <div key={m.name} className="sub-card">
                   <code className="subtle">{m.name}</code>
@@ -1019,12 +1021,12 @@ function SpecForm(props: {
 
       {/* ── Implementation (L4) ── */}
       {sel.kind === 'implementation' && (
-        <div className="panel stack-lg">
+        <div className="syw-card stack-lg">
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Status"><EnumSelect value={draft.status} onChange={(v) => set('status', v)} options={STATUS} /></Field>
           </div>
-          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="syw-textarea" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
             <Field label="Narrative detail (default)"><EnumSelect value={draft.detail} onChange={(v) => set('detail', v)} options={NARRATIVE_DETAIL} allowNone noneLabel="(stereotype default)" /></Field>
             <Field label="Conformance (default)"><EnumSelect value={draft.conformance} onChange={(v) => set('conformance', v)} options={CONFORMANCE} allowNone noneLabel="(stereotype default)" /></Field>
@@ -1034,7 +1036,7 @@ function SpecForm(props: {
           </Field>
           {(draft.methods ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Methods</span>
+              <span className="syw-field__label">Methods</span>
               {draft.methods.map((m: any, i: number) => (
                 <div key={m.name} className="sub-card">
                   <div className="method-head">
@@ -1044,9 +1046,9 @@ function SpecForm(props: {
                     {props.onViewFlow && (m.narrative?.length ?? 0) > 0 && (
                       <button
                         type="button"
-                        className="btn btn-ghost btn-sm"
+                        className="syw-button syw-button--ghost btn-sm"
                         onClick={() => props.onViewFlow!(m.name)}
-                        title="Open this method's narrative flow in the canvas"
+                        data-tip="Open this method's narrative flow in the canvas"
                       >
                         flow ↗
                       </button>
@@ -1057,7 +1059,7 @@ function SpecForm(props: {
                     <Field label="Conformance"><EnumSelect value={m.conformance} onChange={(v) => setArrItem('methods', i, { conformance: v })} options={CONFORMANCE} allowNone noneLabel="(spec default)" /></Field>
                   </div>
                   <Field label="Intent" hint="Behavioral prose — the narrative substitute at detail: intent.">
-                    <textarea className="input" rows={2} value={m.intent ?? ''} onChange={(e) => setArrItem('methods', i, { intent: e.target.value })} />
+                    <textarea className="syw-textarea" rows={2} value={m.intent ?? ''} onChange={(e) => setArrItem('methods', i, { intent: e.target.value })} />
                   </Field>
                 </div>
               ))}
@@ -1068,7 +1070,7 @@ function SpecForm(props: {
 
       {/* ── Type (entity / value-object / enum / signature) ── */}
       {sel.kind === 'type' && (
-        <div className="panel stack-lg">
+        <div className="syw-card stack-lg">
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
             <Field label="Kind"><EnumSelect value={draft.kind} onChange={(v) => set('kind', v)} options={draft.kind === 'signature' ? ['signature'] : TYPE_KIND} disabled={draft.kind === 'signature'} /></Field>
@@ -1078,7 +1080,7 @@ function SpecForm(props: {
               <TextInput value={`(${(draft.params ?? []).map((p: any) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${draft.returns ?? 'any'}`} onChange={() => undefined} disabled />
             </Field>
           )}
-          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="syw-textarea" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           {draft.kind === 'value-object' && (draft.fields ?? []).length === 0 && (
             <Field label="Holds" fieldKey="holds" highlight={flagFor('holds')} hint="A named scalar: one primitive under this name, in place of fields (a newtype or type alias in every language).">
               <EnumSelect value={draft.holds} onChange={(v) => set('holds', v || undefined)} options={HOLDABLE_PRIMITIVES} allowNone noneLabel="(not a named scalar)" />
@@ -1086,7 +1088,7 @@ function SpecForm(props: {
           )}
           {draft.kind === 'enum' && (draft.values ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Values (in declared order)</span>
+              <span className="syw-field__label">Values (in declared order)</span>
               {draft.values.map((v: any, i: number) => (
                 <div key={v.name} className="sub-card">
                   <code className="subtle">{v.name}</code>
@@ -1099,7 +1101,7 @@ function SpecForm(props: {
           )}
           {(draft.fields ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Fields</span>
+              <span className="syw-field__label">Fields</span>
               {draft.fields.map((f: any, i: number) => (
                 <div key={f.name} className="sub-card">
                   <code className="subtle">{f.name}</code>
@@ -1217,7 +1219,7 @@ function Picker(props: {
       <button
         className={`tree-label ${selected?.kind === p.kind && selected?.id === p.id ? 'sel' : ''}`}
         onClick={() => onSelect({ kind: p.kind, id: p.id, label: p.label })}
-        title={p.id}
+        data-tip={p.id}
       >
         <span className={`tree-kind k-${p.kind}`}>{p.kind[0].toUpperCase()}</span>
         <span className="tree-name">{p.label}</span>
@@ -1239,7 +1241,7 @@ function Picker(props: {
           <button
             className={`tree-label ${activeComponentId === c.id ? 'sel' : ''}`}
             onClick={() => openComponent(c)}
-            title={c.id}
+            data-tip={c.id}
           >
             <span className="tree-kind k-component">C</span>
             <span className="tree-name">{c.label}</span>
@@ -1324,28 +1326,24 @@ function ComponentUnitEditor(props: {
         <code className="subtle">{componentId}</code>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="syw-button syw-button--ghost btn-sm"
           onClick={() => navigate(`${canvasBase}#focus=${componentId}`)}
-          title="View this component in the canvas (in its subsystem)"
+          data-tip="View this component in the canvas (in its subsystem)"
         >
           Open in canvas ↗
         </button>
       </div>
-      <div className="tabstrip" role="tablist">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            role="tab"
-            aria-selected={t.key === activeKey}
-            className={`tab ${t.key === activeKey ? 'tab-active' : ''}`}
-            disabled={t.disabled}
-            title={t.disabled ? 'No implementation defined yet' : undefined}
-            onClick={() => t.sel && props.onSelectSpec(t.sel)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        idBase="spec-unit"
+        label="Component specs"
+        active={activeKey}
+        tabs={tabs.map((t) => ({ id: t.key, label: t.label, disabled: t.disabled }))}
+        onSelect={(key) => {
+          const t = tabs.find((x) => x.key === key);
+          if (t?.sel) props.onSelectSpec(t.sel);
+        }}
+      />
+      <TabPanel idBase="spec-unit" id={activeKey}>
       {activeDisabled ? (
         <EmptyState>No implementation is defined for this component yet.</EmptyState>
       ) : (
@@ -1361,6 +1359,7 @@ function ComponentUnitEditor(props: {
           scrollRequest={props.scrollRequest}
         />
       )}
+      </TabPanel>
     </div>
   );
 }
@@ -1400,14 +1399,14 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
   }
 
   return (
-    <div className="panel stack-lg">
+    <div className="syw-card stack-lg">
       {locked && (
-        <div className="lock-banner">
+        <div className="syw-alert syw-alert--warning lock-banner">
           This project is approved — saving a spec change puts this spec back in flux until it is approved again.
         </div>
       )}
       {cfg.profileResolvable === false && (
-        <div className="lock-banner">
+        <div className="syw-alert syw-alert--warning lock-banner">
           The recorded project type “{cfg.projectType}” doesn't resolve to a loaded profile, so its rules aren't being applied. Pick a profile from the list below to fix this.
         </div>
       )}

@@ -1,16 +1,22 @@
 /* ==========================================================================
-   wairon web app theme.
+   wairon web app — product layout and composition.
 
-   The palette is DERIVED at runtime by the theme engine (theme/themes.ts) from
-   the selected theme + appearance mode, emitted as `--wairon-*` custom
-   properties on <html>. This file (a) keeps the global SYW brand tokens
-   (--syw-*), (b) aliases the app's component tokens onto the `--wairon-*` theme
-   vars — with static fallbacks for the frame before the engine runs — and (c)
-   styles the shell + primitives. Switching theme/mode re-derives the `--wairon-*`
-   vars, so every rule below follows along with no rule changes.
+   Buttons, fields, cards, chips, tabs, segmented controls, alerts, dialogs,
+   popovers, tooltips, menus, empty states and the header come from the SYW
+   Design System (`.syw-*`, imported from the bundled package in main.tsx).
+   This file keeps only what the design system does not provide: the app shell
+   and navigation, tables, trees, pickers, the spec editor / theme builder /
+   cockpit layouts, and thin deltas on DS components (compact sizes, popover
+   anchoring).
+
+   The palette is DERIVED at runtime by the theme engine (theme/themes.ts) as
+   `--wairon-*` vars and mirrored onto the DS `--syw-*` semantic tokens
+   (theme/sywBridge.ts). The app aliases below point at the DS tokens (and, for
+   the few roles the DS has no token for, at the engine vars), so every rule
+   follows theme and mode changes with no rule changes.
    ========================================================================== */
 
-/* Global SYW brand tokens (from cdn.sywapps.com/css/syw.css). */
+/* Brand tokens inherited by the canvas engine's shadow root (not DS tokens). */
 :root {
   --syw-cyan: #22ddff;
   --syw-purple: #8b5cf6;
@@ -21,48 +27,48 @@
   --syw-glow: 0 0 20px rgba(34, 221, 255, 0.3);
 }
 
-/* App component tokens → theme-derived vars (fallbacks = dark waffler default). */
+/* App aliases → DS semantic tokens (engine vars where the DS has no role). */
 :root {
-  --bg: var(--wairon-page-bg, #0a0a0f);
-  --chrome: var(--wairon-panel-bg-strong, #0e0e16);
-  --chrome-2: var(--wairon-panel-bg-strong, #12121a);
-  --header-bg: var(--wairon-header-bg, #0e0e16);
-  --sidebar-bg: var(--wairon-sidebar-bg, #0e0e16);
-  --menu-bg: var(--wairon-menu-bg, #14141d);
-  --border: var(--wairon-border, #23232e);
-  --border-strong: var(--wairon-border-strong, rgba(34, 221, 255, 0.5));
-  --border-soft: var(--wairon-border-muted, #1b1b25);
-  --card: var(--wairon-panel-bg, #14141d);
-  --panel: var(--wairon-panel-bg, #16161f);
-  --panel-soft: var(--wairon-panel-bg-soft, rgba(34, 221, 255, 0.06));
-  --ink: var(--wairon-text, #e8e8f0);
-  --ink-dim: var(--wairon-text-muted, #9a9aab);
-  --ink-subtle: var(--wairon-text-subtle, #64646f);
-  --accent: var(--wairon-primary, #22ddff);
-  --accent-strong: var(--wairon-primary-strong, #22ddff);
-  --on-accent: var(--wairon-primary-contrast, #08080c);
-  --accent-purple: var(--wairon-secondary, #8b5cf6);
-  --ok: var(--wairon-ok, #34d399);
-  --warn: var(--wairon-warn, #fbbf24);
-  --bad: var(--wairon-bad, #f43f5e);
-  --hover: var(--wairon-panel-bg-hover, #1d1d28);
-  --shadow: var(--wairon-shadow, 0 12px 40px rgba(0, 0, 0, 0.5));
-  --focus: var(--wairon-focus-ring, 0 0 0 3px rgba(34, 221, 255, 0.34));
-  --brand-gradient: var(--wairon-brand-text-bg, var(--syw-primary-gradient));
+  --syw-header-height: 54px;
 
-  --radius: 10px;
-  --radius-sm: 7px;
+  --bg: var(--syw-color-canvas);
+  --chrome: var(--wairon-panel-bg-strong, var(--syw-color-surface-raised));
+  --chrome-2: var(--syw-color-surface-raised);
+  --header-bg: var(--syw-header-bg);
+  --sidebar-bg: var(--wairon-sidebar-bg, var(--syw-color-surface));
+  --menu-bg: var(--wairon-menu-bg, var(--syw-color-surface-raised));
+  --border: var(--syw-color-line);
+  --border-strong: var(--syw-color-line-strong);
+  --border-soft: var(--wairon-border-muted, var(--syw-color-line));
+  --card: var(--syw-color-surface);
+  --panel: var(--syw-color-surface);
+  --panel-soft: var(--wairon-panel-bg-soft, color-mix(in srgb, var(--syw-color-primary) 8%, transparent));
+  --ink: var(--syw-color-text);
+  --ink-dim: var(--syw-color-text-muted);
+  --ink-subtle: var(--wairon-text-subtle, var(--syw-color-text-muted));
+  --accent: var(--syw-color-primary);
+  --accent-strong: var(--wairon-primary-strong, var(--syw-color-primary));
+  --on-accent: var(--syw-color-on-primary);
+  --accent-purple: var(--syw-color-secondary);
+  --ok: var(--syw-color-success);
+  --warn: var(--syw-color-warning);
+  --bad: var(--syw-color-danger);
+  --hover: var(--wairon-panel-bg-hover, color-mix(in srgb, var(--syw-color-primary) 12%, transparent));
+  --shadow: var(--syw-shadow-elevated);
+  --focus: var(--syw-focus-ring);
+  --brand-gradient: var(--syw-gradient-primary);
+
+  --radius: var(--syw-radius-md);
+  --radius-sm: var(--syw-radius-sm);
   --sidebar-w: 236px;
   --rail-w: 62px;
-  --header-h: 54px;
+  --header-h: var(--syw-header-height);
 }
 
-* { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
-  background: var(--bg);
-  color: var(--ink);
-  font: 14px/1.5 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -74,7 +80,7 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .pad { padding: 24px; }
 .spacer { flex: 1; }
 .stack-lg { display: flex; flex-direction: column; gap: 16px; }
-.syw-gradient-text {
+.brand-gradient-text {
   background: var(--brand-gradient);
   -webkit-background-clip: text;
   background-clip: text;
@@ -82,87 +88,44 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
   color: transparent;
 }
 
-/* ── Buttons ─────────────────────────────────────────────────────────────── */
-.btn {
-  font: inherit;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--chrome-2);
-  color: var(--ink);
-  border-radius: var(--radius-sm);
-  padding: 7px 13px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
-}
-.btn:hover:not(:disabled) { background: var(--hover); }
-.btn:focus-visible { outline: none; box-shadow: var(--focus); }
-.btn:disabled { opacity: 0.5; cursor: default; }
-.btn-sm { padding: 4px 9px; font-size: 12.5px; }
-.btn-primary {
-  background: var(--brand-gradient);
-  border: none;
-  color: var(--on-accent);
-  font-weight: 700;
-}
-.btn-primary:hover:not(:disabled) { box-shadow: var(--syw-glow); transform: translateY(-1px); background: var(--brand-gradient); }
-/* Ghost buttons keep a visible border so they read as buttons, not plain text
-   (Edit / secondary actions were near-invisible until hovered). */
-.btn-ghost { background: transparent; border-color: var(--border); color: var(--ink-dim); }
-.btn-ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); border-color: var(--border-strong); }
-.btn-danger { background: transparent; border-color: rgba(244, 63, 94, 0.5); color: var(--bad); }
-.btn-danger:hover:not(:disabled) { background: rgba(244, 63, 94, 0.12); }
-.icon-btn {
-  background: transparent;
-  border: none;
-  color: var(--ink-dim);
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-}
-.icon-btn:hover { background: var(--hover); color: var(--ink); }
+/* ── DS component deltas ─────────────────────────────────────────────────── */
+/* Compact action size (the DS ships one button size). */
+.syw-button { white-space: nowrap; }
+.syw-button.btn-sm { min-height: 28px; padding: 3px 10px; font-size: var(--syw-font-sm); }
+.syw-button.icon-btn { min-height: 0; padding: 4px 8px; border-color: transparent; font-size: 18px; line-height: 1; color: var(--ink-dim); }
+.syw-button.icon-btn:hover:not(:disabled) { color: var(--ink); background: var(--hover); border-color: transparent; transform: none; }
+.back-link { align-self: flex-start; padding-left: 0; margin-bottom: 4px; }
 
-/* ── Inputs ──────────────────────────────────────────────────────────────── */
-.input {
-  font: inherit;
-  background: var(--wairon-panel-bg-soft, #0b0b12);
-  color: var(--ink);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  width: 100%;
-}
-.input:focus { outline: none; border-color: var(--accent); box-shadow: var(--focus); }
-/* Native <select>: the OS-drawn option popup ignores the .input background and
-   renders white-on-white in dark mode. Force a solid, theme-correct surface on
-   the control AND the options, drop the native chrome, and draw our own caret. */
-select.input {
-  background-color: var(--panel);
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  padding-right: 30px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9aab' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  cursor: pointer;
-}
-select.input option, select.input optgroup {
-  background-color: var(--panel);
-  color: var(--ink);
-}
-.field { display: flex; flex-direction: column; gap: 5px; }
-.field-label { font-size: 12.5px; font-weight: 600; color: var(--ink-dim); display: inline-flex; align-items: center; }
+/* Form controls. */
+.syw-textarea { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 12.5px; line-height: 1.45; }
+.syw-field .hint { margin: 0; }
 .checkbox { display: flex; gap: 9px; align-items: flex-start; cursor: pointer; }
 .checkbox > input { margin: 2px 0 0; width: 15px; height: 15px; flex: none; accent-color: var(--accent); cursor: pointer; }
 .checkbox-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .checkbox-label { font-size: 13px; color: var(--ink); display: inline-flex; align-items: center; }
+.field-label { display: inline-flex; align-items: center; }
 .cell-inline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .preview-id { display: inline-block; padding: 6px 10px; background: var(--panel-soft); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--accent); }
+
+/* Chips used as status badges: DS chip, compact, with tone. */
+.syw-chip.badge { min-height: 20px; padding: 0 var(--syw-space-2); font-size: var(--syw-font-xs); font-weight: 700; border-radius: var(--syw-radius-sm); background: transparent; }
+.badge-neutral { color: var(--ink-dim); }
+.badge-ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); background: color-mix(in srgb, var(--ok) 8%, transparent); }
+.badge-warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.badge-bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, transparent); background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.badge-accent { color: var(--accent); border-color: var(--border-strong); background: var(--panel-soft); }
+
+/* Alerts that carry free-form blocks rather than icon + text. */
+.syw-alert .alert-line { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.syw-alert .alert-line > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.syw-alert.lock-banner, .syw-alert.error-note, .syw-alert.token-help { display: block; }
+.syw-card h4 { margin-bottom: 8px; font-size: 13.5px; }
+
+/* Empty state: the DS block with the app's dashed frame. */
+.syw-empty { padding: var(--syw-space-6); border: 1px dashed var(--border); border-radius: var(--radius); }
+
+/* ── Popover / menu anchoring (the DS ships the surface skin only) ───────── */
+.syw-popover.msel-pop, .syw-popover.unitsel-pop, .syw-popover.hmenu-pop { width: auto; max-width: none; padding: 0; overflow: hidden; }
 
 /* Hierarchical unit picker (components/UnitSelect.tsx) — a collapsible org tree
    instead of a free-text unit id or a flat dropdown. */
@@ -173,14 +136,7 @@ select.input option, select.input optgroup {
 .unitsel-current .unitsel-name { font-weight: 600; color: var(--ink); }
 .unitsel-ph { color: var(--ink-subtle); }
 .unitsel-id { font-size: 11px; color: var(--ink-subtle); }
-.unitsel-pop {
-  margin-top: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--panel);
-  box-shadow: var(--wairon-shadow, 0 10px 24px rgba(0,0,0,0.3));
-  overflow: hidden;
-}
+.unitsel-pop { margin-top: 6px; }
 .unitsel-search { border: none; border-bottom: 1px solid var(--border-soft); border-radius: 0; }
 .unitsel-search:focus { box-shadow: none; border-color: var(--border-soft); }
 .unitsel-list { max-height: 260px; overflow-y: auto; padding: 5px; }
@@ -206,25 +162,15 @@ select.input option, select.input optgroup {
 .msel { position: relative; }
 .msel-trigger {
   display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
-  min-height: 34px; padding-right: 30px; flex-wrap: wrap;
+  min-height: 34px; padding-right: 30px; flex-wrap: wrap; justify-content: flex-start;
 }
 .msel-trigger .msel-caret { margin-left: auto; color: var(--ink-dim); font-size: 10px; }
 .msel-ph { color: var(--ink-subtle); }
 .msel-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
-.msel-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 12px; font-weight: 600; color: var(--accent);
-  background: var(--panel-soft); border: 1px solid var(--border-strong);
-  border-radius: 6px; padding: 1px 4px 1px 7px;
-}
-.msel-chip-x { cursor: pointer; color: var(--ink-dim); font-size: 13px; line-height: 1; padding: 0 2px; }
+.msel-chip { gap: 5px; min-height: 22px; padding: 0 4px 0 8px; font-size: 12px; font-weight: 600; color: var(--accent); background: var(--panel-soft); border-color: var(--border-strong); }
+.msel-chip-x { cursor: pointer; color: var(--ink-dim); font-size: 13px; line-height: 1; padding: 0 2px; border-radius: var(--syw-radius-sm); }
 .msel-chip-x:hover { color: var(--bad); }
-.msel-pop {
-  position: absolute; left: 0; right: 0; z-index: 60; margin-top: 6px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--panel); box-shadow: var(--wairon-shadow, 0 10px 24px rgba(0,0,0,0.3));
-  overflow: hidden;
-}
+.msel-pop { position: absolute; left: 0; right: 0; z-index: 60; margin-top: 6px; }
 .msel-search { border: none; border-bottom: 1px solid var(--border-soft); border-radius: 0; }
 .msel-search:focus { box-shadow: none; border-color: var(--border-soft); }
 .msel-list { max-height: 280px; overflow-y: auto; padding: 5px; }
@@ -233,10 +179,7 @@ select.input option, select.input optgroup {
   font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--ink-subtle); font-weight: 700; padding: 8px 8px 4px;
 }
-.msel-opt {
-  display: flex; align-items: flex-start; gap: 9px; cursor: pointer;
-  padding: 6px 8px; border-radius: var(--radius-sm);
-}
+.msel-opt { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; padding: 6px 8px; border-radius: var(--radius-sm); }
 .msel-opt:hover { background: var(--hover); }
 .msel-opt.sel { background: var(--panel-soft); }
 .msel-opt > input { margin: 2px 0 0; width: 15px; height: 15px; flex: none; accent-color: var(--accent); cursor: pointer; }
@@ -254,7 +197,9 @@ select.input option, select.input optgroup {
 }
 .pack-toggle:hover { color: var(--ink); }
 
-/* Inline "ⓘ" help affordance (components/InfoTip.tsx). */
+/* Inline "ⓘ" help affordance (components/InfoTip.tsx). The bubble is a DS popover,
+   portaled (into the enclosing dialog when there is one) with inline fixed
+   coordinates so a scrolling body never clips it. */
 .infotip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
 .infotip-icon {
   width: 16px; height: 16px; padding: 0; border-radius: 50%;
@@ -263,15 +208,11 @@ select.input option, select.input optgroup {
   line-height: 1; cursor: help; display: inline-flex; align-items: center; justify-content: center;
 }
 .infotip-icon:hover { color: var(--accent); border-color: var(--accent); }
-/* Portaled to <body> with fixed positioning (set inline) so a modal's overflow
-   never clips it; z-index sits above the scrim/modal (100). */
-.infotip-bubble {
+.syw-popover.infotip-bubble {
   position: fixed; z-index: 500;
   width: 340px; max-width: 92vw; max-height: 320px; overflow-y: auto;
-  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--panel); color: var(--ink-dim); font-size: 12.5px; font-weight: 400; line-height: 1.5;
+  padding: 12px 14px; color: var(--ink-dim); font-weight: 400; line-height: 1.5;
   text-align: left; white-space: normal;
-  box-shadow: var(--wairon-shadow, 0 12px 28px rgba(0,0,0,0.34));
   animation: infotip-in .12s ease;
 }
 @keyframes infotip-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
@@ -282,14 +223,12 @@ select.input option, select.input optgroup {
 .infotip-bubble p { margin: 0 0 6px; }
 .infotip-bubble p:last-child { margin-bottom: 0; }
 
+/* Tooltip layer (components/TooltipLayer.tsx): the DS tooltip surface in the top layer. */
+.syw-tooltip.tip-layer { position: fixed; inset: auto; margin: 0; overflow: visible; pointer-events: none; }
+
 /* Git token setup tutorial (components/GitCredentialCard.tsx). */
 .token-help {
   margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-soft);
-  border-left: 3px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--panel-soft);
   font-size: 12.5px;
   color: var(--ink-dim);
 }
@@ -303,23 +242,7 @@ select.input option, select.input optgroup {
 .token-help-note { margin: 0 0 8px; line-height: 1.5; }
 .token-help-note:last-child { margin: 10px 0 0; }
 
-/* ── Badges ──────────────────────────────────────────────────────────────── */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 6px;
-  padding: 2px 7px;
-  border: 1px solid transparent;
-}
-.badge-neutral { color: var(--ink-dim); border-color: var(--border); }
-.badge-ok { color: var(--ok); border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.08); }
-.badge-warn { color: var(--warn); border-color: rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.08); }
-.badge-bad { color: var(--bad); border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.08); }
-.badge-accent { color: var(--accent); border-color: var(--border-strong); background: var(--panel-soft); }
-
-/* ── App shell ───────────────────────────────────────────────────────────── */
+/* ── App shell (sidebar + main column; the DS header sits in the column) ──── */
 .shell { display: flex; height: 100%; }
 .main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .view-full { height: 100%; }
@@ -376,16 +299,8 @@ select.input option, select.input optgroup {
 .nav-item.active { background: var(--panel-soft); color: var(--accent); }
 .nav-icon { width: 18px; text-align: center; font-size: 16px; flex: 0 0 auto; }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: var(--header-h);
-  padding: 0 14px;
-  background: var(--header-bg);
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
+/* The DS header, with the app's height (token above) and a no-shrink guarantee. */
+.topbar { flex: 0 0 auto; }
 .view { flex: 1; min-height: 0; overflow: auto; }
 
 /* ── Local developer shell (`wairon dev`) ─────────────────────────────────────
@@ -394,8 +309,7 @@ select.input option, select.input optgroup {
    cog sits IN this bar rather than floating over the canvas, so it never
    overlaps the graph. */
 .dev-bar { gap: 10px; }
-.dev-bar .tabstrip { border-bottom: none; margin-left: 6px; }
-.dev-bar .tab { padding: 7px 13px; }
+.dev-bar .dev-tabs { border-bottom: none; margin-left: 6px; }
 .dev-bar .theme-cog { position: static; }
 .dev-banner { margin: 8px 14px 0; }
 .dev-banner-list { margin: 6px 0 0; padding-left: 18px; }
@@ -411,21 +325,17 @@ select.input option, select.input optgroup {
   padding: 2px 6px;
 }
 
-/* ── Header account + settings menu ──────────────────────────────────────── */
+/* ── Header account + settings popover ───────────────────────────────────── */
 .hmenu { position: relative; }
-.hmenu-trigger {
-  display: flex;
-  align-items: center;
+.syw-button.hmenu-trigger {
   gap: 8px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  min-height: 0;
+  border-color: transparent;
   padding: 5px 8px;
-  cursor: pointer;
   color: var(--ink);
-  font: inherit;
+  border-radius: var(--radius-sm);
 }
-.hmenu-trigger:hover, .hmenu-trigger.is-open { background: var(--hover); border-color: var(--border); }
+.hmenu-trigger:hover, .hmenu-trigger.is-open { background: var(--hover); }
 .hmenu-who { font-size: 13px; color: var(--ink-dim); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chevron { color: var(--ink-subtle); font-size: 11px; }
 .avatar {
@@ -442,167 +352,85 @@ select.input option, select.input optgroup {
   flex: 0 0 auto;
 }
 .avatar-lg { width: 40px; height: 40px; font-size: 17px; }
-.hmenu-pop {
+.syw-popover.hmenu-pop {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
   width: 300px;
   max-width: 90vw;
-  background: var(--menu-bg);
-  border: 1px solid var(--border);
   border-radius: 14px;
-  box-shadow: var(--shadow);
   z-index: 300;
-  /* visible, not hidden: the ThemeMenu flyout overlays past the popover edge
-     (section backgrounds are transparent, so the rounding stays clean). */
+  /* visible, not hidden: the ThemeMenu flyout overlays past the popover edge. */
   overflow: visible;
 }
 .hmenu-head { display: flex; gap: 12px; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); }
 .hmenu-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .hmenu-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-subtle); font-weight: 700; margin-bottom: 8px; }
 .hmenu-foot { padding: 12px 14px; display: flex; justify-content: flex-end; }
-/* Floating theme cog for chromeless surfaces (sign-in screen, local dev):
-   theme settings are app-level, not account state, so they stay reachable
-   without a session. Viewport-anchored top-right. */
+/* Floating theme cog for chromeless surfaces (sign-in screen): theme settings are
+   app-level, not account state, so they stay reachable without a session. */
 .theme-cog { position: fixed; top: 14px; right: 16px; z-index: 80; }
 .theme-cog .hmenu-trigger { padding: 8px 10px; }
 .theme-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
 .theme-cog .hmenu-trigger:hover .cog, .theme-cog .hmenu-trigger.is-open .cog { color: var(--ink); }
-/* ── Theme menu (components/ThemeMenu.tsx) — the reusable compact palette +
-   mode picker shared across SYW apps. Styled ONLY through app alias tokens so
-   porting the component means restyling this block from the target app's vars. */
+.settings-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
+.settings-cog:hover .cog, .settings-cog.is-open .cog { color: var(--ink); }
+
+/* ── Theme menu (components/ThemeMenu.tsx): theme listbox (DS menu surface) +
+   appearance mode (DS segmented control). ──────────────────────────────── */
 .tmenu { display: flex; flex-direction: column; gap: 8px; }
-.tmenu-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tmenu-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tmenu-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-subtle); font-weight: 700; }
-.tmenu-manage { font: inherit; font-size: 11px; font-weight: 700; color: var(--accent); background: none; border: none; cursor: pointer; padding: 0; }
-.tmenu-manage:hover { text-decoration: underline; }
+.syw-button.tmenu-manage { min-height: 0; padding: 0 6px; border-color: transparent; font-size: 11px; font-weight: 700; color: var(--accent); }
 .tmenu-hint { font-size: 11px; color: var(--ink-subtle); }
 .tmenu-picker { position: relative; }
-.tmenu-trigger {
+.syw-button.tmenu-trigger {
   width: 100%;
   min-height: 38px;
-  display: flex;
-  align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
   background: var(--panel);
-  color: var(--ink);
-  cursor: pointer;
   text-align: left;
-  font: inherit;
 }
-.tmenu-trigger:hover { border-color: var(--border-strong); }
 .tmenu-trigger.is-open { border-color: var(--border-strong); box-shadow: var(--focus); }
 .tmenu-pill { display: flex; width: 42px; height: 16px; border-radius: 999px; overflow: hidden; border: 1px solid var(--border-soft); flex: 0 0 auto; }
 .tmenu-pill span { flex: 1; }
-.tmenu-opt-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.tmenu-opt-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; text-align: left; }
 .tmenu-opt-name { font-size: 13px; font-weight: 800; line-height: 1.1; }
 .tmenu-opt-desc { font-size: 11px; line-height: 1.15; color: var(--ink-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tmenu-caret { color: var(--ink-dim); font-size: 10px; transition: transform 0.16s; }
 .tmenu-trigger.is-open .tmenu-caret { transform: rotate(180deg); }
-.tmenu-panel {
+.syw-menu.tmenu-panel {
   position: absolute;
   left: 0;
   right: 0;
   top: calc(100% + 6px);
   z-index: 40;
-  padding: 4px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--menu-bg);
-  box-shadow: var(--shadow);
+  width: auto;
+  max-width: none;
   max-height: 320px;
   overflow-y: auto;
 }
-.tmenu-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
-  color: var(--ink);
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-}
-.tmenu-row:hover { background: var(--hover); }
+.syw-menu__item.tmenu-row { gap: 10px; padding: 8px; }
 .tmenu-row.is-active { background: var(--panel-soft); color: var(--accent); }
 .tmenu-row .tmenu-pill { width: 38px; height: 14px; }
 .tmenu-check { font-size: 11px; color: var(--accent); }
-.tmenu-create {
+.syw-button.tmenu-create {
   width: 100%;
   min-height: 34px;
   margin-top: 4px;
-  border-radius: var(--radius-sm);
   border: 1px dashed var(--border-strong);
   background: var(--panel-soft);
   color: var(--accent);
-  font: inherit;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  cursor: pointer;
 }
-.tmenu-create:hover { background: var(--hover); }
-.tmenu-modes { display: flex; gap: 4px; padding: 3px; border-radius: var(--radius-sm); background: var(--panel-soft); border: 1px solid var(--border-soft); }
-.tmenu-mode {
-  flex: 1;
-  min-height: 28px;
-  padding: 5px 6px;
-  border-radius: 5px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-dim);
-  font: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.tmenu-mode:hover { color: var(--ink); }
-.tmenu-mode.is-active { border-color: var(--border-strong); background: var(--panel-soft); color: var(--accent); }
-
-.theme-list { display: flex; flex-direction: column; gap: 4px; }
-.theme-opt {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  color: var(--ink);
-  font: inherit;
-}
-.theme-opt:hover { background: var(--hover); }
-.theme-opt.is-active { background: var(--panel-soft); border-color: var(--border-strong); }
-.theme-opt .swatches { display: flex; width: 40px; height: 15px; border-radius: 999px; overflow: hidden; border: 1px solid var(--border); flex: 0 0 auto; }
-.theme-opt .swatches span { flex: 1; }
-.theme-opt .theme-name { font-weight: 800; font-size: 13px; }
-.theme-opt .check { margin-left: auto; color: var(--accent); }
-.seg { display: flex; gap: 3px; padding: 3px; border-radius: var(--radius-sm); background: var(--panel-soft); border: 1px solid var(--border-soft); }
-.seg-btn {
-  flex: 1;
-  padding: 6px 4px;
-  border-radius: 5px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--ink-dim);
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.seg-btn:hover { color: var(--ink); }
-.seg-btn.is-active { background: var(--panel-soft); border-color: var(--border-strong); color: var(--accent); }
+.syw-segmented.tmenu-modes { display: flex; }
+.tmenu-modes .syw-segmented__item { flex: 1; min-height: 26px; padding: 0 6px; font-size: 11px; font-weight: 800; white-space: nowrap; }
 
 /* ── View scaffolding ────────────────────────────────────────────────────── */
 .view-pad { padding: 22px 26px; max-width: 1180px; }
@@ -612,7 +440,7 @@ select.input option, select.input optgroup {
 .chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 
-/* ── Tables ──────────────────────────────────────────────────────────────── */
+/* ── Tables (no DS equivalent) ───────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
 .table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .table th {
@@ -630,42 +458,23 @@ select.input option, select.input optgroup {
 .table tr:last-child td { border-bottom: none; }
 .table tbody tr:hover { background: var(--panel-soft); }
 
-/* ── Panels / forms ──────────────────────────────────────────────────────── */
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-.panel h4 { margin-bottom: 8px; font-size: 13.5px; }
+/* ── Panels / forms (cards are DS `.syw-card`) ───────────────────────────── */
 .row-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-.row-form .field { flex: 1; min-width: 150px; }
+.row-form .syw-field { flex: 1; min-width: 150px; }
 .row-form-action { display: flex; align-items: flex-end; }
 .cap-name { min-width: 150px; display: inline-block; }
 .inline-field { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-dim); }
-.inline-field .input { width: auto; }
-textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 12.5px; line-height: 1.45; }
-.back-link { align-self: flex-start; padding-left: 0; margin-bottom: 4px; }
+.inline-field .syw-input, .inline-field .syw-select { width: auto; }
 .finding-list { margin: 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 6px 0 12px; font-size: 13px; }
 .kv dt { color: var(--ink-dim); font-weight: 600; }
 .kv dd { margin: 0; }
-.token-box { display: block; padding: 12px 14px; background: var(--wairon-panel-bg-soft, #0b0b12); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--accent); word-break: break-all; font-size: 12.5px; }
+.token-box { display: block; padding: 12px 14px; background: var(--panel-soft); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--accent); word-break: break-all; font-size: 12.5px; }
 .toggle-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
 .toggle-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); cursor: pointer; }
 .toggle-row input { margin-top: 3px; }
 
-/* ── Tabs ────────────────────────────────────────────────────────────────── */
-.tabstrip { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
-.tab {
-  font: inherit;
-  cursor: pointer;
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--ink-dim);
-  padding: 9px 15px;
-  font-weight: 600;
-  font-size: 13px;
-  margin-bottom: -1px;
-}
-.tab:hover { color: var(--ink); }
-.tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+/* ── Tabs (DS `.syw-tabs`; the panel is a plain padded region) ───────────── */
 .tab-panel { padding-top: 16px; }
 
 /* ── Tree (org units) ────────────────────────────────────────────────────── */
@@ -682,54 +491,12 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .twist { background: transparent; border: none; color: var(--ink-dim); cursor: pointer; width: 18px; font-size: 12px; }
 .tree-main { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
 
-/* ── Modal ───────────────────────────────────────────────────────────────── */
-.scrim {
-  position: fixed;
-  inset: 0;
-  background: rgba(4, 4, 8, 0.66);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  z-index: 100;
-}
-.modal {
-  width: min(560px, 100%);
-  max-height: 88vh;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.modal-wide { width: min(760px, 100%); }
-.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
-.modal-head h3 { font-size: 15.5px; }
-.modal-body { padding: 18px; overflow-y: auto; }
-.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border); }
+/* ── Dialog (native `<dialog class="syw-dialog">`; see ui.tsx Modal) ──────── */
+.syw-dialog.dialog-wide { width: min(760px, calc(100vw - 32px)); }
+.syw-dialog .syw-dialog__title { font-size: var(--syw-font-lg); }
+.syw-dialog .syw-dialog__body { padding: 18px; }
 
 /* ── Feedback ────────────────────────────────────────────────────────────── */
-.empty-state {
-  padding: 44px 24px;
-  text-align: center;
-  color: var(--ink-dim);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-}
-.error-note {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid rgba(244, 63, 94, 0.4);
-  background: rgba(244, 63, 94, 0.08);
-  color: var(--bad);
-  border-radius: var(--radius);
-  font-size: 13px;
-}
 .spinner {
   display: inline-block;
   width: 20px;
@@ -742,23 +509,26 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .spinner-inline { width: 13px; height: 13px; border-width: 2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Toasts ──────────────────────────────────────────────────────────────── */
-.toast-stack { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 400; }
-.toast {
-  padding: 11px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border);
-  background: var(--card);
-  max-width: 360px;
+/* ── Toasts: DS alerts in a top-layer popover stack (ui.tsx ToastProvider) ── */
+.toast-stack {
+  position: fixed;
+  inset: auto 20px 20px auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, calc(100vw - 40px));
 }
-.toast-ok { border-left: 3px solid var(--ok); }
-.toast-bad { border-left: 3px solid var(--bad); }
+.toast-stack:not(:popover-open) { display: none; }
+.syw-alert.toast { box-shadow: var(--shadow); font-weight: 600; }
 
 /* ── Canvas view ─────────────────────────────────────────────────────────── */
-.canvas-view { display: flex; flex-direction: column; height: 100%; }
+.canvas-view { display: flex; flex-direction: column; height: 100%; position: relative; }
 .canvas-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
 .crumb-sep { color: var(--ink-subtle); }
 .canvas-frame { flex: 1; border: none; width: 100%; background: var(--bg); }
@@ -774,7 +544,6 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .net-gateway { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .net-scope { border-radius: 999px; border-style: dotted; }
 
-
 /* Environment (org hierarchy) graph view. */
 .env-view { display: flex; flex-direction: column; height: 100%; }
 .env-canvas { flex: 1; min-height: 0; width: 100%; background: var(--bg); }
@@ -788,10 +557,8 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   justify-content: center;
   gap: 12px;
 }
-.login-card {
+.syw-card.login-card {
   width: min(360px, 90vw);
-  background: var(--card);
-  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 26px;
   display: flex;
@@ -837,8 +604,8 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .rt-connecting .rt-dot { animation: rt-pulse 1.2s ease-in-out infinite; }
 .rt-offline {
   color: var(--bad);
-  border-color: rgba(244, 63, 94, 0.4);
-  background: rgba(244, 63, 94, 0.08);
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
 }
 @keyframes rt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -889,12 +656,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .taginput { display: flex; flex-direction: column; gap: 8px; }
 .stack-sm { display: flex; flex-direction: column; gap: 8px; }
 .list-line { display: flex; align-items: center; gap: 6px; }
-.list-line > .input { flex: 1 1 auto; min-width: 0; }
-.lock-banner {
-  padding: 10px 14px; border-radius: var(--radius-sm);
-  border: 1px solid rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.08);
-  color: var(--warn); font-size: 13px;
-}
+.list-line > .syw-input, .list-line > .syw-select { flex: 1 1 auto; min-width: 0; }
 /* Tree-wide validation rail — the right column of .spec-layout. Sticky + its
    own scroll so a long finding list never grows the page. */
 .spec-validation {
@@ -921,16 +683,13 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .finding-chip-row { margin-top: 4px; }
 /* The rail's severity label for a notice: dim, so it never reads as a problem. */
 .finding-notice-label { color: var(--ink-dim); }
-/* The affected-spec chip — same visual language as .badge, just an
-   interactive <button> instead of a <span> so it can navigate on click. */
+/* The affected-spec chip — a DS chip, interactive (a <button>) so it can navigate. */
 .finding-chip { cursor: pointer; font: inherit; border: 1px solid var(--border-strong); }
 .finding-chip:hover { background: var(--hover); }
 .finding-chip-unresolved { cursor: default; }
 
 /* Validation-rail field flags (ui.tsx Field's `highlight` prop) — a subtle
-   accent strip reusing the .token-help/.lock-banner left-border language, not
-   a new design element. Applies to whatever the Field wraps: one input, or
-   (e.g. subsystem publicInterfaces) a whole group of sub-cards. */
+   accent strip, not a new design element. Applies to whatever the Field wraps. */
 .field-flag {
   border-left: 3px solid var(--warn);
   background: var(--panel-soft);
@@ -942,10 +701,9 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .field-flag-notice { border-left-color: var(--border-strong); }
 /* ComponentUnitEditor — the Component/Interface/Implementation tab header. */
 .unit-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.unit-head .btn { margin-left: auto; }
+.unit-head .syw-button { margin-left: auto; }
 .method-head { display: flex; align-items: center; gap: 8px; }
-.method-head .btn { margin-left: auto; }
-.tabstrip .tab:disabled { opacity: 0.45; cursor: default; }
+.method-head .syw-button { margin-left: auto; }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 980px) {
@@ -961,14 +719,13 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   .spec-picker { position: static; }
 }
 
-
 /* ── Theme builder (views/ThemeBuilder.tsx) ──────────────────────────────── */
 .tb-view { max-width: 1280px; padding-bottom: 140px; }
 .tb-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
 .tb-side, .tb-main { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .tb-side { position: sticky; top: 0; }
 .tb-side-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
-.tb-new { width: 100%; justify-content: center; border-style: dashed; border-color: var(--border-strong); color: var(--accent); background: var(--panel-soft); margin-bottom: 10px; }
+.syw-button.tb-new { width: 100%; border-style: dashed; border-color: var(--border-strong); color: var(--accent); background: var(--panel-soft); margin-bottom: 10px; }
 .tb-list { display: flex; flex-direction: column; gap: 4px; }
 .tb-empty { padding: 10px; border-radius: var(--radius-sm); background: var(--panel-soft); }
 .tb-empty-main { padding: 42px; text-align: center; }
@@ -981,7 +738,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .tb-block-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .tb-block-head .hint { margin: 2px 0 0; max-width: 560px; }
 .tb-block-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-subtle); font-weight: 700; margin-bottom: 8px; }
-.tb-seg { flex: 0 0 auto; }
+.syw-segmented.tb-seg { flex: 0 0 auto; }
 
 .tb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .tb-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -991,8 +748,8 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
 .tb-clear { font: inherit; font-size: 10px; font-weight: 700; color: var(--accent); background: var(--panel-soft); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; cursor: pointer; }
 .tb-clear:hover { border-color: var(--border-strong); }
 
-.tb-input { font: inherit; width: 100%; padding: 7px 9px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--chrome-2); color: var(--ink); }
-.tb-input:focus-visible { outline: none; box-shadow: var(--focus); }
+/* Compact DS inputs inside the builder grid. */
+.tb-input { min-height: 0; padding: 7px 9px; border-radius: var(--radius-sm); }
 .tb-mono { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 12px; }
 .tb-color { display: flex; gap: 8px; align-items: flex-start; }
 .tb-color-pick { width: 40px; height: 34px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; cursor: pointer; flex: none; }
@@ -1028,12 +785,12 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   width: min(92vw, 640px);
   padding: 12px 18px;
   border-radius: 12px;
-  background: var(--menu-bg);
+  background: var(--syw-color-surface-raised);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   animation: savebar-in 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
-.savebar-icon { width: 34px; height: 34px; border-radius: 10px; background: rgba(245, 158, 11, 0.15); color: var(--warn); display: flex; align-items: center; justify-content: center; font-size: 17px; flex: none; }
+.savebar-icon { width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); display: flex; align-items: center; justify-content: center; font-size: 17px; flex: none; }
 @keyframes savebar-in {
   0% { transform: translate(-50%, 150px); opacity: 0; }
   70% { transform: translate(-50%, -10px); opacity: 1; }
@@ -1050,7 +807,7 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   position: fixed; bottom: 20px; left: 20px; z-index: 390; width: min(360px, calc(100vw - 40px));
   display: flex; flex-direction: column; gap: 8px; padding: 12px 14px;
   border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
-  border-radius: var(--radius); background: var(--panel); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow);
 }
 .review-popup-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .review-popup-note { margin: 0; font-size: 13px; max-height: 6.5em; overflow: hidden; }
@@ -1062,18 +819,37 @@ textarea.input { resize: vertical; font-family: ui-monospace, "SF Mono", "Cascad
   font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 12.5px; line-height: 1.45;
 }
 
-/* Dev cockpit: floating action bar and in-place lock. */
-.cockpit-bar {
+/* Dev cockpit: floating action bar (a DS card) and in-place lock. */
+.syw-card.cockpit-bar {
   position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 390;
   width: min(640px, calc(100vw - 40px)); display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 10px 14px; border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
-  border-radius: var(--radius); background: var(--panel); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 10px 14px; border-color: var(--border-strong); border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
 }
 .cockpit-bar-text { min-width: 0; font-size: 13px; max-height: 4.5em; overflow: hidden; }
 .cockpit-bar-text .dim { color: var(--ink-dim); }
-.canvas-view { position: relative; }
 .lock-inplace { position: absolute; top: 10px; right: 12px; z-index: 20; }
 .lock-inplace-row { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 .lock-inplace-row:empty, .lock-inplace:empty { display: none; }
-.settings-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
-.settings-cog:hover .cog, .settings-cog.is-open .cog { color: var(--ink); }
+
+/* Theme builder library list (views/ThemeBuilder.tsx). */
+.theme-list { display: flex; flex-direction: column; gap: 4px; }
+.theme-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+}
+.theme-opt:hover { background: var(--hover); }
+.theme-opt.is-active { background: var(--panel-soft); border-color: var(--border-strong); }
+.theme-opt .swatches { display: flex; width: 40px; height: 15px; border-radius: 999px; overflow: hidden; border: 1px solid var(--border); flex: 0 0 auto; }
+.theme-opt .swatches span { flex: 1; }
+.theme-opt .theme-name { font-weight: 800; font-size: 13px; }
+.theme-opt .check { margin-left: auto; color: var(--accent); }
