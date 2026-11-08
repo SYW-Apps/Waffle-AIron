@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "ba3ff6976e3545dbc6637402b44ee91074aadc7daf68908f2ab5469d5dc00830"
+    "digest": "3cf71eae9f51d86fc8b3e734e16c7bbd886c8e0d4318eb9489209b0a5b9194ab"
   },
-  "lockedAt": "2026-11-07T20:17:35.695Z",
+  "lockedAt": "2026-11-08T20:00:38.624Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.7.4-dev.5",
+  "validatorVersion": "6.7.4-dev.7",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -350,7 +350,7 @@
     ".wai/specs/components/user_store.yaml": "677f6e9d6cf07c6779d82f9160932b9ef12e1248b3fc81bcb8fa449a2469e886",
     ".wai/specs/components/v5_to_v6_tree_step.yaml": "dd1c3ad5681e9f26c4a942d8f4e32c958cfac16e74a640f0a45e18a4645dc1a1",
     ".wai/specs/components/v5_tree_file_adapter.yaml": "b58159be48887ae7aa9c0cef9b1ef33854ed464c627e5df63e908fd4ff962c25",
-    ".wai/specs/components/validation_memo.yaml": "8069f8eb573c92b4bd206077a416c89daecda0dc12d72a23ab17cb769b931fb1",
+    ".wai/specs/components/validation_memo.yaml": "f72cb9bf501b3f570e7db8bc2904e71b97fb974570f006ab6e0fe5fe96910039",
     ".wai/specs/components/validation_memo_cache.yaml": "80858c915c12c2596f8201104bc4daed0f7c88aabb8a53f3ea028c5a34e728d6",
     ".wai/specs/components/validator_core_adapter.yaml": "51285eac42e00ae915283a075e57277a658dd9f963d1e3381b080b71e031f68c",
     ".wai/specs/components/validator_portal.yaml": "6a451f4dafc21f7bfb696119fb33ff13a3ab0a55d6d508195a41137c95fd1714",
@@ -701,9 +701,9 @@
     ".wai/specs/implementations/v5_to_v6_tree_step_impl.yaml": "5cbf105e21f70943a6f91dc4ffa6aa6f1a71473a256a7f107f523bcd5d84593f",
     ".wai/specs/implementations/v5_tree_file_adapter_impl.yaml": "75797aafae34bd7a4b93df85116de43a41729cd730bfc8ffa9f8ae779b16c6d0",
     ".wai/specs/implementations/validation_memo_cache_impl.yaml": "510ff6869b32b0b57b9356eaa1256d2cffd92b6bb62efb6514340f9472295d45",
-    ".wai/specs/implementations/validation_memo_impl.yaml": "5c7606fec5c3f41a334c9bd96ceff723c54bf83a927dcdfee2c8faf043bf65b3",
+    ".wai/specs/implementations/validation_memo_impl.yaml": "35c50c330e9563d5fd3233d0afed84fc5dde8e82e7f3df1fae9cf7b542c5f275",
     ".wai/specs/implementations/validator_core_adapter_impl.yaml": "6ab4f5336b6e0d411f4137072c357c7b55fdcdc76f80b4de957b02bbe1362db6",
-    ".wai/specs/implementations/validator_portal_impl.yaml": "d2667d180ea23e8048de0ab8cb8d23cf89d2698503b562e4bebfafa4fee276dc",
+    ".wai/specs/implementations/validator_portal_impl.yaml": "29fc1fbb6d522bedde2b5fea9f887552d1ef73c43f9c3866714ad1a47953ab7a",
     ".wai/specs/implementations/validator_surfaces_adapter_impl.yaml": "6b32ce8a79db2a6232e86b18a3345aa9bca540c6174050106321a240b58c2aeb",
     ".wai/specs/implementations/variant_registry_adapter_impl.yaml": "cba6227a129fb6e4fa13c9620c867c563b7fc250425651c0cb76b524d70c58f2",
     ".wai/specs/implementations/version_stamp_impl.yaml": "3f252cba0bb1080f844c23447e9344bd311006cb07a4e03014e3a190861d47ae",
@@ -1050,7 +1050,7 @@
     ".wai/specs/interfaces/iuser_store.yaml": "5f280d75a3d332d02c9b85e8e9d88ad5a2a10ded2dabc92c36609a88e8a2ac39",
     ".wai/specs/interfaces/iv5_to_v6_tree_step.yaml": "124c0625e6ff759e228f503c6373e42c62be0bbd70a238251e684586ca6d0018",
     ".wai/specs/interfaces/iv5_tree_file_adapter.yaml": "82cd9996639f10e45b4057bbcd09e8262aa261c970d388928a6c7170d75214a5",
-    ".wai/specs/interfaces/ivalidation_memo.yaml": "adaff4c4b1de16a4eb1e0c8a87379f92dfa1b609494e859dfadc129a9cd6710f",
+    ".wai/specs/interfaces/ivalidation_memo.yaml": "9e7bc1f7ac924f1b81c1336162604a4a5c11e59ddcf307be4db118029545256b",
     ".wai/specs/interfaces/ivalidation_memo_cache.yaml": "34d9cf315ed802975eebde3d06ce160faa3a71706c1029d2e2414ef342ed75a8",
     ".wai/specs/interfaces/ivalidator_core_adapter.yaml": "b1644b20934473ab331f3425733cac59acbe743deb47ee830226e7ff5f508259",
     ".wai/specs/interfaces/ivalidator_portal.yaml": "dfd2118252b0436352dc4aea8508b74e13bdbf193c73429b9622ecae2af3b46c",
@@ -1840,7 +1840,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "e0764247234b6f3afc073c1eb83f5a15ed2d24081f0b0dc55145980f7eb57da5",
+    "design": "21cfdc4d2c7760dc7adb3ac4cf09addbcb37090a74f11fd191530a8db08f55a7",
     "release": "c1f13a75fdbc1a955c9ff6fa2a6272626739d4bc0502c110f3c4ce37e2706881",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1851,12 +1851,12 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.7.4-dev.5",
-      "doctrineDigest": "9f439529f6472f5c84ad1610f88bdcdbc5cac4e85aff21bc980d7f5ed67ae7a6",
+      "validatorVersion": "6.7.4-dev.7",
+      "doctrineDigest": "5b5348d841c9a1ee5697584a7c7fa62d97ee7928356a850c450af0032e6eb75e",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 0,
-    "notices": 98
+    "warnings": 6,
+    "notices": 97
   }
 }
