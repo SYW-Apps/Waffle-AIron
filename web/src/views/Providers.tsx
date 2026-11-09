@@ -121,11 +121,11 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
           </div>
         )}
 
-        <button className="btn btn-ghost btn-sm" onClick={() => setShowAdvanced((s) => !s)}>
+        <button className="syw-button syw-button--ghost btn-sm" onClick={() => setShowAdvanced((s) => !s)}>
           {showAdvanced ? '▾' : '▸'} Split-horizon endpoint overrides
         </button>
         {showAdvanced && (
-          <div className="panel stack-lg">
+          <div className="syw-card stack-lg">
             <p className="hint">
               Front-channel (browser) vs back-channel (server) endpoints — set these when the token/JWKS endpoints live on a
               VPC-internal address the browser can't reach.
@@ -173,7 +173,7 @@ function SecretsCard() {
   }
 
   return (
-    <div className="panel">
+    <div className="syw-card">
       <h4>Secrets</h4>
       <p className="hint">Client secrets and tokens are write-only — set them here and reference them by name (never shown again).</p>
       <AsyncView state={refs}>

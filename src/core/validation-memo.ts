@@ -24,7 +24,7 @@ import {
 import * as files from '../io/files.js';
 import { fingerprintSources } from './source-analysis.js';
 import { getProjectRoot, declaredMemberDirs } from '../utils/fs.js';
-import { validateProjectFresh, type ValidationOptions, type ValidationResult } from './validation.js';
+import { validateProjectFresh, validateAsCompleteFresh, type ValidationOptions, type ValidationResult } from './validation.js';
 
 /** One remembered owner's-gate run: its options, the fingerprints of what it read, its result. */
 export interface ValidationMemoEntry {
@@ -67,6 +67,19 @@ export function validateProject(
   options?: RulesConfig | ValidationOptions,
   projectType: string = 'backend',
 ): ValidationResult {
+  return remembered('owner', normalizeOptions(options, projectType), () => validateProjectFresh(options, projectType));
+}
+
+/**
+ * The as-complete gate, answered from the last as-complete run with the same
+ * options while nothing it reads has changed; remembered apart from the owner's gate.
+ */
+export function validateAsComplete(options?: ValidationOptions): ValidationResult {
+  return remembered('as-complete', { ...(options ?? {}) }, () => validateAsCompleteFresh(options));
+}
+
+/** Steps 1-14 of either gate: fingerprint what it reads, answer the remembered run or run it. */
+function remembered(gate: string, normalized: ValidationOptions, run: () => ValidationResult): ValidationResult {
   // Step 1: scan the specs, so the loader's issues are this tree's whether or not the gate runs.
   scanAllSpecs();
   // Step 2: the project configuration, for its source roots and exclusions. A configuration the
@@ -77,9 +90,8 @@ export function validateProject(
   } catch {
     config = null;
   }
-  // Step 3: the options as a stable key.
-  const normalized = normalizeOptions(options, projectType);
-  const optionsKey = keyOf(normalized);
+  // Step 3: the options as a stable key, marked with the gate it answers.
+  const optionsKey = `${gate}:${keyOf(normalized)}`;
   const root = path.resolve(getProjectRoot());
   // Steps 4-5: every file under .wai/ and each declared member's .wai/, folded by path, size and mtime.
   const treeFingerprint = fingerprintTree(root);
@@ -102,8 +114,8 @@ export function validateProject(
     // Step 11: a copy of the remembered result.
     return structuredClone(entry.result);
   }
-  // Step 12: run the owner's gate.
-  const result = validateProjectFresh(options, projectType);
+  // Step 12: run the gate.
+  const result = run();
   // Step 13: remember it with the options key and both fingerprints.
   put(root, { optionsKey, treeFingerprint, codeFingerprint, result: structuredClone(result) });
   // Step 14: a copy of the result.

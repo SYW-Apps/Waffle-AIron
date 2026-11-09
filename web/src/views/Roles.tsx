@@ -76,7 +76,7 @@ function RoleModal(props: { mode: 'create' | 'edit'; existing?: Role; onClose: (
         <Field label="Description">
           <TextInput value={description} onChange={setDescription} placeholder="Full control of assigned projects" />
         </Field>
-        <div className="panel">
+        <div className="syw-card">
           <h4>Granted capabilities</h4>
           <p className="hint">Roles grant only — leave a capability on “inherit” to not confer it.</p>
           {CAPABILITIES.map((c) => (

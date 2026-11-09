@@ -13,6 +13,7 @@ import {
   Tabs,
   useAsync,
   useToast,
+  TabPanel,
 } from '../ui';
 import {
   CAPABILITIES,
@@ -90,7 +91,7 @@ function RolesTab(props: { user: HostedUserRecord; roles: Role[]; scopes: Scope[
 
   return (
     <div className="stack-lg">
-      <div className="panel">
+      <div className="syw-card">
         <h4>Current roles</h4>
         {bindings.length === 0 ? (
           <p className="hint">No roles assigned. Roles grant capabilities at the scope you bind them to.</p>
@@ -120,7 +121,7 @@ function RolesTab(props: { user: HostedUserRecord; roles: Role[]; scopes: Scope[
         )}
       </div>
 
-      <div className="panel">
+      <div className="syw-card">
         <h4>Assign a role</h4>
         <div className="row-form">
           <Field label="Role">
@@ -220,7 +221,7 @@ function PermissionsTab(props: { user: HostedUserRecord; scopes: Scope[] }) {
         )}
       </AsyncView>
 
-      <div className="panel">
+      <div className="syw-card">
         <h4>Add / change an override</h4>
         <div className="row-form">
           <Field label="Scope">
@@ -261,6 +262,8 @@ function AccessModal(props: {
   return (
     <Modal wide title={`Access · ${userLabel(props.user)}`} onClose={props.onClose} footer={<Button onClick={props.onClose}>Done</Button>}>
       <Tabs
+        idBase="user-access"
+        label="Access"
         active={tab}
         onSelect={setTab}
         tabs={[
@@ -268,13 +271,13 @@ function AccessModal(props: {
           { id: 'permissions', label: 'Direct permissions' },
         ]}
       />
-      <div className="tab-panel">
+      <TabPanel idBase="user-access" id={tab}>
         {tab === 'roles' ? (
           <RolesTab user={props.user} roles={props.roles} scopes={props.scopes} onChanged={props.onChanged} />
         ) : (
           <PermissionsTab user={props.user} scopes={props.scopes} />
         )}
-      </div>
+      </TabPanel>
     </Modal>
   );
 }

@@ -1,6 +1,8 @@
 id: ivalidation_memo
 name: Validation Memo Interface
-description: The owner's gate, answered from the last identical run while nothing it reads has changed.
+description: >-
+  The owner's gate and the as-complete gate, each answered from the last identical run while nothing
+  it reads has changed.
 component: validation_memo
 methods:
   - name: validateProject
@@ -12,6 +14,15 @@ methods:
       keeps a file's size and time within the clock's resolution is not seen, as with the code model
       cache.
     signatureFrom: spec_validator.validateProject
+  - name: validateAsComplete
+    description: >-
+      The as-complete gate (spec_validator.validateAsComplete) for the bound project, remembered
+      like validateProject: the remembered result of the last as-complete run with the same options
+      while the project's .wai/ files, each declared member's .wai/ files and the gate's source
+      files are unchanged by path, size and modification time; otherwise a fresh run, remembered. An
+      as-complete run and an owner's-gate run are remembered apart, never answered for each other.
+      The answer is a copy.
+    signatureFrom: spec_validator.validateAsComplete
 status: complete
 createdAt: '2026-11-07T15:06:32.115Z'
-updatedAt: '2026-11-07T15:06:34.682Z'
+updatedAt: '2026-11-08T19:55:56.610Z'

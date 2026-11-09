@@ -23,6 +23,8 @@ RUN npm ci
 # caches independently of the app source. The React bundle is built self-contained
 # and embedded into dist/ — nothing from web/ ships to the runtime image.
 COPY web/package.json web/package-lock.json ./web/
+# The vendored design-system tarballs are file: dependencies, so npm ci needs them.
+COPY web/vendor ./web/vendor
 RUN npm --prefix web ci
 COPY tsconfig.json tsup.config.ts ./
 COPY sdk ./sdk

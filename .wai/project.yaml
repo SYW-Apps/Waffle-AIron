@@ -175,14 +175,17 @@ rules:
       - web/src/canvas/styles.ts
       - web/src/components/GitCredentialCard.tsx
       - web/src/components/InfoTip.tsx
+      - web/src/components/TooltipLayer.tsx
       - web/src/components/ThemeMenu.tsx
       - web/src/components/UnitSelect.tsx
       - web/src/main.tsx
+      - web/src/popover.d.ts
       - web/src/realtime.tsx
       - web/src/session.tsx
       - web/src/settings.tsx
       - web/src/theme/canvasBridge.ts
       - web/src/theme/colorUtils.ts
+      - web/src/theme/sywBridge.ts
       - web/src/theme/themes.ts
       - web/src/types.ts
       - web/src/ui.tsx

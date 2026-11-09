@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { validateProject } from '../../src/core/validation.js';
+import { validateProject, validateAsComplete } from '../../src/core/validation.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, saveSystemSpec, saveSpec, saveComponentSpec } from '../../src/core/specs.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
@@ -100,6 +100,23 @@ describe('validation memo', () => {
     const later = new Date(Date.now() + 5000);
     fs.utimesSync(workerFile(root), later, later);
     expect(names(run({ projectType: 'backend' }), 'ghostbbb')).toBe(true);
+  });
+
+  it('remembers the as-complete gate apart from the owner\'s gate', () => {
+    const asComplete = () => runWithProjectRoot(root, () => validateAsComplete({ projectType: 'backend' }));
+    const first = asComplete();
+    expect(names(first, 'ghostaaa')).toBe(true);
+    swapUnseen(root);
+    // The as-complete run is remembered, as a copy ...
+    const second = asComplete();
+    expect(names(second, 'ghostaaa')).toBe(true);
+    expect(second).not.toBe(first);
+    // ... but never answers the owner's gate, which runs fresh.
+    expect(names(run({ projectType: 'backend' }), 'ghostbbb')).toBe(true);
+    // A change under .wai/ runs the as-complete gate again.
+    const later = new Date(Date.now() + 5000);
+    fs.utimesSync(workerFile(root), later, later);
+    expect(names(asComplete(), 'ghostbbb')).toBe(true);
   });
 
   it('runs the gate again once a declared member folder changed', () => {

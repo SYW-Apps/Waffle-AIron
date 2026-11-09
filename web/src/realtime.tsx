@@ -71,7 +71,9 @@ export function RealtimeProvider(props: { children: ReactNode }) {
       const n = attempts.current++;
       // Surface 'offline' only once reconnect keeps failing (e.g. a proxy blocking
       // the upgrade); a quick blip that recovers within a few tries never shows it.
-      setStatus(n >= OFFLINE_AFTER_ATTEMPTS ? 'offline' : 'connecting');
+      // A hidden page never counts as offline: the browser throttles or freezes its
+      // timers and socket, and it reconnects as soon as it is shown again.
+      setStatus(n >= OFFLINE_AFTER_ATTEMPTS && !document.hidden ? 'offline' : 'connecting');
       const delay = Math.min(30_000, 1000 * 2 ** n);
       reconnectTimer = setTimeout(connect, delay);
     };
@@ -98,7 +100,9 @@ export function RealtimeProvider(props: { children: ReactNode }) {
         stopHeartbeat();
         heartbeat = setInterval(() => {
           if (ws.readyState !== WebSocket.OPEN) return;
-          if (awaitingPong) {
+          // A hidden page's timers and frames are delayed by the browser, so a late
+          // pong there is not a dead socket.
+          if (awaitingPong && !document.hidden) {
             try {
               ws.close(); // last ping went unanswered → force a reconnect
             } catch {
@@ -141,9 +145,23 @@ export function RealtimeProvider(props: { children: ReactNode }) {
       };
     };
 
+    // Shown again after being hidden: reconnect at once instead of waiting out the
+    // backoff that built up while the browser held the page back.
+    const onVisible = () => {
+      if (document.hidden || stopped.current) return;
+      const ws = wsRef.current;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      attempts.current = 0;
+      setStatus('connecting');
+      connect();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     connect();
     return () => {
       stopped.current = true;
+      document.removeEventListener('visibilitychange', onVisible);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       stopHeartbeat();
       try {

@@ -55,27 +55,27 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <div className="login-wrap">
       <ThemeCog />
-      <div className="login-card">
+      <div className="syw-card login-card">
         <div className="brand">wairon</div>
         {!opts && <p className="hint">Loading sign-in options…</p>}
         {nothing && <p className="hint">No sign-in method is configured on this instance.</p>}
         {opts?.passwordLogin && (
           <div className="stack">
             <input
-              className="input"
+              className="syw-input"
               placeholder="Admin username"
               value={user}
               onChange={(e) => setUser(e.target.value)}
             />
             <input
-              className="input"
+              className="syw-input"
               type="password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && signInPassword()}
             />
-            <button className="btn btn-primary" disabled={busy} onClick={signInPassword}>
+            <button className="syw-button syw-button--primary" disabled={busy} onClick={signInPassword}>
               Sign in
             </button>
           </div>
@@ -86,9 +86,9 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
             {opts.providers.map((p) => (
               <div key={p.id} className="stack">
                 <button
-                  className="btn"
+                  className="syw-button"
                   disabled={busy || !p.available}
-                  title={p.available ? undefined : p.unavailableReason}
+                  data-tip={p.available ? undefined : p.unavailableReason}
                   onClick={() => signInSso(p.id)}
                 >
                   Sign in with {p.displayName}

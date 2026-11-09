@@ -175,7 +175,7 @@ function AssignmentForm(props: {
   }
 
   return (
-    <div className="panel">
+    <div className="syw-card">
       <h4>Set an assignment</h4>
       <p className="hint">
         One cell of the grid: subject × scope × capability → value. “Everyone” sets the scope's default for all
@@ -379,7 +379,7 @@ export function Permissions() {
         onSaved={assignments.reload}
       />
 
-      <div className="panel">
+      <div className="syw-card">
         <h4>Scope defaults (everyone)</h4>
         <p className="hint">
           What every authenticated user gets at a scope unless a nearer decision applies. No defaults means the
@@ -397,7 +397,7 @@ export function Permissions() {
         </AsyncView>
       </div>
 
-      <div className="panel">
+      <div className="syw-card">
         <div className="view-head">
           <h4>All assignments</h4>
           <div className="row-form">

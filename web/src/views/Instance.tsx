@@ -17,6 +17,7 @@ import {
   useAsync,
   useToast,
   type MultiSelectOption,
+  TabPanel,
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { InfoTip } from '../components/InfoTip';
@@ -151,7 +152,7 @@ function GlobalPacksTab() {
           <div className="stack-lg">
             <p className="hint">Upload a <code>.wpack</code> archive. Only declarative packs (profiles + language/platform tables) install here; code packs stay filesystem-only.</p>
             <Field label="Pack archive (.wpack)">
-              <input className="input" type="file" accept=".wpack,.zip,application/zip"
+              <input className="syw-input" type="file" accept=".wpack,.zip,application/zip"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </Field>
             <Field label="Name override (optional)" hint="Defaults to the pack name in the archive's manifest.">
@@ -239,7 +240,7 @@ function PolicyForm(props: { policy: InstancePackPolicy; onSaved: () => void; on
   }
 
   return (
-    <div className="panel stack-lg">
+    <div className="syw-card stack-lg">
       <Field
         label="Every project must carry"
         hint="Packs required on every project. Enforced per the mode below."
@@ -345,7 +346,7 @@ function ExposureForm(props: { policy: HostExposurePolicy; onSaved: () => void; 
   }
 
   return (
-    <div className="panel stack-lg">
+    <div className="syw-card stack-lg">
       <p className="hint">Which control-plane surfaces this instance serves. Changing these affects what is reachable over HTTP — take care.</p>
       <Field label="Admin API mode">
         <Select value={p.adminApiMode} onChange={(v) => set({ adminApiMode: v })} options={['disabled', 'enabled'].map((m) => ({ value: m, label: m }))} />
@@ -593,13 +594,13 @@ export function Instance() {
           <p className="hint">Instance-wide packs, project policy, control-plane exposure, and backup repositories.</p>
         </div>
       </div>
-      <Tabs tabs={TABS} active={tab} onSelect={setTab} />
-      <div className="tab-panel">
+      <Tabs idBase="instance" label="Instance settings" tabs={TABS} active={tab} onSelect={setTab} />
+      <TabPanel idBase="instance" id={tab}>
         {tab === 'packs' && <GlobalPacksTab />}
         {tab === 'policy' && <PolicyTab />}
         {tab === 'exposure' && <ExposureTab />}
         {tab === 'backups' && <BackupsTab />}
-      </div>
+      </TabPanel>
     </div>
   );
 }

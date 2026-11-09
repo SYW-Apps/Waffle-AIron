@@ -37,7 +37,15 @@ npm and the tags carry.
   modification time), so the dev page, the hosted server and an agent's repeated
   `sdd_validate_tree` no longer run a full validation each time. On a large tree a repeat went from
   about 40 seconds to under half a second. Building the diagram data no longer re-reads every method
-  signature once per type, which took a repeat canvas load from about 11 seconds to under 2.
+  signature once per type, which took a repeat canvas load from about 11 seconds to under 2. The
+  stricter as-complete run that the specs page and the lock read is remembered the same way (apart
+  from the normal one), so reopening the specs page went from about 30 seconds to under 2.
+- **The web UI uses the SYW Design System.** `wairon dev` and the hosted web UI now draw their
+  buttons, fields, cards, tabs, dialogs, menus, tooltips and notifications from SYW Design System
+  0.1.31, bundled into the page (it makes no request to a CDN). The built-in and custom themes, the
+  theme builder and saved appearance choices work as before; the design system follows the chosen
+  theme and mode. Dialogs are native modal dialogs, tooltips also show on keyboard focus, and error
+  notifications stay until dismissed.
 - **An agent asks for a review or a lock instead of the human saying "specs are locked".**
   `sdd_request_review` (`kind: review` for feedback, `kind: lock` for approval, optionally of one
   subsystem) validates first: a design with errors is refused with every finding and nobody is

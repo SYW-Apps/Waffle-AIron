@@ -3,20 +3,21 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from 'react';
+import { SywButton, SywTabs } from '@syw/design-react';
 import { InfoTip } from './components/InfoTip';
 import { useRealtime } from './realtime';
 
 /**
- * Shared UI primitives for the wairon web app. Everything here is intentionally
- * un-opinionated about visuals beyond semantic class names + CSS custom
- * properties (see theme.css), so a design-system reskin is a token change, not a
- * component rewrite. Views compose these — no view hand-rolls a modal, table, or
- * async-load boilerplate.
+ * Shared UI primitives for the wairon web app, built on the SYW Design System
+ * (.syw-* classes + the --syw-* semantic tokens, which the theme engine bridges
+ * onto — see theme/sywBridge.ts). Views compose these — no view hand-rolls a
+ * modal, table, or async-load boilerplate. Product-only layout lives in theme.css.
  */
 
 // ── Async data loading ───────────────────────────────────────────────────────
@@ -96,15 +97,16 @@ export function Button(props: {
 }) {
   const { children, onClick, variant = 'default', disabled, type = 'button', title, size = 'md' } = props;
   return (
-    <button
+    <SywButton
       type={type}
-      className={`btn btn-${variant} btn-${size}`}
+      variant={variant}
+      className={size === 'sm' ? 'btn-sm' : ''}
       onClick={onClick}
       disabled={disabled}
-      title={title}
+      data-tip={title}
     >
       {children}
-    </button>
+    </SywButton>
   );
 }
 
@@ -157,15 +159,15 @@ export function Field(props: {
 }) {
   return (
     <label
-      className={`field${props.highlight ? ` field-flag field-flag-${props.highlight}` : ''}`}
+      className={`syw-field${props.highlight ? ` field-flag field-flag-${props.highlight}` : ''}`}
       data-field={props.fieldKey}
     >
-      <span className="field-label">
+      <span className="syw-field__label field-label">
         {props.label}
         {props.info != null && <InfoTip>{props.info}</InfoTip>}
       </span>
       {props.children}
-      {props.hint && <span className="hint">{props.hint}</span>}
+      {props.hint && <span className="syw-field__help">{props.hint}</span>}
     </label>
   );
 }
@@ -179,7 +181,7 @@ export function TextInput(props: {
 }) {
   return (
     <input
-      className="input"
+      className="syw-input"
       type={props.type ?? 'text'}
       value={props.value}
       placeholder={props.placeholder}
@@ -220,7 +222,7 @@ export function Select<T extends string>(props: {
 }) {
   return (
     <select
-      className="input"
+      className="syw-select"
       value={props.value}
       disabled={props.disabled}
       onChange={(e) => props.onChange(e.target.value as T)}
@@ -277,6 +279,8 @@ export function MultiSelect(props: {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setOpen(false);
+        // Consume it: an enclosing modal <dialog> must not also close on this Escape.
+        e.preventDefault();
         e.stopPropagation();
       }
     }
@@ -322,7 +326,7 @@ export function MultiSelect(props: {
     <div className="msel" ref={rootRef}>
       <button
         type="button"
-        className="input msel-trigger"
+        className="syw-input msel-trigger"
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -333,13 +337,21 @@ export function MultiSelect(props: {
         ) : (
           <span className="msel-chips">
             {selected.map((v) => (
-              <span key={v} className="msel-chip">
+              <span key={v} className="syw-chip msel-chip">
                 {byValue.get(v)?.label ?? v}
                 {!disabled && (
                   <span
                     className="msel-chip-x"
                     role="button"
                     aria-label={`Remove ${byValue.get(v)?.label ?? v}`}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggle(v);
+                      }
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggle(v);
@@ -357,10 +369,10 @@ export function MultiSelect(props: {
         </span>
       </button>
       {open && !disabled && (
-        <div className="msel-pop" role="listbox" aria-multiselectable="true">
+        <div className="syw-popover msel-pop" role="listbox" aria-multiselectable="true">
           {options.length > 8 && (
             <input
-              className="input msel-search"
+              className="syw-input msel-search"
               autoFocus
               placeholder="Filter…"
               value={query}
@@ -404,7 +416,7 @@ export function MultiSelect(props: {
 // ── Badges ───────────────────────────────────────────────────────────────────
 
 export function Badge(props: { children: ReactNode; tone?: 'neutral' | 'ok' | 'warn' | 'bad' | 'accent' }) {
-  return <span className={`badge badge-${props.tone ?? 'neutral'}`}>{props.children}</span>;
+  return <span className={`syw-chip badge badge-${props.tone ?? 'neutral'}`}>{props.children}</span>;
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
@@ -412,24 +424,54 @@ export function Badge(props: { children: ReactNode; tone?: 'neutral' | 'ok' | 'w
 export interface TabDef {
   id: string;
   label: string;
+  disabled?: boolean;
 }
 
-/** A horizontal tab strip with the active tab highlighted (fixing the reported
- *  "current tab not highlighted" bug). Controlled — the caller owns `active`. */
-export function Tabs(props: { tabs: TabDef[]; active: string; onSelect: (id: string) => void }) {
+/** DOM ids for a tab and its panel, so aria-controls / aria-labelledby resolve. */
+export const tabIds = (idBase: string, id: string) => ({
+  tab: `${idBase}-tab-${id}`,
+  panel: `${idBase}-panel-${id}`,
+});
+
+/** A horizontal tab strip (DS SywTabs: roving focus, arrow/Home/End keys,
+ *  disabled skipping) with the active tab selected. Controlled — the caller owns
+ *  `active`. Pass `idBase` and render the body in a `TabPanel` with the same
+ *  base to associate tabs and panel; omit it for a strip that only navigates. */
+export function Tabs(props: {
+  tabs: TabDef[];
+  active: string;
+  onSelect: (id: string) => void;
+  idBase?: string;
+  label?: string;
+  className?: string;
+}) {
+  const auto = useId();
+  const base = props.idBase ?? auto;
+  const hasPanel = props.idBase !== undefined;
   return (
-    <div className="tabstrip" role="tablist">
-      {props.tabs.map((t) => (
-        <button
-          key={t.id}
-          role="tab"
-          aria-selected={t.id === props.active}
-          className={`tab ${t.id === props.active ? 'tab-active' : ''}`}
-          onClick={() => props.onSelect(t.id)}
-        >
-          {t.label}
-        </button>
-      ))}
+    <SywTabs
+      aria-label={props.label ?? 'Sections'}
+      className={props.className}
+      value={props.active}
+      onChange={(v) => props.onSelect(v)}
+      tabs={props.tabs.map((t) => ({
+        value: t.id,
+        label: t.label,
+        disabled: t.disabled,
+        id: tabIds(base, t.id).tab,
+        // Navigation-only strips have no panel element to control.
+        panelId: (hasPanel ? tabIds(base, t.id).panel : undefined) as unknown as string,
+      }))}
+    />
+  );
+}
+
+/** The panel for the active tab of a Tabs strip that shares `idBase`. */
+export function TabPanel(props: { idBase: string; id: string; children: ReactNode }) {
+  const ids = tabIds(props.idBase, props.id);
+  return (
+    <div className="tab-panel" role="tabpanel" id={ids.panel} aria-labelledby={ids.tab}>
+      {props.children}
     </div>
   );
 }
@@ -480,8 +522,11 @@ export function DataTable<Row>(props: {
 
 // ── Modal ────────────────────────────────────────────────────────────────────
 
-/** A centered modal dialog over a scrim. Escape and scrim-click close it. The
- *  body scroll-locks while open. Footer actions are provided by the caller. */
+/** A modal dialog: the native <dialog class="syw-dialog"> opened with
+ *  showModal() (top layer, inert background, focus trap, Escape fires `cancel`).
+ *  Mounted-while-open, like every caller already uses it: on mount it opens, on
+ *  unmount it closes and returns focus to the invoker (when still connected).
+ *  A press on the backdrop closes it; footer actions come from the caller. */
 export function Modal(props: {
   title: ReactNode;
   onClose: () => void;
@@ -489,37 +534,48 @@ export function Modal(props: {
   footer?: ReactNode;
   wide?: boolean;
 }) {
+  const ref = useRef<HTMLDialogElement | null>(null);
+  const onCloseRef = useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+  const titleId = useId();
+
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') props.onClose();
-    }
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const dialog = ref.current;
+    if (!dialog) return;
+    const invoker = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!dialog.open) dialog.showModal();
     return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
+      if (dialog.open) dialog.close();
+      if (invoker && invoker.isConnected) invoker.focus();
     };
-  }, [props]);
+  }, []);
 
   return (
-    <div className="scrim" onMouseDown={props.onClose}>
-      <div
-        className={`modal ${props.wide ? 'modal-wide' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="modal-head">
-          <h3>{props.title}</h3>
-          <button className="icon-btn" aria-label="Close" onClick={props.onClose}>
-            ×
-          </button>
-        </div>
-        <div className="modal-body">{props.children}</div>
-        {props.footer && <div className="modal-foot">{props.footer}</div>}
+    <dialog
+      ref={ref}
+      className={`syw-dialog${props.wide ? ' dialog-wide' : ''}`}
+      aria-labelledby={titleId}
+      onCancel={(e) => {
+        // Escape: let the app decide (a busy form may refuse to close).
+        e.preventDefault();
+        onCloseRef.current();
+      }}
+      onMouseDown={(e) => {
+        // Only a press on the backdrop itself (the dialog's own padding is 0).
+        if (e.target === e.currentTarget) onCloseRef.current();
+      }}
+    >
+      <div className="syw-dialog__header">
+        <h3 className="syw-dialog__title" id={titleId}>
+          {props.title}
+        </h3>
+        <button type="button" className="syw-button syw-button--ghost icon-btn" aria-label="Close" onClick={props.onClose}>
+          ×
+        </button>
       </div>
-    </div>
+      <div className="syw-dialog__body">{props.children}</div>
+      {props.footer && <div className="syw-dialog__footer">{props.footer}</div>}
+    </dialog>
   );
 }
 
@@ -573,22 +629,29 @@ export function ConfirmButton(props: {
 // ── Status / feedback ────────────────────────────────────────────────────────
 
 export function Spinner(props: { inline?: boolean }) {
-  return <span className={`spinner ${props.inline ? 'spinner-inline' : ''}`} aria-label="Loading" />;
+  return <span className={`spinner ${props.inline ? 'spinner-inline' : ''}`} role="status" aria-label="Loading" />;
 }
 
 export function EmptyState(props: { children: ReactNode }) {
-  return <div className="empty-state">{props.children}</div>;
+  return (
+    <div className="syw-empty">
+      <div className="syw-empty__description">{props.children}</div>
+    </div>
+  );
 }
 
 export function ErrorNote(props: { children: ReactNode; onRetry?: () => void }) {
   return (
-    <div className="error-note">
-      <span>{props.children}</span>
-      {props.onRetry && (
-        <Button size="sm" variant="ghost" onClick={props.onRetry}>
-          Retry
-        </Button>
-      )}
+    <div className="syw-alert syw-alert--danger" role="alert">
+      <span aria-hidden="true">⚠</span>
+      <div className="alert-line">
+        <span>{props.children}</span>
+        {props.onRetry && (
+          <Button size="sm" variant="ghost" onClick={props.onRetry}>
+            Retry
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
@@ -624,22 +687,53 @@ export const useToast = () => useContext(ToastContext);
 export function ToastProvider(props: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
+  const stackRef = useRef<HTMLDivElement | null>(null);
   const push = useCallback((message: string, tone: 'ok' | 'bad') => {
     const id = nextId.current++;
+    // Errors stay until dismissed (so a failure is never missed); routine
+    // messages time out. Both are dismissible.
     setToasts((t) => [...t, { id, message, tone }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+    if (tone === 'ok') setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 5000);
   }, []);
-  const api: ToastApi = {
-    ok: (m) => push(m, 'ok'),
-    bad: (m) => push(m, 'bad'),
-  };
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  const api = useMemo<ToastApi>(() => ({ ok: (m) => push(m, 'ok'), bad: (m) => push(m, 'bad') }), [push]);
+
+  // The stack is a manual popover so it enters the TOP LAYER: a toast raised
+  // while a modal dialog is open must render above the dialog and its backdrop.
+  // Re-showing on each change moves it above any dialog opened since.
+  useEffect(() => {
+    const el = stackRef.current;
+    if (!el || typeof el.showPopover !== 'function') return;
+    try {
+      if (el.matches(':popover-open')) el.hidePopover();
+      if (toasts.length > 0) el.showPopover();
+    } catch {
+      /* popover API unavailable: the fixed stack still renders in the page layer */
+    }
+  }, [toasts]);
+
   return (
     <ToastContext.Provider value={api}>
       {props.children}
-      <div className="toast-stack">
+      <div className="toast-stack" popover="manual" ref={stackRef} aria-label="Notifications">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.tone}`}>
-            {t.message}
+          <div
+            key={t.id}
+            className={`syw-alert syw-alert--${t.tone === 'ok' ? 'success' : 'danger'} toast`}
+            role={t.tone === 'ok' ? 'status' : 'alert'}
+          >
+            <span aria-hidden="true">{t.tone === 'ok' ? '✓' : '⚠'}</span>
+            <div className="alert-line">
+              <span>{t.message}</span>
+              <button
+                type="button"
+                className="syw-button syw-button--ghost icon-btn"
+                aria-label="Dismiss notification"
+                onClick={() => dismiss(t.id)}
+              >
+                ×
+              </button>
+            </div>
           </div>
         ))}
       </div>

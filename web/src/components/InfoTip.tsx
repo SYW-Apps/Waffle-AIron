@@ -4,9 +4,11 @@ import { createPortal } from 'react-dom';
 /**
  * A small "ⓘ" help affordance: hover (or focus) reveals a bubble; click pins it
  * open (touch-friendly). The bubble is portaled to <body> with fixed positioning
- * so it is NEVER clipped by an ancestor's overflow (e.g. a modal body's scroll)
- * and always stacks above the modal + backdrop. Used next to fields that need a
- * "what / how" note — e.g. how to create a git PAT.
+ * so it is NEVER clipped by an ancestor's overflow (e.g. a modal body's scroll).
+ * Its surface is the DS `.syw-popover` (it carries rich content and links, so it
+ * is a popover, not a tooltip). Inside a modal `<dialog>` it portals INTO that
+ * dialog — a body-level node would sit beneath the dialog's top layer. Used next
+ * to fields that need a "what / how" note — e.g. how to create a git PAT.
  */
 export function InfoTip(props: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
@@ -53,6 +55,8 @@ export function InfoTip(props: { children: ReactNode; label?: string }) {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setPinned(false);
+        // Also keep an enclosing modal <dialog> from treating it as its own Escape.
+        e.preventDefault();
         e.stopPropagation();
       }
     }
@@ -87,8 +91,9 @@ export function InfoTip(props: { children: ReactNode; label?: string }) {
         pos &&
         createPortal(
           <span
-            className="infotip-bubble"
-            role="tooltip"
+            className="syw-popover infotip-bubble"
+            role="group"
+            aria-label={props.label ?? 'More information'}
             style={{ top: pos.top, left: pos.left }}
             onMouseEnter={openNow}
             onMouseLeave={closeSoon}
@@ -96,7 +101,7 @@ export function InfoTip(props: { children: ReactNode; label?: string }) {
           >
             {props.children}
           </span>,
-          document.body,
+          iconRef.current?.closest('dialog') ?? document.body,
         )}
     </span>
   );

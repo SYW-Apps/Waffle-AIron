@@ -56,13 +56,18 @@ export function ThemeSections(props: { onOpenBuilder?: () => void }) {
 export function ThemeCog() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -74,15 +79,19 @@ export function ThemeCog() {
   return (
     <div className="hmenu theme-cog" ref={ref}>
       <button
-        className={`hmenu-trigger ${open ? 'is-open' : ''}`}
+        type="button"
+        ref={triggerRef}
+        className={`syw-button syw-button--ghost hmenu-trigger ${open ? 'is-open' : ''}`}
         onClick={() => setOpen((o) => !o)}
         aria-label="Theme settings"
-        title="Theme settings"
+        aria-haspopup="true"
+        aria-expanded={open}
+        data-tip="Theme settings"
       >
-        <span className="cog">⚙</span>
+        <span className="cog" aria-hidden="true">⚙</span>
       </button>
       {open && (
-        <div className="hmenu-pop" role="menu">
+        <div className="syw-popover hmenu-pop" role="group" aria-label="Theme settings">
           <ThemeSections />
         </div>
       )}
