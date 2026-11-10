@@ -1,16 +1,18 @@
 // ---------------------------------------------------------------------------
-// validation_memo + validation_memo_cache (sdd_validator).
+// validation_memo + validation_memo_cache + validation_result_file (sdd_validator).
 //
 // The owner's gate takes tens of seconds on a large tree, and a dev page view,
 // a live refresh or an agent's repeated sdd_validate_tree asks for the same run
-// again and again. The memo answers the last run with the same options while
-// nothing the gate reads has changed: the project's .wai/ files, each declared
-// member's .wai/ files, and the source files the gate's code model reads, all
-// compared by path, size and modification time. Otherwise it runs the gate and
-// remembers the result.
+// again and again. The memo answers an earlier run with the same options while
+// nothing the gate reads has changed in content: the project's .wai/ files
+// (its local-state folder .wai/.local left out), each declared member's .wai/
+// files, and the source files the gate's code model reads. It looks in this
+// process's memory first, then in the result file a process before it left in
+// the user cache, and otherwise runs the gate and remembers the result in both.
 //
-// The cache is process-local and never written to disk: a restart starts
-// empty, and an absent entry only costs one validation run.
+// Fingerprints are of content, not modification times, so a branch switched
+// away and back is recognised. Both caches are loss-safe: an absent entry only
+// costs one validation run.
 // ---------------------------------------------------------------------------
 import * as path from 'path';
 import { createHash } from 'crypto';
@@ -22,11 +24,13 @@ import {
   loadTypeSpecs,
 } from './adapters/validator-core.js';
 import * as files from '../io/files.js';
-import { fingerprintSources } from './source-analysis.js';
-import { getProjectRoot, declaredMemberDirs } from '../utils/fs.js';
+import * as contentFingerprint from './content-fingerprint.js';
+import * as codeModelLoader from './lookup/code-model-loader.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
+import { getProjectRoot, declaredMemberDirs, userCacheDir } from '../utils/fs.js';
 import { validateProjectFresh, validateAsCompleteFresh, type ValidationOptions, type ValidationResult } from './validation.js';
 
-/** One remembered owner's-gate run: its options, the fingerprints of what it read, its result. */
+/** One remembered gate run: its options, the fingerprints of what it read, its result. */
 export interface ValidationMemoEntry {
   optionsKey: string;
   treeFingerprint: string;
@@ -34,25 +38,82 @@ export interface ValidationMemoEntry {
   result: ValidationResult;
 }
 
+const MEMO_ENTRIES = 8;
+
 // ---------------------------------------------------------------------------
-// validation_memo_cache — one entry per project root and options key.
+// validation_memo_cache — the last few entries per project root and options key.
 // ---------------------------------------------------------------------------
 
-const held = new Map<string, Map<string, ValidationMemoEntry>>();
+const held = new Map<string, Map<string, ValidationMemoEntry[]>>();
 
-/** The entry held for this project root and options, or none. */
-export function get(root: string, optionsKey: string): ValidationMemoEntry | undefined {
-  return held.get(root)?.get(optionsKey);
+/** The entry held for this project root and options with exactly these fingerprints, or none. */
+export function get(root: string, optionsKey: string, treeFingerprint: string, codeFingerprint: string): ValidationMemoEntry | undefined {
+  return held.get(root)?.get(optionsKey)?.find((e) => e.treeFingerprint === treeFingerprint && e.codeFingerprint === codeFingerprint);
 }
 
-/** Hold this entry for the project root under its options key, replacing any earlier one. */
+/** Hold this entry under its options key, newest first, replacing an entry with the same fingerprints and dropping the oldest past eight. */
 export function put(root: string, entry: ValidationMemoEntry): void {
   let byOptions = held.get(root);
   if (!byOptions) {
     byOptions = new Map();
     held.set(root, byOptions);
   }
-  byOptions.set(entry.optionsKey, entry);
+  const kept = (byOptions.get(entry.optionsKey) ?? []).filter(
+    (e) => e.treeFingerprint !== entry.treeFingerprint || e.codeFingerprint !== entry.codeFingerprint,
+  );
+  byOptions.set(entry.optionsKey, [entry, ...kept].slice(0, MEMO_ENTRIES));
+}
+
+// ---------------------------------------------------------------------------
+// validation_result_file — one JSON file per project root in the user cache.
+// ---------------------------------------------------------------------------
+
+/** What the file holds per entry: the memo entry with the release that wrote it. */
+interface ResultFileEntry extends ValidationMemoEntry {
+  release: string;
+}
+
+/** The result file of one project root, named by the sha256 of the resolved root. */
+function resultFilePath(root: string): string {
+  const name = createHash('sha256').update(root.toLowerCase()).digest('hex').slice(0, 32);
+  return path.join(userCacheDir(), 'validation-results', `${name}.json`);
+}
+
+/** The entries on the root file; a missing, unreadable or malformed file is none. */
+function readResultFile(root: string): ResultFileEntry[] {
+  try {
+    const parsed = JSON.parse(files.readText(resultFilePath(root))) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e): e is ResultFileEntry => {
+      const r = e as Partial<ResultFileEntry> | null;
+      return !!r && typeof r === 'object'
+        && typeof r.release === 'string' && typeof r.optionsKey === 'string'
+        && typeof r.treeFingerprint === 'string' && typeof r.codeFingerprint === 'string'
+        && !!r.result && typeof r.result === 'object';
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** The entry on disk for this root, options and fingerprints written by this wairon release, or none. */
+export function fileGet(root: string, optionsKey: string, treeFingerprint: string, codeFingerprint: string): ValidationMemoEntry | undefined {
+  const found = readResultFile(root).find((e) =>
+    e.release === WAIRON_VERSION && e.optionsKey === optionsKey
+    && e.treeFingerprint === treeFingerprint && e.codeFingerprint === codeFingerprint);
+  return found && { optionsKey, treeFingerprint, codeFingerprint, result: found.result };
+}
+
+/** Hold this entry on disk for the root under this release, newest first, keeping eight. Any failure is ignored. */
+export function filePut(root: string, entry: ValidationMemoEntry): void {
+  try {
+    const kept = readResultFile(root).filter((e) =>
+      e.release === WAIRON_VERSION
+      && !(e.optionsKey === entry.optionsKey && e.treeFingerprint === entry.treeFingerprint && e.codeFingerprint === entry.codeFingerprint));
+    const file = resultFilePath(root);
+    files.ensureDir(path.dirname(file));
+    files.writeText(file, JSON.stringify([{ ...entry, release: WAIRON_VERSION }, ...kept].slice(0, MEMO_ENTRIES)));
+  } catch { /* the next process validates */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -60,7 +121,7 @@ export function put(root: string, entry: ValidationMemoEntry): void {
 // ---------------------------------------------------------------------------
 
 /**
- * The owner's gate, answered from the last run with the same options while
+ * The owner gate, answered from an earlier run with the same options while
  * nothing it reads has changed. Takes the same arguments as the gate.
  */
 export function validateProject(
@@ -71,16 +132,16 @@ export function validateProject(
 }
 
 /**
- * The as-complete gate, answered from the last as-complete run with the same
- * options while nothing it reads has changed; remembered apart from the owner's gate.
+ * The as-complete gate, answered from an earlier as-complete run with the same
+ * options while nothing it reads has changed; remembered apart from the owner gate.
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
   return remembered('as-complete', { ...(options ?? {}) }, () => validateAsCompleteFresh(options));
 }
 
-/** Steps 1-14 of either gate: fingerprint what it reads, answer the remembered run or run it. */
+/** Either gate: fingerprint what it reads, answer the remembered run (memory, then disk) or run it. */
 function remembered(gate: string, normalized: ValidationOptions, run: () => ValidationResult): ValidationResult {
-  // Step 1: scan the specs, so the loader's issues are this tree's whether or not the gate runs.
+  // Step 1: scan the specs, so the loader issues are this tree issues whether or not the gate runs.
   scanAllSpecs();
   // Step 2: the project configuration, for its source roots and exclusions. A configuration the
   // loader refuses leaves them unset: the gate reports it, the memo never fails where the gate would not.
@@ -93,32 +154,33 @@ function remembered(gate: string, normalized: ValidationOptions, run: () => Vali
   // Step 3: the options as a stable key, marked with the gate it answers.
   const optionsKey = `${gate}:${keyOf(normalized)}`;
   const root = path.resolve(getProjectRoot());
-  // Steps 4-5: every file under .wai/ and each declared member's .wai/, folded by path, size and mtime.
+  // Steps 4-5: every file under .wai/ (local state left out) and each declared member, by content.
   const treeFingerprint = fingerprintTree(root);
-  // Steps 6-7: the implementation and type specs, whose source paths the code model reads.
+  // Steps 6-8: the source files the gate code model reads, with the implementation claims.
   const implementations = loadImplementationSpecs();
   const types = loadTypeSpecs();
-  // Step 8: the source files the gate's code model reads.
   const conformance = (normalized.rules ?? config?.rules)?.conformance;
-  const codeFingerprint = fingerprintSources(
+  const codeFingerprint = codeModelLoader.fingerprint(
     implementations,
     types,
     getProjectRoot(),
     conformance?.sourceRoots ?? [],
     conformance?.exclude ?? [],
   );
-  // Step 9: the remembered run for this root and options.
-  const entry = get(root, optionsKey);
-  // Step 10: is it a run of the same files?
-  if (entry && entry.treeFingerprint === treeFingerprint && entry.codeFingerprint === codeFingerprint) {
-    // Step 11: a copy of the remembered result.
-    return structuredClone(entry.result);
+  // Steps 9-11: this process memory.
+  const inMemory = get(root, optionsKey, treeFingerprint, codeFingerprint);
+  if (inMemory) return structuredClone(inMemory.result);
+  // Steps 12-15: the result file a process before this one left.
+  const onDisk = fileGet(root, optionsKey, treeFingerprint, codeFingerprint);
+  if (onDisk) {
+    put(root, onDisk);
+    return structuredClone(onDisk.result);
   }
-  // Step 12: run the gate.
+  // Steps 16-19: run the gate, remember it in memory and on disk.
   const result = run();
-  // Step 13: remember it with the options key and both fingerprints.
-  put(root, { optionsKey, treeFingerprint, codeFingerprint, result: structuredClone(result) });
-  // Step 14: a copy of the result.
+  const fresh: ValidationMemoEntry = { optionsKey, treeFingerprint, codeFingerprint, result: structuredClone(result) };
+  put(root, fresh);
+  filePut(root, fresh);
   return result;
 }
 
@@ -169,37 +231,40 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-/** The .wai/ files of the root and of every member folder it declares (members' members too). */
+/** The .wai/ files of the root and of every member folder it declares (members' members too), by content. */
 function fingerprintTree(root: string): string {
-  const lines: string[] = [];
+  const parts: string[] = [];
   const seen = new Set<string>();
   const visit = (projectRoot: string): void => {
     const key = path.resolve(projectRoot);
     if (seen.has(key)) return;
     seen.add(key);
-    walk(path.join(key, '.wai'), path.relative(root, key) || '.', lines);
+    const found: string[] = [];
+    walk(key, '.wai', found);
+    parts.push(`${path.relative(root, key) || '.'} ${contentFingerprint.digest(key, found)}`);
     for (const member of declaredMemberDirs(key)) visit(member);
   };
   visit(root);
-  lines.sort();
-  return createHash('sha256').update(lines.join('\n')).digest('hex');
+  parts.sort();
+  return createHash('sha256').update(parts.join('\n')).digest('hex');
 }
 
-function walk(dir: string, label: string, lines: string[]): void {
+/** The files under a project .wai/ folder, relative to the project, leaving out the local-state folder. */
+function walk(projectRoot: string, relative: string, found: string[]): void {
   let entries: files.DirEntry[];
   try {
-    entries = files.listEntries(dir);
+    entries = files.listEntries(path.join(projectRoot, relative));
   } catch {
-    lines.push(`${label}:absent`);
+    found.push(`${relative}/(absent)`);
     return;
   }
   for (const entry of entries) {
-    const full = path.join(dir, entry.name);
+    const child = path.join(relative, entry.name);
     if (entry.isDirectory()) {
-      walk(full, `${label}/${entry.name}`, lines);
-      continue;
+      if (relative === '.wai' && entry.name === '.local') continue;
+      walk(projectRoot, child, found);
+    } else {
+      found.push(child);
     }
-    const stat = files.statOrNull(full);
-    lines.push(`${label}/${entry.name}:${stat ? `${stat.size}:${stat.mtimeMs}` : 'missing'}`);
   }
 }

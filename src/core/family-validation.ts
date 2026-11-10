@@ -1,8 +1,7 @@
 import * as crypto from 'crypto';
 import { files } from '../io/index.js';
-import * as os from 'os';
 import * as path from 'path';
-import { getHostedLookup, getProjectRoot, getRequestParentReach, readsV5Forms, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, userCacheDir, getRequestParentReach, readsV5Forms, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
 // spec_validator: the owner's gate every selected project runs, and the gate
 // identity a member's lock is compared with.
 import {
@@ -1126,12 +1125,7 @@ function verdictCacheKey(root: string, record: LockRecord, current: StateId): st
 
 /** The cache file of one project root. */
 function verdictCacheFile(root: string): string {
-  const setting = process.env.WAIRON_CACHE_DIR ?? '';
-  const base = setting !== ''
-    ? path.resolve(setting)
-    : path.join(process.platform === 'win32'
-      ? process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local')
-      : process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Caches') : process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), '.cache'), 'wairon');
+  const base = userCacheDir();
   const name = crypto.createHash('sha256').update(root.toLowerCase()).digest('hex').slice(0, 32);
   return path.join(base, 'release-verdicts', `${name}.json`);
 }
