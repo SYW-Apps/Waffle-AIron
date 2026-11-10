@@ -1,0 +1,45 @@
+id: git_head_adapter_impl
+name: Git Head Adapter Implementation
+description: >-
+  src/io/git-head.ts: resolves the git folder (a `.git` folder, or the gitdir a `.git` file names,
+  relative to the file), reads HEAD, and resolves a `ref: refs/heads/<branch>` through the loose ref
+  file, else the git folder's packed-refs (a worktree's refs live in the common folder its
+  `commondir` file names). Every read goes through the files adapter; any failure answers none.
+contract: igit_head_adapter
+sourcePath: src/io/git-head.ts
+methods:
+  - name: head
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve the git folder for the root (a `.git` folder, or a `.git` file's `gitdir:` path,
+      relative paths read against the root), read its HEAD file, and answer: for `ref:
+      refs/heads/<name>`, the branch <name> and the commit from the loose ref file, else from
+      packed-refs (looked up in the git folder, then in the common folder a worktree's `commondir`
+      names), absent when neither has it; for a bare commit id, that commit and no branch. No git
+      checkout, or any read that fails, answers none.
+    calls:
+      - files_adapter.statOrNull
+      - files_adapter.readText
+  - name: headFile
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve the git folder for the root as head does and answer the path of its HEAD file; none
+      when the root is no git checkout.
+    calls:
+      - files_adapter.statOrNull
+      - files_adapter.readText
+  - name: hasBranch
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve the git folder as head does and answer whether refs/heads/<branch> exists as a loose
+      ref file or a packed-refs line (in the git folder or a worktree's common folder). No git
+      checkout, or a read that fails, answers false.
+    calls:
+      - files_adapter.statOrNull
+      - files_adapter.readText
+status: complete
+createdAt: '2026-11-10T18:57:20.233Z'
+updatedAt: '2026-11-10T18:58:46.432Z'

@@ -434,6 +434,23 @@ methods:
         description: Answer the Markdown
         type: return
     symbol: diagramSetIndex
+  - name: familyMembers
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph of the current scan
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          From the root node: one row per part (its alias, storage badge and subsystems), then one
+          per member project (its alias and storage badge), in declaration order, with each
+          declaration's description
+        type: local
+      - stepNumber: 3
+        description: Return the rows
+        type: return
+        outcome: the members
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -450,4 +467,4 @@ lint:
         above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-10-29T09:39:04.494Z'
+updatedAt: '2026-11-10T19:05:28.615Z'

@@ -1,0 +1,61 @@
+id: content_fingerprint_impl
+name: Content Fingerprint Implementation
+description: >-
+  src/core/content-fingerprint.ts: a stat per file, a read and a sha256 only for a file whose size
+  or modification time moved since its digest was taken.
+contract: icontent_fingerprint
+sourcePath: src/core/content-fingerprint.ts
+methods:
+  - name: digest
+    narrative:
+      - stepNumber: 1
+        description: For each file
+        type: loop
+        loopKind: forEach
+        over: the files, deduplicated by their root-relative path
+        endStep: 9
+      - stepNumber: 2
+        description: A path that leaves the root is folded as escaped and never touched
+        type: branch
+        condition: the path is absolute outside the root or climbs out of it
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Fold `<path> escaped` and go on
+        type: jump
+        toStep: 1
+      - stepNumber: 4
+        description: Read its size and modification time; absent or no file is folded as missing
+        type: call
+        targetComponent: files_adapter
+        targetMethod: statOrNull
+      - stepNumber: 5
+        description: Read the digest held for it
+        type: call
+        targetComponent: file_digest_cache
+        targetMethod: get
+      - stepNumber: 6
+        description: Does the held digest still describe it?
+        type: branch
+        condition: a digest is held and its size and modification time equal the file's
+        onTrueStep: 9
+        onFalseStep: 7
+      - stepNumber: 7
+        description: Read its bytes and take their sha256 (an unreadable file is folded as missing)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readBytes
+      - stepNumber: 8
+        description: Hold the digest with the size and modification time it was taken at
+        type: call
+        targetComponent: file_digest_cache
+        targetMethod: put
+      - stepNumber: 9
+        description: Fold `<path> <digest>`
+        type: local
+      - stepNumber: 10
+        description: Answer the sha256 of the folded lines in path order
+        type: return
+        outcome: the fingerprint
+status: complete
+createdAt: '2026-11-10T19:02:19.228Z'
+updatedAt: '2026-11-10T19:07:16.246Z'

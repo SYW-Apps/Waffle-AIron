@@ -135,8 +135,24 @@ methods:
         type: string
       - name: projectId
         type: string
+  - name: getProjectMembers
+    description: >-
+      The members ONE authorized project declares, as the family panel lists them (a part with its
+      subsystems, a member project, each with its storage), read from the project's family graph
+      alone: no validation runs, so the list answers at once and never waits for the canvas model.
+      Same scoped authorization as the canvas: the session resolves to a Principal and the project
+      must be in the caller's listed projects. The dev page's Family tab and the hosted Relations
+      tab both read it.
+    signature: 'getProjectMembers(sessionId: string, projectId: string): list<family_member>'
+    returns: list<family_member>
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-10-23T22:30:25.237Z'
+updatedAt: '2026-11-10T19:05:50.631Z'

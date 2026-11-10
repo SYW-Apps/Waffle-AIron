@@ -1,8 +1,8 @@
 id: code_model_loader_impl
 name: Code Model Loader Implementation
 description: >-
-  Fingerprint first, build only on a change: the stat walk costs milliseconds where a build costs
-  seconds.
+  Fingerprint first, build only on a change: the stat walk costs milliseconds and a changed file one
+  read, where a build costs seconds.
 contract: icode_model_loader
 sourcePath: src/core/lookup/code-model-loader.ts
 simPath: tests/core/lookup/code-model-loader.sim.test.ts
@@ -27,39 +27,66 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 4
-        description: Fingerprint the files that walk names, without reading them
+        description: Answer the model for them
+        type: call
+        targetComponent: code_model_loader
+        targetMethod: modelFor
+      - stepNumber: 5
+        description: Answer the entry modelFor gave
+        type: return
+        outcome: the entry
+  - name: fingerprint
+    narrative:
+      - stepNumber: 1
+        description: Name the file set the model reads for these specs, and the files the implementations claim
         type: call
         targetComponent: source_analysis_adapter
-        targetMethod: fingerprintSources
-      - stepNumber: 5
+        targetMethod: sourceFiles
+      - stepNumber: 2
+        description: Fingerprint those files by content
+        type: call
+        targetComponent: content_fingerprint
+        targetMethod: digest
+      - stepNumber: 3
+        description: Answer the sha256 of that fingerprint, the file list in walk order and the claimed list
+        type: return
+        outcome: the fingerprint
+  - name: modelFor
+    narrative:
+      - stepNumber: 1
+        description: Fingerprint the inputs
+        type: call
+        targetComponent: code_model_loader
+        targetMethod: fingerprint
+      - stepNumber: 2
         description: Ask the cache for the entry held under the project root
         type: call
         targetComponent: code_model_cache
         targetMethod: get
-      - stepNumber: 6
-        description: Is the held entry built from these files?
+      - stepNumber: 3
+        description: Is the held entry built from these inputs?
         type: branch
         condition: an entry is held and its fingerprint equals the one just taken
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 5
+      - stepNumber: 4
         description: Answer the held entry
         type: return
         outcome: cached
-      - stepNumber: 8
+      - stepNumber: 5
         label: rebuild
         description: Build the model from the same inputs
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
-      - stepNumber: 9
+      - stepNumber: 6
         description: Hold it with the fingerprint and the time it was built
         type: call
         targetComponent: code_model_cache
         targetMethod: put
-      - stepNumber: 10
+      - stepNumber: 7
         description: Answer the new entry
         type: return
         outcome: built
 status: complete
 createdAt: '2026-10-25T19:16:01.704Z'
-updatedAt: '2026-10-25T20:56:40.111Z'
+updatedAt: '2026-11-10T19:03:05.366Z'

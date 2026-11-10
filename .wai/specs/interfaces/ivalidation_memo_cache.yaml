@@ -1,13 +1,15 @@
 id: ivalidation_memo_cache
 name: Validation Memo Cache Interface
 description: >-
-  Keyed by project root and run options: one entry each, replaced whole. Loss-safe: an absent entry
-  only costs its reader a validation run.
+  Keyed by project root and run options: the last few entries each, found by both fingerprints.
+  Loss-safe: an absent entry only costs its reader a validation run.
 component: validation_memo_cache
 methods:
   - name: get
-    description: The entry held for this project root and options, or none.
-    signature: 'get(root: string, optionsKey: string): validation_memo_entry?'
+    description: The entry held for this project root and options with exactly these fingerprints, or none.
+    signature: >-
+      get(root: string, optionsKey: string, treeFingerprint: string, codeFingerprint: string):
+      validation_memo_entry?
     returns: validation_memo_entry?
     params:
       - name: root
@@ -16,9 +18,17 @@ methods:
       - name: optionsKey
         type: string
         description: The run's options in a stable spelling
+      - name: treeFingerprint
+        type: string
+        description: The content fingerprint of the .wai/ files the run reads
+      - name: codeFingerprint
+        type: string
+        description: The code model fingerprint of the source files the run reads
     effect: read
   - name: put
-    description: Hold this entry for the project root under its options key, replacing any earlier one.
+    description: >-
+      Hold this entry for the project root under its options key, newest first, replacing an entry
+      with the same fingerprints and dropping the oldest past eight.
     signature: 'put(root: string, entry: validation_memo_entry): void'
     returns: void
     params:
@@ -31,4 +41,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-11-07T15:06:27.595Z'
-updatedAt: '2026-11-07T15:06:30.293Z'
+updatedAt: '2026-11-10T19:03:51.754Z'

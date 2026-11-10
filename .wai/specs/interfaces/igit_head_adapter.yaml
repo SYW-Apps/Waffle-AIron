@@ -1,0 +1,44 @@
+id: igit_head_adapter
+name: Git Head Adapter Interface
+description: Read a checkout's HEAD without running git.
+component: git_head_adapter
+methods:
+  - name: head
+    description: >-
+      The branch and commit the checkout at this folder has checked out, or none when it is no git
+      checkout or its metadata cannot be read.
+    signature: 'head(root: string): git_head?'
+    returns: git_head?
+    params:
+      - name: root
+        type: string
+        description: The checkout's folder (a project root)
+    effect: io
+  - name: headFile
+    description: >-
+      The path of the HEAD file of the checkout at this folder, resolved through a `.git` file's
+      gitdir, so a watcher can watch it; none when it is no git checkout.
+    signature: 'headFile(root: string): string?'
+    returns: string?
+    params:
+      - name: root
+        type: string
+        description: The checkout's folder (a project root)
+    effect: io
+  - name: hasBranch
+    description: >-
+      Whether the checkout at this folder still has a branch of this name (a loose ref or a
+      packed-refs entry); false when it is no git checkout.
+    signature: 'hasBranch(root: string, branch: string): bool'
+    returns: bool
+    params:
+      - name: root
+        type: string
+        description: The checkout's folder (a project root)
+      - name: branch
+        type: string
+        description: The branch name, as head answers it
+    effect: io
+status: complete
+createdAt: '2026-11-10T18:57:12.881Z'
+updatedAt: '2026-11-10T18:58:44.705Z'

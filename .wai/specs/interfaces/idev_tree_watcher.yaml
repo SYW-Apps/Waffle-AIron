@@ -5,9 +5,10 @@ component: dev_tree_watcher
 methods:
   - name: watch
     description: >-
-      Start watching root's .wai/ folder; on changes (coalesced over a quarter of a second) call
-      onChange with the kind of change: `reviews` for a review request, `tree` for anything else
-      (specs, lock record, configuration). Answers the function that stops watching.
+      Start watching root's .wai/ folder and the checkout's git HEAD; on changes (coalesced over a
+      quarter of a second) call onChange with the kind of change: `reviews` for a review request,
+      `tree` for anything else (specs, lock record, configuration, a branch switch). Answers the
+      function that stops watching.
     signature: 'watch(root: string, onChange: ChangeListener): StopWatching'
     returns: StopWatching
     params:
@@ -35,4 +36,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-11-07T02:40:40.169Z'
-updatedAt: '2026-11-10T00:33:27.730Z'
+updatedAt: '2026-11-10T19:00:31.380Z'

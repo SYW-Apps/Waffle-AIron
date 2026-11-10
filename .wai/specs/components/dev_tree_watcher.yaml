@@ -4,15 +4,17 @@ description: >-
   On the local development server only: watches the served project's .wai/ folder, so a change made
   by any process (an agent's spec write through `wairon mcp serve`, a lock in the terminal, a new
   review request) reaches the open dev page at once instead of on the next manual refresh. It also
-  watches the .wai/ folders of the producers on disk the served project reads (members and externals
-  declared by path), so a member's change refreshes the page and an external producer's change lets
-  the page re-check the external against its pin. Changes are coalesced (a burst of writes is one
-  nudge) and the watches stop with the server.
+  watches the checkout's git HEAD, so switching branches reaches the page even when no .wai/ file
+  changed, and the .wai/ folders of the producers on disk the served project reads (members and
+  externals declared by path), so a member's change refreshes the page and an external producer's
+  change lets the page re-check the external against its pin. Changes are coalesced (a burst of
+  writes is one nudge) and the watches stop with the server.
 subsystem: sdd_host
 componentType: Adapter
 owns: []
 dependsOn:
   - files_adapter
+  - git_head_adapter
 status: complete
 createdAt: '2026-11-07T02:40:37.337Z'
-updatedAt: '2026-11-10T00:33:33.952Z'
+updatedAt: '2026-11-10T19:00:27.091Z'

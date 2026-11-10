@@ -114,8 +114,17 @@ methods:
       - name: systemName
         type: string
         description: The system the index is titled after
+  - name: familyMembers
+    description: >-
+      The members the bound project declares, one per alias, as the canvas's family view reads them
+      (a part with its subsystems, a member project, each with its storage badge), from the family
+      graph alone: no validation runs.
+    signature: 'familyMembers(): list<family_member>'
+    returns: list<family_member>
+    params: []
+    effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-10-29T09:36:48.275Z'
+updatedAt: '2026-11-10T19:05:26.846Z'

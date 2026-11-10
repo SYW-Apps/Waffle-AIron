@@ -1,9 +1,10 @@
 id: validation_memo_impl
 name: Validation Memo Implementation
 description: >-
-  src/core/validation-memo.ts: fingerprint what a gate reads, answer the remembered run of that gate
-  when both fingerprints match, otherwise run it and remember it. The owner's gate and the
-  as-complete gate share the fingerprints and are remembered under separate keys.
+  src/core/validation-memo.ts: fingerprint what a gate reads by content, answer a remembered run of
+  that gate (memory first, then the result file) when both fingerprints match, otherwise run it and
+  remember it in both. The owner's gate and the as-complete gate share the fingerprints and are
+  remembered under separate keys.
 contract: ivalidation_memo
 sourcePath: src/core/validation-memo.ts
 simPath: tests/core/validation-memo.test.ts
@@ -26,17 +27,16 @@ methods:
       - stepNumber: 4
         description: >-
           List every file under the project's .wai/ folder and under each declared member's .wai/
-          folder (the gate reads a member's export table), recursively
+          folder (the gate reads a member's export table), recursively, leaving out each local-state
+          folder (.wai/.local)
         type: call
         targetComponent: files_adapter
         targetMethod: listEntries
       - stepNumber: 5
-        description: >-
-          Fold each file's path, size and modification time into the tree fingerprint, members'
-          files included
+        description: 'Fingerprint those files by content: the tree fingerprint'
         type: call
-        targetComponent: files_adapter
-        targetMethod: statOrNull
+        targetComponent: content_fingerprint
+        targetMethod: digest
       - stepNumber: 6
         description: Read the implementation specs, whose source paths the code model reads
         type: call
@@ -48,35 +48,62 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadTypeSpecs
       - stepNumber: 8
-        description: Fingerprint the source files the gate's code model reads
+        description: >-
+          Fingerprint the source files the gate's code model reads, with the implementations'
+          claims: the code fingerprint
         type: call
-        targetComponent: source_analysis_adapter
-        targetMethod: fingerprintSources
+        targetComponent: code_model_loader
+        targetMethod: fingerprint
       - stepNumber: 9
-        description: Read the remembered run for this root and options
+        description: Look for a run of these options over these fingerprints in this process's memory
         type: call
         targetComponent: validation_memo_cache
         targetMethod: get
       - stepNumber: 10
-        description: Is it a run of the same files?
+        description: Held in memory?
         type: branch
-        condition: an entry is held and both its fingerprints equal the ones just taken
+        condition: an entry was found
         onFalseStep: 12
       - stepNumber: 11
         description: Answer a copy of the remembered result
         type: return
         outcome: the remembered result
       - stepNumber: 12
+        description: Look for it in the result file a process before this one left
+        type: call
+        targetComponent: validation_result_file
+        targetMethod: get
+      - stepNumber: 13
+        description: Held on disk?
+        type: branch
+        condition: an entry was found
+        onFalseStep: 16
+      - stepNumber: 14
+        description: Hold it in memory too
+        type: call
+        targetComponent: validation_memo_cache
+        targetMethod: put
+      - stepNumber: 15
+        description: Answer a copy of its result
+        type: return
+        outcome: the remembered result
+      - stepNumber: 16
+        label: run
         description: Run the owner's gate
         type: call
         targetComponent: spec_validator
         targetMethod: validateProject
-      - stepNumber: 13
-        description: Remember the result with the options key and both fingerprints
+      - stepNumber: 17
+        description: Remember the result in memory with the options key and both fingerprints
         type: call
         targetComponent: validation_memo_cache
         targetMethod: put
-      - stepNumber: 14
+      - stepNumber: 18
+        description: Remember it in the result file for the next process
+        type: call
+        targetComponent: validation_result_file
+        targetMethod: put
+      - stepNumber: 19
         description: Answer a copy of the result
         type: return
         outcome: the fresh result
@@ -100,17 +127,15 @@ methods:
       - stepNumber: 4
         description: >-
           List every file under the project's .wai/ folder and under each declared member's .wai/
-          folder, recursively
+          folder, recursively, leaving out each local-state folder (.wai/.local)
         type: call
         targetComponent: files_adapter
         targetMethod: listEntries
       - stepNumber: 5
-        description: >-
-          Fold each file's path, size and modification time into the tree fingerprint, members'
-          files included
+        description: 'Fingerprint those files by content: the tree fingerprint'
         type: call
-        targetComponent: files_adapter
-        targetMethod: statOrNull
+        targetComponent: content_fingerprint
+        targetMethod: digest
       - stepNumber: 6
         description: Read the implementation specs, whose source paths the code model reads
         type: call
@@ -122,38 +147,65 @@ methods:
         targetComponent: validator_core_adapter
         targetMethod: loadTypeSpecs
       - stepNumber: 8
-        description: Fingerprint the source files the gate's code model reads
+        description: >-
+          Fingerprint the source files the gate's code model reads, with the implementations'
+          claims: the code fingerprint
         type: call
-        targetComponent: source_analysis_adapter
-        targetMethod: fingerprintSources
+        targetComponent: code_model_loader
+        targetMethod: fingerprint
       - stepNumber: 9
-        description: Read the remembered run for this root and key
+        description: Look for a run of this key over these fingerprints in this process's memory
         type: call
         targetComponent: validation_memo_cache
         targetMethod: get
       - stepNumber: 10
-        description: Is it a run of the same files?
+        description: Held in memory?
         type: branch
-        condition: an entry is held and both its fingerprints equal the ones just taken
+        condition: an entry was found
         onFalseStep: 12
       - stepNumber: 11
         description: Answer a copy of the remembered result
         type: return
         outcome: the remembered result
       - stepNumber: 12
+        description: Look for it in the result file a process before this one left
+        type: call
+        targetComponent: validation_result_file
+        targetMethod: get
+      - stepNumber: 13
+        description: Held on disk?
+        type: branch
+        condition: an entry was found
+        onFalseStep: 16
+      - stepNumber: 14
+        description: Hold it in memory too
+        type: call
+        targetComponent: validation_memo_cache
+        targetMethod: put
+      - stepNumber: 15
+        description: Answer a copy of its result
+        type: return
+        outcome: the remembered result
+      - stepNumber: 16
+        label: run
         description: Run the as-complete gate
         type: call
         targetComponent: spec_validator
         targetMethod: validateAsComplete
-      - stepNumber: 13
-        description: Remember the result with the key and both fingerprints
+      - stepNumber: 17
+        description: Remember the result in memory with the key and both fingerprints
         type: call
         targetComponent: validation_memo_cache
         targetMethod: put
-      - stepNumber: 14
+      - stepNumber: 18
+        description: Remember it in the result file for the next process
+        type: call
+        targetComponent: validation_result_file
+        targetMethod: put
+      - stepNumber: 19
         description: Answer a copy of the result
         type: return
         outcome: the fresh result
 status: complete
 createdAt: '2026-11-07T15:06:46.318Z'
-updatedAt: '2026-11-08T19:56:07.724Z'
+updatedAt: '2026-11-10T19:04:22.058Z'

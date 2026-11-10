@@ -247,6 +247,15 @@ methods:
         type: int
         description: The process id that announced it
     effect: write
+  - name: reviewBranchConflict
+    description: >-
+      The newest pending lock request made on another branch than the checkout has now, or none
+      (review_orchestrator.branchConflict): what `wairon lock` checks before it approves this
+      checkout.
+    signature: 'reviewBranchConflict(): review_branch_conflict?'
+    returns: review_branch_conflict?
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-09-25T17:32:24.931Z'
-updatedAt: '2026-11-07T02:38:18.670Z'
+updatedAt: '2026-11-10T18:58:18.655Z'

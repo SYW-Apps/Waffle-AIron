@@ -369,8 +369,14 @@ methods:
   - name: approvalRecord
     description: 'Forward to approval_portal.approvalRecord: the bound project''s lock record, or none.'
     signatureFrom: approval_portal.approvalRecord
+  - name: familyMembers
+    description: The bound project's declared members, as the family panel lists them; no validation runs.
+    signature: 'familyMembers(): list<family_member>'
+    returns: list<family_member>
+    params: []
+    effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-11-07T15:07:14.004Z'
+updatedAt: '2026-11-10T19:05:40.586Z'
