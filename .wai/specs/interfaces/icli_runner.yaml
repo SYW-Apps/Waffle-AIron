@@ -762,7 +762,7 @@ methods:
     invokedBy:
       kind: runtime
       caller: >-
-        The commander program's preAction hook in src/cli/index.ts (cli_portal), once before every
+        The commander program's preAction hook in src/cli/program.ts (cli_portal), once before every
         command's action runs — a hook the framework calls, not an action endpoint, so no portal
         narrative steps into it.
   - name: runNetworkFlows
@@ -967,7 +967,7 @@ methods:
     invokedBy:
       kind: runtime
       caller: >-
-        The commander program's preAction hook in src/cli/index.ts (cli_portal), after
+        The commander program's preAction hook in src/cli/program.ts (cli_portal), after
         announceBinding and before the command's action — a hook the framework calls, not an action
         endpoint.
   - name: announceRelease
@@ -982,7 +982,7 @@ methods:
     invokedBy:
       kind: runtime
       caller: >-
-        The commander program's preAction hook in src/cli/index.ts (cli_portal), before every
+        The commander program's preAction hook in src/cli/program.ts (cli_portal), before every
         command's action — a hook the framework calls, not an action endpoint.
   - name: runHostUser
     description: >-
@@ -1001,4 +1001,4 @@ methods:
     returns: async void
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-30T19:37:18.889Z'
+updatedAt: '2026-11-10T11:02:04.980Z'

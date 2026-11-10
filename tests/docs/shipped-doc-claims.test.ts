@@ -101,13 +101,13 @@ describe('links to this repository resolve for every reader', () => {
 });
 
 describe('the CLI reference documents what the CLI offers', () => {
-  const index = read('src/cli/index.ts');
+  const index = read('src/cli/program.ts');
   const cli = read('docs/cli.md');
   const readme = read('README.md');
 
   it('every `wairon surface` action the CLI registers has a cli.md row (and README names it)', () => {
     const description = /\.command\('surface <action>'\)\s*\.description\('([^']+)'\)/.exec(index);
-    expect(description, 'src/cli/index.ts: the surface command').not.toBeNull();
+    expect(description, 'src/cli/program.ts: the surface command').not.toBeNull();
     const actions = description![1].replace(/^[^:]*:\s*/, '').replace(/\(.*$/, '').split('|').map((a) => a.trim()).filter(Boolean);
     expect(actions).toContain('diff');
     for (const action of actions) {

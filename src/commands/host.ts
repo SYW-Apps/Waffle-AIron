@@ -23,7 +23,8 @@ import { effectiveProjectId } from '../models/project.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
-import type { DevCommand, DevCommands, DevCommandResult } from '../server/dev-commands.js';
+import type { DevCommand, DevCommands, DevCommandResult, DevFamilyCommand, DevFamilyRunner } from '../server/dev-commands.js';
+import type { Command } from 'commander';
 import type {
   AuditRetentionPolicy,
   Capability,
@@ -47,6 +48,8 @@ import type { PackImpact } from '../models/pack-impact.js';
 // ---------------------------------------------------------------------------
 
 export interface HostOptions {
+  /** wairon dev: builds a fresh copy of the CLI's command tree, which parses the dev page's family commands. */
+  commandTree?: () => Command;
   host?: string;
   port?: string | number;
   adminHost?: string;
@@ -438,12 +441,42 @@ async function captureCommand(name: string, root: string, body: () => Promise<vo
   return { command: name, ok, output: lines };
 }
 
+/** Every command under `root`, itself included. */
+function commandsUnder(root: Command): Command[] {
+  return [root, ...root.commands.flatMap((c) => commandsUnder(c))];
+}
+
+/**
+ * The argv one checked family command runs as, read from the command tree itself: the command's words
+ * (`member rename-alias`), its arguments, each option as the command defines it (a boolean option bare,
+ * any other with its value), then --report for a preview, or --yes when the command asks for confirmation.
+ */
+function familyArgv(program: Command, command: DevFamilyCommand): string[] {
+  const dash = command.action.indexOf('-');
+  const words = [command.action.slice(0, dash), command.action.slice(dash + 1)];
+  const group = program.commands.find((c) => c.name() === words[0]);
+  // `externals <action>` takes its action as an argument; `member` and `network` have subcommands.
+  const leaf = group?.commands.find((c) => c.name() === words[1]) ?? group;
+  if (!leaf) throw new Error(`no "${words.join(' ')}" command`);
+  const argv = [...words, ...command.args];
+  for (const [name, value] of Object.entries(command.options)) {
+    const option = leaf.options.find((o) => o.long === `--${name}`);
+    if (!option) throw new Error(`"${words.join(' ')}" takes no --${name}`);
+    if (option.isBoolean()) argv.push(`--${name}`);
+    else argv.push(`--${name}`, value);
+  }
+  if (command.report) argv.push('--report');
+  else if (leaf.options.some((o) => o.long === '--yes')) argv.push('--yes');
+  return argv;
+}
+
 /**
  * The human commands `wairon dev` hands its server so the page runs exactly what the terminal runs:
  * the CLI's lock (unattended, of one subsystem when named, this machine's git identity as approver
- * exactly as `wairon lock` records it), generate, and doctor --fix.
+ * exactly as `wairon lock` records it), generate, doctor --fix, and the family panel's commands,
+ * each parsed by a fresh copy of the CLI's own command tree, which the CLI hands in.
  */
-export function devCommandsFor(root: string): DevCommands {
+export function devCommandsFor(root: string, commandTree?: () => Command): DevCommands {
   const lock: DevCommand = (subsystem) => captureCommand('lock', root, async () => {
     // Imported on use: the runner imports this module's siblings.
     const { lockCommand } = await import('../cli/runner.js');
@@ -451,7 +484,17 @@ export function devCommandsFor(root: string): DevCommands {
   });
   const generate: DevCommand = () => captureCommand('generate', root, async () => { await runGenerate({}); });
   const doctor: DevCommand = () => captureCommand('doctor', root, async () => { await runDoctor({ fix: true }); });
-  return { lock, generate, doctor };
+  const family: DevFamilyRunner = (command) => captureCommand(command.action, root, async () => {
+    if (!commandTree) throw new Error('this server was started without the command tree, so it runs no family command');
+    const program = commandTree();
+    // A usage error is printed into the captured output and fails the command, never the dev server.
+    for (const c of commandsUnder(program)) {
+      c.exitOverride();
+      c.configureOutput({ writeOut: (s) => console.log(s.trimEnd()), writeErr: (s) => console.error(s.trimEnd()) });
+    }
+    await program.parseAsync(familyArgv(program, command), { from: 'user' });
+  });
+  return { lock, generate, doctor, family };
 }
 
 export async function runDev(options: HostOptions = {}): Promise<void> {
@@ -505,7 +548,7 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
     devMode: true,
     exposurePolicy,
     // This CLI's own human commands, so the page runs exactly what the terminal runs.
-    devCommands: devCommandsFor(cwd),
+    devCommands: devCommandsFor(cwd, options.commandTree),
   };
 
   // Register the cwd as the single local project 'local' (idempotent upsert). Its

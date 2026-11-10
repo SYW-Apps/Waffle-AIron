@@ -1,7 +1,7 @@
 id: cli_runner_impl
 name: CLI Runner Implementation
 description: >-
-  Concrete implementation of the CLI Runner Interface: the workflows cli_portal (src/cli/index.ts)
+  Concrete implementation of the CLI Runner Interface: the workflows cli_portal (src/cli/program.ts)
   dispatches each command to — those with no command module of their own in src/cli/runner.ts, the
   rest in the src/commands/ module named per method — mapping each parsed command onto the core
   engine.
@@ -4488,4 +4488,4 @@ lint:
         interleave their output. No domain state: nothing to store, list or recover.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-07T12:20:23.476Z'
+updatedAt: '2026-11-10T11:01:50.414Z'

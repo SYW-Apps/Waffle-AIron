@@ -31,7 +31,7 @@ import * as shareadmin from './shareadmin.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import * as devCockpit from './dev-commands.js';
-import type { DevApproval, DevCommandResult, DevReviewDecision } from './dev-commands.js';
+import type { DevApproval, DevCommandResult, DevFamilyAction, DevFamilyCommand, DevReviewDecision } from './dev-commands.js';
 import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import * as hostNetwork from './adapters/network.js';
@@ -571,6 +571,11 @@ export function getDevApproval(cfg: HostConfig, sessionId: string): DevApproval 
 /** Forward the session and the decoded arguments to the dev cockpit orchestrator: run one command the CLI handed the server. */
 export function runDevCommand(cfg: HostConfig, sessionId: string, command: string, subsystem?: string): Promise<DevCommandResult> {
   return devCockpit.run(cfg, sessionId, command, subsystem); // step 1 (call)
+}
+
+/** Forward the session and the decoded family command to the dev cockpit orchestrator: a preview, or the change itself. */
+export function runDevFamilyCommand(cfg: HostConfig, sessionId: string, command: DevFamilyCommand): Promise<DevCommandResult> {
+  return devCockpit.family(cfg, sessionId, command); // step 1 (call)
 }
 
 /**
@@ -3674,6 +3679,16 @@ export async function handleWebRequest(
         String(body?.command ?? ''),
         typeof body?.subsystem === 'string' && body.subsystem !== '' ? body.subsystem : undefined,
       ));
+    }
+    // POST /web/dev/family { action, args, options, report } → { command, ok, output }. The orchestrator
+    // checks the command against its action's shape; the body is passed on as decoded.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'family') {
+      return sendJson(res, 200, await runDevFamilyCommand(cfg, sessionId, {
+        action: String(body?.action ?? '') as DevFamilyAction,
+        args: Array.isArray(body?.args) ? (body.args as string[]) : [],
+        options: body?.options && typeof body.options === 'object' && !Array.isArray(body.options) ? (body.options as Record<string, string>) : {},
+        report: body?.report === true,
+      }));
     }
 
     // GET /web/projects/externals?projectId= → one authorized project's relation

@@ -8,8 +8,8 @@ import { routeData } from '../../src/server/http.js';
 import { registerLocalDevProject } from '../../src/server/admin.js';
 import { bootstrapInstance } from '../../src/server/instance-bootstrap.js';
 import { startDevSession } from '../../src/server/web.js';
-import { approval, decide, reviews, run } from '../../src/server/dev-commands.js';
-import type { DevCommandResult, DevCommands } from '../../src/server/dev-commands.js';
+import { approval, decide, family, familyProblem, producers, reviews, run } from '../../src/server/dev-commands.js';
+import type { DevCommandResult, DevCommands, DevFamilyCommand } from '../../src/server/dev-commands.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, saveSystemSpec, saveSpec, saveComponentSpec } from '../../src/core/specs.js';
 import { captureApprovedSpecs } from '../../src/core/approval.js';
@@ -83,11 +83,13 @@ describe('dev cockpit (sdd_host)', () => {
   let calls: { name: string; subsystem?: string | null }[];
   let lockImpl: (subsystem?: string | null) => Promise<DevCommandResult>;
   let gate: Promise<void> | null;
+  let familyCalls: DevFamilyCommand[];
 
   const commands = (): DevCommands => ({
     lock: (s) => { calls.push({ name: 'lock', subsystem: s }); return lockImpl(s); },
     generate: async () => { calls.push({ name: 'generate' }); if (gate) await gate; return ok('generate', ['generated']); },
     doctor: async () => { calls.push({ name: 'doctor' }); return ok('doctor', ['\u001b[32mhealthy\u001b[39m']); },
+    family: async (c) => { calls.push({ name: c.action }); familyCalls.push(c); if (gate) await gate; return ok(c.action, ['\u001b[1mplanned\u001b[22m']); },
   });
 
   beforeEach(() => {
@@ -102,6 +104,7 @@ describe('dev cockpit (sdd_host)', () => {
     bootstrapInstance(cfg);
     session = startDevSession(cfg);
     calls = [];
+    familyCalls = [];
     gate = null;
     lockImpl = async () => { writeLock(root); return ok('lock', ['Specs locked']); };
   });
@@ -228,6 +231,86 @@ describe('dev cockpit (sdd_host)', () => {
     });
   });
 
+  describe('family', () => {
+    const cmd = (c: Partial<DevFamilyCommand> & Pick<DevFamilyCommand, 'action'>): DevFamilyCommand =>
+      ({ args: [], options: {}, report: false, ...c });
+
+    it('runs a checked family command and answers its output with colour codes removed', async () => {
+      const command = cmd({ action: 'member-add', args: ['admin', '../admin'], options: { project: 'true', description: 'the admin app' }, report: true });
+      const out = await family(cfg, session, command);
+      expect(out).toEqual({ command: 'member add', ok: true, output: ['planned'] });
+      expect(familyCalls).toEqual([command]);
+    });
+
+    it('checks the shape: arguments, options, leading dashes and the preview', () => {
+      expect(familyProblem(cmd({ action: 'member-promote', args: ['billing'], options: { id: 'billing-svc' }, report: true }))).toBeUndefined();
+      expect(familyProblem(cmd({ action: 'externals-pin' }))).toBeUndefined();
+      expect(familyProblem(cmd({ action: 'nope' as DevFamilyCommand['action'] }))).toMatch(/not a family command/);
+      expect(familyProblem(cmd({ action: 'member-move', args: ['only-one'] }))).toMatch(/takes 2 argument/);
+      expect(familyProblem(cmd({ action: 'externals-pin', args: ['a', 'b'] }))).toMatch(/takes 0 to 1/);
+      expect(familyProblem(cmd({ action: 'member-adopt', args: ['--yes'] }))).toMatch(/starts with "-"/);
+      expect(familyProblem(cmd({ action: 'member-update', args: ['x'], options: { ref: '-rf' } }))).toMatch(/starts with "-"/);
+      expect(familyProblem(cmd({ action: 'member-update', args: ['x'], options: { widen: 'true' } }))).toMatch(/takes no --widen/);
+      expect(familyProblem(cmd({ action: 'member-detach', args: ['x'], options: { widen: 'yes' } }))).toMatch(/is a flag/);
+      expect(familyProblem(cmd({ action: 'member-move', args: ['x', 'y'], report: true }))).toMatch(/has no preview/);
+      expect(familyProblem(cmd({ action: 'network-undeclare', report: true }))).toMatch(/has no preview/);
+      expect(familyProblem(cmd({ action: 'member-adopt', args: [''] }))).toMatch(/empty/);
+    });
+
+    it('refuses a malformed command before running anything', async () => {
+      await expect(family(cfg, session, cmd({ action: 'member-move', args: ['x'] }))).rejects.toThrow(/malformed/);
+      expect(familyCalls).toEqual([]);
+    });
+
+    it('shares the one-at-a-time rule with run', async () => {
+      let release!: () => void;
+      gate = new Promise<void>((r) => { release = r; });
+      const first = family(cfg, session, cmd({ action: 'externals-status' }));
+      await expect(run(cfg, session, 'doctor')).rejects.toThrow(/cannot run/);
+      await expect(family(cfg, session, cmd({ action: 'externals-status' }))).rejects.toThrow(/cannot run/);
+      release();
+      expect((await first).ok).toBe(true);
+    });
+
+    it('is refused outside the local development server and without handed commands', async () => {
+      await expect(family({ ...cfg, devMode: false }, session, cmd({ action: 'externals-status' }))).rejects.toThrow(/cannot run/);
+      await expect(family({ ...cfg, devCommands: undefined }, session, cmd({ action: 'externals-status' }))).rejects.toThrow(/cannot run/);
+    });
+  });
+
+  describe('producers', () => {
+    const declare = (extra: Record<string, unknown>): void => {
+      const file = path.join(root, '.wai', 'project.yaml');
+      fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), ...extra }));
+      invalidateSpecCache();
+    };
+
+    it('names the members and path externals on disk, skipping git, hosted and folders without .wai/', () => {
+      fs.mkdirSync(path.join(root, 'services', 'part', '.wai'), { recursive: true });
+      fs.mkdirSync(path.join(root, 'services', 'empty'), { recursive: true });
+      const sibling = path.join(root, '..', path.basename(root) + '-geo');
+      fs.mkdirSync(path.join(sibling, '.wai'), { recursive: true });
+      try {
+        declare({
+          members: { part: 'services/part', empty: 'services/empty', remote: 'git@example.com:acme/x.git#' + 'a'.repeat(40) },
+          externals: { geo: { source: '../' + path.basename(sibling) }, cloud: { source: 'hosted:cloud' } },
+        });
+        expect(producers(root)).toEqual([
+          { alias: 'part', root: path.join(root, 'services', 'part'), relation: 'member' },
+          { alias: 'geo', root: sibling, relation: 'external' },
+        ]);
+      } finally {
+        fs.rmSync(sibling, { recursive: true, force: true });
+      }
+    });
+
+    it('answers none for a project without a configuration', () => {
+      fs.rmSync(path.join(root, '.wai', 'project.yaml'));
+      invalidateSpecCache();
+      expect(producers(root)).toEqual([]);
+    });
+  });
+
   describe('approval', () => {
     it('answers an unlocked project as not approved', () => {
       const state = approval(cfg, session);
@@ -326,9 +409,22 @@ describe('dev cockpit (sdd_host)', () => {
       expect(calls).toEqual([{ name: 'lock', subsystem: 'dom' }]);
     });
 
+    it('runs a family command through the family route, and refuses a malformed one', async () => {
+      await startServer(cfg);
+      const planned = await call('POST', '/web/dev/family', { action: 'member-promote', args: ['billing'], options: { id: 'billing' }, report: true });
+      expect(planned.status).toBe(200);
+      expect(planned.json).toEqual({ command: 'member promote', ok: true, output: ['planned'] });
+      expect(familyCalls).toEqual([{ action: 'member-promote', args: ['billing'], options: { id: 'billing' }, report: true }]);
+      const refused = await call('POST', '/web/dev/family', { action: 'member-promote', args: ['--yes'], options: {}, report: false });
+      expect(refused.status).not.toBe(200);
+      expect(familyCalls.length).toBe(1);
+    });
+
     it('does not mount the routes outside dev mode', async () => {
       const hosted: HostConfig = { ...cfg, devMode: false, devCommands: undefined, authEnabled: true };
       await startServer(hosted);
+      const family = await call('POST', '/web/dev/family', { action: 'externals-status', args: [], options: {}, report: false });
+      expect(family.status).not.toBe(200);
       const listed = await call('GET', '/web/dev/reviews');
       expect(listed.status).not.toBe(200);
       const cmd = await call('POST', '/web/dev/commands', { command: 'generate' });
@@ -339,5 +435,6 @@ describe('dev cockpit (sdd_host)', () => {
   it('nudges the reviews channel and the served project after a decision or command', () => {
     expect(channelsForWebMutation('/web/dev/reviews/decide', {})).toEqual(['reviews', 'project:local']);
     expect(channelsForWebMutation('/web/dev/commands', {})).toEqual(['project:local']);
+    expect(channelsForWebMutation('/web/dev/family', {})).toEqual(['project:local', 'projects', 'externals']);
   });
 });

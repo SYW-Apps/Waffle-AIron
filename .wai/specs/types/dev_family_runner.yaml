@@ -1,0 +1,18 @@
+kind: signature
+id: dev_family_runner
+name: DevFamilyRunner
+description: >-
+  The family commands the CLI that started the dev server hands it: runs one already-checked family
+  command through the CLI's own command parser (the exact command the terminal would run, preview or
+  apply) and answers what it printed.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/dev-commands.ts
+params:
+  - name: command
+    type: dev_family_command
+    description: The checked command
+returns: async DevCommandResult
+createdAt: '2026-11-10T00:32:29.976Z'
+updatedAt: '2026-11-10T00:32:31.416Z'

@@ -1,20 +1,22 @@
 id: cli_portal_impl
 name: CLI Portal Implementation
 description: >-
-  The commander program in src/cli/index.ts — the `wairon` (and `wai`) bin entry. Each command
+  The commander program built by buildProgram() in src/cli/program.ts — a fresh command tree per
+  call — and parsed by src/cli/index.ts, the `wairon` (and `wai`) bin entry. Each command
   registration is one endpoint: its `.command('…')` literal is the method's anchor (the anchored
   conformance tier, a route registration), and its action hands the parsed arguments and flags to
   one cli_runner workflow, either in ./runner.ts or in the command module that realizes it. A
   preAction hook sets the log level from --verbose/--silent and hands the command's path to
   cli_runner.announceBinding, so every command that acts on a project names the one it bound (and is
-  refused on a configuration that does not parse) before it runs; main() parses argv and turns ANY
-  error a command throws into one `✖` line with its message and exit 1 — the stack only when
-  WAIRON_DEBUG is set — so user input never meets a raw Node stack trace. The file reaches no
-  adapter and holds no workflow.
+  refused on a configuration that does not parse) before it runs; main() in src/cli/index.ts parses
+  argv and turns ANY error a command throws into one `✖` line with its message and exit 1 — the
+  stack only when WAIRON_DEBUG is set — so user input never meets a raw Node stack trace. Neither
+  file reaches an adapter or holds a workflow.
 contract: icli_portal
 sourcePath: src/cli/index.ts
 methods:
   - name: init
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Run cli_runner.runInit with the parsed --yes flag.
@@ -33,6 +35,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runPack
   - name: generate
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon generate` with its parsed arguments and flags to cli_runner.runGenerate.
@@ -40,6 +43,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runGenerate
   - name: lockCheck
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -50,6 +54,7 @@ methods:
         targetMethod: runLockCheck
     symbol: lock-check
   - name: lock
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon lock` with its parsed arguments and flags to cli_runner.runLock.
@@ -57,6 +62,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runLock
   - name: validate
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon validate` with its parsed arguments and flags to cli_runner.runValidate.
@@ -64,6 +70,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runValidate
   - name: status
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon status` with its parsed arguments and flags to cli_runner.runStatus.
@@ -71,6 +78,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runStatus
   - name: doctor
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon doctor` with its parsed arguments and flags to cli_runner.runDoctor.
@@ -78,6 +86,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runDoctor
   - name: executionShow
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -88,6 +97,7 @@ methods:
         targetMethod: runExecutionShow
     symbol: show
   - name: executionSetTier
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -98,6 +108,7 @@ methods:
         targetMethod: runExecutionSetTier
     symbol: set-tier <tier>
   - name: rulesList
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon rules list` with its parsed arguments and flags to cli_runner.runRules.
@@ -106,6 +117,7 @@ methods:
         targetMethod: runRules
     symbol: rules
   - name: pack
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon pack <action>` with its parsed arguments and flags to cli_runner.runPack.
@@ -113,6 +125,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runPack
   - name: patternsList
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -123,6 +136,7 @@ methods:
         targetMethod: runPatterns
     symbol: patterns
   - name: variantsList
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -133,6 +147,7 @@ methods:
         targetMethod: runVariants
     symbol: variants
   - name: diagram
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon diagram` with its parsed arguments and flags to cli_runner.runDiagram.
@@ -140,6 +155,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runDiagram
   - name: list
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon list` with its parsed arguments and flags to cli_runner.runList.
@@ -147,6 +163,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runList
   - name: show
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon show <id>` with its parsed arguments and flags to cli_runner.runShow.
@@ -155,6 +172,7 @@ methods:
         targetMethod: runShow
     symbol: show <id>
   - name: agent
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -165,6 +183,7 @@ methods:
         targetMethod: runAgent
     symbol: agent <action> <id>
   - name: aliasesList
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -175,6 +194,7 @@ methods:
         targetMethod: runAliasesList
     symbol: aliases
   - name: aliasesEnable
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -185,6 +205,7 @@ methods:
         targetMethod: runAliasesEnable
     symbol: enable <name>
   - name: aliasesDisable
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -195,6 +216,7 @@ methods:
         targetMethod: runAliasesDisable
     symbol: disable <name>
   - name: mcpServe
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon mcp serve` with its parsed arguments and flags to cli_runner.runMcpServe.
@@ -203,6 +225,7 @@ methods:
         targetMethod: runMcpServe
     symbol: serve
   - name: mcpInstall
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -213,6 +236,7 @@ methods:
         targetMethod: runMcpInstall
     symbol: install
   - name: mcpStatus
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -223,6 +247,7 @@ methods:
         targetMethod: runMcpStatus
     symbol: status
   - name: produce
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -233,6 +258,7 @@ methods:
         targetMethod: runProduce
     symbol: produce <target>
   - name: surface
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -243,6 +269,7 @@ methods:
         targetMethod: runSurface
     symbol: surface <action>
   - name: exportDesign
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon export` with its parsed arguments and flags to cli_runner.runExport.
@@ -251,6 +278,7 @@ methods:
         targetMethod: runExport
     symbol: export
   - name: externals
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -261,6 +289,7 @@ methods:
         targetMethod: runExternals
     symbol: externals <action> [aliases...]
   - name: login
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon login <url>` with its parsed arguments and flags to cli_runner.runLogin.
@@ -269,6 +298,7 @@ methods:
         targetMethod: runLogin
     symbol: login <url>
   - name: logout
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -279,6 +309,7 @@ methods:
         targetMethod: runLogout
     symbol: logout [url]
   - name: remote
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -289,6 +320,7 @@ methods:
         targetMethod: runRemote
     symbol: remote <action>
   - name: serve
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon serve` with its parsed arguments and flags to cli_runner.runServe.
@@ -296,6 +328,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runServe
   - name: dev
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon dev` with its parsed arguments and flags to cli_runner.runDev.
@@ -303,6 +336,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runDev
   - name: hostProject
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -313,6 +347,7 @@ methods:
         targetMethod: runHostProject
     symbol: project <action>
   - name: hostDemo
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon host demo` with its parsed arguments and flags to cli_runner.runHostDemo.
@@ -321,6 +356,7 @@ methods:
         targetMethod: runHostDemo
     symbol: demo
   - name: hostUnit
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -331,6 +367,7 @@ methods:
         targetMethod: runHostUnit
     symbol: unit <action>
   - name: hostPermission
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -341,6 +378,7 @@ methods:
         targetMethod: runHostPermission
     symbol: permission <action>
   - name: hostKey
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -351,6 +389,7 @@ methods:
         targetMethod: runHostKey
     symbol: key <action>
   - name: hostLock
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon host lock` with its parsed arguments and flags to cli_runner.runHostLock.
@@ -359,6 +398,7 @@ methods:
         targetMethod: runHostLock
     symbol: lock
   - name: hostGit
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -369,6 +409,7 @@ methods:
         targetMethod: runHostGit
     symbol: git <action>
   - name: hostProducer
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -379,6 +420,7 @@ methods:
         targetMethod: runHostProducer
     symbol: producer <action>
   - name: hostPacks
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -389,6 +431,7 @@ methods:
         targetMethod: runHostPacks
     symbol: packs <action>
   - name: hostSecret
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -399,6 +442,7 @@ methods:
         targetMethod: runHostSecret
     symbol: secret <action>
   - name: memberAdd
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -409,6 +453,7 @@ methods:
         targetMethod: runMemberAdd
     symbol: add <alias> <source>
   - name: memberUpdate
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -419,6 +464,7 @@ methods:
         targetMethod: runMemberUpdate
     symbol: update <alias>
   - name: memberMove
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -429,6 +475,7 @@ methods:
         targetMethod: runMemberMove
     symbol: move <alias> <path>
   - name: memberAttach
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -439,6 +486,7 @@ methods:
         targetMethod: runMemberAttach
     symbol: attach <alias> <path>
   - name: memberDetach
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -449,6 +497,7 @@ methods:
         targetMethod: runMemberDetach
     symbol: detach <alias>
   - name: memberAdopt
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -459,6 +508,7 @@ methods:
         targetMethod: runMemberAdopt
     symbol: adopt <alias>
   - name: memberRenameAlias
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -469,6 +519,7 @@ methods:
         targetMethod: runMemberRenameAlias
     symbol: rename-alias <old> <new>
   - name: memberInternalize
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -479,6 +530,7 @@ methods:
         targetMethod: runMemberInternalize
     symbol: internalize <alias>
   - name: memberPromote
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -489,6 +541,7 @@ methods:
         targetMethod: runMemberPromote
     symbol: promote <alias>
   - name: memberDemote
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -499,6 +552,7 @@ methods:
         targetMethod: runMemberDemote
     symbol: demote <alias>
   - name: projectRename
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -509,6 +563,7 @@ methods:
         targetMethod: runProjectRename
     symbol: rename <new-id>
   - name: subsystemExternalize
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -519,6 +574,7 @@ methods:
         targetMethod: runSubsystemExternalize
     symbol: externalize <id>
   - name: update
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon update` with its parsed arguments and flags to cli_runner.runUpdate.
@@ -526,6 +582,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runUpdate
   - name: domainsList
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -536,6 +593,7 @@ methods:
         targetMethod: runDomainsList
     symbol: list
   - name: domainsScan
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -546,6 +604,7 @@ methods:
         targetMethod: runDomainsScan
     symbol: scan
   - name: domainsAdd
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -556,6 +615,7 @@ methods:
         targetMethod: runDomainsAdd
     symbol: Manually register a new domain
   - name: domainsRemove
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -566,6 +626,7 @@ methods:
         targetMethod: runDomainsRemove
     symbol: remove <id>
   - name: skillsList
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -576,6 +637,7 @@ methods:
         targetMethod: runSkillsList
     symbol: skills
   - name: skillsInstall
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -586,6 +648,7 @@ methods:
         targetMethod: runSkillsInstall
     symbol: install
   - name: networkFlows
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon network flows` with its parsed flags to cli_runner.runNetworkFlows.
@@ -594,6 +657,7 @@ methods:
         targetMethod: runNetworkFlows
     symbol: flows
   - name: networkPolicy
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon network policy` with its parsed flags to cli_runner.runNetworkPolicy.
@@ -602,6 +666,7 @@ methods:
         targetMethod: runNetworkPolicy
     symbol: policy
   - name: networkDiagram
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon network diagram` with its parsed flags to cli_runner.runNetworkDiagram.
@@ -610,6 +675,7 @@ methods:
         targetMethod: runNetworkDiagram
     symbol: diagram
   - name: networkCheck
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon network check` with its parsed flags to cli_runner.runNetworkCheck.
@@ -618,6 +684,7 @@ methods:
         targetMethod: runNetworkCheck
     symbol: check
   - name: networkWhy
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon network why` with its arguments and flags to cli_runner.runNetworkWhy.
@@ -626,6 +693,7 @@ methods:
         targetMethod: runNetworkWhy
     symbol: why <from> <to>
   - name: networkDeclare
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon network declare` with its flags to cli_runner.runNetworkDeclare.
@@ -634,6 +702,7 @@ methods:
         targetMethod: runNetworkDeclare
     symbol: declare
   - name: networkUndeclare
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon network undeclare` to cli_runner.runNetworkUndeclare.
@@ -642,6 +711,7 @@ methods:
         targetMethod: runNetworkUndeclare
     symbol: undeclare
   - name: typeRenameField
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -652,6 +722,7 @@ methods:
         targetMethod: runTypeRenameField
     symbol: rename-field <type> <field> <new-name>
   - name: methodRenameParam
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -662,6 +733,7 @@ methods:
         targetMethod: runMethodRenameParam
     symbol: rename-param <component> <method> <param> <new-name>
   - name: methodRename
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -672,6 +744,7 @@ methods:
         targetMethod: runMethodRename
     symbol: rename <component> <method> <new-name>
   - name: upgrade
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon upgrade` with its parsed flags to cli_runner.runUpgrade.
@@ -679,6 +752,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runUpgrade
   - name: whatsnew
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: Dispatch `wairon whatsnew` with its version argument to cli_runner.runWhatsNew.
@@ -686,6 +760,7 @@ methods:
         targetComponent: cli_runner
         targetMethod: runWhatsNew
   - name: hostUser
+    sourcePath: src/cli/program.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -697,4 +772,4 @@ methods:
     symbol: user <action>
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-30T12:05:46.030Z'
+updatedAt: '2026-11-10T11:04:01.992Z'

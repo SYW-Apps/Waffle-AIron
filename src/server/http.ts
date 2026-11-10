@@ -13,6 +13,7 @@ import * as admin from './admin.js';
 import * as packs from './packs.js';
 import * as backupSchedule from './backup-schedule.js';
 import * as devTreeWatcher from './dev-watcher.js';
+import * as devCockpit from './dev-commands.js';
 import { existingProjectRoot } from './projects.js';
 import { bootstrapInstance } from './instance-bootstrap.js';
 import * as identityPortal from './identity-portal.js';
@@ -803,13 +804,26 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   // On the local development server only: watch the served project's .wai/ folder, so a spec written
   // by another process (an agent's MCP server) or a terminal lock refreshes the open page and a new
   // review request pops up. A change is a bare nudge; the page refetches through its own session.
+  // The projects on disk it reads are watched too: a member's change refreshes the page like its own,
+  // an external's nudges the externals channel, so the page re-reads relation health and names a drift.
   let stopWatching: devTreeWatcher.DevStopWatching | undefined;
+  let stopProducers: devTreeWatcher.DevStopWatching | undefined;
   if (cfg.devMode === true) {
     const servedRoot = existingProjectRoot(cfg.dataDir, 'local');
     if (servedRoot) {
+      const watchProducers = (): void => {
+        // Steps 11-12: the producers as the configuration now declares them, any earlier watch stopped.
+        stopProducers?.();
+        stopProducers = devTreeWatcher.watchProducers(devCockpit.producers(servedRoot), (producer) => {
+          publishChange(producer.relation === 'member' ? 'project:local' : 'externals');
+        });
+      };
       stopWatching = devTreeWatcher.watch(servedRoot, (kind) => {
         publishChange(kind === 'reviews' ? 'reviews' : 'project:local');
+        // Step 10: a tree change may declare or drop a producer.
+        if (kind === 'tree') watchProducers();
       });
+      watchProducers();
     }
   }
 
@@ -823,6 +837,7 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
     close() {
       backupSchedule.stop();
       stopWatching?.();
+      stopProducers?.();
       getRealtimeHub().closeAll();
       dataServer.close();
       adminServer.close();

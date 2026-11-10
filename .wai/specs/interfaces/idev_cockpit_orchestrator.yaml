@@ -1,6 +1,6 @@
 id: idev_cockpit_orchestrator
 name: Dev Cockpit Orchestrator Interface
-description: Reviews and human commands on the local development server.
+description: Reviews, human commands and the family panel on the local development server.
 component: dev_cockpit_orchestrator
 methods:
   - name: reviews
@@ -69,6 +69,37 @@ methods:
     params:
       - name: sessionId
         type: string
+  - name: family
+    description: >-
+      Run one family command from the dev page's family panel (externals pin or live status, network
+      declare or undeclare, or a member command) through the commands the CLI handed the server, and
+      answer what it printed. The command is checked first: its positional arguments must match the
+      action's, only the options the action takes are accepted, and no argument or option value may
+      start with `-`. A preview runs the CLI's --report and writes nothing; applying a migration
+      that asks for confirmation runs it with --yes. One command runs at a time, shared with `run`.
+    signature: 'family(sessionId: string, command: dev_family_command): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: command
+        type: dev_family_command
+        description: The family command
+    effect: write
+  - name: producers
+    description: >-
+      The projects on disk the served project reads, for the dev server to watch: every member whose
+      location is a folder (contained or a `../` sibling), and every external whose source is a
+      folder. Git and hosted sources are left out: they are not on disk. A configuration that cannot
+      be read answers none.
+    signature: 'producers(root: string): list<dev_producer>'
+    returns: list<dev_producer>
+    params:
+      - name: root
+        type: string
+        description: The served project's root
+    effect: read
 status: complete
 createdAt: '2026-11-07T02:41:40.170Z'
-updatedAt: '2026-11-07T15:07:16.978Z'
+updatedAt: '2026-11-10T00:33:01.737Z'
