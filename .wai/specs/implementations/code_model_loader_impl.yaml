@@ -48,7 +48,16 @@ methods:
         targetComponent: content_fingerprint
         targetMethod: digest
       - stepNumber: 3
-        description: Answer the sha256 of that fingerprint, the file list in walk order and the claimed list
+        description: >-
+          Name the compiler an exact reading would take, so installing, upgrading or removing
+          TypeScript changes the fingerprint
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: compilerIdentity
+      - stepNumber: 4
+        description: >-
+          Answer the sha256 of that fingerprint, the compiler, the file list in walk order and the
+          claimed list
         type: return
         outcome: the fingerprint
   - name: modelFor
@@ -89,4 +98,4 @@ methods:
         outcome: built
 status: complete
 createdAt: '2026-10-25T19:16:01.704Z'
-updatedAt: '2026-11-10T19:03:05.366Z'
+updatedAt: '2026-11-10T22:55:22.880Z'

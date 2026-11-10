@@ -5,6 +5,7 @@ description: >-
   or modification time moved since its digest was taken.
 contract: icontent_fingerprint
 sourcePath: src/core/content-fingerprint.ts
+simPath: tests/core/content-fingerprint.test.ts
 methods:
   - name: digest
     narrative:
@@ -58,4 +59,4 @@ methods:
         outcome: the fingerprint
 status: complete
 createdAt: '2026-11-10T19:02:19.228Z'
-updatedAt: '2026-11-10T19:07:16.246Z'
+updatedAt: '2026-11-10T22:29:44.503Z'

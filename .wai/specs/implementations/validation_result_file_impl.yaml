@@ -17,6 +17,7 @@ methods:
       such entry, answers none.
     calls:
       - files_adapter.readText
+    symbol: fileGet
   - name: put
     narrative: []
     detail: intent
@@ -28,6 +29,7 @@ methods:
       - files_adapter.readText
       - files_adapter.ensureDir
       - files_adapter.writeText
+    symbol: filePut
 status: complete
 createdAt: '2026-11-10T19:03:38.593Z'
-updatedAt: '2026-11-10T19:07:29.196Z'
+updatedAt: '2026-11-10T22:29:54.903Z'
