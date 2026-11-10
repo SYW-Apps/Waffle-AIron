@@ -1714,6 +1714,28 @@ methods:
       transport: HTTP
       method: GET
       path: /web/dev/approval
+  - name: runDevFamilyCommand
+    description: >-
+      Local development server only: run one family command from the dev page's family panel
+      (externals pin or live status, network declare or undeclare, or a member command), previewed
+      with its report or applied, and answer what it printed (dev_cockpit_orchestrator.family).
+      Mounted only under devMode. CLIENT CONTRACT: the dev page's family panel lists the members,
+      the externals with their relation health and the network state; each row offers its actions,
+      and each action opens a form that says in plain words what it does, then Preview (the report)
+      and Apply. An action without a report (member move, network undeclare) asks for confirmation
+      instead. When the externals channel nudges, the panel re-reads relation health and names an
+      external that drifted or broke, offering its pin.
+    signature: 'runDevFamilyCommand(sessionId: string, command: dev_family_command): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+      - name: command
+        type: dev_family_command
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/family
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-07T15:07:42.617Z'
+updatedAt: '2026-11-10T00:33:58.872Z'

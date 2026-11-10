@@ -4,7 +4,9 @@ name: DevCommands
 description: >-
   The human commands `wairon dev` hands its server, so the page runs exactly what the terminal runs:
   the CLI's own lock (this machine's git identity as approver, whole design or one subsystem),
-  generate and doctor --fix. Only the local development server has them; a hosted server never does.
+  generate, doctor --fix, and the family commands (externals pin and status, network declare and
+  undeclare, the member commands). Only the local development server has them; a hosted server never
+  does.
 subsystem: sdd_host
 fields:
   - name: lock
@@ -19,7 +21,13 @@ fields:
     type: DevCommand
     description: '`wairon doctor --fix`.'
     optional: false
+  - name: family
+    type: dev_family_runner
+    description: >-
+      The family commands (`wairon externals`, `wairon network declare|undeclare`, `wairon member
+      …`), parsed by the CLI's own command parser.
+    optional: false
 methods: []
 sourcePath: src/server/dev-commands.ts
 createdAt: '2026-11-07T02:41:16.714Z'
-updatedAt: '2026-11-07T02:41:17.536Z'
+updatedAt: '2026-11-10T00:32:34.187Z'

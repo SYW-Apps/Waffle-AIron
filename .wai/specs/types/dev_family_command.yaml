@@ -1,0 +1,35 @@
+kind: value-object
+id: dev_family_command
+name: DevFamilyCommand
+description: >-
+  One family command the dev page asks the server to run: the action, its positional arguments in
+  the CLI's order, the options it takes by long name, and whether to preview it (the CLI's --report)
+  instead of applying it.
+subsystem: sdd_host
+fields:
+  - name: action
+    type: dev_family_action
+    description: Which command.
+    optional: false
+  - name: args
+    type: list<string>
+    description: >-
+      The positional arguments in the CLI's order (an alias, a source or path, a new alias). None
+      may start with `-`.
+    optional: false
+  - name: options
+    type: map<string, string>
+    description: >-
+      Options by long name without dashes (`description`, `ref`, `into`); a flag is given the value
+      `true`. Only the options the action takes are accepted, and no value may start with `-`.
+    optional: false
+  - name: report
+    type: bool
+    description: >-
+      Preview: run with --report and write nothing. Applying a migration that asks for confirmation
+      runs it with --yes.
+    optional: false
+methods: []
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-10T00:32:21.987Z'
+updatedAt: '2026-11-10T00:32:23.270Z'

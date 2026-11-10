@@ -1,6 +1,8 @@
 id: dev_tree_watcher_impl
 name: Dev Tree Watcher Implementation
-description: 'src/server/dev-watcher.ts: one recursive watch on the served project''s .wai/ folder, debounced.'
+description: >-
+  src/server/dev-watcher.ts: one recursive watch on the served project's .wai/ folder, and one on
+  each producer's, debounced.
 contract: idev_tree_watcher
 sourcePath: src/server/dev-watcher.ts
 methods:
@@ -22,6 +24,28 @@ methods:
         description: Return the function that clears the timer and stops the watch
         type: return
         outcome: the stop function
+  - name: watchProducers
+    narrative:
+      - stepNumber: 1
+        description: For each producer
+        type: loop
+        loopKind: forEach
+        over: the producers
+        endStep: 3
+      - stepNumber: 2
+        description: Watch the producer's .wai/ folder recursively; a folder that cannot be watched is skipped
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchTree
+      - stepNumber: 3
+        description: >-
+          On each change outside the lock files, (re)start that producer's 250 ms timer; when it
+          fires, call onChange once with the producer
+        type: local
+      - stepNumber: 4
+        description: Return the function that clears every timer and stops every watch
+        type: return
+        outcome: the stop function
 status: complete
 createdAt: '2026-11-07T02:40:44.472Z'
-updatedAt: '2026-11-07T02:40:45.337Z'
+updatedAt: '2026-11-10T00:33:29.338Z'

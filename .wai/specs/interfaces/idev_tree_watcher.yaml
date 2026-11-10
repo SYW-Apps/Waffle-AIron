@@ -1,6 +1,6 @@
 id: idev_tree_watcher
 name: Dev Tree Watcher Interface
-description: Watch the served project's .wai/ folder and nudge the page.
+description: Watch the served project's .wai/ folder, and the producers it reads, and nudge the page.
 component: dev_tree_watcher
 methods:
   - name: watch
@@ -18,6 +18,21 @@ methods:
         type: ChangeListener
         description: Called with `reviews` or `tree`
     effect: io
+  - name: watchProducers
+    description: >-
+      Start watching each producer's .wai/ folder; on changes (coalesced over a quarter of a second
+      per producer, ignoring lock files) call onChange with the producer that changed. A producer
+      whose folder cannot be watched is skipped. Answers the function that stops every watch.
+    signature: 'watchProducers(producers: list<dev_producer>, onChange: dev_producer_listener): StopWatching'
+    returns: StopWatching
+    params:
+      - name: producers
+        type: list<dev_producer>
+        description: The members and path externals on disk
+      - name: onChange
+        type: dev_producer_listener
+        description: Called with the producer that changed
+    effect: io
 status: complete
 createdAt: '2026-11-07T02:40:40.169Z'
-updatedAt: '2026-11-07T02:40:42.759Z'
+updatedAt: '2026-11-10T00:33:27.730Z'

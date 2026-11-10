@@ -1,0 +1,48 @@
+kind: enum
+id: dev_family_action
+name: DevFamilyAction
+description: >-
+  The family commands the dev page's family panel runs, each one CLI command: the externals pin and
+  live status, the network declaration, and the member commands. A migration's preview is the same
+  action with report set.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/dev-commands.ts
+values:
+  - name: externals-pin
+    description: '`wairon externals pin [alias]`: re-pin one external, or every one when no alias is given.'
+  - name: externals-status
+    description: >-
+      `wairon externals status`: compare every external with its live producer, git producers
+      included.
+  - name: network-declare
+    description: '`wairon network declare [--description]`: this project and its members form one network.'
+  - name: network-undeclare
+    description: '`wairon network undeclare`: remove the network declaration.'
+  - name: member-add
+    description: '`wairon member add <alias> <source> [--project] [--description]`.'
+  - name: member-update
+    description: '`wairon member update <alias> [--ref | --commit]`: move a git member''s pin.'
+  - name: member-move
+    description: '`wairon member move <alias> <path>`: relocate a member''s folder.'
+  - name: member-attach
+    description: '`wairon member attach <alias> <path> [--description]`: make an existing project a member.'
+  - name: member-detach
+    description: >-
+      `wairon member detach <alias> [--widen]`: take a member out; the family reaches it as an
+      external.
+  - name: member-adopt
+    description: '`wairon member adopt <alias>`: make an external found by path a member again.'
+  - name: member-rename-alias
+    description: '`wairon member rename-alias <alias> <new>`: rename one alias of this project.'
+  - name: member-internalize
+    description: >-
+      `wairon member internalize <alias> [--into] [--packs] [--export]`: fold a member back into
+      this project.
+  - name: member-promote
+    description: '`wairon member promote <alias> [--id]`: make a part an independent project.'
+  - name: member-demote
+    description: '`wairon member demote <alias> [--home] [--packs]`: make a project member a part again.'
+createdAt: '2026-11-10T00:32:14.407Z'
+updatedAt: '2026-11-10T00:32:15.389Z'

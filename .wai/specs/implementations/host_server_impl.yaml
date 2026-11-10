@@ -76,19 +76,36 @@ methods:
         description: >-
           On the local development server only (devMode), watch the served project's .wai/ folder: a
           `tree` change nudges the served project's realtime channel, so a spec written by another
-          process (an agent's `wairon mcp serve`) or a terminal lock refreshes the open page; a
-          `reviews` change nudges the reviews channel, so a new review request pops up
+          process (an agent's `wairon mcp serve`) or a terminal lock refreshes the open page, and
+          re-runs the next two steps, since the configuration may have declared, moved or removed a
+          producer; a `reviews` change nudges the reviews channel, so a new review request pops up
         type: call
         targetComponent: dev_tree_watcher
         targetMethod: watch
       - stepNumber: 11
+        description: >-
+          On the local development server only (devMode), name the producers on disk the served
+          project reads: its members and the externals it declares by path
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: producers
+      - stepNumber: 12
+        description: >-
+          On the local development server only (devMode), stop any earlier producer watch and watch
+          the producers' .wai/ folders: a member's change nudges the served project's realtime
+          channel, an external producer's change nudges the externals channel, so the page re-checks
+          that external against its pin
+        type: call
+        targetComponent: dev_tree_watcher
+        targetMethod: watchProducers
+      - stepNumber: 13
         description: >-
           Start the periodic backup schedule (git-bound project sweep + container-level backing
           sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
         targetComponent: backup_schedule
         targetMethod: start
-      - stepNumber: 12
+      - stepNumber: 14
         description: Return the running server handle
         type: return
         outcome: running
@@ -143,4 +160,4 @@ methods:
         outcome: ready or not
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-11-07T12:20:16.988Z'
+updatedAt: '2026-11-10T00:33:40.791Z'

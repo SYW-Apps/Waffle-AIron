@@ -157,6 +157,80 @@ methods:
         description: Answer the approval state
         type: return
         outcome: the approval state
+  - name: family
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse outside the local development server, without the commands the CLI hands it, or
+          while another command runs
+        type: branch
+        condition: the server has no dev commands or a command is already running
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming the reason
+        type: throw
+        error: the command cannot run
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: >-
+          Check the command against its action's shape: the number of positional arguments, the
+          options the action takes, and that no argument or option value starts with `-`
+        type: local
+      - stepNumber: 5
+        description: Is the command malformed?
+        type: branch
+        condition: the check found a problem
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Refuse, naming the problem
+        type: throw
+        error: the family command is malformed
+      - stepNumber: 7
+        description: >-
+          Run the family command the CLI handed over (one at a time, shared with run), capturing
+          every line it prints with colour codes removed; a thrown error is a failed result
+        type: local
+      - stepNumber: 8
+        description: Answer whether it succeeded and its output
+        type: return
+        outcome: the command's result
+  - name: producers
+    narrative:
+      - stepNumber: 1
+        description: Read the served project's configuration (bound to the root)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: No configuration, or one that cannot be read?
+        type: branch
+        condition: there is no configuration
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer none
+        type: return
+        outcome: no producers
+      - stepNumber: 4
+        description: >-
+          Collect every member whose location is a folder, resolved against the root, as a member
+          producer
+        type: local
+      - stepNumber: 5
+        description: >-
+          Collect every external whose source is a folder, resolved against the root, as an external
+          producer; git and hosted sources are skipped
+        type: local
+      - stepNumber: 6
+        description: Keep only producers whose .wai/ folder exists
+        type: local
+      - stepNumber: 7
+        description: Answer them
+        type: return
+        outcome: the producers
 lint:
   allow:
     - code: HIDDEN_STATE
@@ -182,4 +256,4 @@ lint:
         the core approval portal, so the analyzer reads the core workflow behind each forward.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-07T15:07:28.395Z'
+updatedAt: '2026-11-10T00:33:11.061Z'
