@@ -171,6 +171,7 @@ export function buildProgram(): Command {
     .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
     .option('--subsystem <id>', 'only lock specs in the specified subsystem')
     .option('--all', 'list every changed spec in the summary instead of summarizing a long list')
+    .option('--force', 'lock although a pending lock request was made on another branch than this checkout has')
     .action(async (opts) => {
       await lockCommand(opts);
     });

@@ -15,6 +15,8 @@ export interface DevApprovalData {
   approvedAt?: string;
   approvedBy?: string;
   verdict: ApprovalVerdictData;
+  /** The branch the served checkout has now. */
+  branch?: string;
 }
 
 /** The part of a graph node this logic reads. */
@@ -118,6 +120,18 @@ export function barState(approval: DevApprovalData | undefined, pendingCount: nu
     return { show: true, action: 'lock', line: `${stamp}${n > 0 ? `${n} spec${n === 1 ? '' : 's'} changed since.` : 'The design changed since.'}` };
   }
   return { show: false, action: 'none', line: '' };
+}
+
+/** What a review card says when its request was made on another branch than the checkout has; none when it matches or either is unknown. */
+export function otherBranchLine(requestBranch: string | undefined, checkoutBranch: string | undefined): string | undefined {
+  if (!requestBranch || requestBranch === checkoutBranch) return undefined;
+  return `requested on ${requestBranch}; checkout is on ${checkoutBranch ?? 'a detached HEAD'}`;
+}
+
+/** The notice shown when the checkout's branch changed between two approval reads; none on the first read or when nothing changed. */
+export function branchChangeNotice(previous: { seen: boolean; branch?: string }, branch: string | undefined): string | undefined {
+  if (!previous.seen || previous.branch === branch) return undefined;
+  return `The checkout switched from ${previous.branch ?? 'a detached HEAD'} to ${branch ?? 'a detached HEAD'}.`;
 }
 
 /** Whether a Lock action belongs in place (specs / diagrams view). */

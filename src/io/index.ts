@@ -14,3 +14,4 @@
 export * as files from './files.js';
 export * as processes from './process.js';
 export * as http from './http.js';
+export * as gitHead from './git-head.js';

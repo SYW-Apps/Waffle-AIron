@@ -178,14 +178,14 @@ async function runLock(options: LockOptions): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /** cli_runner.runLock — hosted when attached, else the local approval. */
-export async function lockCommand(options: { yes?: boolean; subsystem?: string; all?: boolean }): Promise<void> {
+export async function lockCommand(options: { yes?: boolean; subsystem?: string; all?: boolean; force?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     const outcome = await lockAttached(target);
     logger.success(`Hosted lock of "${target.projectId}" on ${target.url}: ${outcome}`);
     return;
   }
-  await runLock({ yes: options.yes, subsystem: options.subsystem, all: options.all });
+  await runLock({ yes: options.yes, subsystem: options.subsystem, all: options.all, force: options.force });
 }
 
 /** cli_runner.runValidate — hosted when attached, else the local validation. */

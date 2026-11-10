@@ -40,6 +40,24 @@ npm and the tags carry.
   signature once per type, which took a repeat canvas load from about 11 seconds to under 2. The
   stricter as-complete run that the specs page and the lock read is remembered the same way (apart
   from the normal one), so reopening the specs page went from about 30 seconds to under 2.
+- **Validation results survive a restart and a branch switch.** Files are now compared by content
+  (re-read only when their size or modification time changed), so switching to another branch and
+  back, or rewriting a file with the same bytes, counts as no change. The last 8 results per project
+  are kept, both in memory and in one file per project in the user cache folder (`WAIRON_CACHE_DIR`,
+  otherwise the platform's cache folder; never inside the project), so a fresh `wairon validate` or a
+  restarted `wairon dev` on an unchanged tree answers in a few seconds instead of a full run (about 3
+  seconds instead of about 40 on a large tree). Validation shares its source-code model with the
+  lookup tools, so a spec edit that moves no source file no longer re-reads the code. A new review
+  request no longer invalidates the remembered result. The Family tab reads its member list from a
+  new `GET /web/projects/members` route instead of the full diagram data.
+- **wairon follows the git branch.** A review request records the branch and commit it was made on.
+  A pending lock request made on another branch, for a design this checkout does not hold, now stays
+  pending instead of being superseded, and deciding it from another branch is refused, naming both
+  branches. `wairon lock` (and the dev page's Lock) refuses while such a request is pending and names
+  both branches; `wairon lock --force` approves this checkout anyway. A request whose branch was
+  deleted, or whose design the checkout already holds, never blocks a lock. The dev page shows the
+  current branch in the lock bar, notes "requested on X; checkout is on Y" on such a request, tells
+  you when the branch changed, and refreshes on a branch switch even when no `.wai/` file changed.
 - **The web UI uses the SYW Design System.** `wairon dev` and the hosted web UI now draw their
   buttons, fields, cards, tabs, dialogs, menus, tooltips and notifications from SYW Design System
   0.1.31, bundled into the page (it makes no request to a CDN). The built-in and custom themes, the

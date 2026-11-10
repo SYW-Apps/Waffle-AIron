@@ -9,6 +9,8 @@ import {
   lockBody,
   movedScope,
   offersLockInPlace,
+  otherBranchLine,
+  branchChangeNotice,
   parseMoved,
   type DevApprovalData,
   type MovedScope,
@@ -67,6 +69,16 @@ export function CockpitProvider(props: { children: ReactNode }) {
     ['reviews'],
   );
   const approval = approvalState.data ?? undefined;
+  const toast = useToast();
+  // A banner when the checkout's branch changes between two reads of the approval state.
+  const lastBranch = useRef<{ seen: boolean; branch?: string }>({ seen: false });
+  useEffect(() => {
+    if (approvalState.data === undefined || approvalState.data === null) return;
+    const branch = approvalState.data.branch;
+    const notice = branchChangeNotice(lastBranch.current, branch);
+    if (notice) toast.ok(notice);
+    lastBranch.current = { seen: true, branch };
+  }, [approvalState.data]);
   const pending = (reviews.data ?? []).filter((r) => r.status === 'pending');
 
   // The spec tree is only needed to place moved specs in a subsystem, i.e. while something moved.
@@ -97,6 +109,10 @@ export function CockpitProvider(props: { children: ReactNode }) {
         <div className="syw-card cockpit-bar" role="status">
           <div className="cockpit-bar-text">
             <strong>{bar.line}</strong>
+            {approval?.branch && <span className="dim"> on {approval.branch}</span>}
+            {bar.action === 'review' && pending[0] && otherBranchLine(pending[0].branch, approval?.branch) && (
+              <span className="dim"> ({otherBranchLine(pending[0].branch, approval?.branch)})</span>
+            )}
             {bar.action === 'review' && pending[0] && <span className="dim"> {pending[0].note}</span>}
             {bar.action !== 'review' && approval?.verdict.text && approval.verdict.drifted && (
               <span className="dim"> {firstLine(approval.verdict.text)}</span>
@@ -365,6 +381,11 @@ function ReviewScreen(props: { request: ReviewRequest; onClose: () => void; onDe
         <div className="stack-lg">
           <section className="stack-sm">
             <h4>The agent's note</h4>
+            {otherBranchLine(request.branch, approval?.branch) && (
+              <p className="hint" role="alert">
+                {otherBranchLine(request.branch, approval?.branch)}
+              </p>
+            )}
             <p className="review-note">{request.note}</p>
             <p className="hint">
               Requested {new Date(request.requestedAt).toLocaleString()}

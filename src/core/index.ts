@@ -259,6 +259,10 @@ export type { TypeDiagram, TypeDiagramScope } from './diagram.js';
 // snapshots.
 export { buildCanvasDataModel } from './diagram.js';
 
+// The members the project declares, for the family panel (spec_tree_portal familyMembers).
+export { familyMembers } from './specs.js';
+export type { FamilyMember } from './diagram.js';
+
 // The scoped diagrams and the whole set (spec_tree_portal generateComponentDiagram,
 // generateSequenceDiagram, generateDiagramSet, diagramSetIndex), forwarded by
 // identity to the architecture diagrams' renderComponents, renderSequence,
@@ -648,5 +652,6 @@ export {
   withdrawReview,
   announceDevServer,
   withdrawDevServer,
+  reviewBranchConflict,
 } from './reviews.js';
-export type { ReviewStatus, ReviewNote, ReviewDecision, ReviewRequest, ReviewReceipt } from './reviews.js';
+export type { ReviewStatus, ReviewNote, ReviewDecision, ReviewRequest, ReviewReceipt, ReviewBranchConflict } from './reviews.js';
