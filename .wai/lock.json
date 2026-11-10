@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "3953589f34f3da6c6e831dee3f3768066cb1d5b01f80082699fa88c216d820ca"
+    "digest": "b33b8f148ad1a9390db60ee8785a12a5760a3ec625146b5a1447c4e52fcae044"
   },
-  "lockedAt": "2026-11-10T22:13:44.668Z",
+  "lockedAt": "2026-11-10T23:10:56.745Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -421,7 +421,7 @@
     ".wai/specs/implementations/cli_validator_adapter_impl.yaml": "b9e2fe064dc91c885fdfdbc9f48a0e02819b6e522e44e5bb1c7ad5e3f188181f",
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "4f9617c76a4449425f61e59014f5bcb071d95400260d676ad238adbda55353f0",
     ".wai/specs/implementations/code_model_cache_impl.yaml": "318dba2d81b2c4dc8d6ea7cf6ed7998a0fd6cc705446be0e3133b966267f8163",
-    ".wai/specs/implementations/code_model_loader_impl.yaml": "67e2e5d3c11604cd05fe16a3fa2f08647ccd5e64c5399d69c19ee62fe10a8741",
+    ".wai/specs/implementations/code_model_loader_impl.yaml": "0fd5310de08645b3918f12fe64388aa6ce1f141420f3e875821f2435932f314a",
     ".wai/specs/implementations/conformance_rules_impl.yaml": "bf735e748b8cc1b0014b48877418fe396b4a9f6e91940fbc86ef9d0d173baea7",
     ".wai/specs/implementations/content_fingerprint_impl.yaml": "79ac129cc58d3885908274143ec5dcfdf5bd86f32b4e8c20a3653ac42af1b26d",
     ".wai/specs/implementations/context_composer_impl.yaml": "f839aa8f55e33ebe754bf4cf7c3a391cd3ca9e76c9a5867fc4c559d9278a0d59",
@@ -1863,7 +1863,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "b0c758ee5297e9c1cf104294c719f04e8d1a480ff26e05d21198f93693f85c5d",
+    "design": "a556235436cb3adf0278c30ea2e5de3bdd23ace0adacf53d0b5b128173d3986a",
     "release": "c1f13a75fdbc1a955c9ff6fa2a6272626739d4bc0502c110f3c4ce37e2706881",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1879,7 +1879,7 @@
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 40,
-    "notices": 105
+    "warnings": 0,
+    "notices": 97
   }
 }
