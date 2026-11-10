@@ -46,6 +46,15 @@ npm and the tags carry.
   theme builder and saved appearance choices work as before; the design system follows the chosen
   theme and mode. Dialogs are native modal dialogs, tooltips also show on keyboard focus, and error
   notifications stay until dismissed.
+- **`wairon dev` has a Family tab.** It lists the project's members (parts and projects), its
+  externals with their relation health, and its network. From there you can pin externals, check them
+  live, declare or remove the network, and run the member commands (add, update, move, attach,
+  detach, adopt, rename, fold in, promote, demote). Each action explains what it does in plain words.
+  A command with a preview shows its plan (the CLI's `--report`) before you apply it; one without a
+  preview asks you to confirm. The page runs the same command the terminal would. The dev server
+  also watches the members and externals on disk: a change in a member refreshes the page, and when
+  an external moves under its pin the tab names it and offers to re-pin. The hosted project page's
+  Relations tab shows the same panel, read-only.
 - **An agent asks for a review or a lock instead of the human saying "specs are locked".**
   `sdd_request_review` (`kind: review` for feedback, `kind: lock` for approval, optionally of one
   subsystem) validates first: a design with errors is refused with every finding and nobody is

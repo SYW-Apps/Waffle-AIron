@@ -12,7 +12,7 @@ import { execFileSync } from 'child_process';
 
 describe('the --yes flag', () => {
   it('every command declaring --yes also accepts -y', () => {
-    const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'cli', 'index.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'cli', 'program.ts'), 'utf8');
     const declarations = [...source.matchAll(/\.option\((['"])([^'"]*--yes\b[^'"]*)\1/g)].map((m) => m[2]);
     expect(declarations.length).toBeGreaterThan(0);
     expect(declarations.filter((flags) => !flags.startsWith('-y, --yes'))).toEqual([]);

@@ -21,10 +21,11 @@ import {
 } from '../ui';
 import { GitCredentialCard, GitPatSummary } from '../components/GitCredentialCard';
 import { SharingTab } from './Sharing';
+import { FamilyPanel } from './FamilyPanel';
+import { externalTone } from './familyPanelLogic';
 import { SpecsTab } from './SpecsEditor';
 import type {
   DoctrineChange,
-  ExternalStatus,
   GitBackingStatus,
   ImpactFinding,
   PackDescriptor,
@@ -965,63 +966,7 @@ export function MemberLinks(props: { projectId: string; projects: ProjectRecord[
   );
 }
 
-/** How an external's relation health reads at a glance. Unavailable is never a pass. */
-export function externalTone(s: ExternalStatus): { tone: 'ok' | 'warn' | 'bad' | 'neutral'; label: string } {
-  if (!s.reachable) return { tone: 'warn', label: s.outOfReach ? 'out of reach' : 'unavailable' };
-  if (s.stale) return { tone: 'bad', label: 'stale' };
-  if (s.drifted) return { tone: 'warn', label: 'drifted' };
-  if (!s.pinned) return { tone: 'warn', label: 'not pinned' };
-  if (s.uses.some((u) => u.state === 'unavailable')) return { tone: 'neutral', label: 'pinned · not comparable here' };
-  return { tone: 'ok', label: 'current' };
-}
-
-/**
- * Relation health of one project: its externals status, one row per external,
- * from GET /web/projects/externals. What cannot be compared is reported as
- * unavailable with its reason, never as a pass.
- */
-export function RelationsPanel(props: { projectId: string }) {
-  const enc = encodeURIComponent(props.projectId);
-  const state = useAsync<{ externals: ExternalStatus[] }>(
-    () => get(`/web/projects/externals?projectId=${enc}`),
-    [props.projectId],
-    [`project:${props.projectId}`, 'projects'],
-  );
-  return (
-    <AsyncView state={state}>
-      {(d) =>
-        d.externals.length === 0 ? (
-          <p className="hint">This project declares no externals.</p>
-        ) : (
-          <div className="stack-sm">
-            {d.externals.map((s) => {
-              const health = externalTone(s);
-              return (
-                <details key={s.alias} className="syw-card">
-                  <summary>
-                    <strong>{s.alias}</strong> <span className="subtle">→ {s.project}</span>{' '}
-                    <Badge tone={health.tone}>{health.label}</Badge> <span className="hint">{s.sourceKind}</span>
-                  </summary>
-                  {s.detail && <p className="hint">{s.detail}</p>}
-                  {s.uses.length > 0 && (
-                    <ul className="finding-list">
-                      {s.uses.map((u, i) => (
-                        <li key={i}>
-                          <code>{[u.publicName, u.member].filter(Boolean).join('.') || '(the external)'}</code> — {u.state}
-                          {u.detail ? <span className="hint"> — {u.detail}</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </details>
-              );
-            })}
-          </div>
-        )
-      }
-    </AsyncView>
-  );
-}
+export { externalTone };
 
 // ── Ops shell ────────────────────────────────────────────────────────────────
 
@@ -1090,7 +1035,7 @@ export function ProjectOps() {
         {tab === 'git' && <GitTab projectId={projectId} />}
         {tab === 'transfer' && <TransferTab projectId={projectId} />}
         {tab === 'sharing' && <SharingTab projectId={projectId} />}
-        {tab === 'relations' && <RelationsPanel projectId={projectId} />}
+        {tab === 'relations' && <FamilyPanel projectId={projectId} actions={false} />}
       </TabPanel>
     </div>
   );

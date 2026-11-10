@@ -25,6 +25,7 @@ import { Instance } from './views/Instance';
 import { ThemeBuilder } from './views/ThemeBuilder';
 import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
+import { FamilyPanel } from './views/FamilyPanel';
 import { DevBanner } from './views/DevBanner';
 import { CockpitProvider, LockInPlaceButton, SettingsCog, useScopeNodes } from './views/DevCockpit';
 import { subsystemOfRoute, subsystemOfSpec } from './views/devCockpitLogic';
@@ -114,6 +115,7 @@ function Sidebar(props: { adminVisible: boolean; collapsed: boolean; onToggle: (
 const DEV_TABS = [
   { id: 'canvas', label: 'Canvas' },
   { id: 'specs', label: 'Specs' },
+  { id: 'family', label: 'Family' },
 ];
 
 /** `/canvas/[local/]<engine route>` — the local project's live canvas, mounted
@@ -166,10 +168,18 @@ function DevSpecs() {
   );
 }
 
+function DevFamily() {
+  return (
+    <div className="view-pad view-pad-wide">
+      <FamilyPanel projectId={DEV_PROJECT_ID} actions />
+    </div>
+  );
+}
+
 function DevShell() {
   const nav = useNavigate();
   const { pathname } = useLocation();
-  const tab = pathname.startsWith('/specs') ? 'specs' : 'canvas';
+  const tab = pathname.startsWith('/specs') ? 'specs' : pathname.startsWith('/family') ? 'family' : 'canvas';
 
   return (
     <CockpitProvider>
@@ -180,7 +190,7 @@ function DevShell() {
           <span className="dev-tag" data-tip="Local developer server — this project only" tabIndex={0}>
             dev
           </span>
-          <Tabs label="Workspace" className="dev-tabs" tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : '/canvas')} />
+          <Tabs label="Workspace" className="dev-tabs" tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : id === 'family' ? '/family' : '/canvas')} />
           <span className="syw-header__spacer" />
           <RealtimeStatus />
           <SettingsCog />
@@ -190,6 +200,7 @@ function DevShell() {
           <Routes>
             <Route path="/canvas/*" element={<DevCanvas />} />
             <Route path="/specs/*" element={<DevSpecs />} />
+            <Route path="/family" element={<DevFamily />} />
             <Route path="*" element={<Navigate to="/canvas" replace />} />
           </Routes>
         </main>

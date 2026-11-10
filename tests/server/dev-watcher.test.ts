@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { watch, DEV_WATCH_DEBOUNCE_MS } from '../../src/server/dev-watcher.js';
-import type { DevChangeKind } from '../../src/server/dev-watcher.js';
+import { watch, watchProducers, DEV_WATCH_DEBOUNCE_MS } from '../../src/server/dev-watcher.js';
+import type { DevChangeKind, DevProducer } from '../../src/server/dev-watcher.js';
 
 // ---------------------------------------------------------------------------
 // dev_tree_watcher: one recursive watch on the served project's .wai/ folder,
@@ -86,5 +86,49 @@ describe('dev tree watcher (sdd_host)', () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-devwatch-'));
     const stopIt = watch(root, () => undefined);
     expect(() => stopIt()).not.toThrow();
+  });
+});
+
+describe('dev producer watcher (sdd_host)', () => {
+  const roots: string[] = [];
+  let stop: (() => void) | undefined;
+
+  afterEach(() => {
+    stop?.();
+    stop = undefined;
+    for (const r of roots.splice(0)) {
+      try { fs.rmSync(r, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    }
+  });
+
+  function producer(alias: string, relation: DevProducer['relation']): DevProducer {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-devprod-'));
+    fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+    roots.push(root);
+    return { alias, root, relation };
+  }
+
+  it('names the producer that changed, once per burst, and ignores lock files', async () => {
+    const member = producer('part', 'member');
+    const external = producer('geo', 'external');
+    const seen: string[] = [];
+    stop = watchProducers([member, external], (p) => seen.push(`${p.relation}:${p.alias}`));
+    fs.writeFileSync(path.join(external.root, '.wai', 'specs', 'a.yaml'), 'a: 1');
+    fs.writeFileSync(path.join(external.root, '.wai', 'specs', 'b.yaml'), 'b: 1');
+    fs.writeFileSync(path.join(member.root, '.wai', 'other.lock'), 'x');
+    await sleep(DEV_WATCH_DEBOUNCE_MS + 400);
+    expect(seen).toEqual(['external:geo']);
+  });
+
+  it('skips a producer whose folder cannot be watched, and stops every watch', async () => {
+    const member = producer('part', 'member');
+    const gone: DevProducer = { alias: 'gone', root: path.join(member.root, 'missing'), relation: 'member' };
+    const seen: string[] = [];
+    const stopAll = watchProducers([gone, member], (p) => seen.push(p.alias));
+    stopAll();
+    fs.writeFileSync(path.join(member.root, '.wai', 'specs', 'a.yaml'), 'a: 1');
+    await sleep(DEV_WATCH_DEBOUNCE_MS + 400);
+    expect(seen).toEqual([]);
+    expect(() => stopAll()).not.toThrow();
   });
 });

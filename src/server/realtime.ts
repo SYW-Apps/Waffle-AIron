@@ -25,7 +25,7 @@ export const REALTIME_PATH = '/web/ws';
 
 /** Channels every authenticated session may listen on — the payload is only a
  *  "refetch" nudge and the data is re-fetched through the caller's own scope. */
-const USER_CHANNELS = new Set(['projects', 'landscape', 'units', 'tokens', 'reviews']);
+const USER_CHANNELS = new Set(['projects', 'landscape', 'units', 'tokens', 'reviews', 'externals']);
 
 function canSubscribe(cfg: HostConfig, principal: Principal, channel: string): boolean {
   if (channel.startsWith('project:')) {
@@ -171,6 +171,9 @@ export function channelsForWebMutation(pathname: string, body: unknown, queryPro
     add('reviews', 'project:local');
   } else if (pathname === '/web/dev/commands') {
     add('project:local');
+  } else if (pathname === '/web/dev/family') {
+    // A member or network change moves the served project; a pin moves its relation health.
+    add('project:local', 'projects', 'externals');
   } else if (pathname.startsWith('/web/projects')) {
     add('projects', 'landscape');
     if (projectId) add(`project:${projectId}`);
