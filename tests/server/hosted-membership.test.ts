@@ -617,6 +617,13 @@ describe('the UI routes', () => {
     expect((await web(sessionFor('u-out'), '/web/projects/members?projectId=platform')).status).toBe(403);
   });
 
+  it('GET /web/projects/members: a project that declares no members answers 200 with an empty list', async () => {
+    seedPeople();
+    const res = await web(sessionFor('u-view'), '/web/projects/members?projectId=docs');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
   it('GET /web/projects/network: the network view model of an authorized project; another project is Forbidden', async () => {
     seedPeople();
     const answer = (await web(sessionFor('u-view'), '/web/projects/network?projectId=docs')).body as { networks: unknown[]; workloads: unknown[]; edges: unknown[] };

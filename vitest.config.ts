@@ -1,4 +1,6 @@
 import { defineConfig, configDefaults } from 'vitest/config';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 export default defineConfig({
   test: {
@@ -17,6 +19,10 @@ export default defineConfig({
     // git/server-spawning test per loaded full run in round 7; each passes
     // alone in 5–10s.)
     testTimeout: 30_000,
+    // wairon's user cache (validation results, git producer clones) goes to a
+    // throwaway folder, never the developer's real cache: every fixture root
+    // would otherwise leave a results file there.
+    env: { WAIRON_CACHE_DIR: process.env.WAIRON_TEST_CACHE_DIR ?? path.join(os.tmpdir(), 'wairon-test-cache') },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
