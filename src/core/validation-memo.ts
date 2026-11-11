@@ -22,6 +22,7 @@ import {
   loadProjectConfig,
   loadImplementationSpecs,
   loadTypeSpecs,
+  loadProjectExtensions,
 } from './adapters/validator-core.js';
 import * as files from '../io/files.js';
 import * as contentFingerprint from './content-fingerprint.js';
@@ -160,28 +161,87 @@ function remembered(gate: string, normalized: ValidationOptions, run: () => Vali
   const implementations = loadImplementationSpecs();
   const types = loadTypeSpecs();
   const conformance = (normalized.rules ?? config?.rules)?.conformance;
-  const codeFingerprint = codeModelLoader.fingerprint(
+  const modelFingerprint = codeModelLoader.fingerprint(
     implementations,
     types,
     getProjectRoot(),
     conformance?.sourceRoots ?? [],
     conformance?.exclude ?? [],
   );
-  // Steps 9-11: this process memory.
+  // Steps 9-11: what the gate reads outside the tree and the code model — the
+  // binding modules and the loaded packs — folded into the code fingerprint.
+  const codeFingerprint = createHash('sha256')
+    .update(JSON.stringify([modelFingerprint, outsideFingerprint(root, implementations, normalized)]))
+    .digest('hex');
+  // Steps 12-14: this process memory.
   const inMemory = get(root, optionsKey, treeFingerprint, codeFingerprint);
   if (inMemory) return structuredClone(inMemory.result);
-  // Steps 12-15: the result file a process before this one left.
+  // Steps 15-18: the result file a process before this one left.
   const onDisk = fileGet(root, optionsKey, treeFingerprint, codeFingerprint);
   if (onDisk) {
     put(root, onDisk);
     return structuredClone(onDisk.result);
   }
-  // Steps 16-19: run the gate, remember it in memory and on disk.
+  // Steps 19-22: run the gate, remember it in memory and on disk.
   const result = run();
   const fresh: ValidationMemoEntry = { optionsKey, treeFingerprint, codeFingerprint, result: structuredClone(result) };
   put(root, fresh);
   filePut(root, fresh);
   return result;
+}
+
+/**
+ * Steps 9-11: the binding modules the implementations name and each loaded
+ * pack's files inside the project root, by content; a pack outside the root
+ * (a global or installed pack) by its name, version and location.
+ */
+function outsideFingerprint(root: string, implementations: ReturnType<typeof loadImplementationSpecs>, options: ValidationOptions): string {
+  let packs: { name: string; ref: string; version?: string }[] = [];
+  try {
+    packs = (options.extensions ?? loadProjectExtensions()).packs ?? [];
+  } catch {
+    packs = [];
+  }
+  const inside: string[] = [];
+  const outside: string[] = [];
+  for (const impl of implementations) {
+    if (impl.id.includes('::')) continue;
+    for (const binding of impl.bindings ?? []) inside.push(binding.replace(/\\/g, '/'));
+  }
+  for (const pack of packs) {
+    const ref = path.resolve(root, pack.ref);
+    const rel = path.relative(root, ref);
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) packFiles(root, rel, inside);
+    else outside.push(`${pack.name}@${pack.version ?? ''}:${ref}`);
+  }
+  inside.sort();
+  outside.sort();
+  return `${contentFingerprint.digest(root, inside)}|${outside.join(',')}`;
+}
+
+/** A pack's files under the project root: the file itself, or every file of its folder (dependencies and git data left out). */
+function packFiles(root: string, relative: string, found: string[]): void {
+  const stat = files.statOrNull(path.join(root, relative));
+  if (!stat) {
+    found.push(relative);
+    return;
+  }
+  if (!stat.isDirectory()) {
+    found.push(relative);
+    return;
+  }
+  let entries: files.DirEntry[];
+  try {
+    entries = files.listEntries(path.join(root, relative));
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === '.git') continue;
+    const child = path.join(relative, entry.name);
+    if (entry.isDirectory()) packFiles(root, child, found);
+    else found.push(child);
+  }
 }
 
 /** The two argument forms the gate takes, read as one options object (as the gate reads them). */
