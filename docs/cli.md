@@ -1835,7 +1835,7 @@ A person signs in one of two ways; the startup log names the ones configured:
   Sign-in (SSO) view and the startup log warn about it). A provider added in
   the UI names the same list under Allowed redirect URIs, usually the one
   address `<public URL>/web/sso/callback`. Optional: `WAIRON_OIDC_DISPLAY_NAME` (the button
-  label), `WAIRON_OIDC_PROVIDER_TYPE` (default `oidc`),
+  label),
   `WAIRON_OIDC_ALLOWED_DOMAINS` (email domains admitted),
   `WAIRON_OIDC_ADMIN_GROUPS` (group claims bound to the built-in `sso-admin`
   role: project administration and creation everywhere, never the

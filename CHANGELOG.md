@@ -6,6 +6,7 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **Every identity provider is configured as plain OIDC.** The provider type is gone; the admin UI offers an optional preset that only fills hints (issuer URL shape, groups-claim tip) and stores nothing. Endpoint templates are removed: an issuer must publish OIDC discovery, otherwise set the endpoints explicitly (a provider with neither is rejected, naming what to set). `WAIRON_OIDC_PROVIDER_TYPE` is ignored, and stored provider records that still carry a type keep working.
 - **`@wairon/sdk` reads a pack in memory and fails with stable codes.** New `readPack(archive, limits?)`
   returns the envelope, the inner pack manifest (`pack.yaml`, or `package.json` of a code pack) and the
   files without writing anything. Every .wpack reader (`readPack`, `inspectArchive`, `extractPack`) throws

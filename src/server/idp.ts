@@ -9,7 +9,7 @@ import type { IdentityProviderConfig, PrincipalSubject, ProviderEndpoints } from
 //
 // The only block that talks to an external OIDC provider. It resolves each
 // provider's concrete endpoints (explicit config overrides -> OIDC discovery ->
-// providerType template), assembles browser authorization URLs against the
+// nothing else: every provider is plain OIDC), assembles browser authorization URLs against the
 // front-channel authorize endpoint, exchanges authorization codes over the
 // back-channel token endpoint (which may be VPC-internal), and verifies the
 // returned id_token against the provider JWKS before mapping the verified claims
@@ -168,7 +168,7 @@ function decodeIdTokenClaims(idToken: string): IdTokenClaims {
 
 /** Fetch and cache the OIDC discovery document for an issuer. Best-effort: a
  *  network error or non-2xx response yields null so resolution falls through to
- *  the providerType template. */
+ *  the failure naming what to set. */
 async function fetchDiscovery(issuer: string): Promise<OidcDiscoveryDocument | null> {
   const cached = discoveryCache.get(issuer);
   if (cached) return cached;
@@ -192,39 +192,12 @@ async function fetchDiscovery(issuer: string): Promise<OidcDiscoveryDocument | n
   return doc;
 }
 
-/** The providerType-template endpoints (last resort). An empty issuer yields no
- *  template (the provider is then rejected for having no usable endpoints). */
-function templateEndpoints(config: IdentityProviderConfig, issuer: string): Partial<ProviderEndpoints> {
-  if (!issuer) return {};
-  switch (config.providerType) {
-    case 'keycloak':
-      return {
-        authorizationEndpoint: `${issuer}/protocol/openid-connect/auth`,
-        tokenEndpoint: `${issuer}/protocol/openid-connect/token`,
-        jwksUri: `${issuer}/protocol/openid-connect/certs`,
-      };
-    case 'authentik':
-      return {
-        authorizationEndpoint: `${issuer}/application/o/authorize/`,
-        tokenEndpoint: `${issuer}/application/o/token/`,
-        jwksUri: `${issuer}/application/o/jwks/`,
-      };
-    default:
-      // Generic OIDC: the conventional /authorize + /token relative to the issuer.
-      return {
-        authorizationEndpoint: `${issuer}/authorize`,
-        tokenEndpoint: `${issuer}/token`,
-      };
-  }
-}
-
 /**
  * Resolve the provider's concrete OIDC endpoints for one config, with precedence:
  * (1) explicit per-endpoint overrides on the config win field-by-field (the
  * split-horizon path); (2) OIDC discovery over
  * <issuerUrl>/.well-known/openid-configuration fills any still-missing endpoint;
- * (3) a providerType template is the last resort. Discovery documents are cached
- * in-adapter (transient, refetchable). Rejects a config that resolves to no usable
+ * Discovery documents are cached in-adapter (transient, refetchable). Rejects a config that resolves to no usable
  * authorization or token endpoint.
  */
 export async function resolveEndpoints(config: IdentityProviderConfig): Promise<ProviderEndpoints> {
@@ -248,18 +221,10 @@ export async function resolveEndpoints(config: IdentityProviderConfig): Promise<
     }
   }
 
-  // (3) providerType template as a last resort for any endpoint still unresolved.
-  if (!authorizationEndpoint || !tokenEndpoint || !jwksUri) {
-    const tmpl = templateEndpoints(config, issuer);
-    authorizationEndpoint = authorizationEndpoint || tmpl.authorizationEndpoint;
-    tokenEndpoint = tokenEndpoint || tmpl.tokenEndpoint;
-    jwksUri = jwksUri || tmpl.jwksUri;
-  }
-
   // Reject a provider whose endpoints cannot be resolved to a usable authorize/token pair.
   if (!authorizationEndpoint || !tokenEndpoint) {
     throw new Error(
-      `Identity provider '${config.id}' resolved no usable authorization or token endpoint.`,
+      `Identity provider '${config.id}' resolved no usable authorization or token endpoint. Set an issuer URL whose provider publishes OIDC discovery (/.well-known/openid-configuration), or set the authorization and token endpoints explicitly.`,
     );
   }
 

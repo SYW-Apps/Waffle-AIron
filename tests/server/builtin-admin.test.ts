@@ -124,7 +124,6 @@ function stubClaims(claims: Record<string, unknown>): void {
 function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
   return {
     id: PROVIDER_ID,
-    providerType: 'oidc',
     issuerUrl,
     clientId: CLIENT_ID,
     clientSecretRef: SECRET_REF,

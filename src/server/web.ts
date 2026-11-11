@@ -2080,10 +2080,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       (notes || []).forEach(function (n) { html += '<div class="hint bad">' + esc(n) + '</div>'; });
       if (!provs.length) html += '<div class="hint">No identity providers configured.</div>';
       else {
-        html += '<table class="grid"><thead><tr><th>ID</th><th>Type</th><th>Issuer</th><th>Enabled</th><th>Setup</th><th></th></tr></thead><tbody>';
+        html += '<table class="grid"><thead><tr><th>ID</th><th>Issuer</th><th>Enabled</th><th>Setup</th><th></th></tr></thead><tbody>';
         provs.forEach(function (p, i) {
           var problem = listings[i].setupProblem;
-          html += '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.providerType) + '</td><td>' + esc(p.issuerUrl || '—') + '</td>'
+          html += '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.issuerUrl || '—') + '</td>'
             + '<td><span class="pill ' + (p.enabled ? 'ok' : 'warn') + '">' + (p.enabled ? 'enabled' : 'disabled') + '</span></td>'
             + '<td>' + (problem ? '<span class="pill warn" title="' + esc(problem) + '">not set up</span> <span class="hint bad">' + esc(problem) + '</span>' : '<span class="pill ok">ready</span>') + '</td>'
             + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-del="' + esc(p.id) + '">Remove</button></td></tr>';
@@ -2106,13 +2106,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
   function providerForm(el, p) {
     var box = $('pForm'); p = p || {}; var creating = !p.id;
-    var types = ['oidc', 'keycloak', 'authentik', 'google_workspace', 'entra_id'];
-    var typeOpts = types.map(function (t) { return opt(t, t, (p.providerType || 'oidc') === t); }).join('');
     var html = '<div class="formcard"><h3>' + (creating ? 'Add identity provider' : 'Edit ' + esc(p.id)) + '</h3>';
     html += '<div class="frow">'
       + fcol('Provider ID', '<input id="pId" value="' + esc(p.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="e.g. corp-keycloak" />')
       + fcol('Display name', '<input id="pDisplay" value="' + esc(p.displayName || '') + '" placeholder="login-button label — defaults to the ID" />')
-      + fcol('Type', '<select id="pType">' + typeOpts + '</select>')
       + fcol('Enabled', '<div class="cbrow"><input type="checkbox" id="pEnabled"' + (p.enabled === false ? '' : ' checked') + ' /> <span>sign-in allowed</span></div>')
       + '</div>';
     html += '<div class="frow">' + fcol('Issuer URL', '<input id="pIssuer" value="' + esc(p.issuerUrl || '') + '" placeholder="your provider issuer / realm base URL" />', true) + '</div>';
@@ -2144,7 +2141,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     $('pCancel').addEventListener('click', function () { box.innerHTML = ''; });
     $('pSave').addEventListener('click', function () {
       var msg = $('pMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
-      var cf = { id: $('pId').value.trim(), providerType: $('pType').value, enabled: $('pEnabled').checked, updatedAt: new Date().toISOString() };
+      var cf = { id: $('pId').value.trim(), enabled: $('pEnabled').checked, updatedAt: new Date().toISOString() };
       if (!cf.id) { msg.className = 'msg bad'; msg.textContent = 'Provider ID is required.'; return; }
       var disp = $('pDisplay').value.trim(); if (disp) cf.displayName = disp;
       var issuer = $('pIssuer').value.trim(); if (issuer) cf.issuerUrl = issuer;

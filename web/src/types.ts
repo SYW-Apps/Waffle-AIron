@@ -331,7 +331,6 @@ export interface InstanceHealthReport {
 
 export interface IdentityProviderConfig {
   id: string;
-  providerType: string;
   displayName?: string;
   issuerUrl?: string;
   clientId?: string;
