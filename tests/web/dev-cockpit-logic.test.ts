@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  barState, inPlaceScope, lockBody, movedScope, offersLockInPlace, parseMoved, subsystemOfRoute, subsystemOfSpec,
+  barState, branchChipText, inPlaceScope, lockBody, movedScope, offersLockInPlace, parseMoved, subsystemOfRoute, subsystemOfSpec,
   type DevApprovalData, type ScopeNode,
 } from '../../web/src/views/devCockpitLogic.js';
 
@@ -74,5 +74,14 @@ describe('dev cockpit lock scoping', () => {
     expect(subsystemOfRoute('', nodes)).toBeUndefined();
     expect(lockBody('a')).toEqual({ command: 'lock', subsystem: 'a' });
     expect(lockBody(undefined)).toEqual({ command: 'lock' });
+  });
+});
+
+describe('branch chip text', () => {
+  it('shows the branch, else a short commit, else nothing', () => {
+    expect(branchChipText({ branch: 'feat/x', commit: 'abcdef0123' })).toBe('feat/x');
+    expect(branchChipText({ commit: 'abcdef0123' })).toBe('abcdef0');
+    expect(branchChipText({})).toBeUndefined();
+    expect(branchChipText(undefined)).toBeUndefined();
   });
 });

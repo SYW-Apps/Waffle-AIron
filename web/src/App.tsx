@@ -27,7 +27,7 @@ import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
 import { FamilyPanel } from './views/FamilyPanel';
 import { DevBanner } from './views/DevBanner';
-import { CockpitProvider, LockInPlaceButton, SettingsCog, useScopeNodes } from './views/DevCockpit';
+import { BranchChip, CockpitProvider, LockInPlaceButton, SettingsCog, useScopeNodes } from './views/DevCockpit';
 import { subsystemOfRoute, subsystemOfSpec } from './views/devCockpitLogic';
 import { Tabs } from './ui';
 import { post, raw } from './api';
@@ -192,6 +192,7 @@ function DevShell() {
           </span>
           <Tabs label="Workspace" className="dev-tabs" tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : id === 'family' ? '/family' : '/canvas')} />
           <span className="syw-header__spacer" />
+          <BranchChip />
           <RealtimeStatus />
           <SettingsCog />
         </header>

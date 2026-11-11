@@ -17,6 +17,8 @@ export interface DevApprovalData {
   verdict: ApprovalVerdictData;
   /** The branch the served checkout has now. */
   branch?: string;
+  /** The checkout's HEAD commit, when the server sends it (shown short on a detached HEAD). */
+  commit?: string;
 }
 
 /** The part of a graph node this logic reads. */
@@ -132,6 +134,13 @@ export function otherBranchLine(requestBranch: string | undefined, checkoutBranc
 export function branchChangeNotice(previous: { seen: boolean; branch?: string }, branch: string | undefined): string | undefined {
   if (!previous.seen || previous.branch === branch) return undefined;
   return `The checkout switched from ${previous.branch ?? 'a detached HEAD'} to ${branch ?? 'a detached HEAD'}.`;
+}
+
+/** What the header's branch chip says: the branch, else the short commit of a detached HEAD; none when neither is known. */
+export function branchChipText(approval: Pick<DevApprovalData, 'branch' | 'commit'> | undefined): string | undefined {
+  if (approval?.branch) return approval.branch;
+  if (approval?.commit) return approval.commit.slice(0, 7);
+  return undefined;
 }
 
 /** Whether a Lock action belongs in place (specs / diagrams view). */

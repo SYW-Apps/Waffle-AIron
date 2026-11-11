@@ -21,7 +21,8 @@ export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      // The theme flyout is portaled to <body>: a click in it is still inside the menu.
+      if (!ref.current?.contains(e.target as Node) && !(e.target as Element).closest?.('.tmenu-panel')) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;

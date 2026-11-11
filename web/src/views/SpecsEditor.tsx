@@ -466,12 +466,12 @@ function resolveSpecRef(
 function IssueSpecChip(props: { specId: string; nodes: GraphNode[]; onSelectSpec: (sel: { kind: string; id: string }) => void }) {
   const ref = resolveSpecRef(props.specId, props.nodes);
   if (!ref) {
-    return <span className="syw-chip badge badge-neutral finding-chip-unresolved" data-tip={props.specId}>id · {props.specId}</span>;
+    return <span className="finding-meta" data-tip={props.specId}>id · {props.specId}</span>;
   }
   return (
     <button
       type="button"
-      className="syw-chip badge badge-accent finding-chip"
+      className="finding-meta finding-link"
       data-tip={props.specId}
       onClick={() => props.onSelectSpec({ kind: ref.kind, id: ref.id })}
     >
@@ -528,7 +528,7 @@ function ValidationRail(props: {
   // Notices are listed apart and last: reported, never a problem that blocks
   // anything (they never make the tree invalid and never fail --ci).
   const displayedNotices = showingAll ? (v?.notices ?? []) : scopedNotices;
-  const labelClass = { error: 'err', warn: 'badge-warn', notice: 'finding-notice-label' } as const;
+  const labelClass = { error: 'badge-bad', warn: 'badge-warn', notice: 'badge-neutral' } as const;
 
   const Finding = (i: any, kindLabel: 'error' | 'warn' | 'notice', key: string) => {
     const field = CODE_FIELD_MAP[i.code];
@@ -536,8 +536,8 @@ function ValidationRail(props: {
     return (
       <li key={key} className={`finding f-${kindLabel}`}>
         <div className="finding-row">
-          <span className={labelClass[kindLabel]} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>
-          {i.code ? <code className="subtle">{i.code}</code> : null}
+          <span className={`syw-chip badge ${labelClass[kindLabel]}`}>{kindLabel}</span>
+          {i.code ? <code className="syw-chip badge badge-neutral finding-code">{i.code}</code> : null}
         </div>
         <div
           className={scrollable ? 'finding-msg finding-msg-clickable' : 'finding-msg'}
@@ -548,7 +548,7 @@ function ValidationRail(props: {
           {i.message}
         </div>
         {i.specId && (
-          <div className="finding-chip-row">
+          <div className="finding-meta-row">
             <IssueSpecChip specId={i.specId} nodes={props.nodes} onSelectSpec={props.onSelectSpec} />
           </div>
         )}
