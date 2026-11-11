@@ -17,6 +17,7 @@ dependsOn:
   - spec_search
   - reference_finder
   - validation_memo
+  - validation_runner
 transport: InProcess
 invokedBy:
   kind: entry
@@ -26,4 +27,4 @@ invokedBy:
     own process
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T15:06:52.817Z'
+updatedAt: '2026-11-11T23:26:31.956Z'

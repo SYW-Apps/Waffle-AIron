@@ -11,10 +11,11 @@ methods:
     description: >-
       Run the conformance gate at full strictness (treating all specs as complete) under the bound
       project's own rule severities and projectType, read through the host core adapter, and return
-      the result. A hosted project is judged by its own configuration, never the host's, so the
-      caller passes nothing; a root with no configuration is refused as uninitialized.
-    signature: 'validateAsComplete(): ValidationResult'
-    returns: ValidationResult
+      the result. Runs off the serving thread, so other requests keep being answered while a cold
+      run takes its time. A hosted project is judged by its own configuration, never the host's, so
+      the caller passes nothing; a root with no configuration is refused as uninitialized.
+    signature: 'validateAsComplete(): async ValidationResult'
+    returns: async ValidationResult
     params: []
   - name: computeGateStateId
     description: >-
@@ -86,6 +87,20 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: warm
+    description: >-
+      Start both gates for this project root in the background, so the first page that needs them
+      finds them remembered. Failures are ignored.
+    signature: 'warm(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+  - name: stopBackground
+    description: Stop the background validation thread, for a server that shuts down.
+    signature: 'stopBackground(): async void'
+    returns: async void
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-10-04T10:28:25.347Z'
+updatedAt: '2026-11-11T23:27:03.458Z'

@@ -1,0 +1,30 @@
+id: ivalidation_runner
+name: Validation Runner Interface
+description: >-
+  Runs a remembered gate for the bound project off the request path, sharing one run among identical
+  waiting callers; stops the thread.
+component: validation_runner
+methods:
+  - name: run
+    description: >-
+      Answer the gate for the bound project from the validation thread. Callers asking for the same
+      root, gate and options while a run is in flight share it. Options carrying loaded extensions
+      are refused: they are code and cannot cross to the thread.
+    signature: 'run(gate: ValidationGate, options?: ValidationOptions): async ValidationResult'
+    returns: async ValidationResult
+    params:
+      - name: gate
+        type: ValidationGate
+      - name: options
+        type: ValidationOptions
+        optional: true
+    effect: io
+  - name: stop
+    description: Stop the validation thread when it runs.
+    signature: 'stop(): async void'
+    returns: async void
+    params: []
+    effect: lifecycle
+status: complete
+createdAt: '2026-11-11T23:25:54.605Z'
+updatedAt: '2026-11-11T23:25:58.851Z'

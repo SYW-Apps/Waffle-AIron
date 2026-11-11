@@ -9,10 +9,10 @@ methods:
   - name: validateProject
     narrative:
       - stepNumber: 1
-        description: Call validateProject on the validator portal
+        description: Call validateProjectAsync on the validator portal
         type: call
         targetComponent: validator_portal
-        targetMethod: validateProject
+        targetMethod: validateProjectAsync
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -81,4 +81,4 @@ methods:
         targetMethod: listRules
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T12:00:37.808Z'
+updatedAt: '2026-11-11T23:27:16.042Z'

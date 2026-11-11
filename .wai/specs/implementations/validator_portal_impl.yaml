@@ -181,6 +181,57 @@ methods:
         targetComponent: family_validator
         targetMethod: adviseNetwork
     symbol: adviseNetwork
+  - name: validateProjectAsync
+    narrative:
+      - stepNumber: 1
+        description: Run the owner's gate on the validation thread
+        type: call
+        targetComponent: validation_runner
+        targetMethod: run
+      - stepNumber: 2
+        description: Answer its result
+        type: return
+        outcome: the gate's result
+  - name: validateAsCompleteAsync
+    narrative:
+      - stepNumber: 1
+        description: Run the as-complete gate on the validation thread
+        type: call
+        targetComponent: validation_runner
+        targetMethod: run
+      - stepNumber: 2
+        description: Answer its result
+        type: return
+        outcome: the gate's result
+  - name: warm
+    narrative:
+      - stepNumber: 1
+        description: Start the as-complete gate on the validation thread without waiting, ignoring a failure
+        type: call
+        targetComponent: validation_runner
+        targetMethod: run
+        detach: true
+      - stepNumber: 2
+        description: Start the owner's gate after it without waiting, ignoring a failure
+        type: call
+        targetComponent: validation_runner
+        targetMethod: run
+        detach: true
+      - stepNumber: 3
+        description: Answer at once
+        type: return
+        outcome: started
+  - name: stopBackground
+    narrative:
+      - stepNumber: 1
+        description: Stop the validation thread
+        type: call
+        targetComponent: validation_runner
+        targetMethod: stop
+      - stepNumber: 2
+        description: Answer
+        type: return
+        outcome: stopped
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-08T19:56:10.003Z'
+updatedAt: '2026-11-11T23:26:37.998Z'

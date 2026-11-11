@@ -16,10 +16,10 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 2
-        description: Forward the as-complete validation to the validator portal
+        description: Forward the as-complete validation to the validator portal, run off the serving thread
         type: call
         targetComponent: validator_portal
-        targetMethod: validateAsComplete
+        targetMethod: validateAsCompleteAsync
   - name: computeGateStateId
     narrative:
       - stepNumber: 1
@@ -71,6 +71,31 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: familyRelations
+  - name: warm
+    narrative:
+      - stepNumber: 1
+        description: Bind the given root for the call
+        type: local
+      - stepNumber: 2
+        description: Ask the validator portal to start both gates in the background
+        type: call
+        targetComponent: validator_portal
+        targetMethod: warm
+      - stepNumber: 3
+        description: Answer at once
+        type: return
+        outcome: started
+  - name: stopBackground
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: stopBackground
+      - stepNumber: 2
+        description: Answer
+        type: return
+        outcome: stopped
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-10-03T12:15:32.493Z'
+updatedAt: '2026-11-11T23:27:06.274Z'
