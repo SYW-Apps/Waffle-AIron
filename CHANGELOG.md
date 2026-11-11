@@ -58,6 +58,15 @@ npm and the tags carry.
   deleted, or whose design the checkout already holds, never blocks a lock. The dev page shows the
   current branch in the lock bar, notes "requested on X; checkout is on Y" on such a request, tells
   you when the branch changed, and refreshes on a branch switch even when no `.wai/` file changed.
+  The header always shows the current branch.
+- **Web UI layout fixes.** The settings panel closes on a click outside it or on Escape, shows above
+  the canvas instead of behind it, and its theme list opens over the panel instead of making it
+  scroll; Generate and doctor --fix are compact rows. Form actions line up with the field they act
+  on, select arrows have room on their right, and validation findings show the severity and code as
+  equal chips on one line with the message and the spec link below.
+- **SSO users keep their names.** Signing in again now also refreshes the identity that login tokens
+  carry, so the header, the audit log and approvals show the user's name instead of an `sso:` id for
+  a user first seen without one.
 - **The web UI uses the SYW Design System.** `wairon dev` and the hosted web UI now draw their
   buttons, fields, cards, tabs, dialogs, menus, tooltips and notifications from SYW Design System
   0.1.31, bundled into the page (it makes no request to a CDN). The built-in and custom themes, the
