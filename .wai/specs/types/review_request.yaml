@@ -3,8 +3,9 @@ id: review_request
 name: ReviewRequest
 description: >-
   An agent's request that the human review the design, or approve it with a lock. It lives in the
-  project's .wai/.local/reviews/ folder, which git ignores, so it is local to this checkout and
-  works whether or not a dev server runs.
+  project's .wai/.local/reviews/ folder, which git ignores, so it is local to this checkout,
+  survives a branch switch, and works whether or not a dev server runs. It records the branch it was
+  made on, so a checkout switched to another branch is told apart from a design that changed.
 subsystem: sdd_core
 fields:
   - name: id
@@ -43,7 +44,17 @@ fields:
     type: ReviewDecision
     description: The human's answer, once decided.
     optional: true
+  - name: branch
+    type: string
+    description: >-
+      The branch the checkout had checked out when the request was made; absent outside a git
+      checkout or on a detached HEAD.
+    optional: true
+  - name: commit
+    type: string
+    description: The commit HEAD pointed at when the request was made; absent outside a git checkout.
+    optional: true
 methods: []
 sourcePath: src/core/reviews.ts
 createdAt: '2026-11-07T02:36:39.520Z'
-updatedAt: '2026-11-07T02:36:40.728Z'
+updatedAt: '2026-11-10T18:57:26.909Z'

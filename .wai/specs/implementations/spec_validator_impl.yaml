@@ -94,10 +94,10 @@ methods:
         targetComponent: binding_module_adapter
         targetMethod: readBindingModules
       - stepNumber: 12
-        description: Build the source code model via the source analysis adapter, identical to validateProject
+        description: Take the source code model from the code model loader, identical to validateProject
         type: call
-        targetComponent: source_analysis_adapter
-        targetMethod: buildCodeModel
+        targetComponent: code_model_loader
+        targetMethod: modelFor
       - stepNumber: 13
         description: Gather the round-trip findings for the rule context, identical to validateProject
         type: call
@@ -609,13 +609,16 @@ methods:
         targetMethod: memberApprovedSurfaces
       - stepNumber: 25
         description: >-
-          Build the source code model via the source analysis adapter — every distinct source path
-          of the bound project's own implementations (a contained member's paths are relative to its
-          root and are its own gate's) resolved and containment-checked within the project root,
-          analyzed at the best available grade
+          Take the source code model from the code model loader — built from every distinct source
+          path of the bound project's own implementations (a contained member's paths are relative
+          to its root and are its own gate's) resolved and containment-checked within the project
+          root, analyzed at the best available grade, and answered from its cache when those files'
+          content and the implementations' claims are unchanged since it was built; the model is
+          shared and never changed here. A reach-only run reads no source file and builds the empty
+          model directly
         type: call
-        targetComponent: source_analysis_adapter
-        targetMethod: buildCodeModel
+        targetComponent: code_model_loader
+        targetMethod: modelFor
       - stepNumber: 26
         description: >-
           Read, through the core adapter, the spec files unchanged since the approval — the specs
@@ -1004,4 +1007,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-08T19:56:12.162Z'
+updatedAt: '2026-11-10T19:03:14.331Z'

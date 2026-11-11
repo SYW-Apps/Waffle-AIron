@@ -1736,6 +1736,24 @@ methods:
       transport: HTTP
       method: POST
       path: /web/dev/family
+  - name: projectMembers
+    description: >-
+      Serve the members one authorized project declares as JSON, one row per member (a part with its
+      subsystems, a member project, each with its storage), read without validating. Forwards to the
+      web graph orchestrator's getProjectMembers; session-cookie authenticated, so cross-project
+      access is Forbidden. The family panel lists members from it, on the dev page's Family tab and
+      the hosted Relations tab alike.
+    signature: 'projectMembers(sessionId: string, projectId: string): list<family_member>'
+    returns: list<family_member>
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/members
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-10T00:33:58.872Z'
+updatedAt: '2026-11-10T19:06:04.238Z'

@@ -70,6 +70,26 @@ describe('dev tree watcher (sdd_host)', () => {
     expect(seen).toEqual([]);
   });
 
+  it('says `tree` when git HEAD is rewritten (a branch switch), and stops watching it on stop', async () => {
+    project();
+    fs.mkdirSync(path.join(root, '.git'));
+    fs.writeFileSync(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/a');
+    const seen: DevChangeKind[] = [];
+    const stopIt = watch(root, (k) => seen.push(k));
+    fs.writeFileSync(path.join(root, '.git', 'index'), 'x');
+    await settle();
+    expect(seen).toEqual([]);
+    fs.writeFileSync(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/b');
+    await settle();
+    expect(seen).toEqual(['tree']);
+    stopIt();
+    seen.length = 0;
+    fs.writeFileSync(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/c');
+    await settle();
+    expect(seen).toEqual([]);
+    stop = undefined;
+  });
+
   it('says nothing after it is stopped, and stopping twice is harmless', async () => {
     project();
     const seen: DevChangeKind[] = [];

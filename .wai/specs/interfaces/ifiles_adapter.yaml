@@ -353,6 +353,21 @@ methods:
         type: ChangeListener
         description: Called with each changed path
     effect: io
+  - name: watchFolder
+    description: >-
+      Watch one directory's own entries, not below it, and call onChange with the name of each entry
+      created, changed or removed. Answers the function that stops watching; a watch that cannot
+      start answers one that does nothing, and it never throws for that.
+    signature: 'watchFolder(dir: string, onChange: ChangeListener): StopWatching'
+    returns: StopWatching
+    params:
+      - name: dir
+        type: string
+        description: The directory to watch
+      - name: onChange
+        type: ChangeListener
+        description: Called with each changed entry's name
+    effect: io
 status: draft
 createdAt: '2026-10-31T23:15:13.122Z'
-updatedAt: '2026-11-07T02:40:33.538Z'
+updatedAt: '2026-11-10T19:00:20.114Z'

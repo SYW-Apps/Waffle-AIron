@@ -1,0 +1,25 @@
+id: icontent_fingerprint
+name: Content Fingerprint Interface
+description: A stable fingerprint of a list of files' content.
+component: content_fingerprint
+methods:
+  - name: digest
+    description: >-
+      The fingerprint of these files' content: equal for equal paths and bytes, whatever their
+      modification times. A path outside the root is folded as escaped, an absent or unreadable file
+      as missing; never throws.
+    signature: 'digest(root: string, files: list<string>): string'
+    returns: string
+    params:
+      - name: root
+        type: string
+        description: The folder the paths are relative to, and inside which they must stay
+      - name: files
+        type: list<string>
+        description: The files, relative to the root (or absolute inside it)
+    effect: write
+    previousNames:
+      - icontent_fingerprint.fingerprintFiles
+status: complete
+createdAt: '2026-11-10T19:02:12.133Z'
+updatedAt: '2026-11-10T19:07:14.894Z'

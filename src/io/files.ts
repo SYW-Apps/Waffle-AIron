@@ -268,3 +268,27 @@ export function watchTree(dir: string, onChange: ChangeListener): StopWatching {
     try { watcher.close(); } catch { /* already closed */ }
   };
 }
+
+/**
+ * Watch one directory without descending (fs.watch, not recursive). Each event
+ * calls `onChange` with the entry's name (the empty string when the event has
+ * none). A watch that cannot start answers a stop function that does nothing; an
+ * error after start closes it quietly.
+ */
+export function watchFolder(dir: string, onChange: ChangeListener): StopWatching {
+  let watcher: fs.FSWatcher;
+  try {
+    watcher = fs.watch(dir, (_event, name) => {
+      onChange(name === null || name === undefined ? '' : String(name));
+    });
+  } catch {
+    return () => {};
+  }
+  watcher.on('error', () => { try { watcher.close(); } catch { /* already closed */ } });
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    try { watcher.close(); } catch { /* already closed */ }
+  };
+}

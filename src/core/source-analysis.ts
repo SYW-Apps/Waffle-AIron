@@ -1,7 +1,6 @@
 import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { createHash } from 'crypto';
 import {
   implementationSourceFiles,
   routerLinkage,
@@ -4477,7 +4476,7 @@ interface CheckerReading {
 }
 
 /**
- * The one file set both buildCodeModel and fingerprintSources take: every
+ * The one file set both buildCodeModel and sourceFiles take: every
  * source file an implementation names (its own path, then each method's), its
  * simPath and router module, then every file a type names, then the walked
  * root files — in that order, before deduplication. `claimed` is the files
@@ -4565,44 +4564,25 @@ function importChain(seeds: readonly string[], projectRoot: string): string[] {
 }
 
 /**
- * A fingerprint of the files buildCodeModel would read: the same set, each
- * file's path with its size and modification time (stat only, no content), or
- * its classification when it is missing, escaped or not a file; folded in
- * path order into one digest. Not a content hash: a change that keeps both
- * size and modification time is not seen.
+ * The source files buildCodeModel reads for these specs, in the order it walks
+ * them and deduplicated, and the ones the implementations claim; no file's
+ * content is read.
  */
-export function fingerprintSources(
+export function sourceFiles(
   implementations: ImplementationSpec[],
   types: TypeSpec[],
   projectRoot: string,
   sourceRoots: readonly string[] = [],
   exclude: readonly string[] = [],
-): string {
-  const { declaredPaths } = sourceFileSet(implementations, types, projectRoot, sourceRoots, exclude);
-  const entries = new Map<string, string>();
-  for (const declared of declaredPaths) {
-    const key = pathKey(declared);
-    if (entries.has(key)) continue;
-    if (path.isAbsolute(key) || path.normalize(key).split(path.sep)[0] === '..') {
-      entries.set(key, 'escaped');
-      continue;
-    }
-    const absolute = path.resolve(projectRoot, key);
-    if (path.relative(projectRoot, absolute).startsWith('..')) {
-      entries.set(key, 'escaped');
-      continue;
-    }
-    try {
-      const stat = ioFiles.stat(absolute);
-      entries.set(key, stat.isFile() ? `${stat.size}:${stat.mtimeMs}` : 'missing');
-    } catch {
-      entries.set(key, 'missing');
-    }
-  }
-  const hash = createHash('sha256');
-  for (const key of [...entries.keys()].sort()) hash.update(`${key} ${entries.get(key)}
-`);
-  return hash.digest('hex');
+): SourceFileSet {
+  const { declaredPaths, claimed } = sourceFileSet(implementations, types, projectRoot, sourceRoots, exclude);
+  return { files: [...new Set(declaredPaths.map(pathKey))], claimed: [...new Set(claimed.map(pathKey))] };
+}
+
+/** The source files the code model reads, and the ones the implementations claim. */
+export interface SourceFileSet {
+  files: string[];
+  claimed: string[];
 }
 
 /**

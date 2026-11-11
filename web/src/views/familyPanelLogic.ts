@@ -2,7 +2,7 @@ import type { ExternalStatus } from '../types';
 
 /**
  * Pure helpers of the family panel: the action table (mirrors the server's POST /web/dev/family shapes),
- * form validation, the member rows derived from the canvas model, and the drift notices.
+ * form validation, the member row shape, and the drift notices.
  */
 
 export type FamilyActionId =
@@ -243,16 +243,6 @@ export function formProblem(def: FamilyActionDef, form: FamilyForm): string | un
 
 // ── Members, from the canvas model ───────────────────────────────────────────
 
-/** The fields of a canvas-model subsystem the panel reads, narrowed defensively. */
-export interface CanvasSubsystemLike {
-  id: string;
-  name?: string;
-  description?: string;
-  storage?: string;
-  project?: boolean;
-  external?: boolean;
-}
-
 export interface MemberRow {
   kind: 'project' | 'part';
   alias: string;
@@ -260,30 +250,6 @@ export interface MemberRow {
   description?: string;
   /** A part's subsystems. */
   subsystems: string[];
-}
-
-/** One row per member project and one per part alias. */
-export function memberRows(subsystems: CanvasSubsystemLike[]): MemberRow[] {
-  const rows: MemberRow[] = [];
-  const parts = new Map<string, MemberRow>();
-  for (const s of subsystems) {
-    if (s.project && !s.external) {
-      if (s.id.includes('::') || s.id.includes('/')) continue;
-      rows.push({ kind: 'project', alias: s.name || s.id, storage: s.storage, description: s.description, subsystems: [] });
-    } else if (!s.project && s.storage && s.storage.startsWith('part ')) {
-      const m = /^part\s+(\S+)(?:\s*·\s*(.*))?$/.exec(s.storage);
-      const alias = m?.[1] ?? s.storage.slice(5).trim();
-      const storage = m?.[2]?.trim() || undefined;
-      let row = parts.get(alias);
-      if (!row) {
-        row = { kind: 'part', alias, storage, description: undefined, subsystems: [] };
-        parts.set(alias, row);
-        rows.push(row);
-      }
-      row.subsystems.push(s.name || s.id);
-    }
-  }
-  return rows;
 }
 
 /** How an external's relation health reads at a glance. Unavailable is never a pass. */

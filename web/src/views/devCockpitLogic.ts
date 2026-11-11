@@ -15,6 +15,10 @@ export interface DevApprovalData {
   approvedAt?: string;
   approvedBy?: string;
   verdict: ApprovalVerdictData;
+  /** The branch the served checkout has now. */
+  branch?: string;
+  /** The checkout's HEAD commit, when the server sends it (shown short on a detached HEAD). */
+  commit?: string;
 }
 
 /** The part of a graph node this logic reads. */
@@ -118,6 +122,36 @@ export function barState(approval: DevApprovalData | undefined, pendingCount: nu
     return { show: true, action: 'lock', line: `${stamp}${n > 0 ? `${n} spec${n === 1 ? '' : 's'} changed since.` : 'The design changed since.'}` };
   }
   return { show: false, action: 'none', line: '' };
+}
+
+/** What a review card says when its request was made on another branch than the checkout has; none when it matches or either is unknown. */
+export function otherBranchLine(requestBranch: string | undefined, checkoutBranch: string | undefined): string | undefined {
+  if (!requestBranch || requestBranch === checkoutBranch) return undefined;
+  return `requested on ${requestBranch}; checkout is on ${checkoutBranch ?? 'a detached HEAD'}`;
+}
+
+/** The notice shown when the checkout's branch changed between two approval reads; none on the first read or when nothing changed. */
+export function branchChangeNotice(previous: { seen: boolean; branch?: string }, branch: string | undefined): string | undefined {
+  if (!previous.seen || previous.branch === branch) return undefined;
+  return `The checkout switched from ${previous.branch ?? 'a detached HEAD'} to ${branch ?? 'a detached HEAD'}.`;
+}
+
+/** What the header's branch chip says: the branch, else the short commit of a detached HEAD; none when neither is known. */
+export function branchChipText(approval: Pick<DevApprovalData, 'branch' | 'commit'> | undefined): string | undefined {
+  if (approval?.branch) return approval.branch;
+  if (approval?.commit) return approval.commit.slice(0, 7);
+  return undefined;
+}
+
+/** The one-line approval state the specs view shows: what is true now, never "approved" once the design moved. */
+export function approvalStatusLine(approval: DevApprovalData | undefined): string | undefined {
+  if (!approval) return undefined;
+  if (!approval.approved) return 'This design has not been locked yet.';
+  if (approval.verdict.drifted) {
+    const n = approval.verdict.moved?.length ?? 0;
+    return n > 0 ? `${n} spec${n === 1 ? '' : 's'} changed since the last approval.` : 'The design changed since the last approval.';
+  }
+  return 'This project is approved — saving a spec change puts that spec back in flux until it is approved again.';
 }
 
 /** Whether a Lock action belongs in place (specs / diagrams view). */

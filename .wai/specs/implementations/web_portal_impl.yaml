@@ -1099,7 +1099,18 @@ methods:
         targetComponent: dev_cockpit_orchestrator
         targetMethod: family
     detail: calls-only
+  - name: projectMembers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded from the request to
+          web_graph_orchestrator.getProjectMembers, and hand back its result for the router to
+          encode
+        type: call
+        targetComponent: web_graph_orchestrator
+        targetMethod: getProjectMembers
+    symbol: getProjectMembers
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-11-10T00:33:51.610Z'
+updatedAt: '2026-11-10T19:05:59.211Z'

@@ -3,9 +3,8 @@ import { setProjectRoot } from '../../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../../src/core/specs.js';
 import { lookupProject } from '../../helpers/lookup-fixture.js';
 // The real modules of the component and of each direct dependency: no fakes.
-import { current } from '../../../src/core/lookup/code-model-loader.js';
+import { current, fingerprint, modelFor } from '../../../src/core/lookup/code-model-loader.js';
 import * as cache from '../../../src/core/lookup/code-model-cache.js';
-import { fingerprintSources } from '../../../src/core/source-analysis.js';
 import * as validatorCore from '../../../src/core/adapters/validator-core.js';
 
 // Integration sim for code_model_loader: the real loader, cache, fingerprint
@@ -26,8 +25,20 @@ describe('sim: code_model_loader.current', () => {
 
   it('fingerprints the same files the gate walks, from the real configuration', () => {
     const conformance = validatorCore.loadProjectConfig()?.rules?.conformance;
-    const again = fingerprintSources(validatorCore.loadImplementationSpecs(), validatorCore.loadTypeSpecs(), fixture.root, conformance?.sourceRoots ?? [], conformance?.exclude ?? []);
+    const again = fingerprint(validatorCore.loadImplementationSpecs(), validatorCore.loadTypeSpecs(), fixture.root, conformance?.sourceRoots ?? [], conformance?.exclude ?? []);
     expect(again).toBe(current().fingerprint);
+  });
+
+  it('modelFor answers the held entry for equal inputs, and a rewrite with the same bytes keeps the fingerprint', () => {
+    const conformance = validatorCore.loadProjectConfig()?.rules?.conformance;
+    const args = [validatorCore.loadImplementationSpecs(), validatorCore.loadTypeSpecs(), fixture.root, conformance?.sourceRoots ?? [], conformance?.exclude ?? []] as const;
+    const held = modelFor(...args);
+    expect(modelFor(...args)).toBe(held);
+    fixture.edit('src/orphan.ts', 'export const orphan = 2;\n');
+    const changed = modelFor(...args);
+    expect(changed).not.toBe(held);
+    fixture.edit('src/orphan.ts', 'export const orphan = 2;\n');
+    expect(modelFor(...args)).toBe(changed);
   });
 
   it('rebuilds when a file changes and when a walked file appears', () => {

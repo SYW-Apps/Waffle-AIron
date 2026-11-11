@@ -30,6 +30,7 @@ import { existingProjectRoot, listFamilyRecords, resolveProjectRoot } from './pr
 import * as shareadmin from './shareadmin.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
+import type { FamilyMember } from '../core/index.js';
 import * as devCockpit from './dev-commands.js';
 import type { DevApproval, DevCommandResult, DevFamilyAction, DevFamilyCommand, DevReviewDecision } from './dev-commands.js';
 import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
@@ -588,6 +589,14 @@ export function getProjectExternals(cfg: HostConfig, sessionId: string, projectI
 }
 
 /**
+ * Return the members one authorized project declares by delegating to the web graph
+ * orchestrator, which authenticates the session and scopes the read to the caller's reach.
+ */
+export function getProjectMembers(cfg: HostConfig, sessionId: string, projectId: string): FamilyMember[] {
+  return getWebProjectMembers(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
  * Return one authorized project's network view — its declared networks, the
  * workloads inside them, the gateways and the allowed flows per workload pair,
  * derived from the design — by delegating to the web graph orchestrator, which
@@ -812,6 +821,26 @@ export function getWebProjectExternals(cfg: HostConfig, sessionId: string, proje
   if (!root) throw new ForbiddenError('project not authorized or unknown');
   // Steps 4-6: bound with the caller's reach — the caller must gate on reach itself.
   return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostSurfaces.getExternalsStatus());
+}
+
+/**
+ * The members ONE authorized project declares, one row per member (a part with its
+ * subsystems, a member project, each with its storage), read from the family graph
+ * under the project's root without validating: same scoped authorization as
+ * getWebProjectExternals.
+ */
+export function getWebProjectMembers(cfg: HostConfig, sessionId: string, projectId: string): FamilyMember[] {
+  // Step 1.
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  // Step 2.
+  const readable = webproject.listProjects(cfg, sessionId);
+  if (!readable.some((r) => r.id === projectId)) throw new ForbiddenError('project not authorized or unknown');
+  // Step 3.
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  // Step 4.
+  return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostCore.familyMembers());
 }
 
 /**
@@ -3696,6 +3725,13 @@ export async function handleWebRequest(
     if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'externals') {
       const projectId = projectIdParam(url);
       return sendJson(res, 200, { externals: getProjectExternals(cfg, sessionId, projectId) });
+    }
+
+    // GET /web/projects/members?projectId= → the members one authorized project declares,
+    // one row per member, read without validating. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'members') {
+      const projectId = projectIdParam(url);
+      return sendJson(res, 200, getProjectMembers(cfg, sessionId, projectId));
     }
 
     // GET /web/projects/network?projectId= → one authorized project's network

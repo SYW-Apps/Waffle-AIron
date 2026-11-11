@@ -1,10 +1,12 @@
 id: validation_memo_cache
 name: Validation Memo Cache
 description: >-
-  The last owner's-gate results per project root, one entry per run options, each with the
-  fingerprints of the files it read. Evictable and loss-safe: a lost entry costs one validation run,
-  never a wrong answer, because a reader compares both fingerprints before trusting it. Held in the
-  process only (a long-running server: the dev server, the hosted server, an MCP session).
+  The last few gate results per project root and run options (up to eight, newest first), each with
+  the content fingerprints of the files it read, so a tree switched away and back (another branch,
+  then this one again) is answered from memory. Evictable and loss-safe: a lost entry costs one
+  validation run, never a wrong answer, because an entry is found only by both fingerprints. Held in
+  the process only (a long-running server: the dev server, the hosted server, an MCP session);
+  validation_result_file keeps them across processes.
 subsystem: sdd_validator
 componentType: Store
 owns: []
@@ -14,9 +16,9 @@ lint:
   allow:
     - code: UNOWNED_STORE
       reason: >-
-        Simple keyed state: one entry per project root and options, replaced whole, read only by its
-        key; its one writer and reader is the workflow validation_memo. No lookup beyond the key
-        needs a Registry or Index.
+        Simple keyed state: the last few entries per project root and options, found only by their
+        key and fingerprints; its one writer and reader is the workflow validation_memo. No lookup
+        beyond the key needs a Registry or Index.
 status: complete
 createdAt: '2026-11-07T15:06:15.144Z'
-updatedAt: '2026-11-07T15:06:50.044Z'
+updatedAt: '2026-11-10T19:03:47.343Z'

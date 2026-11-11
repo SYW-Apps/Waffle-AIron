@@ -6,7 +6,7 @@
 // The hosting control and data planes reuse sdd_core through this module and
 // nothing else: none of them imports a core module.
 // ---------------------------------------------------------------------------
-import { buildCanvasDataModel as buildCoreCanvasDataModel, loadSystemSpec } from '../../core/index.js';
+import { buildCanvasDataModel as buildCoreCanvasDataModel, loadSystemSpec, familyMembers as coreFamilyMembers, type FamilyMember } from '../../core/index.js';
 import type { CanvasModel } from '../../core/canvas.js';
 import type { ProjectRelations } from '../../models/index.js';
 
@@ -66,6 +66,11 @@ export {
   approvalRecord,
   approvalVerdict,
 } from '../../core/index.js';
+
+/** ihost_core_adapter.familyMembers — the bound project's declared members; no validation runs. */
+export function familyMembers(): FamilyMember[] {
+  return coreFamilyMembers();
+}
 
 /**
  * ihost_core_adapter.buildCanvasDataModel — the bound project's canvas model, PARTIAL-TOLERANT: the core

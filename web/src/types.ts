@@ -500,6 +500,9 @@ export interface ReviewRequest {
   requestedAt: string;
   status: ReviewStatus;
   decision?: ReviewDecision;
+  /** The branch the checkout had when the request was made. */
+  branch?: string;
+  commit?: string;
 }
 
 /** What a human command run from the dev page printed. */

@@ -14,14 +14,27 @@ methods:
         targetComponent: files_adapter
         targetMethod: watchTree
       - stepNumber: 2
+        description: Find the checkout's HEAD file (none outside a git checkout)
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: headFile
+      - stepNumber: 3
+        description: >-
+          When there is one, watch the folder holding it, not below it: a change of the entry named
+          HEAD is a branch switch, counted as a `tree` change (every other entry there is git's own
+          bookkeeping and is ignored)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchFolder
+      - stepNumber: 4
         description: >-
           On each change, ignore the spec tree's own write lock and other lock files, note whether
           the path is under .local/reviews/, and (re)start a 250 ms timer; when it fires, call
           onChange once with `reviews` when any noted change was a review request and once with
           `tree` when any other was
         type: local
-      - stepNumber: 3
-        description: Return the function that clears the timer and stops the watch
+      - stepNumber: 5
+        description: Return the function that clears the timer and stops both watches
         type: return
         outcome: the stop function
   - name: watchProducers
@@ -48,4 +61,4 @@ methods:
         outcome: the stop function
 status: complete
 createdAt: '2026-11-07T02:40:44.472Z'
-updatedAt: '2026-11-10T00:33:29.338Z'
+updatedAt: '2026-11-10T19:00:33.601Z'

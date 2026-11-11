@@ -11,8 +11,6 @@ import {
   formArgs,
   formOptions,
   formProblem,
-  memberRows,
-  type CanvasSubsystemLike,
   type FamilyActionDef,
   type FamilyActionId,
   type FamilyForm,
@@ -42,7 +40,7 @@ export function FamilyPanel(props: { projectId: string; actions: boolean }) {
     [...channels, 'externals'],
   );
   const network = useAsync<NetworkViewModel>(() => get(`/web/projects/network?projectId=${enc}`), [projectId], channels);
-  const model = useAsync<{ subsystems?: CanvasSubsystemLike[] }>(() => get(`/web/canvas-model?projectId=${enc}`), [projectId], channels);
+  const model = useAsync<MemberRow[]>(() => get(`/web/projects/members?projectId=${enc}`), [projectId], channels);
   const [req, setReq] = useState<Request | null>(null);
   const open = (action: FamilyActionId, preset?: Record<string, string>) => setReq({ action, preset });
   const reloadAll = () => {
@@ -93,7 +91,7 @@ export function FamilyPanel(props: { projectId: string; actions: boolean }) {
         </div>
         <AsyncView state={model}>
           {(m) => {
-            const rows = memberRows(m.subsystems ?? []);
+            const rows = m;
             return rows.length === 0 ? <p className="hint">This project has no members.</p> : <MemberList rows={rows} actions={actions} open={open} />;
           }}
         </AsyncView>

@@ -5,10 +5,13 @@ import { ThemeSections } from '../ThemeControls';
 import type { DevCommandResult, DevReviewDecision, DevStatus, ReviewNote, ReviewRequest, ReviewStatus } from '../types';
 import {
   barState,
+  branchChipText,
   inPlaceScope,
   lockBody,
   movedScope,
   offersLockInPlace,
+  otherBranchLine,
+  branchChangeNotice,
   parseMoved,
   type DevApprovalData,
   type MovedScope,
@@ -67,6 +70,16 @@ export function CockpitProvider(props: { children: ReactNode }) {
     ['reviews'],
   );
   const approval = approvalState.data ?? undefined;
+  const toast = useToast();
+  // A banner when the checkout's branch changes between two reads of the approval state.
+  const lastBranch = useRef<{ seen: boolean; branch?: string }>({ seen: false });
+  useEffect(() => {
+    if (approvalState.data === undefined || approvalState.data === null) return;
+    const branch = approvalState.data.branch;
+    const notice = branchChangeNotice(lastBranch.current, branch);
+    if (notice) toast.ok(notice);
+    lastBranch.current = { seen: true, branch };
+  }, [approvalState.data]);
   const pending = (reviews.data ?? []).filter((r) => r.status === 'pending');
 
   // The spec tree is only needed to place moved specs in a subsystem, i.e. while something moved.
@@ -97,6 +110,10 @@ export function CockpitProvider(props: { children: ReactNode }) {
         <div className="syw-card cockpit-bar" role="status">
           <div className="cockpit-bar-text">
             <strong>{bar.line}</strong>
+            {approval?.branch && <span className="dim"> on {approval.branch}</span>}
+            {bar.action === 'review' && pending[0] && otherBranchLine(pending[0].branch, approval?.branch) && (
+              <span className="dim"> ({otherBranchLine(pending[0].branch, approval?.branch)})</span>
+            )}
             {bar.action === 'review' && pending[0] && <span className="dim"> {pending[0].note}</span>}
             {bar.action !== 'review' && approval?.verdict.text && approval.verdict.drifted && (
               <span className="dim"> {firstLine(approval.verdict.text)}</span>
@@ -158,6 +175,25 @@ export function LockInPlaceButton(props: { viewSubsystem?: string }) {
     <Button size="sm" variant="primary" title={sub ? `Approve ${sub}` : 'Approve the whole design'} onClick={() => openLock(sub)}>
       {sub ? `Lock ${sub}` : 'Lock'}
     </Button>
+  );
+}
+
+/** The dev approval state, for views that show it as a line (the floating bar carries the Lock). */
+export function useApproval(): DevApprovalData | undefined {
+  return useCockpit().approval;
+}
+
+/** The header's branch chip: the checkout's branch (or a detached HEAD's short commit). Absent outside a git checkout. */
+export function BranchChip() {
+  const approval = useCockpit().approval;
+  const text = branchChipText(approval);
+  if (!text) return null;
+  const detached = !approval?.branch;
+  return (
+    <span className="syw-chip badge badge-neutral branch-chip" data-tip={detached ? 'Detached HEAD' : 'Current git branch'} tabIndex={0}>
+      <span aria-hidden="true">⎇</span>
+      <span className="branch-chip-name">{text}</span>
+    </span>
   );
 }
 
@@ -287,11 +323,21 @@ function FindingsList(props: { state: ReturnType<typeof useAsync<Findings>> }) {
             <Badge tone={f.errors.length ? 'bad' : 'ok'}>{f.errors.length} errors</Badge>{' '}
             <Badge tone={f.warnings.length ? 'warn' : 'ok'}>{f.warnings.length} warnings</Badge>
           </p>
-          {[...f.errors, ...f.warnings].slice(0, 30).map((i, n) => (
-            <div key={n} className="review-finding">
-              {i.code ? <code className="subtle">{i.code}</code> : null} {i.specId ? <code>{i.specId}</code> : null} {i.message}
-            </div>
-          ))}
+          {[
+            ...f.errors.map((i) => ({ i, sev: 'error' as const })),
+            ...f.warnings.map((i) => ({ i, sev: 'warn' as const })),
+          ]
+            .slice(0, 30)
+            .map(({ i, sev }, n) => (
+              <div key={n} className="review-finding">
+                <div className="finding-row">
+                  <span className={`syw-chip badge ${sev === 'error' ? 'badge-bad' : 'badge-warn'}`}>{sev}</span>
+                  {i.code ? <code className="syw-chip badge badge-neutral finding-code">{i.code}</code> : null}
+                </div>
+                <div className="finding-msg">{i.message}</div>
+                {i.specId ? <span className="finding-meta">{i.specId}</span> : null}
+              </div>
+            ))}
         </>
       )}
     </AsyncView>
@@ -365,6 +411,11 @@ function ReviewScreen(props: { request: ReviewRequest; onClose: () => void; onDe
         <div className="stack-lg">
           <section className="stack-sm">
             <h4>The agent's note</h4>
+            {otherBranchLine(request.branch, approval?.branch) && (
+              <p className="hint" role="alert">
+                {otherBranchLine(request.branch, approval?.branch)}
+              </p>
+            )}
             <p className="review-note">{request.note}</p>
             <p className="hint">
               Requested {new Date(request.requestedAt).toLocaleString()}
@@ -469,13 +520,16 @@ function CommandRunner(props: { id: 'generate' | 'doctor'; label: string; explai
   }
 
   return (
-    <section className="stack-sm">
-      <div className="list-line">
-        <Button disabled={props.busy !== null} onClick={run}>
-          {props.busy === props.id ? <Spinner inline /> : props.label}
+    <section className="settings-cmd">
+      <div className="settings-cmd-row">
+        <div className="settings-cmd-text">
+          <strong>{props.label}</strong>
+          <span className="hint">{props.explain}</span>
+        </div>
+        <Button size="sm" disabled={props.busy !== null} onClick={run}>
+          {props.busy === props.id ? <Spinner inline /> : 'Run'}
         </Button>
       </div>
-      <p className="hint">{props.explain}</p>
       {result && (
         <>
           <Badge tone={result.ok ? 'ok' : 'bad'}>{result.ok ? 'ok' : 'failed'}</Badge>
@@ -498,21 +552,32 @@ export function SettingsCog() {
   const dev = !!status.data?.devMode;
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // A sticky panel: it stays open while the page is used (so a theme change shows on
-  // the page behind it) and closes only from the cog, its close button or Escape.
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Closes on an outside press (captured, so the canvas cannot swallow it), on Escape, from the close
+  // button, and from the cog (a toggle). The theme flyout is portaled to <body>: a press in it is inside.
   useEffect(() => {
     if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (rootRef.current?.contains(t) || t?.closest?.('.tmenu-panel')) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       setOpen(false);
       triggerRef.current?.focus();
     };
+    document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
   }, [open]);
 
   return (
-    <div className="hmenu">
+    <div className="hmenu" ref={rootRef}>
       <button
         type="button"
         ref={triggerRef}
@@ -541,7 +606,7 @@ export function SettingsCog() {
               ✕
             </button>
           </div>
-          <div className="settings-pop-body stack-lg">
+          <div className="settings-pop-body">
             <ThemeSections />
             {dev && SETTINGS_COMMANDS.map((c) => <CommandRunner key={c.id} {...c} busy={busy} setBusy={setBusy} />)}
           </div>

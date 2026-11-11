@@ -1,5 +1,6 @@
 import { files as fileIo } from '../io/index.js';
 import * as path from 'path';
+import * as os from 'os';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as yaml from 'js-yaml';
 
@@ -869,4 +870,14 @@ export function replaceFile(file: string, text: string | Uint8Array, mode?: numb
     try { fileIo.removeFileIfPresent(tmp); } catch { /* nothing left to clean */ }
     throw e;
   }
+}
+
+/** wairon user cache folder: WAIRON_CACHE_DIR, else the platform cache folder under `wairon`. Never inside a project. */
+export function userCacheDir(): string {
+  const setting = process.env.WAIRON_CACHE_DIR ?? "";
+  if (setting !== "") return path.resolve(setting);
+  const platformBase = process.platform === "win32"
+    ? process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local")
+    : process.platform === "darwin" ? path.join(os.homedir(), "Library", "Caches") : process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), ".cache");
+  return path.join(platformBase, "wairon");
 }

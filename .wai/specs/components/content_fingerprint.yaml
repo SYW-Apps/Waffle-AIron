@@ -1,0 +1,18 @@
+id: content_fingerprint
+name: Content Fingerprint
+description: >-
+  Fingerprints a list of files by their CONTENT: one line per file (its path relative to the root
+  and the sha256 of its bytes, or that it is missing or outside the root), folded in a stable order.
+  A file's digest is taken again only when its size or modification time changed since the last time
+  this process read it, so a fingerprint of unchanged files costs a stat walk. Unlike a fingerprint
+  of modification times, it is equal for equal content: a branch switched away and back, or a file
+  rewritten with the same bytes, fingerprints as before.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - file_digest_cache
+  - files_adapter
+status: complete
+createdAt: '2026-11-10T19:02:07.833Z'
+updatedAt: '2026-11-10T19:02:09.269Z'
