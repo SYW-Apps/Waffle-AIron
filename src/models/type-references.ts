@@ -204,6 +204,25 @@ function normalizePart(part: string): string {
 }
 
 /**
+ * A reference's or id's `::`/`.` segments, each normalized, empty ones left
+ * out. Validation compares every written reference with every type, so the
+ * same strings are split again and again; the parts are remembered per string
+ * (a bounded cache, cleared when full). The returned array is shared: never
+ * change it.
+ */
+const refParts = new Map<string, readonly string[]>();
+const REF_PARTS_MAX = 100_000;
+function refPartsOf(text: string): readonly string[] {
+  let parts = refParts.get(text);
+  if (parts === undefined) {
+    parts = text.split(/::|\./).map(normalizePart).filter(Boolean);
+    if (refParts.size >= REF_PARTS_MAX) refParts.clear();
+    refParts.set(text, parts);
+  }
+  return parts;
+}
+
+/**
  * reference_resolution.nameKey — the one key a bare name is compared by,
  * locally and through imports alike: lower-cased, every character outside
  * [a-z0-9] removed, so `SharedError`, `shared-error` and `shared_error` are
@@ -220,8 +239,8 @@ export function nameKey(name: string): string {
  * punctuation.
  */
 export function matchTypeRef(ref: string, typeId: string): boolean {
-  const refParts = ref.split(/::|\./).map(normalizePart).filter(Boolean);
-  const typeParts = typeId.split(/::|\./).map(normalizePart).filter(Boolean);
+  const refParts = refPartsOf(ref);
+  const typeParts = refPartsOf(typeId);
 
   if (refParts.length === 0 || typeParts.length === 0) return false;
   if (refParts.length > typeParts.length) return false;

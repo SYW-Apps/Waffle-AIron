@@ -1,0 +1,22 @@
+kind: value-object
+id: git_head
+name: GitHead
+description: >-
+  What a checkout has checked out, read from its git metadata without running git: the branch HEAD
+  names and the commit it points at. A detached HEAD has a commit and no branch; a branch with no
+  commit yet has a branch and no commit.
+fields:
+  - name: branch
+    type: string
+    description: The branch HEAD names (`feat/x`, the part after refs/heads/); absent on a detached HEAD
+    optional: true
+  - name: commit
+    type: string
+    description: >-
+      The full commit id HEAD resolves to (from the loose ref or packed-refs); absent when the
+      branch has no commit yet or the ref cannot be read
+    optional: true
+methods: []
+sourcePath: src/io/git-head.ts
+createdAt: '2026-11-10T18:57:00.203Z'
+updatedAt: '2026-11-10T18:57:01.543Z'

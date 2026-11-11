@@ -1,0 +1,35 @@
+id: validation_result_file_impl
+name: Validation Result File Implementation
+description: >-
+  src/core/validation-memo.ts: one JSON file per project root (named by the sha256 of the resolved
+  root) in the user's cache folder, holding up to eight entries, newest first, each with the release
+  that wrote it.
+contract: ivalidation_result_file
+sourcePath: src/core/validation-memo.ts
+simPath: tests/core/validation-memo.test.ts
+methods:
+  - name: get
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the root's file and answer the entry whose release is this wairon's and whose options key
+      and both fingerprints equal the ones asked for; a missing, unreadable or malformed file, or no
+      such entry, answers none.
+    calls:
+      - files_adapter.readText
+    symbol: fileGet
+  - name: put
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the root's file (none is an empty list), drop entries of another release and any entry
+      with the same options key and fingerprints, put the new entry first, keep eight, and write the
+      file (its folder created). Any failure is ignored: the next process validates.
+    calls:
+      - files_adapter.readText
+      - files_adapter.ensureDir
+      - files_adapter.writeText
+    symbol: filePut
+status: complete
+createdAt: '2026-11-10T19:03:38.593Z'
+updatedAt: '2026-11-10T22:29:54.903Z'

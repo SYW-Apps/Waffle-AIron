@@ -61,6 +61,7 @@ import { projectIdentity, requiredPolicies, type PackRequirement, type PackSelec
 import * as packImpact from './pack-impact.js';
 // spec_search and reference_finder: the lookups the portal forwards searchSpecs and findReferences to.
 import * as specSearch from './lookup/spec-search.js';
+import * as codeModelLoader from './lookup/code-model-loader.js';
 import * as referenceFinder from './lookup/reference-finder.js';
 import type { LookupSearchResult, LookupReferencesResult } from '../models/lookup.js';
 import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
@@ -598,7 +599,8 @@ export function validateProjectFresh(
   options?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
 ): ValidationResult {
-  const run = runOwnersGate(options, projectType);
+  // Step 25: the code model, shared with lookups through the code model loader.
+  const run = runOwnersGate(options, projectType, false, (impls, types, root, roots, exclude) => codeModelLoader.modelFor(impls, types, root, [...roots], [...exclude]).model);
   // Step 53: how the code was read, one line beside the hint.
   const unrouted = run.unroutedPortals ?? [];
   return { ...run.result, validatorVersion: WAIRON_VERSION, codeReading: codeReadingOf(run.codeModel, unrouted), ...codeCompactOf(run.codeModel, unrouted) };
@@ -756,10 +758,24 @@ interface OwnersGateRun {
  * the as-complete run also needs the code model the rules read, to say how
  * exactly the code half was analyzed.
  */
+/**
+ * Where the gate takes its code model from. The gate's own callers name it:
+ * the project and as-complete gates share the code model loader's cached
+ * model; every other caller builds the model fresh.
+ */
+type CodeModelSource = (
+  implementations: ImplementationSpec[],
+  types: TypeSpec[],
+  projectRoot: string,
+  sourceRoots: readonly string[],
+  exclude: readonly string[],
+) => CodeModel;
+
 function runOwnersGate(
   rulesOrOptions?: RulesConfig | ValidationOptions,
   projectType: string = 'backend',
   reachOnly = false,
+  modelSource: CodeModelSource = buildCodeModel,
 ): OwnersGateRun {
   let rules = rulesOrOptions as RulesConfig | undefined;
   let scopeSubsystem: string | undefined;
@@ -831,7 +847,7 @@ function runOwnersGate(
   // A reach-only run judges no code: it reads no source file.
   const codeModel = reachOnly
     ? buildCodeModel([], [], getProjectRoot(), [], [])
-    : buildCodeModel(implementations, types, getProjectRoot(), conformance?.sourceRoots ?? [], conformance?.exclude ?? []);
+    : modelSource(implementations, types, getProjectRoot(), conformance?.sourceRoots ?? [], conformance?.exclude ?? []);
 
   // As-complete mode: flip statuses on the freshly loaded instances — these
   // are the workspace cache's own objects, loaded after the cache clear above,
@@ -1371,7 +1387,8 @@ export function validateAsComplete(options?: ValidationOptions): ValidationResul
 
 /** spec_validator.validateAsComplete — the as-complete gate, always run. */
 export function validateAsCompleteFresh(options?: ValidationOptions): ValidationResult {
-  const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: true });
+  // Step 12: the code model, shared with lookups through the code model loader.
+  const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: true }, 'backend', false, (impls, types, root, roots, exclude) => codeModelLoader.modelFor(impls, types, root, [...roots], [...exclude]).model);
   // Steps 15-16: the code half summarized apart, with the analyzer that took
   // it — never removed from the issues; the lock partitions with designOnly.
   const sequence = ruleSequence();

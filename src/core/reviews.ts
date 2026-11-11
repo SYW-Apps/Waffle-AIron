@@ -3,6 +3,8 @@ import { computeOwnDesignStateId } from './statehash.js';
 import { approvalRecord, approvalVerdict } from './approval.js';
 import { localApprover } from './approver.js';
 import { ReviewStore } from './review-store.js';
+import { gitHead } from '../io/index.js';
+import { getProjectRoot } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Reviews (sdd_core): the review handshake between an agent and the human.
@@ -41,6 +43,17 @@ export interface ReviewRequest {
   requestedAt: string;
   status: ReviewStatus;
   decision?: ReviewDecision;
+  /** The branch the checkout had checked out when the request was made. */
+  branch?: string;
+  /** The commit HEAD pointed at when the request was made. */
+  commit?: string;
+}
+
+/** A pending lock request made on another branch than the checkout has now. */
+export interface ReviewBranchConflict {
+  requestId: string;
+  requestedOn: string;
+  checkedOut: string | null;
 }
 
 /** What an agent gets back when it asks for a review: the request, and where the human will see it. */
@@ -62,6 +75,7 @@ export class ReviewOrchestrator {
     if ((kind !== 'review' && kind !== 'lock') || (kind === 'review' && subsystem)) {
       throw new Error('invalid review request: the kind is `review` or `lock`, and only a lock request names a subsystem');
     }
+    const head = gitHead.head(getProjectRoot());
     const request: ReviewRequest = {
       id: crypto.randomUUID().slice(0, 8),
       kind,
@@ -70,6 +84,8 @@ export class ReviewOrchestrator {
       designId: designIdOf(),
       requestedAt: new Date().toISOString(),
       status: 'pending',
+      ...(head?.branch ? { branch: head.branch } : {}),
+      ...(head?.commit ? { commit: head.commit } : {}),
     };
     this.store.save(request);
     const shownAt = this.store.devServer();
@@ -82,6 +98,7 @@ export class ReviewOrchestrator {
     if (!request) throw new Error(`unknown review request: ${id}`);
     if (request.status !== 'pending') return request;
     const same = designIdOf() === request.designId;
+    if (this.onOtherBranch(request, same)) return request;
     const record = approvalRecord();
     if (request.kind === 'lock' && same && record !== null && !approvalVerdict().drifted) {
       request.status = 'locked';
@@ -100,6 +117,12 @@ export class ReviewOrchestrator {
     return request;
   }
 
+  /** Made on another branch than the checkout has, with another design than the checkout holds: it says nothing about the request. */
+  private onOtherBranch(request: ReviewRequest, sameDesign: boolean): boolean {
+    if (!request.branch || sameDesign) return false;
+    return gitHead.head(getProjectRoot())?.branch !== request.branch;
+  }
+
   /** The requests still pending after being brought up to date, newest first. */
   pending(): ReviewRequest[] {
     return this.store.list()
@@ -115,6 +138,10 @@ export class ReviewOrchestrator {
     const lockAnswered = request.kind === 'lock' && request.status === 'locked' && outcome === 'locked';
     if (request.status !== 'pending' && !lockAnswered) {
       throw new Error(`the request cannot take this decision: it is ${request.status}`);
+    }
+    if (request.status === 'pending' && this.onOtherBranch(request, designIdOf() === request.designId)) {
+      const now = gitHead.head(getProjectRoot())?.branch;
+      throw new Error(`the request cannot take this decision: it was made on branch ${request.branch}, and the checkout is on ${now ?? 'a detached HEAD'}; switch back to ${request.branch} to decide it`);
     }
     const takes = request.kind === 'lock' ? ['locked', 'changes_requested'] : ['approved', 'changes_requested'];
     if (!takes.includes(outcome)) {
@@ -142,6 +169,16 @@ export class ReviewOrchestrator {
     return request;
   }
 
+  /** The newest pending lock request made on another branch (that still exists) with another design than the checkout has. */
+  branchConflict(): ReviewBranchConflict | undefined {
+    const root = getProjectRoot();
+    const now = gitHead.head(root)?.branch;
+    const design = designIdOf();
+    const hit = this.store.list().find((r) =>
+      r.status === 'pending' && r.kind === 'lock' && r.branch && r.branch !== now && r.designId !== design && gitHead.hasBranch(root, r.branch));
+    return hit ? { requestId: hit.id, requestedOn: hit.branch as string, checkedOut: now ?? null } : undefined;
+  }
+
   /** Record where a starting dev server serves this project. */
   announceDevServer(url: string, pid: number): void {
     this.store.announceDevServer(url, pid);
@@ -162,3 +199,4 @@ export const decideReview = (id: string, outcome: ReviewStatus, comment?: string
 export const withdrawReview = (id: string): ReviewRequest => new ReviewOrchestrator().withdraw(id);
 export const announceDevServer = (url: string, pid: number): void => new ReviewOrchestrator().announceDevServer(url, pid);
 export const withdrawDevServer = (pid: number): void => new ReviewOrchestrator().withdrawDevServer(pid);
+export const reviewBranchConflict = (): ReviewBranchConflict | undefined => new ReviewOrchestrator().branchConflict();

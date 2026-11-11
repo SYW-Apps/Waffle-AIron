@@ -110,6 +110,8 @@ import {
   buildGraphModel,
   renderDiagram as renderArchitectureDiagram,
   renderTypeDiagrams as renderArchitectureTypeDiagrams,
+  familyMembers as architectureFamilyMembers,
+  type FamilyMember,
   type DiagramFormat,
   type TypeDiagram,
 } from './diagram.js';
@@ -9194,6 +9196,14 @@ export function renderDiagram(format: DiagramFormat, relations?: ProjectRelation
  */
 export function renderTypeDiagrams(): TypeDiagram[] {
   return renderArchitectureTypeDiagrams();
+}
+
+/**
+ * spec_tree_portal.familyMembers — the members the bound project declares, from the family graph
+ * alone (architecture_diagrams.familyMembers); no validation runs.
+ */
+export function familyMembers(): FamilyMember[] {
+  return architectureFamilyMembers();
 }
 
 /**

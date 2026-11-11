@@ -1,0 +1,24 @@
+kind: value-object
+id: review_branch_conflict
+name: ReviewBranchConflict
+description: >-
+  A pending lock request made on another branch than the one the checkout has now: what a lock of
+  this checkout would approve is not the design the agent asked to have approved.
+subsystem: sdd_core
+fields:
+  - name: requestId
+    type: string
+    description: The pending lock request's id
+    optional: false
+  - name: requestedOn
+    type: string
+    description: The branch the request was made on
+    optional: false
+  - name: checkedOut
+    type: string?
+    description: The branch the checkout has now; none on a detached HEAD
+    optional: false
+methods: []
+sourcePath: src/core/reviews.ts
+createdAt: '2026-11-10T18:57:30.677Z'
+updatedAt: '2026-11-10T18:57:32.029Z'

@@ -857,9 +857,12 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
   // and refresh displayName/email from the verified claims on every re-login.
   const bindings = user.roleBindings ?? [];
   const hasSsoAdmin = bindings.some((b) => b.roleId === SSO_ADMIN_ROLE_ID);
+  // The stored subject is what every token minted for this user carries and
+  // what the header, audit and approvals name: it is refreshed with the record,
+  // so a user first seen without a name (or before names were read) shows one.
   const identityDrifted =
-    (subject.displayName !== undefined && subject.displayName !== user.displayName) ||
-    (subject.email !== undefined && subject.email !== user.email);
+    (subject.displayName !== undefined && (subject.displayName !== user.displayName || subject.displayName !== user.subject.displayName)) ||
+    (subject.email !== undefined && (subject.email !== user.email || subject.email !== user.subject.email));
   if (hasSsoAdmin !== inAdminGroup || identityDrifted) {
     user = userRepo.upsertUser(cfg.dataDir, {
       ...user,
@@ -870,6 +873,11 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
         : bindings.filter((b) => b.roleId !== SSO_ADMIN_ROLE_ID),
       ...(subject.displayName ? { displayName: subject.displayName } : {}),
       ...(subject.email ? { email: subject.email } : {}),
+      subject: {
+        ...user.subject,
+        ...(subject.displayName ? { displayName: subject.displayName } : {}),
+        ...(subject.email ? { email: subject.email } : {}),
+      },
     });
   }
 

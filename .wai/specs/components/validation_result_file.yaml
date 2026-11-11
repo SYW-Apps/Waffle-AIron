@@ -1,0 +1,27 @@
+id: validation_result_file
+name: Validation Result File
+description: >-
+  The last validation results of a project root, on disk, so a new process (a `wairon lock` right
+  after an agent validated over MCP, a `wairon dev` started later, a repeated `wairon validate`)
+  answers a tree nothing changed in at once. One file per project root in the user's cache folder
+  (WAIRON_CACHE_DIR, else the platform's cache folder under `wairon`), never inside the project, so
+  it is never committed and never part of what it fingerprints. It holds the last few entries per
+  root, each keyed by the run's options, both content fingerprints and the wairon release that ran
+  it. Evictable and loss-safe: a missing, unreadable or foreign file is no entry and costs one
+  validation run; a write that fails is ignored.
+subsystem: sdd_validator
+componentType: Store
+owns: []
+dependsOn:
+  - files_adapter
+durability: cache
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Simple keyed state: the last few results per project root, read and replaced only by their
+        key; its one writer and reader is the workflow validation_memo. No lookup beyond the key
+        needs a Registry or Index.
+status: complete
+createdAt: '2026-11-10T19:03:22.597Z'
+updatedAt: '2026-11-10T19:03:28.265Z'

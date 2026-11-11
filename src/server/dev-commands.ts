@@ -7,6 +7,7 @@ import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js
 import type { ApprovalVerdict } from '../core/approval.js';
 import { describeApprover } from '../models/lock.js';
 import type { HostConfig } from './types.js';
+import { gitHead } from '../io/index.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { declaredExternals, declaredMembers } from '../models/project.js';
@@ -62,6 +63,8 @@ export interface DevApproval {
   approvedBy?: string;
   /** What the lock says about the tree now: drifted, the moved specs, the line to show. */
   verdict: ApprovalVerdict;
+  /** The branch the served checkout has now; absent outside a git checkout or on a detached HEAD. */
+  branch?: string;
 }
 
 /** The id of the one project the development server serves. */
@@ -160,8 +163,11 @@ export function approval(cfg: HostConfig, sessionId: string): DevApproval {
     // Step 6: what the lock says about the tree now.
     const verdict = hostCore.approvalVerdict();
     // Step 7.
-    if (!record) return { approved: false, verdict };
-    const state: DevApproval = { approved: true, verdict };
+    // Step 7: the branch the served checkout has now.
+    const branch = gitHead.head(root)?.branch;
+    const branchOf = branch ? { branch } : {};
+    if (!record) return { approved: false, verdict, ...branchOf };
+    const state: DevApproval = { approved: true, verdict, ...branchOf };
     if (typeof record.lockedAt === 'string' && record.lockedAt !== '') state.approvedAt = record.lockedAt;
     if (record.lockedBy && record.lockedBy.id && record.lockedBy.id !== 'unknown') state.approvedBy = describeApprover(record.lockedBy);
     return state;

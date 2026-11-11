@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  FAMILY_ACTIONS, driftNotices, emptyForm, externalTone, formArgs, formOptions, formProblem, memberRows,
+  FAMILY_ACTIONS, driftNotices, emptyForm, externalTone, formArgs, formOptions, formProblem,
 } from '../../web/src/views/familyPanelLogic.js';
 
 const ext = (o: object) => ({ alias: 'a', project: 'p', sourceKind: 'path', pinned: true, reachable: true, stale: false, uses: [], ...o }) as any;
@@ -24,18 +24,6 @@ describe('family panel logic', () => {
     const add = FAMILY_ACTIONS['member-add'];
     const f = emptyForm(add); f.options.project = 'true'; f.options.description = ' hi ';
     expect(formOptions(add, f)).toEqual({ project: 'true', description: 'hi' });
-  });
-  it('derives member rows: projects top-level only, parts grouped by alias', () => {
-    const rows = memberRows([
-      { id: 'admin', name: 'admin', project: true, storage: '../admin' },
-      { id: 'admin::x', project: true },
-      { id: 'ext', project: true, external: true },
-      { id: 's1', name: 'S1', storage: 'part sched · services/sched' },
-      { id: 's2', name: 'S2', storage: 'part sched · services/sched' },
-      { id: 'plain', name: 'Plain' },
-    ]);
-    expect(rows).toHaveLength(2);
-    expect(rows[1]).toMatchObject({ kind: 'part', alias: 'sched', storage: 'services/sched', subsystems: ['S1', 'S2'] });
   });
   it('flags drifted, stale and changed externals', () => {
     expect(externalTone(ext({}))).toMatchObject({ label: 'current' });

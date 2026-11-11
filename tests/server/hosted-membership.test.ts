@@ -607,6 +607,23 @@ describe('the UI routes', () => {
     expect((await web(sessionFor('u-out'), '/web/projects/externals?projectId=docs')).status).toBe(403);
   });
 
+  it('GET /web/projects/members: the declared members of an authorized project; another project is Forbidden', async () => {
+    seedPeople();
+    const answer = (await web(sessionFor('u-view'), '/web/projects/members?projectId=platform')).body as { alias: string; kind: string; storage: string; subsystems: string[] }[];
+    expect(Array.isArray(answer)).toBe(true);
+    expect(answer.map((m) => m.alias)).toEqual(['billing', 'payments', 'docs']);
+    expect(answer[0]).toMatchObject({ kind: 'project', storage: 'contained', subsystems: [] });
+    user('u-out');
+    expect((await web(sessionFor('u-out'), '/web/projects/members?projectId=platform')).status).toBe(403);
+  });
+
+  it('GET /web/projects/members: a project that declares no members answers 200 with an empty list', async () => {
+    seedPeople();
+    const res = await web(sessionFor('u-view'), '/web/projects/members?projectId=docs');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
   it('GET /web/projects/network: the network view model of an authorized project; another project is Forbidden', async () => {
     seedPeople();
     const answer = (await web(sessionFor('u-view'), '/web/projects/network?projectId=docs')).body as { networks: unknown[]; workloads: unknown[]; edges: unknown[] };

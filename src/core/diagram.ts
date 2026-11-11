@@ -1,3 +1,4 @@
+import * as path from 'path';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -7,6 +8,7 @@ import {
   loadTypeSpecs,
   loadGroupSpecs,
   groupChain,
+  graph,
 } from './specs.js';
 import {
   ComponentSpec,
@@ -15,6 +17,7 @@ import {
   ImplementationSpec,
   PATTERN_TYPES,
   isOwnComponentEntry,
+  declaredMembers,
   fieldTypeRefs,
   methodTypeRefs,
   signatureTypeRefs,
@@ -1016,4 +1019,57 @@ function typeClassDiagram(
     lines.push(`  ${ids.idFor(r.from)} --> ${ids.idFor(r.to)} : ${classText(r.via)}`);
   }
   return lines.join('\n');
+}
+
+/** How a member's storage reads on its badge: contained, its sibling path, or git and its short commit. */
+function storageBadge(storage: string, directory: string | undefined, commit: string | undefined): string {
+  if (storage === 'git') return `git ${commit ? commit.slice(0, 7) : ''}`.trim();
+  if (storage === 'hosted') return 'hosted';
+  if (storage === 'unresolved') return 'unresolved';
+  if (storage === 'path') return directory ? `../${directory.split(/[\\/]/).pop()}` : 'sibling';
+  return 'contained';
+}
+
+/** One member the project declares, as the family panel lists it. */
+export interface FamilyMember {
+  /** The member's key in the project's `members`. */
+  alias: string;
+  /** `part` or `project`. */
+  kind: string;
+  /** Where it is stored, as the canvas badge reads: `contained`, a sibling path, `git <short commit>`, `hosted` or `unresolved`. */
+  storage: string;
+  /** The declaration's description. */
+  description?: string;
+  /** A part's subsystems (empty for a member project). */
+  subsystems: string[];
+}
+
+/**
+ * architecture_diagrams.familyMembers — the members the bound project declares, from the family graph
+ * alone (no validation): one row per part, then one per member project, in declaration order.
+ */
+export function familyMembers(): FamilyMember[] {
+  const family = graph();
+  const root = family.nodes.find((n) => n.namespace === '');
+  const declared = new Map(declaredMembers(projectConfigRepository.load() ?? {}).map((d) => [d.alias, d.description]));
+  const described = (alias: string, fallback?: string): { description?: string } => {
+    const d = declared.get(alias) ?? fallback;
+    return d ? { description: d } : {};
+  };
+  const rows: FamilyMember[] = [];
+  for (const part of root?.parts ?? []) {
+    rows.push({ alias: part.alias, kind: 'part', storage: storageBadge(part.storage, part.directory, part.commit), ...described(part.alias), subsystems: [...part.subsystems] });
+  }
+  const top = root?.directory;
+  const sibling = (dir: string): boolean => top !== undefined && path.relative(top, dir).startsWith('..');
+  const seen = new Set<string>();
+  for (const n of family.nodes.filter((x) => x.namespace !== '')) {
+    const alias = n.mountAlias ?? n.namespace;
+    seen.add(alias);
+    rows.push({ alias, kind: 'project', storage: sibling(n.directory) ? storageBadge('path', n.directory, undefined) : 'contained', ...described(alias, n.memberDescription), subsystems: [] });
+  }
+  for (const e of (root?.externals ?? []).filter((x) => x.role === 'member' && !seen.has(x.alias))) {
+    rows.push({ alias: e.alias, kind: 'project', storage: storageBadge(e.sourceKind === 'family' ? 'contained' : e.sourceKind, e.directory, e.commit), ...described(e.alias), subsystems: [] });
+  }
+  return rows;
 }

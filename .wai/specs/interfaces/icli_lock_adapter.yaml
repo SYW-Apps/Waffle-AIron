@@ -156,13 +156,20 @@ methods:
   - name: assertApprovable
     description: >-
       Refuse, writing nothing, what no lock may approve: a project requiring approved members with a
-      member project not approved, an external never pinned, or a use its pin does not record.
-    signature: 'assertApprovable(members: list<ProjectApproval>): void'
+      member project not approved, an external never pinned, a use its pin does not record, or,
+      unless forced, a pending lock request made on another branch than the checkout has now.
+    signature: 'assertApprovable(members: list<ProjectApproval>, force?: bool): void'
     returns: void
     params:
       - name: members
         type: list<ProjectApproval>
         description: The direct members' approval entries
+      - name: force
+        type: bool
+        description: >-
+          `wairon lock --force`: approve this checkout although a pending lock request was made on
+          another branch
+        optional: true
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-23T22:13:10.898Z'
+updatedAt: '2026-11-10T19:07:41.270Z'

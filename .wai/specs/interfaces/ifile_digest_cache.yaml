@@ -1,0 +1,34 @@
+id: ifile_digest_cache
+name: File Digest Cache Interface
+description: >-
+  Keyed by absolute path: one digest each, replaced whole. Loss-safe: an absent entry only costs its
+  reader one read of the file.
+component: file_digest_cache
+methods:
+  - name: get
+    description: The digest held for this file, or none.
+    signature: 'get(file: string): file_digest?'
+    returns: file_digest?
+    params:
+      - name: file
+        type: string
+        description: The file's absolute path
+    effect: read
+  - name: put
+    description: >-
+      Hold this digest for the file, replacing any earlier one; past the bound the cache is cleared
+      first.
+    signature: 'put(file: string, digest: file_digest): void'
+    returns: void
+    params:
+      - name: file
+        type: string
+        description: The file's absolute path
+      - name: digest
+        type: file_digest
+    guarantees:
+      - idempotent
+    effect: write
+status: complete
+createdAt: '2026-11-10T19:01:53.229Z'
+updatedAt: '2026-11-10T19:01:57.567Z'

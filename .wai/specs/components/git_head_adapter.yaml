@@ -1,0 +1,16 @@
+id: git_head_adapter
+name: Git Head Adapter
+description: >-
+  Reads which branch and commit a checkout has checked out, straight from its git metadata: the
+  `.git` folder, or the `.git` file a worktree or submodule holds (`gitdir: <path>`), then HEAD,
+  then the ref it names (a loose ref file, else packed-refs). Runs no git process, so a page view or
+  a watcher can ask on every change. Answers nothing for a folder that is no git checkout, and never
+  fails: unreadable metadata is no answer. Published as shared, like the other generic I/O.
+subsystem: sdd_io
+componentType: Adapter
+owns: []
+dependsOn:
+  - files_adapter
+status: complete
+createdAt: '2026-11-10T18:57:04.602Z'
+updatedAt: '2026-11-10T18:57:06.058Z'

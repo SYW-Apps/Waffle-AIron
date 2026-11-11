@@ -578,6 +578,14 @@ methods:
       - name: systemName
         type: string
         description: The system the index is titled after
+  - name: familyMembers
+    description: >-
+      The members the bound project declares, as the family panel lists them
+      (architecture_diagrams.familyMembers); no validation runs.
+    signature: 'familyMembers(): list<family_member>'
+    returns: list<family_member>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-29T09:36:52.807Z'
+updatedAt: '2026-11-10T19:05:33.792Z'

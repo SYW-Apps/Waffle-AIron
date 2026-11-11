@@ -1,14 +1,18 @@
 id: validation_memo
 name: Validation Memo
 description: >-
-  Answers the owner's gate, and the as-complete gate the dev page and the lock read, from the last
-  run of that gate with the same options when nothing it reads has changed: the project's .wai/
-  files, each declared member's .wai/ files (the gate reads their export tables) and the source
-  files the gate's code model reads, compared by path, size and modification time. Otherwise runs
-  the gate and remembers the result, each gate under its own key. A full validation of a large tree
-  takes tens of seconds; a page view, a live refresh or an agent's repeated sdd_validate_tree then
-  costs a fingerprint walk instead. The specs are always scanned first, so what the loader reports
-  is this tree's.
+  Answers the owner's gate, and the as-complete gate the dev page and the lock read, from an earlier
+  run of that gate with the same options when what it reads has the same content: the project's
+  .wai/ files (its local-state folder .wai/.local left out, so a review request or the dev server's
+  address changes nothing), each declared member's .wai/ files (the gate reads their export tables),
+  and the source files the gate's code model reads with the implementations' claims. It looks in
+  this process's memory first, then in the result file a process before it left on disk, and
+  otherwise runs the gate and remembers the result in both, each gate under its own key.
+  Fingerprints are of content, not modification times, so a branch switched away and back, or a new
+  process on an unchanged tree, is answered without a run. A full validation of a large tree takes
+  tens of seconds; a page view, a live refresh, an agent's repeated sdd_validate_tree or a lock
+  right after one then costs a fingerprint walk instead. The specs are always scanned first, so what
+  the loader reports is this tree's.
 subsystem: sdd_validator
 componentType: Orchestrator
 owns: []
@@ -16,8 +20,10 @@ dependsOn:
   - validation_memo_cache
   - spec_validator
   - validator_core_adapter
-  - source_analysis_adapter
   - files_adapter
+  - content_fingerprint
+  - code_model_loader
+  - validation_result_file
 status: complete
 createdAt: '2026-11-07T15:06:17.840Z'
-updatedAt: '2026-11-08T19:56:18.980Z'
+updatedAt: '2026-11-10T19:04:04.872Z'

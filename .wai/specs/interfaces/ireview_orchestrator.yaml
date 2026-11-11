@@ -6,8 +6,9 @@ methods:
   - name: request
     description: >-
       Record a review request (`review`, or `lock` for approval, optionally of one subsystem) with
-      the agent's note, against the design identity as it stands. Answers the request and, when a
-      dev server announces itself for this project, its URL.
+      the agent's note, against the design identity as it stands and the branch and commit the
+      checkout has. Answers the request and, when a dev server announces itself for this project,
+      its URL.
     signature: 'request(kind: string, note: string, subsystem?: string): ReviewReceipt'
     returns: ReviewReceipt
     params:
@@ -24,9 +25,11 @@ methods:
     effect: write
   - name: status
     description: >-
-      One request, brought up to date: a pending lock request whose design is now approved by a lock
-      is `locked` (decided by the lock record's approver); a pending request whose design changed
-      since is `superseded`. Unknown id throws.
+      One request, brought up to date: a pending request made on another branch than the checkout
+      has now stays pending as it is (the checkout switched away; nothing about its design is known
+      here); otherwise a pending lock request whose design is now approved by a lock is `locked`
+      (decided by the lock record's approver), and a pending request whose design changed since is
+      `superseded`. Unknown id throws.
     signature: 'status(id: string): ReviewRequest'
     returns: ReviewRequest
     params:
@@ -46,7 +49,8 @@ methods:
     description: >-
       The human's answer to a pending request: `approved` (a review request), `changes_requested`
       with a comment and per-spec notes, or `locked` after the caller's lock succeeded. Decided by
-      this machine's git identity. A request no longer pending is refused, naming its status.
+      this machine's git identity. A request no longer pending is refused, naming its status; a
+      request made on another branch than the checkout has now is refused, naming both branches.
     signature: >-
       decide(id: string, outcome: ReviewStatus, comment?: string, notes?: list<ReviewNote>):
       ReviewRequest
@@ -97,6 +101,15 @@ methods:
         type: int
         description: The process id that announced it
     effect: write
+  - name: branchConflict
+    description: >-
+      The newest pending lock request made on another branch than the checkout has now, or none:
+      what a lock of this checkout would approve is not the design that request asked to have
+      approved.
+    signature: 'branchConflict(): review_branch_conflict?'
+    returns: review_branch_conflict?
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-11-07T02:37:33.473Z'
-updatedAt: '2026-11-07T02:38:25.961Z'
+updatedAt: '2026-11-10T18:57:42.771Z'

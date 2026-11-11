@@ -1,0 +1,22 @@
+id: file_digest_cache
+name: File Digest Cache
+description: >-
+  Each file's content digest by absolute path, with the size and modification time it was taken at.
+  Evictable and loss-safe: a reader trusts an entry only while the file's size and modification time
+  still match it, and a lost entry costs one read of the file. Held in the process only; bounded,
+  cleared when full.
+subsystem: sdd_validator
+componentType: Store
+owns: []
+dependsOn: []
+durability: cache
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Simple keyed state: one digest per absolute path, replaced whole, read only by its key; its
+        one writer and reader is the workflow content_fingerprint. No lookup beyond the key needs a
+        Registry or Index.
+status: complete
+createdAt: '2026-11-10T19:01:42.173Z'
+updatedAt: '2026-11-10T19:01:50.290Z'

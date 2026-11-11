@@ -466,12 +466,12 @@ function resolveSpecRef(
 function IssueSpecChip(props: { specId: string; nodes: GraphNode[]; onSelectSpec: (sel: { kind: string; id: string }) => void }) {
   const ref = resolveSpecRef(props.specId, props.nodes);
   if (!ref) {
-    return <span className="syw-chip badge badge-neutral finding-chip-unresolved" data-tip={props.specId}>id · {props.specId}</span>;
+    return <span className="finding-meta" data-tip={props.specId}>id · {props.specId}</span>;
   }
   return (
     <button
       type="button"
-      className="syw-chip badge badge-accent finding-chip"
+      className="finding-meta finding-link"
       data-tip={props.specId}
       onClick={() => props.onSelectSpec({ kind: ref.kind, id: ref.id })}
     >
@@ -528,7 +528,7 @@ function ValidationRail(props: {
   // Notices are listed apart and last: reported, never a problem that blocks
   // anything (they never make the tree invalid and never fail --ci).
   const displayedNotices = showingAll ? (v?.notices ?? []) : scopedNotices;
-  const labelClass = { error: 'err', warn: 'badge-warn', notice: 'finding-notice-label' } as const;
+  const labelClass = { error: 'badge-bad', warn: 'badge-warn', notice: 'badge-neutral' } as const;
 
   const Finding = (i: any, kindLabel: 'error' | 'warn' | 'notice', key: string) => {
     const field = CODE_FIELD_MAP[i.code];
@@ -536,8 +536,8 @@ function ValidationRail(props: {
     return (
       <li key={key} className={`finding f-${kindLabel}`}>
         <div className="finding-row">
-          <span className={labelClass[kindLabel]} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>
-          {i.code ? <code className="subtle">{i.code}</code> : null}
+          <span className={`syw-chip badge ${labelClass[kindLabel]}`}>{kindLabel}</span>
+          {i.code ? <code className="syw-chip badge badge-neutral finding-code">{i.code}</code> : null}
         </div>
         <div
           className={scrollable ? 'finding-msg finding-msg-clickable' : 'finding-msg'}
@@ -548,7 +548,7 @@ function ValidationRail(props: {
           {i.message}
         </div>
         {i.specId && (
-          <div className="finding-chip-row">
+          <div className="finding-meta-row">
             <IssueSpecChip specId={i.specId} nodes={props.nodes} onSelectSpec={props.onSelectSpec} />
           </div>
         )}
@@ -1366,7 +1366,7 @@ function ComponentUnitEditor(props: {
 
 // ── Project config (projectType + lock banner) — degrades if the route is absent ─
 
-function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectConfigResp | null>; profiles: AvailableProfile[] }) {
+function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectConfigResp | null>; profiles: AvailableProfile[]; approvalLine?: string | null }) {
   const toast = useToast();
   const cfg = props.config.data;
   const [projectType, setProjectType] = useState(cfg?.projectType ?? 'backend');
@@ -1374,7 +1374,10 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
   if (!cfg) return null; // route not deployed / not readable — hide, keep the rest working
 
-  const locked = !!cfg.locked;
+  // Dev passes the live approval line (null while unknown); hosted has only the config's locked flag.
+  const statusLine = props.approvalLine !== undefined
+    ? props.approvalLine
+    : cfg.locked ? 'This project is approved — saving a spec change puts this spec back in flux until it is approved again.' : null;
 
   // Adoptable options (server-global pack profiles not yet registered in this
   // project) get a label suffix via the shared labelAdoptable() — see its doc
@@ -1400,11 +1403,7 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
   return (
     <div className="syw-card stack-lg">
-      {locked && (
-        <div className="syw-alert syw-alert--warning lock-banner">
-          This project is approved — saving a spec change puts this spec back in flux until it is approved again.
-        </div>
-      )}
+      {statusLine && <div className="hint approval-line">{statusLine}</div>}
       {cfg.profileResolvable === false && (
         <div className="syw-alert syw-alert--warning lock-banner">
           The recorded project type “{cfg.projectType}” doesn't resolve to a loaded profile, so its rules aren't being applied. Pick a profile from the list below to fix this.
@@ -1442,12 +1441,15 @@ export function SpecsTab({
   projectId,
   selection,
   onSelectSpec,
+  approvalLine,
 }: {
   projectId: string;
   /** The open spec, from the URL path (ProjectOps owns the routing). */
   selection: { kind: string; id: string } | null;
   /** Push a new selection into the URL; null clears it. */
   onSelectSpec: (sel: { kind: string; id: string } | null) => void;
+  /** Dev only: the live approval state as one line (null = unknown). Left out on hosted, which falls back to the config's locked flag. */
+  approvalLine?: string | null;
 }) {
   const enc = encodeURIComponent(projectId);
   // Tree-wide validation lives at the tab level so results persist across spec
@@ -1574,7 +1576,7 @@ export function SpecsTab({
 
   return (
     <div className="stack-lg">
-      <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} />
+      <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} approvalLine={approvalLine} />
       <AsyncView state={graph}>
         {(g) => (
           <div className="spec-layout">

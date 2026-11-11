@@ -107,6 +107,22 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .cell-inline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .preview-id { display: inline-block; padding: 6px 10px; background: var(--panel-soft); border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--accent); }
 
+/* Native selects: own the chevron so it has breathing room from the right border (the browser's sits flush). */
+select.syw-select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-dim) 50%), linear-gradient(135deg, var(--ink-dim) 50%, transparent 50%);
+  background-position: calc(100% - 17px) calc(50% + 1px), calc(100% - 12px) calc(50% + 1px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
+}
+
+/* Header branch chip (dev page). */
+.syw-chip.badge.branch-chip { gap: 6px; font-weight: 600; font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; }
+.branch-chip-name { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Chips used as status badges: DS chip, compact, with tone. */
 .syw-chip.badge { min-height: 20px; padding: 0 var(--syw-space-2); font-size: var(--syw-font-xs); font-weight: 700; border-radius: var(--syw-radius-sm); background: transparent; }
 .badge-neutral { color: var(--ink-dim); }
@@ -300,7 +316,9 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .nav-icon { width: 18px; text-align: center; font-size: 16px; flex: 0 0 auto; }
 
 /* The DS header, with the app's height (token above) and a no-shrink guarantee. */
-.topbar { flex: 0 0 auto; }
+/* The header (a DS bar with backdrop-filter, so a stacking context of its own) must sit above the view
+   below it, or its popovers (settings, account) render behind the canvas's z-indexed layers. */
+.topbar { flex: 0 0 auto; position: relative; z-index: 200; }
 .view { flex: 1; min-height: 0; overflow: auto; }
 
 /* ── Local developer shell (`wairon dev`) ─────────────────────────────────────
@@ -387,8 +405,14 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
   padding: 10px 10px 10px 16px;
   border-bottom: 1px solid var(--border);
 }
-.settings-pop-body { padding: 0 0 12px; overflow-y: auto; }
-.settings-pop-body > section { padding: 0 14px; }
+.settings-pop-body { overflow-y: auto; }
+.settings-pop-body > .hmenu-section:last-child { border-bottom: none; }
+/* A dev command (Generate, Doctor --fix): title + one-line explanation on the left, the action aligned right. */
+.settings-cmd { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.settings-cmd:last-child { border-bottom: none; }
+.settings-cmd-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-cmd-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.settings-cmd-text .hint { margin: 0; font-size: 11.5px; line-height: 1.35; }
 .settings-cog .cog { font-size: 16px; line-height: 1; color: var(--ink-dim); }
 .settings-cog:hover .cog, .settings-cog.is-open .cog { color: var(--ink); }
 
@@ -419,11 +443,8 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .tmenu-caret { color: var(--ink-dim); font-size: 10px; transition: transform 0.16s; }
 .tmenu-trigger.is-open .tmenu-caret { transform: rotate(180deg); }
 .syw-menu.tmenu-panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
+  position: fixed;
+  z-index: 320;
   width: auto;
   max-width: none;
   max-height: 320px;
@@ -475,9 +496,12 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .table tbody tr:hover { background: var(--panel-soft); }
 
 /* ── Panels / forms (cards are DS `.syw-card`) ───────────────────────────── */
-.row-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+/* A form row with an action: the action aligns with the INPUT row (below the label), not with the
+   bottom of the field, so helper text under a control never pushes the button away from it. */
+.row-form { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 .row-form .syw-field { flex: 1; min-width: 150px; }
-.row-form-action { display: flex; align-items: flex-end; }
+.row-form .syw-field__label { line-height: 1.4; }
+.row-form-action { display: flex; align-items: center; padding-top: calc(var(--syw-font-sm) * 1.4 + var(--syw-space-2)); }
 .cap-name { min-width: 150px; display: inline-block; }
 .inline-field { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-dim); }
 .inline-field .syw-input, .inline-field .syw-select { width: auto; }
@@ -688,21 +712,23 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .spec-validation-scope { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .spec-validation-counts { display: flex; gap: 6px; flex-wrap: wrap; }
 .spec-validation .finding-list { padding-left: 0; list-style: none; gap: 0; }
-.spec-validation .finding { padding: 6px 0; border-top: 1px solid var(--border-soft); line-height: 1.5; word-break: break-word; }
-.spec-validation .finding:first-child { border-top: none; }
-.finding-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-.finding-msg { color: var(--ink); }
+.spec-validation .finding { padding: 12px 0; border-top: 1px solid var(--border-soft); line-height: 1.5; word-break: break-word; display: flex; flex-direction: column; gap: 6px; }
+.spec-validation .finding:first-child { border-top: none; padding-top: 4px; }
+.spec-validation .finding:last-child { padding-bottom: 4px; }
+/* Header line: severity chip + code chip, equal height, one baseline. */
+.finding-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.finding-row .syw-chip.badge { min-height: 20px; line-height: 1; text-transform: lowercase; }
+.finding-row .finding-code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; font-size: 11px; font-weight: 600; letter-spacing: 0; word-break: break-all; }
+.finding-msg { color: var(--ink); font-size: 13px; line-height: 1.55; }
+.finding-meta-row { display: flex; }
+/* The affected-spec line: quiet meta text; a link when it resolves to a spec. */
+.finding-meta { font: inherit; font-size: 12px; line-height: 1.4; color: var(--ink-dim); background: none; border: none; padding: 0; text-align: left; }
+.finding-link { cursor: pointer; }
+.finding-link:hover { color: var(--accent); text-decoration: underline; }
 /* Only rendered clickable when the issue's code maps to a real field on the
    spec that is currently open in the editor (SpecsEditor CODE_FIELD_MAP). */
 .finding-msg-clickable { cursor: pointer; }
 .finding-msg-clickable:hover { text-decoration: underline dotted; }
-.finding-chip-row { margin-top: 4px; }
-/* The rail's severity label for a notice: dim, so it never reads as a problem. */
-.finding-notice-label { color: var(--ink-dim); }
-/* The affected-spec chip — a DS chip, interactive (a <button>) so it can navigate. */
-.finding-chip { cursor: pointer; font: inherit; border: 1px solid var(--border-strong); }
-.finding-chip:hover { background: var(--hover); }
-.finding-chip-unresolved { cursor: default; }
 
 /* Validation-rail field flags (ui.tsx Field's `highlight` prop) — a subtle
    accent strip, not a new design element. Applies to whatever the Field wraps. */
@@ -828,7 +854,8 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .review-popup-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .review-popup-note { margin: 0; font-size: 13px; max-height: 6.5em; overflow: hidden; }
 .review-note { margin: 0; white-space: pre-wrap; }
-.review-finding { font-size: 12.5px; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.review-finding { padding: 10px 0; border-bottom: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 6px; word-break: break-word; }
+.review-finding:last-child { border-bottom: none; }
 .cmd-output {
   margin: 0; padding: 10px 12px; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word;
   border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-soft);
@@ -845,8 +872,7 @@ code { font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace; 
 .cockpit-bar-text { min-width: 0; font-size: 13px; max-height: 4.5em; overflow: hidden; }
 .cockpit-bar-text .dim { color: var(--ink-dim); }
 .lock-inplace { position: absolute; top: 10px; right: 12px; z-index: 20; }
-.lock-inplace-row { display: flex; justify-content: flex-end; margin-bottom: 8px; }
-.lock-inplace-row:empty, .lock-inplace:empty { display: none; }
+.lock-inplace:empty { display: none; }
 
 /* Theme builder library list (views/ThemeBuilder.tsx). */
 .theme-list { display: flex; flex-direction: column; gap: 4px; }

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { SywSegmented } from '@syw/design-react';
 
 /**
@@ -63,6 +64,10 @@ export function ThemeMenu(props: {
   const pickerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The flyout renders in a portal on <body> (position: fixed from the trigger's rect), so a scrolling or
+  // clipping ancestor (the settings panel body) can never make it scroll or cut it off.
+  const [pos, setPos] = useState<CSSProperties>({});
 
   function close(returnFocus: boolean) {
     setOpen(false);
@@ -72,7 +77,8 @@ export function ThemeMenu(props: {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!pickerRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!pickerRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -86,6 +92,31 @@ export function ThemeMenu(props: {
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = triggerRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const below = window.innerHeight - r.bottom - 12;
+      const above = r.top - 12;
+      const flip = below < 220 && above > below;
+      const room = Math.max(120, flip ? above : below);
+      setPos({
+        left: r.left,
+        width: r.width,
+        maxHeight: Math.min(320, room),
+        ...(flip ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
+      });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
     };
   }, [open]);
 
@@ -142,8 +173,9 @@ export function ThemeMenu(props: {
           <span className="tmenu-caret" aria-hidden="true">▾</span>
         </button>
 
-        {open && (
-          <div className="syw-menu tmenu-panel">
+        {open &&
+          createPortal(
+          <div className="syw-menu tmenu-panel" ref={panelRef} style={pos}>
             <div role="listbox" aria-label="Themes" ref={listRef} onKeyDown={onListKey}>
               {props.options.map((o) => (
                 <button
@@ -179,7 +211,8 @@ export function ThemeMenu(props: {
                 Create custom theme
               </button>
             )}
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
 

@@ -1,4 +1,4 @@
-import { files } from '../io/index.js';
+import { files, gitHead } from '../io/index.js';
 import * as path from 'path';
 
 // ---------------------------------------------------------------------------
@@ -68,10 +68,29 @@ export function watch(root: string, onChange: DevChangeListener): DevStopWatchin
     }, DEV_WATCH_DEBOUNCE_MS);
   });
 
+  // The folder of git's HEAD file: a branch switch rewrites HEAD, and that is a change of the tree.
+  const headFile = gitHead.headFile(root);
+  const stopHead = headFile
+    ? files.watchFolder(path.dirname(headFile), (name) => {
+        if (name !== 'HEAD') return;
+        tree = true;
+        if (timer !== undefined) clearTimeout(timer);
+        timer = setTimeout(() => {
+          timer = undefined;
+          const sendReviews = reviews;
+          reviews = false;
+          tree = false;
+          onChange('tree');
+          if (sendReviews) onChange('reviews');
+        }, DEV_WATCH_DEBOUNCE_MS);
+      })
+    : () => {};
+
   return () => {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
     stopTree();
+    stopHead();
   };
 }
 

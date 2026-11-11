@@ -8,7 +8,7 @@ vi.mock('fs', async (orig) => {
   return { ...wrapped, default: wrapped };
 });
 
-import { buildCodeModel, fingerprintSources } from '../../../src/core/source-analysis.js';
+import { buildCodeModel, sourceFiles } from '../../../src/core/source-analysis.js';
 
 const dirs: string[] = [];
 function project(files: Record<string, string>): string {
@@ -26,52 +26,30 @@ afterEach(() => {
 
 const impl = { id: 'x_impl', name: 'X', contract: 'ix', sourcePath: 'src/x.ts', methods: [] } as never;
 
-describe('fingerprintSources', () => {
-  it('is stable for an unchanged tree and covers the walked roots', () => {
+describe('sourceFiles', () => {
+  it('names the walked roots, deduplicated, and nothing else for no specs', () => {
     const dir = project({ 'src/a.ts': 'export const a = 1;\n', 'src/b.ts': 'export const b = 2;\n' });
-    const one = fingerprintSources([], [], dir, ['src']);
-    expect(fingerprintSources([], [], dir, ['src'])).toBe(one);
-    expect(fingerprintSources([], [], dir, [])).not.toBe(one);
-  });
-
-  it('changes when a file changes size or time, appears or disappears', () => {
-    const dir = project({ 'src/a.ts': 'export const a = 1;\n' });
-    const base = fingerprintSources([], [], dir, ['src']);
-    fs.writeFileSync(path.join(dir, 'src/a.ts'), 'export const a = 12345;\n');
-    const grown = fingerprintSources([], [], dir, ['src']);
-    expect(grown).not.toBe(base);
-    const later = new Date(Date.now() + 60_000);
-    fs.utimesSync(path.join(dir, 'src/a.ts'), later, later);
-    const touched = fingerprintSources([], [], dir, ['src']);
-    expect(touched).not.toBe(grown);
-    fs.writeFileSync(path.join(dir, 'src/c.ts'), 'export const c = 3;\n');
-    const added = fingerprintSources([], [], dir, ['src']);
-    expect(added).not.toBe(touched);
-    fs.rmSync(path.join(dir, 'src/c.ts'));
-    expect(fingerprintSources([], [], dir, ['src'])).toBe(touched);
+    const set = sourceFiles([], [], dir, ['src']);
+    expect([...set.files].sort()).toEqual(['src/a.ts', 'src/b.ts']);
+    expect(set.claimed).toEqual([]);
+    expect(sourceFiles([], [], dir, []).files).toEqual([]);
   });
 
   it('takes the file set buildCodeModel takes, spec-named files included, exclude honoured', () => {
     const dir = project({ 'src/x.ts': 'export const x = 1;\n', 'src/gen/g.ts': 'export const g = 1;\n' });
     const model = buildCodeModel([impl], [], dir, ['src'], ['src/gen']);
     expect(model.files.map(f => f.path).sort()).toEqual(['src/x.ts']);
-    const before = fingerprintSources([impl], [], dir, ['src'], ['src/gen']);
-    fs.writeFileSync(path.join(dir, 'src/gen/g.ts'), 'export const g = 99999;\n');
-    expect(fingerprintSources([impl], [], dir, ['src'], ['src/gen'])).toBe(before);
-    fs.writeFileSync(path.join(dir, 'src/x.ts'), 'export const x = 99999;\n');
-    expect(fingerprintSources([impl], [], dir, ['src'], ['src/gen'])).not.toBe(before);
+    const set = sourceFiles([impl], [], dir, ['src'], ['src/gen']);
+    expect(set.files).toEqual(['src/x.ts']);
+    expect(set.claimed).toEqual(['src/x.ts']);
   });
 
-  it('lets a missing or escaped spec-named file contribute its classification', () => {
+  it('names a missing or escaped spec-named file without touching it', () => {
     const dir = project({});
     const missing = { ...(impl as object), sourcePath: 'src/later.ts' } as never;
     const escaped = { ...(impl as object), sourcePath: '../outside.ts' } as never;
-    const planned = fingerprintSources([missing], [], dir);
-    const out = fingerprintSources([escaped], [], dir);
-    expect(planned).not.toBe(out);
-    fs.mkdirSync(path.join(dir, 'src'));
-    fs.writeFileSync(path.join(dir, 'src/later.ts'), 'export {};\n');
-    expect(fingerprintSources([missing], [], dir)).not.toBe(planned);
+    expect(sourceFiles([missing], [], dir).files).toEqual(['src/later.ts']);
+    expect(sourceFiles([escaped], [], dir).files).toEqual(['../outside.ts']);
   });
 
   it('reads no file content', () => {
@@ -80,7 +58,7 @@ describe('fingerprintSources', () => {
     const open = vi.mocked(fs.openSync);
     read.mockClear();
     open.mockClear();
-    fingerprintSources([impl], [], dir, ['src']);
+    sourceFiles([impl], [], dir, ['src']);
     expect(read).not.toHaveBeenCalled();
     expect(open).not.toHaveBeenCalled();
   });

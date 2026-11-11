@@ -347,6 +347,28 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     expect(principal.permissionSubject?.roleBindings).toEqual([{ roleId: 'custom-role' }]);
   });
 
+  it('completeSsoLogin (returning user stored without a name): the re-login names the record AND the subject its tokens carry', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig());
+    const s1 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    await identity.completeSsoLogin(cfg, s1, 'code-1');
+
+    // A record from before names were read: no name on the record nor on its subject.
+    const stored = findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!;
+    const { displayName: _d, email: _e, ...bare } = stored;
+    const { displayName: _sd, email: _se, ...bareSubject } = stored.subject;
+    identity.upsertUser(cfg, MASTER, { ...bare, subject: bareSubject });
+
+    const s2 = stateFrom(await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb'));
+    const token2 = await identity.completeSsoLogin(cfg, s2, 'code-2');
+
+    const user = findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!;
+    expect(user.displayName).toBe('Alice');
+    expect(user.subject.displayName).toBe('Alice');
+    expect(user.subject.email).toBe('alice@corp.example');
+    expect(persistedByToken(token2)!.ownerSubject?.displayName).toBe('Alice');
+    expect(authenticate(dataDir, token2).subject?.displayName).toBe('Alice');
+  });
+
   // ── deactivated returning user is refused (B1) ─────────────────────────────
 
   it('completeSsoLogin refuses a returning user who has been deactivated, while a first login still succeeds', async () => {

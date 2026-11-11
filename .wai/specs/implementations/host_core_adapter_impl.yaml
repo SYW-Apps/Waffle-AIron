@@ -278,6 +278,13 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: approvalRecord
+  - name: familyMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: familyMembers
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-11-07T15:07:24.696Z'
+updatedAt: '2026-11-10T19:05:42.279Z'

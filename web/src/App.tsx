@@ -27,8 +27,8 @@ import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
 import { FamilyPanel } from './views/FamilyPanel';
 import { DevBanner } from './views/DevBanner';
-import { CockpitProvider, LockInPlaceButton, SettingsCog, useScopeNodes } from './views/DevCockpit';
-import { subsystemOfRoute, subsystemOfSpec } from './views/devCockpitLogic';
+import { BranchChip, CockpitProvider, LockInPlaceButton, SettingsCog, useApproval, useScopeNodes } from './views/DevCockpit';
+import { approvalStatusLine, subsystemOfRoute } from './views/devCockpitLogic';
 import { Tabs } from './ui';
 import { post, raw } from './api';
 
@@ -156,14 +156,10 @@ function DevSpecs() {
     const idPath = sel.id.split('::').map(encodeURIComponent).join('/');
     nav(`/specs/${sel.kind}/${idPath}`);
   };
-  const nodes = useScopeNodes();
-  const viewSubsystem = selection ? subsystemOfSpec(selection.kind, selection.id, nodes) : undefined;
+  const approvalLine = approvalStatusLine(useApproval());
   return (
     <div className="view-pad view-pad-wide">
-      <div className="lock-inplace-row">
-        <LockInPlaceButton viewSubsystem={viewSubsystem} />
-      </div>
-      <SpecsTab projectId={DEV_PROJECT_ID} selection={selection} onSelectSpec={selectSpec} />
+      <SpecsTab projectId={DEV_PROJECT_ID} selection={selection} onSelectSpec={selectSpec} approvalLine={approvalLine ?? null} />
     </div>
   );
 }
@@ -192,6 +188,7 @@ function DevShell() {
           </span>
           <Tabs label="Workspace" className="dev-tabs" tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : id === 'family' ? '/family' : '/canvas')} />
           <span className="syw-header__spacer" />
+          <BranchChip />
           <RealtimeStatus />
           <SettingsCog />
         </header>

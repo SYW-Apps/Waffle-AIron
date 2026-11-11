@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -13,6 +13,9 @@ import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 // by swapping a spec's content for one of the same size with its old
 // modification time: a remembered run still names the old content, a fresh one
 // the new.
+
+// Result files go to a throwaway cache folder, never the user's.
+process.env.WAIRON_CACHE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-memo-cache-'));
 
 const now = '2026-11-07T10:00:00Z';
 
@@ -133,3 +136,69 @@ describe('validation memo', () => {
     expect(names(run({ projectType: 'backend' }), 'ghostbbb')).toBe(true);
   });
 });
+
+describe('validation memo: memory entries and the result file', () => {
+  let root: string;
+  let cacheDir: string;
+  let previous: string | undefined;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-memo2-'));
+    cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-memo2-cache-'));
+    previous = process.env.WAIRON_CACHE_DIR;
+    process.env.WAIRON_CACHE_DIR = cacheDir;
+    makeProject(root);
+  });
+  afterEach(() => {
+    if (previous === undefined) delete process.env.WAIRON_CACHE_DIR; else process.env.WAIRON_CACHE_DIR = previous;
+    for (const dir of [root, cacheDir]) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* windows file locks */ }
+    }
+  });
+
+  const entry = (n: number) => ({
+    optionsKey: 'owner:k', treeFingerprint: `t${n}`, codeFingerprint: `c${n}`,
+    result: { valid: true, issues: [], validatorVersion: String(n) },
+  }) as never;
+
+  it('keeps up to eight entries per root and options, newest first, found by both fingerprints', async () => {
+    const memo = await import('../../src/core/validation-memo.js');
+    for (let n = 1; n <= 9; n++) memo.put(root, entry(n));
+    expect(memo.get(root, 'owner:k', 't1', 'c1')).toBeUndefined();
+    expect(memo.get(root, 'owner:k', 't2', 'c2')).toBeDefined();
+    expect(memo.get(root, 'owner:k', 't9', 'c2')).toBeUndefined();
+    expect(memo.get(root, 'owner:k', 't9', 'c9')).toBeDefined();
+  });
+
+  it('answers a fresh process from the result file, and a corrupt file is a miss', async () => {
+    const first = runWithProjectRoot(root, () => validateProject({ projectType: 'backend' }));
+    expect(names(first, 'ghostaaa')).toBe(true);
+    const resultFiles = fs.readdirSync(path.join(cacheDir, 'validation-results'));
+    expect(resultFiles).toHaveLength(1);
+    swapUnseenKeepingContent(root);
+    // A fresh module graph has an empty memory cache: only the file can answer.
+    vi.resetModules();
+    const fresh = await import('../../src/core/validation-memo.js');
+    const fsUtils = await import('../../src/utils/fs.js');
+    const specs = await import('../../src/core/specs.js');
+    specs.invalidateSpecCache();
+    const second = fsUtils.runWithProjectRoot(root, () => fresh.validateProject({ projectType: 'backend' }));
+    expect(second).toEqual(first);
+    // Corrupt the file: the next fresh process runs the gate instead of failing.
+    fs.writeFileSync(path.join(cacheDir, 'validation-results', resultFiles[0]), '{ not json');
+    vi.resetModules();
+    const again = await import('../../src/core/validation-memo.js');
+    const fsUtils2 = await import('../../src/utils/fs.js');
+    const specs2 = await import('../../src/core/specs.js');
+    specs2.invalidateSpecCache();
+    expect(() => fsUtils2.runWithProjectRoot(root, () => again.validateProject({ projectType: 'backend' }))).not.toThrow();
+    expect(again.fileGet(root, 'owner:x', 'a', 'b')).toBeUndefined();
+  });
+});
+
+/** Rewrite the worker spec with the same bytes it already has, a new modification time: the content is unchanged. */
+function swapUnseenKeepingContent(root: string): void {
+  const file = workerFile(root);
+  fs.writeFileSync(file, fs.readFileSync(file));
+  invalidateSpecCache();
+}

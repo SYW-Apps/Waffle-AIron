@@ -134,6 +134,13 @@ methods:
       fs.watch on the directory with recursive: true (supported on Windows and macOS, and on Linux
       by current Node); a watch that cannot start answers a stop function that does nothing. Each
       event calls onChange with the forward-slash relative path.
+  - name: watchFolder
+    narrative: []
+    detail: intent
+    intent: >-
+      fs.watch on the directory without recursive; a watch that cannot start answers a stop function
+      that does nothing, and an error after start closes it quietly. Each event calls onChange with
+      the entry's name (an event without one passes the empty string).
 status: draft
 createdAt: '2026-10-31T23:15:19.163Z'
-updatedAt: '2026-11-07T02:40:34.598Z'
+updatedAt: '2026-11-10T19:00:21.895Z'

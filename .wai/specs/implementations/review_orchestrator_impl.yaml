@@ -21,18 +21,23 @@ methods:
         targetComponent: state_hash
         targetMethod: ownDesign
       - stepNumber: 4
+        description: Read the branch and commit the checkout has (none outside a git checkout)
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: head
+      - stepNumber: 5
         description: >-
-          Record a new pending request with a fresh id, the kind, subsystem, note, that identity and
-          the time
+          Record a new pending request with a fresh id, the kind, subsystem, note, that identity,
+          the branch and commit when known, and the time
         type: call
         targetComponent: review_store
         targetMethod: save
-      - stepNumber: 5
+      - stepNumber: 6
         description: Look up the dev server announced for this project
         type: call
         targetComponent: review_store
         targetMethod: devServer
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return the request and, when a dev server runs, the URL that shows it
         type: return
         outcome: the receipt
@@ -56,19 +61,36 @@ methods:
         description: A request already decided is answered as it stands
         type: branch
         condition: the request is not pending
-        onTrueStep: 13
+        onTrueStep: 15
         onFalseStep: 5
       - stepNumber: 5
+        description: Read the branch the checkout has now
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: head
+      - stepNumber: 6
         description: Take the design identity as it stands now
         type: call
         targetComponent: state_hash
         targetMethod: ownDesign
-      - stepNumber: 6
+      - stepNumber: 7
+        description: >-
+          Made on another branch, with another design than the checkout has? The checkout switched
+          away: its design here says nothing about the request, which neither locks nor supersedes
+          it, and stays pending until the checkout is back on its branch. A request whose design the
+          checkout holds (its branch merged here) is judged as usual
+        type: branch
+        condition: >-
+          the request recorded a branch, the checkout's branch differs from it (a detached HEAD
+          differs from every branch), and the identity differs from the requested one
+        onTrueStep: 15
+        onFalseStep: 8
+      - stepNumber: 8
         description: Read what the lock says about the tree now
         type: call
         targetComponent: approval_comparison
         targetMethod: verdict
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           A lock request whose design is approved: the identity is the one requested and the verdict
           shows nothing moved since a lock
@@ -76,35 +98,35 @@ methods:
         condition: >-
           the request is a lock request, the identity equals the requested one, and the tree is
           approved
-        onFalseStep: 11
-      - stepNumber: 8
+        onFalseStep: 13
+      - stepNumber: 10
         description: Read the lock record for its approver and time
         type: call
         targetComponent: approval_comparison
         targetMethod: approvalRecord
-      - stepNumber: 9
+      - stepNumber: 11
         description: Mark it locked, decided by the lock's approver at the lock's time, and save it
         type: call
         targetComponent: review_store
         targetMethod: save
-      - stepNumber: 10
+      - stepNumber: 12
         description: 'Locked: answer it'
         type: jump
-        toStep: 12
-      - stepNumber: 11
+        toStep: 14
+      - stepNumber: 13
         description: >-
           Mark it superseded and save it when the design changed since the request; otherwise it
           stays pending
         type: call
         targetComponent: review_store
         targetMethod: save
-      - stepNumber: 12
+      - stepNumber: 14
         description: Return the request as it now stands
         type: return
         outcome: the up-to-date request
-      - stepNumber: 13
+      - stepNumber: 15
         label: decided
-        description: Return the decided request unchanged
+        description: 'Return the request unchanged: decided already, or pending on another branch'
         type: return
         outcome: the request
   - name: pending
@@ -132,32 +154,42 @@ methods:
         targetMethod: status
       - stepNumber: 2
         description: >-
-          Only a pending request can be decided, and only to approved (a review request),
-          changes_requested, or locked (a lock request) — except that a lock request the lock
-          already answered (status found it locked) takes locked once more, so the page's lock adds
-          the human's comment and notes to it
+          Read the branch the checkout has now and the design identity as it stands, as status
+          judged them
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: head
+      - stepNumber: 3
+        description: >-
+          Only a pending request made on the branch the checkout has can be decided, and only to
+          approved (a review request), changes_requested, or locked (a lock request) — except that a
+          lock request the lock already answered (status found it locked) takes locked once more, so
+          the page's lock adds the human's comment and notes to it
         type: branch
         condition: >-
-          the request is not pending (other than a locked lock request taking locked), or the
-          outcome does not fit its kind
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Refuse, naming the request's status or the outcomes its kind takes
+          the request is not pending (other than a locked lock request taking locked), it is pending
+          only because it was made on another branch with another design than the checkout has now,
+          or the outcome does not fit its kind
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse, naming the request's status, both branches (switch back to the request's branch to
+          decide it), or the outcomes its kind takes
         type: throw
         error: the request cannot take this decision
-      - stepNumber: 4
+      - stepNumber: 5
         description: Resolve this machine's approver identity (git user, else the OS user)
         type: call
         targetComponent: local_approver
         targetMethod: resolve
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Record the outcome with the comment, the notes, the time and that identity (a request the
           lock already answered keeps the lock's approver and time, and gains the comment and notes)
         type: call
         targetComponent: review_store
         targetMethod: save
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return the decided request
         type: return
         outcome: the decided request
@@ -200,6 +232,45 @@ methods:
         type: call
         targetComponent: review_store
         targetMethod: withdrawDevServer
+  - name: branchConflict
+    narrative:
+      - stepNumber: 1
+        description: Read every request
+        type: call
+        targetComponent: review_store
+        targetMethod: list
+      - stepNumber: 2
+        description: Read the branch the checkout has now
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: head
+      - stepNumber: 3
+        description: Take the design identity as it stands
+        type: call
+        targetComponent: state_hash
+        targetMethod: ownDesign
+      - stepNumber: 4
+        description: >-
+          Keep the pending lock requests that recorded a branch other than the checkout's, whose
+          design identity differs from the checkout's, and whose branch the checkout still has (a
+          request whose branch was deleted asks for nothing that can still be approved), newest
+          first
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: hasBranch
+      - stepNumber: 5
+        description: None left?
+        type: branch
+        condition: no such request
+        onFalseStep: 7
+      - stepNumber: 6
+        description: No conflict
+        type: return
+        outcome: none
+      - stepNumber: 7
+        description: 'Answer the newest: its id, the branch it was made on, and the checkout''s branch'
+        type: return
+        outcome: the conflict
 status: complete
 createdAt: '2026-11-07T02:38:00.333Z'
-updatedAt: '2026-11-07T11:59:59.496Z'
+updatedAt: '2026-11-10T18:59:09.398Z'
