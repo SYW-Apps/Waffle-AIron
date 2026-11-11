@@ -19,7 +19,7 @@ import type { IdentityProviderConfig } from '../../src/server/types.js';
 // ---------------------------------------------------------------------------
 
 function idp(over: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
-  return { id: 'idp-a', providerType: 'oidc', enabled: true, updatedAt: '', ...over };
+  return { id: 'idp-a', enabled: true, updatedAt: '', ...over };
 }
 
 describe('identity provider config storage (sdd_host policy repository)', () => {
@@ -134,14 +134,36 @@ describe('identity provider config storage (sdd_host policy repository)', () => 
   // ── multiple providers coexist ───────────────────────────────────────────
 
   it('multiple providers coexist and preserve order across an in-place update', () => {
-    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-1', providerType: 'keycloak' }));
-    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-2', providerType: 'google' }));
-    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-3', providerType: 'entra' }));
-    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-2', providerType: 'google', enabled: false }));
+    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-1' }));
+    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-2' }));
+    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-3' }));
+    upsertIdentityProviderRecord(dataDir, idp({ id: 'idp-2', enabled: false }));
 
     const list = listIdentityProviderRecords(dataDir);
     expect(list.map((c) => c.id)).toEqual(['idp-1', 'idp-2', 'idp-3']);
     expect(list.find((c) => c.id === 'idp-2')?.enabled).toBe(false);
+  });
+
+  // ── legacy records ───────────────────────────────────────────────────────
+
+  it('a stored record carrying a legacy providerType loads and works, and the field is not written back', () => {
+    const file = path.join(dataDir, 'identity-providers.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify([
+        { id: 'old', providerType: 'keycloak', issuerUrl: 'https://idp.example/realms/r', clientId: 'c', enabled: true, updatedAt: 't' },
+      ]),
+    );
+    const loaded = listIdentityProviderRecords(dataDir);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].id).toBe('old');
+    expect(loaded[0].issuerUrl).toBe('https://idp.example/realms/r');
+    expect('providerType' in loaded[0]).toBe(false);
+
+    // Any later write re-projects the whole collection without the legacy field.
+    upsertIdentityProviderRecord(dataDir, idp({ id: 'new' }));
+    expect(fs.readFileSync(file, 'utf8')).not.toContain('providerType');
+    expect(listIdentityProviderRecords(dataDir).map((c) => c.id)).toEqual(['old', 'new']);
   });
 
   // ── remove + not-found ───────────────────────────────────────────────────

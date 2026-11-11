@@ -140,7 +140,6 @@ afterEach(() => {
 function cfg(overrides: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
   return {
     id: 'authentik-corp',
-    providerType: 'oidc',
     issuerUrl,
     clientId: CLIENT_ID,
     clientSecretRef: SECRET_REF,
@@ -191,32 +190,14 @@ describe('resolveEndpoints', () => {
     expect(endpoints.jwksUri).toBe(`${issuerUrl}/jwks`);
   });
 
-  it('keycloak template is the last resort when discovery is unreachable', async () => {
-    const endpoints = await resolveEndpoints(
-      cfg({ providerType: 'keycloak', issuerUrl: `${CLOSED_ISSUER}/realms/corp` }),
-    );
-    expect(endpoints.authorizationEndpoint).toBe(`${CLOSED_ISSUER}/realms/corp/protocol/openid-connect/auth`);
-    expect(endpoints.tokenEndpoint).toBe(`${CLOSED_ISSUER}/realms/corp/protocol/openid-connect/token`);
-    expect(endpoints.jwksUri).toBe(`${CLOSED_ISSUER}/realms/corp/protocol/openid-connect/certs`);
-  });
-
-  it('authentik template is the last resort when discovery is unreachable', async () => {
-    const endpoints = await resolveEndpoints(
-      cfg({ providerType: 'authentik', issuerUrl: `${CLOSED_ISSUER}/application/o/corp` }),
-    );
-    expect(endpoints.authorizationEndpoint).toBe(`${CLOSED_ISSUER}/application/o/corp/application/o/authorize/`);
-    expect(endpoints.tokenEndpoint).toBe(`${CLOSED_ISSUER}/application/o/corp/application/o/token/`);
-    expect(endpoints.jwksUri).toBe(`${CLOSED_ISSUER}/application/o/corp/application/o/jwks/`);
-  });
-
-  it('generic oidc template derives /authorize + /token when discovery is unreachable', async () => {
-    const endpoints = await resolveEndpoints(cfg({ providerType: 'oidc', issuerUrl: CLOSED_ISSUER }));
-    expect(endpoints.authorizationEndpoint).toBe(`${CLOSED_ISSUER}/authorize`);
-    expect(endpoints.tokenEndpoint).toBe(`${CLOSED_ISSUER}/token`);
-  });
-
   it('rejects a config that resolves to no usable authorize/token endpoint', async () => {
-    await expect(resolveEndpoints(cfg({ providerType: 'oidc', issuerUrl: '' }))).rejects.toThrow(
+    await expect(resolveEndpoints(cfg({ issuerUrl: '' }))).rejects.toThrow(
+      /no usable authorization or token endpoint.*OIDC discovery.*endpoints explicitly/i,
+    );
+  });
+
+  it('rejects an issuer that publishes no discovery, with no template fallback', async () => {
+    await expect(resolveEndpoints(cfg({ issuerUrl: CLOSED_ISSUER }))).rejects.toThrow(
       /no usable authorization or token endpoint/i,
     );
   });

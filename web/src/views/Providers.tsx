@@ -16,7 +16,31 @@ import {
 } from '../ui';
 import type { IdentityProviderConfig, IdentityProviderListing, IdentityProviderSaveResult } from '../types';
 
-const PROVIDER_TYPES = ['oidc', 'keycloak', 'authentik', 'google_workspace', 'entra_id'];
+// Presets only fill placeholder hints for the issuer URL and the groups claim;
+// nothing about a preset is stored. Every provider is plain OIDC.
+const PRESETS: Record<string, { label: string; issuer: string; groupsTip: string }> = {
+  oidc: { label: 'Generic OIDC', issuer: 'https://sso.example.com', groupsTip: 'a groups claim in the id_token, e.g. groups' },
+  authentik: {
+    label: 'authentik',
+    issuer: 'https://<host>/application/o/<slug>/',
+    groupsTip: 'authentik sends groups with the profile scope; use the group names',
+  },
+  keycloak: {
+    label: 'Keycloak',
+    issuer: 'https://<host>/realms/<realm>',
+    groupsTip: 'add a Group Membership mapper to the client so groups reach the id_token',
+  },
+  google: {
+    label: 'Google Workspace',
+    issuer: 'https://accounts.google.com',
+    groupsTip: 'Google sends no groups claim; limit access with allowed email domains instead',
+  },
+  entra: {
+    label: 'Microsoft Entra ID',
+    issuer: 'https://login.microsoftonline.com/<tenant>/v2.0',
+    groupsTip: 'enable the groups optional claim on the app registration (group object ids)',
+  },
+};
 
 const suggestedRedirect = `${window.location.origin}/web/sso/callback`;
 
@@ -29,7 +53,6 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
   const [f, setF] = useState<IdentityProviderConfig>(
     props.existing ?? {
       id: '',
-      providerType: 'oidc',
       displayName: '',
       issuerUrl: '',
       clientId: '',
@@ -41,6 +64,8 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
   const [adminGroups, setAdminGroups] = useState(listToCsv(props.existing?.adminGroupClaims));
   const [redirects, setRedirects] = useState(listToCsv(props.existing?.allowedRedirectUris));
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [preset, setPreset] = useState('oidc');
+  const hints = PRESETS[preset];
   const set = (patch: Partial<IdentityProviderConfig>) => setF((s) => ({ ...s, ...patch }));
 
   async function save() {
@@ -79,11 +104,11 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
           <Field label="Provider id">
             <TextInput value={f.id} onChange={(v) => set({ id: v })} disabled={isEdit} placeholder="corp-sso" />
           </Field>
-          <Field label="Type">
+          <Field label="Preset" hint="Optional. Only fills the hints below; nothing is stored.">
             <Select
-              value={f.providerType}
-              onChange={(v) => set({ providerType: v })}
-              options={PROVIDER_TYPES.map((t) => ({ value: t, label: t }))}
+              value={preset}
+              onChange={setPreset}
+              options={Object.entries(PRESETS).map(([value, p]) => ({ value, label: p.label }))}
             />
           </Field>
           <Field label="Sign-in label">
@@ -91,7 +116,7 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
           </Field>
         </div>
         <Field label="Issuer URL" hint="OIDC discovery base — endpoints resolve from /.well-known unless overridden below.">
-          <TextInput value={f.issuerUrl ?? ''} onChange={(v) => set({ issuerUrl: v })} placeholder="https://sso.example.com/realms/main" />
+          <TextInput value={f.issuerUrl ?? ''} onChange={(v) => set({ issuerUrl: v })} placeholder={hints.issuer} />
         </Field>
         <div className="row-form">
           <Field label="Client id">
@@ -104,7 +129,7 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
         <Field label="Allowed email domains" hint="Comma-separated. First-login provisioning is limited to these.">
           <TextInput value={domains} onChange={setDomains} placeholder="example.com, corp.example.com" />
         </Field>
-        <Field label="Admin group claims" hint="Comma-separated. Members of these groups become instance admins.">
+        <Field label="Admin group claims" hint={`Comma-separated. Members of these groups become instance admins. Tip: ${hints.groupsTip}.`}>
           <TextInput value={adminGroups} onChange={setAdminGroups} placeholder="wairon-admins" />
         </Field>
         <Field
@@ -217,7 +242,7 @@ export function Providers() {
       <div className="view-head">
         <div>
           <h2>Sign-in (SSO)</h2>
-          <p className="hint">Identity providers users can sign in with. OIDC, Keycloak, Authentik, Google, Entra.</p>
+          <p className="hint">Identity providers users can sign in with. Every provider is plain OIDC.</p>
         </div>
         <Button variant="primary" onClick={() => setAdding(true)}>
           + Add provider
@@ -237,7 +262,7 @@ export function Providers() {
                 cell: ({ provider: p }) => (
                   <div className="cell-stack">
                     <strong>{p.displayName || p.id}</strong>
-                    <code className="subtle">{p.providerType} · {p.id}</code>
+                    <code className="subtle">{p.id}</code>
                   </div>
                 ),
               },

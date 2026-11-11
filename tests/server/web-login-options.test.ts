@@ -27,7 +27,6 @@ const SECRET_REF = 'oidc-client-secret-ref';
 function provider(over: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
   return {
     id: 'corp-keycloak',
-    providerType: 'keycloak',
     issuerUrl: 'https://sso.corp.example/realms/main',
     clientId: 'wairon-client-id',
     clientSecretRef: SECRET_REF,
