@@ -1366,7 +1366,7 @@ function ComponentUnitEditor(props: {
 
 // ── Project config (projectType + lock banner) — degrades if the route is absent ─
 
-function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectConfigResp | null>; profiles: AvailableProfile[] }) {
+function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectConfigResp | null>; profiles: AvailableProfile[]; approvalLine?: string | null }) {
   const toast = useToast();
   const cfg = props.config.data;
   const [projectType, setProjectType] = useState(cfg?.projectType ?? 'backend');
@@ -1374,7 +1374,10 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
   if (!cfg) return null; // route not deployed / not readable — hide, keep the rest working
 
-  const locked = !!cfg.locked;
+  // Dev passes the live approval line (null while unknown); hosted has only the config's locked flag.
+  const statusLine = props.approvalLine !== undefined
+    ? props.approvalLine
+    : cfg.locked ? 'This project is approved — saving a spec change puts this spec back in flux until it is approved again.' : null;
 
   // Adoptable options (server-global pack profiles not yet registered in this
   // project) get a label suffix via the shared labelAdoptable() — see its doc
@@ -1400,11 +1403,7 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
   return (
     <div className="syw-card stack-lg">
-      {locked && (
-        <div className="syw-alert syw-alert--warning lock-banner">
-          This project is approved — saving a spec change puts this spec back in flux until it is approved again.
-        </div>
-      )}
+      {statusLine && <div className="hint approval-line">{statusLine}</div>}
       {cfg.profileResolvable === false && (
         <div className="syw-alert syw-alert--warning lock-banner">
           The recorded project type “{cfg.projectType}” doesn't resolve to a loaded profile, so its rules aren't being applied. Pick a profile from the list below to fix this.
@@ -1442,12 +1441,15 @@ export function SpecsTab({
   projectId,
   selection,
   onSelectSpec,
+  approvalLine,
 }: {
   projectId: string;
   /** The open spec, from the URL path (ProjectOps owns the routing). */
   selection: { kind: string; id: string } | null;
   /** Push a new selection into the URL; null clears it. */
   onSelectSpec: (sel: { kind: string; id: string } | null) => void;
+  /** Dev only: the live approval state as one line (null = unknown). Left out on hosted, which falls back to the config's locked flag. */
+  approvalLine?: string | null;
 }) {
   const enc = encodeURIComponent(projectId);
   // Tree-wide validation lives at the tab level so results persist across spec
@@ -1574,7 +1576,7 @@ export function SpecsTab({
 
   return (
     <div className="stack-lg">
-      <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} />
+      <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} approvalLine={approvalLine} />
       <AsyncView state={graph}>
         {(g) => (
           <div className="spec-layout">

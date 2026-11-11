@@ -178,6 +178,11 @@ export function LockInPlaceButton(props: { viewSubsystem?: string }) {
   );
 }
 
+/** The dev approval state, for views that show it as a line (the floating bar carries the Lock). */
+export function useApproval(): DevApprovalData | undefined {
+  return useCockpit().approval;
+}
+
 /** The header's branch chip: the checkout's branch (or a detached HEAD's short commit). Absent outside a git checkout. */
 export function BranchChip() {
   const approval = useCockpit().approval;

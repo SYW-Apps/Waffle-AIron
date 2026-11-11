@@ -143,6 +143,17 @@ export function branchChipText(approval: Pick<DevApprovalData, 'branch' | 'commi
   return undefined;
 }
 
+/** The one-line approval state the specs view shows: what is true now, never "approved" once the design moved. */
+export function approvalStatusLine(approval: DevApprovalData | undefined): string | undefined {
+  if (!approval) return undefined;
+  if (!approval.approved) return 'This design has not been locked yet.';
+  if (approval.verdict.drifted) {
+    const n = approval.verdict.moved?.length ?? 0;
+    return n > 0 ? `${n} spec${n === 1 ? '' : 's'} changed since the last approval.` : 'The design changed since the last approval.';
+  }
+  return 'This project is approved — saving a spec change puts that spec back in flux until it is approved again.';
+}
+
 /** Whether a Lock action belongs in place (specs / diagrams view). */
 export function offersLockInPlace(approval: DevApprovalData | undefined): boolean {
   return !!approval && (!approval.approved || approval.verdict.drifted);

@@ -872,8 +872,7 @@ select.syw-select:not([multiple]):not([size]) {
 .cockpit-bar-text { min-width: 0; font-size: 13px; max-height: 4.5em; overflow: hidden; }
 .cockpit-bar-text .dim { color: var(--ink-dim); }
 .lock-inplace { position: absolute; top: 10px; right: 12px; z-index: 20; }
-.lock-inplace-row { display: flex; justify-content: flex-end; margin-bottom: 8px; }
-.lock-inplace-row:empty, .lock-inplace:empty { display: none; }
+.lock-inplace:empty { display: none; }
 
 /* Theme builder library list (views/ThemeBuilder.tsx). */
 .theme-list { display: flex; flex-direction: column; gap: 4px; }
