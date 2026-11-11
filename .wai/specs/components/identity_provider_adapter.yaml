@@ -1,9 +1,10 @@
 id: identity_provider_adapter
 name: Identity Provider Adapter
 description: >-
-  Draft external I/O adapter for OIDC/SSO providers such as Authentik, Keycloak, Google Workspace,
-  and Entra ID. It performs discovery, authorization-code exchange, and token/userinfo verification
-  behind a provider-neutral contract while never storing raw client secrets itself.
+  External I/O adapter for OIDC/SSO providers (authentik, Keycloak, Google Workspace, Entra ID and
+  any other OIDC provider, all handled as plain OIDC). It performs discovery, authorization-code
+  exchange, and token/userinfo verification behind a provider-neutral contract while never storing
+  raw client secrets itself.
 subsystem: sdd_host
 componentType: Adapter
 owns: []
@@ -12,4 +13,4 @@ dependsOn:
   - http_client_adapter
 status: complete
 createdAt: '2026-07-08T22:00:27.787Z'
-updatedAt: '2026-10-31T23:22:44.676Z'
+updatedAt: '2026-11-11T21:05:55.922Z'

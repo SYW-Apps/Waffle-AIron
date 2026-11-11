@@ -2,10 +2,10 @@ id: iidentity_provider_adapter
 name: Identity Provider Adapter Interface
 description: >-
   Provider-neutral adapter contract for OIDC/SSO sign-in and subject resolution. Resolves each
-  provider's concrete endpoints (via explicit config overrides, OIDC discovery, or a providerType
-  template), then builds authorization URLs, exchanges authorization codes, and verifies the
-  returned id_token against the provider JWKS. Performs external provider I/O only; never persists
-  or logs raw provider tokens or client secrets.
+  provider's concrete endpoints (via explicit config overrides or OIDC discovery), then builds
+  authorization URLs, exchanges authorization codes, and verifies the returned id_token against the
+  provider JWKS. Performs external provider I/O only; never persists or logs raw provider tokens or
+  client secrets.
 component: identity_provider_adapter
 methods:
   - name: resolveEndpoints
@@ -15,12 +15,11 @@ methods:
       (authorizationEndpoint/tokenEndpoint/jwksUri/userinfoEndpoint) win field-by-field — the
       split-horizon path, letting a public authorize endpoint coexist with a VPC-internal token/jwks
       endpoint; (2) OIDC discovery over <issuerUrl>/.well-known/openid-configuration, whose
-      advertised authorization_endpoint/token_endpoint/jwks_uri/userinfo_endpoint are used; (3) a
-      providerType template as a last resort (keycloak:
-      <issuer>/protocol/openid-connect/{auth,token,certs}; authentik:
-      <base>/application/o/{authorize,token}/ + jwks; generic oidc: <issuer>/{authorize,token}).
-      Discovery documents are cached in-adapter (transient, refetchable) so resolution is cheap on
-      the hot path. Rejects a config that resolves to no usable authorization or token endpoint.
+      advertised authorization_endpoint/token_endpoint/jwks_uri/userinfo_endpoint are used. Every
+      provider (authentik, Keycloak, Google Workspace, Entra ID and any other) is plain OIDC: there
+      is no per-provider template. Discovery documents are cached in-adapter (transient,
+      refetchable) so resolution is cheap on the hot path. Rejects a config that resolves to no
+      usable authorization or token endpoint, naming what to set.
     signature: 'resolveEndpoints(config: IdentityProviderConfig): async ProviderEndpoints'
     returns: async ProviderEndpoints
     params:
@@ -99,4 +98,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T22:00:47.217Z'
-updatedAt: '2026-10-19T22:11:27.979Z'
+updatedAt: '2026-11-11T21:05:52.670Z'

@@ -146,7 +146,6 @@ function stubClaims(claims: Record<string, unknown>): void {
 function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
   return {
     id: PROVIDER_ID,
-    providerType: 'oidc',
     issuerUrl,
     clientId: 'test-client',
     clientSecretRef: SECRET_REF,
@@ -807,10 +806,10 @@ describe('web portal legacy client app shell (sdd_host)', () => {
     expect(html).toContain('/web/admin/providers/remove');
     expect(html).toContain('/web/admin/org/units');
     expect(html).toContain('/web/admin/org/placements');
-    // The Identity-Provider form exposes the provider types and the split-horizon
+    // The Identity-Provider form has no provider type (plain OIDC) and exposes the split-horizon
     // override fields that make self-hosted Keycloak/Authentik work.
-    expect(html).toContain('google_workspace');
-    expect(html).toContain('entra_id');
+    expect(html).not.toContain('google_workspace');
+    expect(html).not.toContain('pType');
     expect(html).toContain('clientSecretRef');
     expect(html).toContain('authorizationEndpoint');
     expect(html).toContain('tokenEndpoint');
@@ -1651,7 +1650,7 @@ describe('web admin routes over HTTP (sdd_host)', () => {
       method: 'POST',
       path: '/web/admin/providers',
       headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
-      body: JSON.stringify({ id: PROVIDER_ID, providerType: 'oidc', enabled: true, updatedAt: '' }),
+      body: JSON.stringify({ id: PROVIDER_ID, enabled: true, updatedAt: '' }),
     });
     expect(put.status).toBe(200);
     // The body names no redirect address: the save is answered with the warning.

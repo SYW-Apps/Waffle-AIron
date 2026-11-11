@@ -2,7 +2,7 @@ id: identity_provider_adapter_impl
 name: Identity Provider Adapter Implementation
 description: >-
   Provider-neutral OIDC/SSO adapter: resolves each provider's endpoints (explicit overrides -> OIDC
-  discovery -> providerType template), assembles authorization URLs against the front-channel
+  discovery; every provider is plain OIDC), assembles authorization URLs against the front-channel
   authorization endpoint, exchanges authorization codes against the back-channel token endpoint
   (which may be VPC-internal), and verifies the returned id_token against the provider JWKS before
   mapping claims to a PrincipalSubject. Caches discovery documents and signing keys in-adapter
@@ -27,22 +27,17 @@ methods:
           endpoints from its authorization_endpoint / token_endpoint / jwks_uri / userinfo_endpoint
         type: local
       - stepNumber: 3
-        description: >-
-          For any endpoint still unresolved, apply the providerType template as a last resort —
-          keycloak: <issuer>/protocol/openid-connect/{auth,token,certs}; authentik: the
-          <base>/application/o/{authorize,token}/ paths plus jwks; generic oidc:
-          <issuer>/{authorize,token}
-        type: local
-      - stepNumber: 4
         description: If no usable authorization or token endpoint could be resolved, reject
         type: branch
         condition: no usable authorization or token endpoint resolved
-        onFalseStep: 6
-      - stepNumber: 5
-        description: Reject a provider whose endpoints cannot be resolved
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Reject a provider whose endpoints cannot be resolved, naming what to set: an issuer that
+          publishes OIDC discovery, or the endpoints themselves
         type: throw
         error: provider endpoints unresolved
-      - stepNumber: 6
+      - stepNumber: 5
         description: >-
           Return the resolved ProviderEndpoints (issuer plus the front-channel and back-channel
           endpoints)
@@ -144,4 +139,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T08:19:10.907Z'
-updatedAt: '2026-10-31T23:35:16.674Z'
+updatedAt: '2026-11-11T21:05:48.051Z'
