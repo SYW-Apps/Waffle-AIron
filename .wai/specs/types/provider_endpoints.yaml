@@ -3,11 +3,11 @@ id: provider_endpoints
 name: ProviderEndpoints
 description: >-
   The resolved set of OIDC endpoints for one identity provider, computed once by the identity
-  provider adapter (from explicit config overrides, OIDC discovery, or a providerType template) and
-  threaded through the authorization-URL build, code->token exchange, and id_token verification.
-  Splits the browser-facing front-channel (authorizationEndpoint) from the server-facing
-  back-channel (tokenEndpoint, jwksUri, userinfoEndpoint) so the two may live at different addresses
-  (public authorize vs VPC-internal token/jwks).
+  provider adapter (from explicit config overrides or OIDC discovery) and threaded through the
+  authorization-URL build, code->token exchange, and id_token verification. Splits the
+  browser-facing front-channel (authorizationEndpoint) from the server-facing back-channel
+  (tokenEndpoint, jwksUri, userinfoEndpoint) so the two may live at different addresses (public
+  authorize vs VPC-internal token/jwks).
 subsystem: sdd_host
 fields:
   - name: issuer
@@ -37,4 +37,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-13T18:23:18.078Z'
-updatedAt: '2026-09-19T11:07:14.826Z'
+updatedAt: '2026-11-11T21:05:56.856Z'
