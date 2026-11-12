@@ -27,8 +27,8 @@ import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
 import { FamilyPanel } from './views/FamilyPanel';
 import { DevBanner } from './views/DevBanner';
-import { BranchChip, CockpitProvider, LockInPlaceButton, SettingsCog, useApproval, useScopeNodes } from './views/DevCockpit';
-import { approvalStatusLine, subsystemOfRoute } from './views/devCockpitLogic';
+import { ApprovalBanner, BranchChip, CockpitProvider, LockInPlaceButton, SettingsCog, useApproval, useScopeNodes } from './views/DevCockpit';
+import { parseMoved, subsystemOfRoute } from './views/devCockpitLogic';
 import { Select, Tabs } from './ui';
 import { devPageTitle, hostedPageTitle, projectLabel } from './views/devCockpitLogic';
 import { post, raw } from './api';
@@ -157,10 +157,17 @@ function DevSpecs() {
     const idPath = sel.id.split('::').map(encodeURIComponent).join('/');
     nav(`/specs/${sel.kind}/${idPath}`);
   };
-  const approvalLine = approvalStatusLine(useApproval());
+  const approval = useApproval();
+  const changedSpecs = useMemo(() => parseMoved(approval?.verdict.moved), [approval]);
   return (
     <div className="view-pad view-pad-wide">
-      <SpecsTab projectId={DEV_PROJECT_ID} selection={selection} onSelectSpec={selectSpec} approvalLine={approvalLine ?? null} />
+      <SpecsTab
+        projectId={DEV_PROJECT_ID}
+        selection={selection}
+        onSelectSpec={selectSpec}
+        approvalBanner={<ApprovalBanner />}
+        changedSpecs={changedSpecs}
+      />
     </div>
   );
 }
@@ -197,7 +204,6 @@ function DevFrame() {
 
   const go = (id: string) => nav(id === 'specs' ? '/specs' : id === 'family' ? '/family' : '/canvas');
   return (
-    <CockpitProvider>
     <div className="shell">
       <div className="main-col">
         <header className="syw-header topbar dev-bar">
@@ -228,7 +234,6 @@ function DevFrame() {
         </main>
       </div>
     </div>
-    </CockpitProvider>
   );
 }
 

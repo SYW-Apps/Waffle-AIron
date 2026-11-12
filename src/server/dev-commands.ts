@@ -5,7 +5,8 @@ import * as hostCore from './adapters/core.js';
 import { ForbiddenError, UnauthenticatedError } from './errors.js';
 import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
 import type { ApprovalVerdict } from '../core/approval.js';
-import { describeApprover } from '../models/lock.js';
+import { describeApprover, type ProjectApproval } from '../models/lock.js';
+import { familyApprovals } from './adapters/validator.js';
 import type { HostConfig } from './types.js';
 import { gitHead } from '../io/index.js';
 import * as path from 'path';
@@ -33,8 +34,8 @@ export interface DevCommandResult {
   output: string[];
 }
 
-/** One human command the CLI that started the dev server hands it to run on the page's behalf; `subsystem` is the one subsystem a lock re-approves, ignored by the others. */
-export type DevCommand = (subsystem?: string | null) => Promise<DevCommandResult>;
+/** One human command the CLI that started the dev server hands it to run on the page's behalf; `subsystem` is the one subsystem a lock re-approves, ignored by the others; `root` is the project folder to run at (the served project's when absent). */
+export type DevCommand = (subsystem?: string | null, root?: string) => Promise<DevCommandResult>;
 
 /** The human commands `wairon dev` hands its server: the CLI's own lock, generate and doctor --fix. */
 export interface DevCommands {
@@ -43,6 +44,14 @@ export interface DevCommands {
   doctor: DevCommand;
   /** The family panel's commands: one checked family command, run through the CLI's own command parser. */
   family: DevFamilyRunner;
+}
+
+/** A pending review request for the dev page, tagged with the member project it was made in (absent for the served project's own). */
+export interface DevReview {
+  /** The request. */
+  request: ReviewRequest;
+  /** The alias of the direct member project the request was made in; absent for the served project's own. */
+  member?: string;
 }
 
 /** What the dev page gets back when the human decides a review request: the request as it now stands and, for a lock, what the lock printed. */
@@ -67,6 +76,8 @@ export interface DevApproval {
   branch?: string;
   /** The served project's name (its system spec's name); absent when the spec cannot be read. */
   projectName?: string;
+  /** The direct member projects' approvals, each judged at its own root; absent when they cannot be read. */
+  members?: ProjectApproval[];
 }
 
 /** The id of the one project the development server serves. */
@@ -96,14 +107,14 @@ function servedRoot(cfg: HostConfig, sessionId: string): string {
 }
 
 /** Run one handed command (never overlapping another), turning a thrown error into a failed result. */
-async function runHanded(cfg: HostConfig, name: string, subsystem?: string | null): Promise<DevCommandResult> {
+async function runHanded(cfg: HostConfig, name: string, subsystem?: string | null, root?: string): Promise<DevCommandResult> {
   const handed = cfg.devCommands;
   if (cfg.devMode !== true || !handed || !COMMAND_NAMES.has(name) || running) {
     throw new Error('the command cannot run');
   }
   running = true;
   try {
-    const result = await (handed as unknown as Record<string, DevCommand>)[name](subsystem ?? undefined);
+    const result = await (handed as unknown as Record<string, DevCommand>)[name](subsystem ?? undefined, root);
     return { command: name, ok: result.ok, output: plain(result.output) };
   } catch (e) {
     return { command: name, ok: false, output: plain([e instanceof Error ? e.message : String(e)]) };
@@ -112,18 +123,72 @@ async function runHanded(cfg: HostConfig, name: string, subsystem?: string | nul
   }
 }
 
-/** dev_cockpit_orchestrator.reviews — the served project's pending review requests. */
-export function reviews(cfg: HostConfig, sessionId: string): ReviewRequest[] {
-  // Steps 1-2: refused outside the local development server.
+/** The served project's direct member projects, each judged at its own root. A contained project member carries no `as`; a part carries `as: part` and is approved with the served project, so it is left out. */
+function directMembers(root: string): ProjectApproval[] {
+  return runWithProjectRoot(root, () =>
+    familyApprovals(1).filter((a) => a.parent === '' && a.as !== 'part' && a.alias !== undefined && a.alias !== '' && a.key !== ''));
+}
+
+/** The folder of a member declared by the served project, or undefined when it is not a folder on disk. */
+function memberFolder(root: string, alias: string): string | undefined {
+  return runWithProjectRoot(root, () => {
+    let config: ReturnType<typeof hostCore.loadProjectConfig>;
+    try {
+      config = hostCore.loadProjectConfig();
+    } catch {
+      config = null;
+    }
+    if (!config) return undefined;
+    const member = declaredMembers(config).find((m) => m.alias === alias);
+    if (!member || (member.storage !== 'contained' && member.storage !== 'path')) return undefined;
+    const location = member.path ?? member.source.path;
+    return location ? path.resolve(root, location) : undefined;
+  });
+}
+
+/** The folder a named direct member project is locked at, refusing an alias that names none and a member that is not a folder on disk. */
+function memberRootOf(root: string, alias: string): string {
+  if (!directMembers(root).some((a) => a.alias === alias)) throw new ForbiddenError('no member project of that alias');
+  const folder = memberFolder(root, alias);
+  if (!folder || !fs.existsSync(path.join(folder, '.wai'))) {
+    throw new ForbiddenError(`the member project "${alias}" is not a folder on disk, so it cannot be locked from here`);
+  }
+  return folder;
+}
+
+/** dev_cockpit_orchestrator.reviews — the pending review requests of the served project and of its direct member projects. */
+export function reviews(cfg: HostConfig, sessionId: string): DevReview[] {
+  // Steps 1-4: refused outside the local development server; the session authenticated; the served root.
   const root = servedRoot(cfg, sessionId);
-  // Steps 3-4.
-  return runWithProjectRoot(root, () => hostCore.pendingReviews());
+  // Step 5: the served project's own, first.
+  const out: DevReview[] = runWithProjectRoot(root, () => hostCore.pendingReviews()).map((request) => ({ request }));
+  // Step 6: the direct member projects; one that cannot be read is skipped.
+  let members: ProjectApproval[];
+  try {
+    members = directMembers(root);
+  } catch {
+    return out;
+  }
+  // Steps 7-9: each member's requests, read at its own root, tagged with its alias.
+  for (const m of members) {
+    try {
+      const alias = m.alias as string;
+      const folder = memberFolder(root, alias);
+      if (!folder || !fs.existsSync(path.join(folder, '.wai'))) continue;
+      for (const request of runWithProjectRoot(folder, () => hostCore.pendingReviews())) out.push({ request, member: alias });
+    } catch {
+      continue;
+    }
+  }
+  // Step 10.
+  return out;
 }
 
 /**
  * dev_cockpit_orchestrator.decide — the human's answer to a pending request. `locked` runs the
  * CLI's lock first (of the request's subsystem when it names one) and records the request locked
  * only when the lock succeeded; a failed lock leaves the request pending and answers the lock's output.
+ * A request made in a direct member project (`member`) is read, decided and locked at that project's root.
  */
 export async function decide(
   cfg: HostConfig,
@@ -132,26 +197,30 @@ export async function decide(
   outcome: ReviewStatus,
   comment?: string,
   notes?: ReviewNote[],
+  member?: string,
 ): Promise<DevReviewDecision> {
   // Steps 1-2.
   if (cfg.devCommands === undefined) throw new ForbiddenError('not the local development server');
-  const root = servedRoot(cfg, sessionId);
-  // Step 3: the request brought up to date, for its kind and subsystem.
+  // Steps 3-4.
+  const served = servedRoot(cfg, sessionId);
+  // Steps 5-9: the root the request lives at.
+  const root = member !== undefined && member !== '' ? memberRootOf(served, member) : served;
+  // Step 10: the request brought up to date, for its kind and subsystem.
   const request = runWithProjectRoot(root, () => hostCore.reviewStatus(id));
   let lock: DevCommandResult | undefined;
-  // Step 4.
+  // Step 11.
   if (outcome === 'locked') {
     // Only a lock request is answered by a lock; refused before anything runs.
     if (request.kind !== 'lock') throw new Error(`request ${id} asks for a review, not a lock`);
-    // Step 5: the CLI's lock, of the request's subsystem when it names one. The CLI binds its own root.
-    lock = await runHanded(cfg, 'lock', request.subsystem);
-    // Steps 6-7: a failed lock leaves the request pending.
+    // Step 12: the CLI's lock at the bound root, of the request's subsystem when it names one.
+    lock = await runHanded(cfg, 'lock', request.subsystem, root);
+    // Steps 13-14: a failed lock leaves the request pending.
     if (!lock.ok) return { request, lock };
   }
-  // Step 10: record the decision with the comment and the notes (a lock request the lock already
+  // Step 15: record the decision with the comment and the notes (a lock request the lock already
   // answered keeps the lock's approver and time and gains them).
   const decided = runWithProjectRoot(root, () => hostCore.decideReview(id, outcome, comment, notes));
-  // Step 9.
+  // Step 16.
   return lock ? { request: decided, lock } : { request: decided };
 }
 
@@ -164,7 +233,6 @@ export function approval(cfg: HostConfig, sessionId: string): DevApproval {
     const record = hostCore.approvalRecord();
     // Step 6: what the lock says about the tree now.
     const verdict = hostCore.approvalVerdict();
-    // Step 7.
     // Step 7: the branch the served checkout has now.
     const branch = gitHead.head(root)?.branch;
     // Step 8: the served project's name, from its system spec; absent when unreadable.
@@ -174,7 +242,15 @@ export function approval(cfg: HostConfig, sessionId: string): DevApproval {
     } catch {
       name = undefined;
     }
-    const branchOf = { ...(branch ? { branch } : {}), ...(name ? { projectName: name } : {}) };
+    // Step 9: each direct member project's approval at its own root; unreadable, the page simply gets none.
+    let members: ProjectApproval[] | undefined;
+    try {
+      members = directMembers(root);
+    } catch {
+      members = undefined;
+    }
+    // Step 10.
+    const branchOf = { ...(branch ? { branch } : {}), ...(name ? { projectName: name } : {}), ...(members ? { members } : {}) };
     if (!record) return { approved: false, verdict, ...branchOf };
     const state: DevApproval = { approved: true, verdict, ...branchOf };
     if (typeof record.lockedAt === 'string' && record.lockedAt !== '') state.approvedAt = record.lockedAt;
@@ -184,7 +260,7 @@ export function approval(cfg: HostConfig, sessionId: string): DevApproval {
 }
 
 /** dev_cockpit_orchestrator.run — one human command the CLI handed the server, and what it printed. */
-export async function run(cfg: HostConfig, sessionId: string, command: string, subsystem?: string): Promise<DevCommandResult> {
+export async function run(cfg: HostConfig, sessionId: string, command: string, subsystem?: string, member?: string): Promise<DevCommandResult> {
   // Steps 1-2: refused outside the local development server, for a command it was not handed, or while one runs.
   if (cfg.devMode !== true || !cfg.devCommands || !COMMAND_NAMES.has(command) || running) {
     throw new Error('the command cannot run');
@@ -192,8 +268,17 @@ export async function run(cfg: HostConfig, sessionId: string, command: string, s
   // Step 3: authenticate the session.
   const principal = authenticateSession(cfg.dataDir, sessionId);
   if (!principal.authenticated) throw new UnauthenticatedError();
-  // Steps 4-5.
-  return runHanded(cfg, command, subsystem);
+  // Steps 4-8: a named member project is only ever locked, at its own folder.
+  let memberRoot: string | undefined;
+  if (member !== undefined && member !== '') {
+    const served = servedRoot(cfg, sessionId);
+    if (command !== 'lock' || !directMembers(served).some((a) => a.alias === member)) {
+      throw new ForbiddenError('only a direct member project can be locked from here');
+    }
+    memberRoot = memberRootOf(served, member);
+  }
+  // Steps 9-10.
+  return runHanded(cfg, command, subsystem, memberRoot);
 }
 
 // ── The family panel's commands ──────────────────────────────────────────────
