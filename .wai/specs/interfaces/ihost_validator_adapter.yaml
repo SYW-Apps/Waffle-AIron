@@ -108,6 +108,14 @@ methods:
     signature: 'validateAsCompleteAsync(): async ValidationResult'
     returns: async ValidationResult
     params: []
+  - name: validateProjectAsync
+    description: >-
+      The owner's gate for the bound project under its own rule severities and projectType, run off
+      the serving thread, so other requests keep being answered while a cold run takes its time. For
+      the page reads that draw the tree's findings.
+    signature: 'validateProjectAsync(): async ValidationResult'
+    returns: async ValidationResult
+    params: []
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-11-12T00:16:10.492Z'
+updatedAt: '2026-11-12T21:50:07.755Z'

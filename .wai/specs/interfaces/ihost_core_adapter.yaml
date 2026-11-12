@@ -224,12 +224,21 @@ methods:
       spec when none can carry it) and the rest of the tree is drawn; the model is built over
       whatever loaded, and a tree that yields nothing at all answers an empty model holding one
       error finding with the cause.
-    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
+    signature: >-
+      buildCanvasDataModel(relations?: list<ProjectRelations>, issues?: list<ValidationIssue>):
+      CanvasModel
     returns: CanvasModel
     params:
       - name: relations
         type: list<ProjectRelations>
         description: The family's relation health to carry; omitted, none
+        optional: true
+      - name: issues
+        type: list<ValidationIssue>
+        description: >-
+          The tree's findings to draw, when the caller already holds them (the web read takes them
+          from the gate run off the serving thread); omitted, the owner's gate is run on the
+          caller's thread
         optional: true
   - name: packEntryRef
     description: >-
@@ -379,4 +388,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-11-10T19:05:40.586Z'
+updatedAt: '2026-11-12T21:50:01.481Z'
