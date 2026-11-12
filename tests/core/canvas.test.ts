@@ -241,7 +241,7 @@ describe('interactive canvas generation', () => {
     expect(store.owner).toBe('billing-repo');
 
     const crossEdge = model.edges.find(e => e.from === 'shipping-client');
-    expect(crossEdge).toEqual({ from: 'shipping-client', to: 'billing-portal', cross: true });
+    expect(crossEdge).toEqual({ from: 'shipping-client', to: 'billing-portal', cross: true, kind: 'depends' });
 
     const billing = model.subsystems.find(s => s.id === 'billing')!;
     expect(billing.trustedLinks).toEqual([{ subsystem: 'shipping', reason: 'latency fast lane' }]);

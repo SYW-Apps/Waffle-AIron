@@ -6,6 +6,18 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **Canvas lines show every dependency and their direction.** The canvas now draws its lines itself. Chevrons along each line point its direction, and a boundary hop carries a thin red stripe. Every dependency between drawn nodes shows, tagged with the strongest way it is stated:
+  - `depends`: a `dependsOn` entry, drawn full weight.
+  - `calls`: a narrative call or register step with no `dependsOn` beside it, drawn full weight.
+  - `uses`: a contract that names a type another project owns. It lands on that project's node and is drawn thinner and grey.
+  - `declared`: a member or external a project declares but nothing else shows yet. It is drawn thin, grey and dotted.
+
+  Folded edges keep their strongest kind. Line styles:
+  - Orthogonal lines leave and enter on the facing side and route around boxes. Lines into one box merge into one trunk, lines with different ends spread across a shared channel, and a horizontal run hops a vertical one it crosses.
+  - Curved lines take the shortest way around boxes as smooth curves.
+  - A PNG export carries the lines as drawn.
+
+  Clicking a line focuses it and the two boxes it joins. While an element is selected, a glowing dot runs along its lines in their direction: every incoming line first, then every outgoing one, repeating. It runs only while the page is visible and is off when the reader asks for reduced motion. Incoming lines of a selection now take their "used by" colour again.
 - **The dev server stays responsive while the validator works.** Validation of a served project (the as-complete gate behind the canvas, and the owner's gate behind `sdd_validate_tree`) now runs on a background validation thread, so other requests are answered during a cold run. `wairon dev` starts both gates in the background at start, so the first page finds them remembered. The page header shows the served project's name, and the browser tab title carries it. Lock and approval paths stay synchronous.
 - **Every identity provider is configured as plain OIDC.** The provider type is gone; the admin UI offers an optional preset that only fills hints (issuer URL shape, groups-claim tip) and stores nothing. Endpoint templates are removed: an issuer must publish OIDC discovery, otherwise set the endpoints explicitly (a provider with neither is rejected, naming what to set). `WAIRON_OIDC_PROVIDER_TYPE` is ignored, and stored provider records that still carry a type keep working.
 - **`@wairon/sdk` reads a pack in memory and fails with stable codes.** New `readPack(archive, limits?)`

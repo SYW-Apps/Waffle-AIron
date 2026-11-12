@@ -398,7 +398,7 @@ describe('stage 8 — overview follows composition: parts are the parent\'s subs
     // Round 8: a `../` sibling member is composed live like a contained one —
     // its badge says where it is stored, and the edge lands on its component.
     expect(shop.subsystems.find((s) => s.id === 'ledger')).toMatchObject({ project: true, storage: '../ledger' });
-    expect(shop.edges).toContainEqual({ from: 'checkout', to: 'ledger::ledger-portal', cross: true, consumption: true });
+    expect(shop.edges).toContainEqual({ from: 'checkout', to: 'ledger::ledger-portal', cross: true, consumption: true, kind: 'depends' });
   });
 
   it('status prints a part\'s subsystems under their parent, and at a part\'s root one line naming its parent', () => {

@@ -73,8 +73,8 @@ describe('demo-project seeder', () => {
     const crossEdges = model.edges.filter((e) => e.cross);
     expect(crossEdges).toEqual(
       expect.arrayContaining([
-        { from: 'catalog-client', to: 'catalog-portal', cross: true },
-        { from: 'payments-client', to: 'payments-portal', cross: true },
+        { from: 'catalog-client', to: 'catalog-portal', cross: true, kind: 'depends' },
+        { from: 'payments-client', to: 'payments-portal', cross: true, kind: 'depends' },
       ]),
     );
   });

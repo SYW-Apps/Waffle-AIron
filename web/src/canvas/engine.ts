@@ -324,7 +324,7 @@ export function mountCanvas(host, model, opts = {}) {
   // ---- themes (solid fills, WCAG AA text contrast) ------------------------------
   var THEMES = {
     light: {
-      pageEdge: '#5f6b78', edgeText: '#3d4650', cross: '#b3261e', ink: '#1a1f24',
+      pageEdge: '#5f6b78', weakEdge: '#9aa3ad', edgeText: '#3d4650', cross: '#b3261e', ink: '#1a1f24',
       subFill: '#e9eef4', subStroke: '#8195aa', subText: '#122a44',
       patFill: '#eef1f5', patStroke: '#5f6b78',
       innerFill: '#dbe3ec', innerStroke: '#8195aa', innerText: '#1a1f24',
@@ -342,10 +342,10 @@ export function mountCanvas(host, model, opts = {}) {
         patternLeaf: { fill: '#eef1f5', stroke: '#5f6b78', text: '#1a1f24' },
       },
       issue: '#b3261e', selGlow: '#3465b4', bgLabel: '#f2f5f8', png: '#f2f5f8',
-      relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78',
+      relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78', warn: '#9a6a00',
     },
     syw: {
-      pageEdge: '#7c8ca3', edgeText: '#aebdd2', cross: '#ff6b81', ink: '#eef2f8',
+      pageEdge: '#7c8ca3', weakEdge: '#5b6679', edgeText: '#aebdd2', cross: '#ff6b81', ink: '#eef2f8',
       subFill: '#101f33', subStroke: '#3ec5e8', subText: '#7fe7ff',
       patFill: '#1b2740', patStroke: '#93a1b8',
       innerFill: '#243a5c', innerStroke: '#6b7c96', innerText: '#eef2f8',
@@ -363,7 +363,7 @@ export function mountCanvas(host, model, opts = {}) {
         patternLeaf: { fill: '#1b2740', stroke: '#93a1b8', text: '#eef2f8' },
       },
       issue: '#ff6b81', selGlow: '#22ddff', bgLabel: '#0a0a0f', png: '#0a0a0f',
-      relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8',
+      relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8', warn: '#f59e0b',
     },
   };
 
@@ -410,13 +410,13 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: '.proxyOut', style: { 'background-color': t.proxyOut.fill, 'border-color': t.proxyOut.stroke, color: t.proxyOut.stroke } },
       { selector: 'edge.revealEdge', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, 'line-style': 'dashed', width: 2.4, opacity: 0.95 } },
       { selector: 'edge', style: Object.assign({}, routingStyle, {
-        width: 1.8, 'line-color': t.pageEdge,
+        width: 1.8, 'line-color': t.pageEdge, 'line-opacity': 0,
         'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, 'arrow-scale': 0.9,
         label: 'data(lbl)', 'font-size': 10, color: t.edgeText,
         'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
       })},
       { selector: 'edge.routed', style: routedStyle },
-      { selector: 'edge.cross', style: { 'line-color': t.cross, 'target-arrow-color': t.cross, width: 2.6 } },
+      { selector: 'edge.cross', style: { width: 2.2 } },
       { selector: 'edge.datacoupling', style: {
         'line-color': t.typeV.stroke, 'target-arrow-color': t.typeV.stroke, 'line-style': 'dashed',
         width: 1.8, 'arrow-scale': 0.85, label: 'data(lbl)', 'font-size': 9, color: t.typeV.stroke,
@@ -433,6 +433,10 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: 'edge.rel-drifted', style: { 'line-color': t.relDrift, 'target-arrow-color': t.relDrift } },
       { selector: 'edge.rel-incompatible', style: { 'line-color': t.relBad, 'target-arrow-color': t.relBad } },
       { selector: 'edge.rel-unavailable', style: { 'line-color': t.relUnknown, 'target-arrow-color': t.relUnknown, 'line-style': 'dotted' } },
+      // An edge's kind sets its weight: a type use thinner and grey, a bare
+      // declaration thin, grey and dotted (after health, so the weight wins).
+      { selector: 'edge.k-uses', style: { width: 1.1, 'arrow-scale': 0.7, 'line-color': t.weakEdge, 'target-arrow-color': t.weakEdge } },
+      { selector: 'edge.k-declared', style: { width: 1, 'arrow-scale': 0.65, 'line-color': t.weakEdge, 'target-arrow-color': t.weakEdge, 'line-style': 'dotted' } },
       { selector: '.extProject', style: { 'border-style': 'dashed' } },
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
@@ -444,6 +448,7 @@ export function mountCanvas(host, model, opts = {}) {
       // the compound parent and makes hover flicker; overlay never affects layout.
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.34, 'overlay-padding': 6 } },
       { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 6 } },
+      { selector: '.edgeEnd', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.3, 'overlay-padding': 7 } },
       // Focus mode: on selection, the picked element's edges are lifted above
       // every box and recoloured, while unrelated elements recede — so a single
       // block's relations read clearly even in a dense graph.
@@ -463,6 +468,9 @@ export function mountCanvas(host, model, opts = {}) {
         'line-color': t.warn, 'target-arrow-color': t.warn, 'source-arrow-color': t.warn,
         width: 3.6, opacity: 1, 'z-compound-depth': 'top', 'z-index': 9998, 'text-background-opacity': 1,
       }},
+      // A focused line keeps the weight its kind gives it, only lifted.
+      { selector: 'edge.k-uses.edgeFocus, edge.k-uses.edgeOut, edge.k-uses.edgeIn', style: { width: 1.8 } },
+      { selector: 'edge.k-declared.edgeFocus, edge.k-declared.edgeOut, edge.k-declared.edgeIn', style: { width: 1.5 } },
       { selector: 'node.typeCluster', style: {
         'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText,
         'font-weight': 'bold', 'font-size': 12, 'border-width': 2, 'text-wrap': 'wrap',
@@ -480,6 +488,7 @@ export function mountCanvas(host, model, opts = {}) {
   var HEALTH_RANK = { ok: 1, drifted: 2, unavailable: 3, incompatible: 4 };
   var HEALTH_GLYPH = { ok: '\u2713', drifted: '\u0394', incompatible: '\u2715', unavailable: '?' };
   var HAS_CONSUMPTION = MODEL.edges.some(function (e) { return !!e.consumption; });
+  var HAS_WEAK = MODEL.edges.some(function (e) { return e.kind === 'uses' || e.kind === 'declared'; });
   function edgeHealth(edge) {
     var r = edge.relation ? REL_BY_ID[edge.relation] : null;
     return r ? r.health : (HAS_RELATIONS ? 'unavailable' : null);
@@ -560,6 +569,7 @@ export function mountCanvas(host, model, opts = {}) {
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
       'on select: <span style="color:' + t.selGlow + '">\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\u2190 used by</span>' +
       (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '') +
+      (HAS_WEAK ? '<br><span style="color:' + t.weakEdge + '">thin grey</span> = uses a type of that project · <span style="color:' + t.weakEdge + '">··· dotted</span> = declared, nothing used yet' : '') +
       relationLegend(t);
   }
 
@@ -1026,6 +1036,9 @@ export function mountCanvas(host, model, opts = {}) {
       var key = src + '=>' + tgt;
       if (!agg[key]) agg[key] = { src: src, tgt: tgt, n: 0, cross: false, ghost: ghost };
       agg[key].n++;
+      // Folded edges keep their strongest kind.
+      var kind = edge.kind || 'depends';
+      if (!agg[key].kind || KIND_RANK[kind] > KIND_RANK[agg[key].kind]) agg[key].kind = kind;
       if (edge.cross) agg[key].cross = true;
       if (edge.consumption) {
         agg[key].consumption = true;
@@ -1039,9 +1052,11 @@ export function mountCanvas(host, model, opts = {}) {
     return { agg: agg, ghosts: ghosts };
   }
 
+  var KIND_RANK = { depends: 3, calls: 2, uses: 1, declared: 0 };
   function externalAnchorFor(compId, scope) {
     var c = compById[compId];
-    if (!c) return null;
+    // An edge landing on a project node: outside a system view it is a ghost of that node.
+    if (!c) return subById[compId] ? { gid: 'x~subsystem~' + compId, kind: 'subsystem', id: compId, label: nameOf({ kind: 'subsystem', id: compId }) } : null;
     var contexts = [];
     if (scope.kind === 'component') {
       var oc = compById[scope.id];
@@ -1877,9 +1892,11 @@ export function mountCanvas(host, model, opts = {}) {
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       var route = routeData(e.src, e.tgt, key);
       // A consumption edge carries its relation's health: the glyph at its middle,
-      // its colour (and line, dotted when unavailable) by class.
-      var glyph = e.health ? HEALTH_GLYPH[e.health] : '';
+      // its colour (and line, dotted when unavailable) by class. A bare
+      // declaration uses nothing yet, so it carries no glyph.
+      var glyph = e.health && e.kind !== 'declared' ? HEALTH_GLYPH[e.health] : '';
       var relCls = e.consumption ? 'rel rel-' + (e.health || 'unchecked') + ' ' : '';
+      if (e.kind === 'uses' || e.kind === 'declared') relCls += 'k-' + e.kind + ' ';
       eles.push({
         data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: (bundle ? e.n + ' links' : '') + (glyph ? (bundle ? ' ' : '') + glyph : ''), rels: (e.rels || []).join('|'), cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
         classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + relCls + (dim ? 'dimmed' : ''),
@@ -1923,6 +1940,806 @@ export function mountCanvas(host, model, opts = {}) {
     autounselectify: true,
   });
   cy.autolock(true);
+  // ---- edge overlay ------------------------------------------------------------
+  // Cytoscape keeps every edge's geometry, label and hit area, but its own line is
+  // hidden (line-opacity 0): the overlay below the boxes draws each line itself, so
+  // a line can show its direction along its whole length (chevrons), a boundary hop
+  // as a thin red stripe through it, and an orthogonal line hopping over another.
+  var edgeOverlay = (function () {
+    var host = ROOT.getElementById('cy');
+    var canvas = document.createElement('canvas');
+    // Without a drawing surface (a headless run) there is nothing to draw on.
+    if (!canvas || !canvas.getContext || !host || !host.insertBefore || typeof window === 'undefined') {
+      return { draw: function () {}, drawInto: function () {}, startFlow: function () {}, stopFlow: function () {} };
+    }
+    canvas.className = 'edgeOverlay';
+    canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0;';
+    host.insertBefore(canvas, host.firstChild);
+    var cache = { refs: [], paths: [] };
+    function quad(out, x0, y0, cx, cy2, x1, y1) {
+      for (var k = 1; k <= 12; k++) {
+        var t = k / 12, u = 1 - t;
+        out.push({ x: u * u * x0 + 2 * u * t * cx + t * t * x1, y: u * u * y0 + 2 * u * t * cy2 + t * t * y1 });
+      }
+    }
+    // Each corner of a polyline replaced by a curve of the given radius (clamped to half of each leg).
+    function rounded(pts, radii) {
+      var out = [pts[0]];
+      for (var k = 1; k < pts.length - 1; k++) {
+        var a = pts[k - 1], c = pts[k], b = pts[k + 1];
+        var la = Math.hypot(c.x - a.x, c.y - a.y), lb = Math.hypot(b.x - c.x, b.y - c.y);
+        var r = Math.min(radii[k - 1] || radii[radii.length - 1] || 0, la / 2, lb / 2);
+        if (r < 1) { out.push(c); continue; }
+        var p0 = { x: c.x + (a.x - c.x) * r / la, y: c.y + (a.y - c.y) * r / la };
+        var p1 = { x: c.x + (b.x - c.x) * r / lb, y: c.y + (b.y - c.y) * r / lb };
+        out.push(p0);
+        quad(out, p0.x, p0.y, c.x, c.y, p1.x, p1.y);
+      }
+      out.push(pts[pts.length - 1]);
+      return out;
+    }
+    function pathOf(edge) {
+      var rs = edge._private.rscratch;
+      var p = rs && rs.allpts;
+      if (!p || p.length < 4 || isNaN(p[0]) || rs.badLine) return null;
+      var pts = [{ x: p[0], y: p[1] }];
+      var curved = rs.edgeType === 'bezier' || rs.edgeType === 'multibezier' || rs.edgeType === 'self' || rs.edgeType === 'compound';
+      var i;
+      if (curved) { for (i = 2; i + 3 < p.length; i += 4) quad(pts, p[i - 2], p[i - 1], p[i], p[i + 1], p[i + 2], p[i + 3]); }
+      else { for (i = 2; i + 1 < p.length; i += 2) pts.push({ x: p[i], y: p[i + 1] }); }
+      if (!curved && rs.isRound && pts.length > 2) pts = rounded(pts, rs.radii || []);
+      var tip = typeof rs.arrowEndX === 'number' && !isNaN(rs.arrowEndX) ? { x: rs.arrowEndX, y: rs.arrowEndY } : null;
+      return { pts: pts, tip: tip, ortho: !curved && pts.length > 2 };
+    }
+    // Where a horizontal run of one orthogonal line crosses a vertical run of
+    // another, the horizontal one hops. Lines that share an end box never hop
+    // each other: they meet there on purpose.
+    function hopsFor(list) {
+      var vert = [];
+      list.forEach(function (it, li) {
+        if (!it.path || !it.path.ortho) return;
+        var q = it.path.pts;
+        for (var k = 1; k < q.length; k++) {
+          if (Math.abs(q[k].x - q[k - 1].x) < 0.5 && Math.abs(q[k].y - q[k - 1].y) > 1) {
+            vert.push({ li: li, x: q[k].x, y1: Math.min(q[k].y, q[k - 1].y), y2: Math.max(q[k].y, q[k - 1].y) });
+          }
+        }
+      });
+      list.forEach(function (it, li) {
+        it.hops = {};
+        if (!it.path || !it.path.ortho) return;
+        var q = it.path.pts;
+        for (var k = 1; k < q.length; k++) {
+          if (Math.abs(q[k].y - q[k - 1].y) >= 0.5) continue;
+          var y = q[k].y, x1 = Math.min(q[k].x, q[k - 1].x), x2 = Math.max(q[k].x, q[k - 1].x);
+          var xs = [];
+          vert.forEach(function (v) {
+            if (v.li === li) return;
+            var o = list[v.li];
+            if (o.src === it.src || o.src === it.tgt || o.tgt === it.src || o.tgt === it.tgt) return;
+            if (v.x > x1 + 7 && v.x < x2 - 7 && y > v.y1 + 7 && y < v.y2 - 7) xs.push(v.x);
+          });
+          if (xs.length) it.hops[k] = xs;
+        }
+      });
+    }
+    function items() {
+      var edges = cy.edges();
+      var same = cache.refs.length === edges.length;
+      var refs = [];
+      edges.forEach(function (e, idx) {
+        var r = e._private.rscratch && e._private.rscratch.allpts;
+        refs.push(r);
+        if (same && cache.refs[idx] !== r) same = false;
+      });
+      if (same && cache.list && cache.lineStyle === state.lineStyle) return cache.list;
+      var list = [];
+      edges.forEach(function (e) {
+        list.push({ edge: e, src: e.data('source'), tgt: e.data('target'), path: pathOf(e) });
+      });
+      hopsFor(list);
+      cache = { refs: refs, list: list, lineStyle: state.lineStyle };
+      return list;
+    }
+    function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
+    function trace(ctx, it) {
+      var q = it.path.pts, R = 5;
+      ctx.beginPath();
+      ctx.moveTo(q[0].x, q[0].y);
+      for (var k = 1; k < q.length; k++) {
+        var xs = it.hops && it.hops[k];
+        if (xs) {
+          var dir = q[k].x > q[k - 1].x ? 1 : -1, y = q[k].y;
+          xs.slice().sort(function (a, b) { return dir * (a - b); }).forEach(function (xc) {
+            ctx.lineTo(xc - dir * R, y);
+            if (dir > 0) ctx.arc(xc, y, R, Math.PI, 0, false);
+            else ctx.arc(xc, y, R, 0, Math.PI, true);
+          });
+        }
+        ctx.lineTo(q[k].x, q[k].y);
+      }
+    }
+    // Chevrons every gap model units along the line, pointing along it.
+    function chevrons(ctx, q, gap, arm) {
+      var carry = gap * 0.5;
+      ctx.beginPath();
+      for (var k = 1; k < q.length; k++) {
+        var dx = q[k].x - q[k - 1].x, dy = q[k].y - q[k - 1].y, len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.001) continue;
+        var ux = dx / len, uy = dy / len, s = carry;
+        while (s < len) {
+          var px = q[k - 1].x + ux * s, py = q[k - 1].y + uy * s;
+          ctx.moveTo(px - ux * arm - uy * arm, py - uy * arm + ux * arm);
+          ctx.lineTo(px, py);
+          ctx.lineTo(px - ux * arm + uy * arm, py - uy * arm - ux * arm);
+          s += gap;
+        }
+        carry = s - len;
+      }
+    }
+    function paintEdge(ctx, it, z, theme) {
+      var e = it.edge;
+      if (!it.path || !e.visible()) return;
+      var op = e.effectiveOpacity();
+      if (op <= 0.001) return;
+      var color = e.pstyle('line-color').value;
+      var arrowColor = e.pstyle('target-arrow-color').value;
+      var w = e.pstyle('width').pfValue;
+      var style = e.pstyle('line-style').value;
+      var q = it.path.pts;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      // The line itself: lighter than before, so the chevrons carry the eye.
+      var showChevrons = z >= 0.3;
+      ctx.setLineDash(style === 'dashed' ? [6, 5] : style === 'dotted' ? [1.5, 3.5] : []);
+      ctx.strokeStyle = rgba(color, op * (showChevrons ? 0.55 : 1));
+      ctx.lineWidth = showChevrons ? Math.max(1, w * 0.7) : w;
+      trace(ctx, it);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (showChevrons) {
+        ctx.strokeStyle = rgba(color, op);
+        ctx.lineWidth = Math.max(1.2, w * 0.75);
+        chevrons(ctx, q, 26, 3.6 + w * 0.5);
+        ctx.stroke();
+      }
+      // A boundary hop: a thin red stripe through the line. A type use or a bare
+      // declaration always joins two projects, so the stripe would say nothing there.
+      if (e.hasClass('cross') && !e.hasClass('k-uses') && !e.hasClass('k-declared')) {
+        var red = theme.cross;
+        ctx.strokeStyle = red;
+        ctx.globalAlpha = op;
+        ctx.lineWidth = 0.9;
+        trace(ctx, it);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      // The arrowhead, from where the line ends to the tip at the box.
+      var end = q[q.length - 1], tip = it.path.tip;
+      if (tip && e.pstyle('target-arrow-shape').value !== 'none') {
+        var ax = tip.x - end.x, ay = tip.y - end.y, al = Math.sqrt(ax * ax + ay * ay);
+        if (al > 0.5) {
+          var hw = al * 0.55, nx = -ay / al, ny = ax / al;
+          ctx.fillStyle = rgba(arrowColor, op);
+          ctx.beginPath();
+          ctx.moveTo(tip.x, tip.y);
+          ctx.lineTo(end.x + nx * hw, end.y + ny * hw);
+          ctx.lineTo(end.x - nx * hw, end.y - ny * hw);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+    function paint(ctx, z) {
+      var theme = THEMES[state.theme];
+      var list = items();
+      // Receding lines first, lifted ones last.
+      var low = [], mid = [], top = [];
+      list.forEach(function (it) {
+        var e = it.edge;
+        if (e.hasClass('defocus') || e.hasClass('dimmed')) low.push(it);
+        else if (e.hasClass('stubHover') || e.hasClass('edgeFocus') || e.hasClass('edgeOut') || e.hasClass('edgeIn') || e.hasClass('revealEdge')) top.push(it);
+        else mid.push(it);
+      });
+      low.concat(mid, top).forEach(function (it) { paintEdge(ctx, it, z, theme); });
+    }
+    function draw() {
+      var w = host.clientWidth, h = host.clientHeight, dpr = window.devicePixelRatio || 1;
+      var cw = Math.round(w * dpr), ch = Math.round(h * dpr);
+      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      var ctx = canvas.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, cw, ch);
+      var z = cy.zoom(), pan = cy.pan();
+      ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * pan.x, dpr * pan.y);
+      paint(ctx, z);
+    }
+    cy.on('render', draw);
+    // Draws the lines into an export: bb is the model box the image covers, scale its pixels per unit.
+    function drawInto(ctx, bb, scale) {
+      ctx.save();
+      ctx.setTransform(scale, 0, 0, scale, -bb.x1 * scale, -bb.y1 * scale);
+      paint(ctx, scale);
+      ctx.restore();
+    }
+    // ---- selection flow ----------------------------------------------------
+    // While an element is selected, a glowing dot runs along each of its lines in
+    // their direction: every incoming line first, then every outgoing one, then
+    // again. Its own canvas above the lines, redrawn per frame for those lines
+    // only; it stops when nothing is selected, waits while the page is hidden,
+    // and never starts when the reader asks for reduced motion.
+    var dots = document.createElement('canvas');
+    dots.className = 'edgeFlow';
+    dots.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0;';
+    host.insertBefore(dots, canvas.nextSibling);
+    var reduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    var RUN = 1500, REST = 250;
+    var flow = null, frame = 0;
+    // A path's points with their running lengths, so a fraction maps to a point.
+    function measured(pts) {
+      var acc = [0];
+      for (var k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+      return { pts: pts, acc: acc, len: acc[acc.length - 1] };
+    }
+    function pointAt(m, f) {
+      var s = m.len * f, k = 1;
+      while (k < m.acc.length - 1 && m.acc[k] < s) k++;
+      var seg = m.acc[k] - m.acc[k - 1] || 1, t = (s - m.acc[k - 1]) / seg;
+      var a = m.pts[k - 1], b = m.pts[k];
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    function pathsFor(eles) {
+      var byEdge = {};
+      items().forEach(function (it) { if (it.path) byEdge[it.edge.id()] = it; });
+      var out = [];
+      eles.forEach(function (e) {
+        var it = byEdge[e.id()];
+        if (!it || !e.visible()) return;
+        var pts = it.path.tip ? it.path.pts.concat([it.path.tip]) : it.path.pts;
+        var m = measured(pts);
+        if (m.len > 1) out.push(m);
+      });
+      return out;
+    }
+    function clearDots() {
+      var ctx = dots.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, dots.width, dots.height);
+    }
+    function glow(ctx, x, y, color, dpr) {
+      var r = 9 * dpr;
+      var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.25, color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function tick(now) {
+      frame = 0;
+      if (!flow) return;
+      if (document.hidden) { flow.paused = true; return; }
+      if (!flow.t0) flow.t0 = now;
+      // The lines move with every relayout or route: re-read them when the drawn geometry changes.
+      if (flow.cacheList !== cache.list) { flow.cacheList = items(); flow.inP = pathsFor(flow.inE); flow.outP = pathsFor(flow.outE); }
+      var phases = [];
+      if (flow.inP.length) phases.push({ paths: flow.inP, color: THEMES[state.theme].warn });
+      if (flow.outP.length) phases.push({ paths: flow.outP, color: THEMES[state.theme].selGlow });
+      if (!phases.length) { clearDots(); return; }
+      var cycle = RUN + REST, t = (now - flow.t0) % (cycle * phases.length);
+      var ph = phases[Math.floor(t / cycle)], f = (t % cycle) / RUN;
+      var w = host.clientWidth, h = host.clientHeight, dpr = window.devicePixelRatio || 1;
+      var cw = Math.round(w * dpr), ch = Math.round(h * dpr);
+      if (dots.width !== cw || dots.height !== ch) { dots.width = cw; dots.height = ch; }
+      clearDots();
+      if (f <= 1) {
+        var ctx = dots.getContext('2d'), z = cy.zoom(), pan = cy.pan();
+        // Ease in and out, so a dot leaves and arrives gently.
+        var e2 = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+        ph.paths.forEach(function (m) {
+          var p = pointAt(m, e2);
+          var x = (p.x * z + pan.x) * dpr, y = (p.y * z + pan.y) * dpr;
+          if (x < -20 || y < -20 || x > cw + 20 || y > ch + 20) return;
+          glow(ctx, x, y, ph.color, dpr);
+        });
+      }
+      frame = requestAnimationFrame(tick);
+    }
+    function stopFlow() {
+      flow = null;
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      clearDots();
+    }
+    function startFlow(inE, outE) {
+      stopFlow();
+      if (reduce && reduce.matches) return;
+      if (!inE.length && !outE.length) return;
+      flow = { inE: inE, outE: outE, inP: [], outP: [], cacheList: null, t0: 0 };
+      frame = requestAnimationFrame(tick);
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && flow && flow.paused && !frame) { flow.paused = false; flow.t0 = 0; frame = requestAnimationFrame(tick); }
+    });
+    if (reduce && reduce.addEventListener) reduce.addEventListener('change', function () { if (reduce.matches) stopFlow(); });
+    return { draw: draw, drawInto: drawInto, startFlow: startFlow, stopFlow: stopFlow };
+  })();
+  // ---- edge router ---------------------------------------------------------------
+  // Curved and orthogonal lines are routed around the boxes: each line leaves its
+  // source and enters its target on the side facing the other end, at its own port,
+  // and finds the cheapest orthogonal path through the gaps between boxes (length,
+  // plus a cost per bend and for running along a channel another line already uses).
+  // Lines that still share a channel are then spread apart, so no two lines with
+  // different ends run on top of each other. Orthogonal draws the path; curved draws
+  // a smooth curve through its bends. Straight lines are not routed.
+  var edgeRouter = (function () {
+    var MARGIN = 14, STUB = 18, BEND = 46, SHARE = 0.9, LANE = 7, MAX_NODES = 220;
+    function rectOf(n) {
+      var bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
+      return { l: bb.x1, r: bb.x2, t: bb.y1, b: bb.y2, cx: (bb.x1 + bb.x2) / 2, cy: (bb.y1 + bb.y2) / 2, w: bb.w, h: bb.h };
+    }
+    // The side of a facing b: right/left when there is a horizontal gap, else bottom/top.
+    function sideToward(a, b) {
+      var gapX = Math.abs(b.cx - a.cx) - (a.w + b.w) / 2;
+      var gapY = Math.abs(b.cy - a.cy) - (a.h + b.h) / 2;
+      if (gapX >= gapY) return b.cx >= a.cx ? 'r' : 'l';
+      return b.cy >= a.cy ? 'b' : 't';
+    }
+    var NORMAL = { r: { x: 1, y: 0 }, l: { x: -1, y: 0 }, b: { x: 0, y: 1 }, t: { x: 0, y: -1 } };
+    // Spread the ports of one side evenly, ordered by where the other end lies.
+    function assignPorts(jobs) {
+      var bySide = {};
+      jobs.forEach(function (j) {
+        ['s', 't'].forEach(function (end) {
+          var key = (end === 's' ? j.src : j.tgt) + '|' + (end === 's' ? j.sSide : j.tSide);
+          (bySide[key] = bySide[key] || []).push({ job: j, end: end });
+        });
+      });
+      Object.keys(bySide).forEach(function (key) {
+        var list = bySide[key];
+        var side = key.split('|').pop();
+        var horizontal = side === 't' || side === 'b';
+        list.sort(function (a, b) {
+          var oa = a.end === 's' ? a.job.tr : a.job.sr, ob = b.end === 's' ? b.job.tr : b.job.sr;
+          return horizontal ? oa.cx - ob.cx : oa.cy - ob.cy;
+        });
+        list.forEach(function (it, k) {
+          var r = it.end === 's' ? it.job.sr : it.job.tr;
+          var span = (horizontal ? r.w : r.h) * 0.7;
+          // Lines into one box from one side converge on one port: they all flow the same way.
+          var off = it.end === 't' || list.length === 1 ? 0 : -span / 2 + span * k / (list.length - 1);
+          var n = NORMAL[side];
+          var p = horizontal
+            ? { x: r.cx + off, y: side === 't' ? r.t : r.b }
+            : { x: side === 'l' ? r.l : r.r, y: r.cy + off };
+          var stub = { x: p.x + n.x * STUB, y: p.y + n.y * STUB };
+          if (it.end === 's') { it.job.sPort = p; it.job.sStub = stub; } else { it.job.tPort = p; it.job.tStub = stub; }
+        });
+      });
+    }
+    function uniqSorted(a) {
+      a.sort(function (x, y) { return x - y; });
+      var out = [];
+      a.forEach(function (v) { if (!out.length || Math.abs(out[out.length - 1] - v) > 0.5) out.push(v); });
+      return out;
+    }
+    // The routing grid: every box's inflated edges, every stub, and the middle of every gap.
+    function buildGrid(obstacles, jobs) {
+      var xs = [], ys = [];
+      obstacles.forEach(function (o) { xs.push(o.l - MARGIN, o.r + MARGIN); ys.push(o.t - MARGIN, o.b + MARGIN); });
+      jobs.forEach(function (j) { xs.push(j.sStub.x, j.tStub.x); ys.push(j.sStub.y, j.tStub.y); });
+      xs = uniqSorted(xs); ys = uniqSorted(ys);
+      var mx = [], my = [], i;
+      for (i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] > 2 * LANE) mx.push((xs[i] + xs[i - 1]) / 2);
+      for (i = 1; i < ys.length; i++) if (ys[i] - ys[i - 1] > 2 * LANE) my.push((ys[i] + ys[i - 1]) / 2);
+      xs = uniqSorted(xs.concat(mx)); ys = uniqSorted(ys.concat(my));
+      var W = xs.length, H = ys.length;
+      // 2 = through a box, 1 = through the clearance around one (allowed, at a cost), 0 = free.
+      var inside = function (x, y) {
+        var level = 0;
+        for (var k = 0; k < obstacles.length; k++) {
+          var o = obstacles[k];
+          if (x > o.l - 2 && x < o.r + 2 && y > o.t - 2 && y < o.b + 2) return 2;
+          if (x > o.l - MARGIN + 0.5 && x < o.r + MARGIN - 0.5 && y > o.t - MARGIN + 0.5 && y < o.b + MARGIN - 0.5) level = 1;
+        }
+        return level;
+      };
+      var blocked = new Uint8Array(W * H);
+      var blockR = new Uint8Array(W * H), blockD = new Uint8Array(W * H);
+      for (var yi = 0; yi < H; yi++) {
+        for (var xi = 0; xi < W; xi++) {
+          var id = yi * W + xi;
+          blocked[id] = inside(xs[xi], ys[yi]);
+          if (xi + 1 < W) blockR[id] = inside((xs[xi] + xs[xi + 1]) / 2, ys[yi]);
+          if (yi + 1 < H) blockD[id] = inside(xs[xi], (ys[yi] + ys[yi + 1]) / 2);
+        }
+      }
+      var xIndex = {}, yIndex = {};
+      xs.forEach(function (v, k) { xIndex[Math.round(v * 2)] = k; });
+      ys.forEach(function (v, k) { yIndex[Math.round(v * 2)] = k; });
+      return { xs: xs, ys: ys, W: W, H: H, blocked: blocked, blockR: blockR, blockD: blockD, xIndex: xIndex, yIndex: yIndex, usage: {} };
+    }
+    function nearestIndex(arr, v) {
+      var best = 0;
+      for (var k = 1; k < arr.length; k++) if (Math.abs(arr[k] - v) < Math.abs(arr[best] - v)) best = k;
+      return best;
+    }
+    // A binary heap of [cost, state].
+    function Heap() { this.a = []; }
+    Heap.prototype.push = function (c, s) {
+      var a = this.a; a.push([c, s]);
+      var i = a.length - 1;
+      while (i > 0) { var p = (i - 1) >> 1; if (a[p][0] <= a[i][0]) break; var t = a[p]; a[p] = a[i]; a[i] = t; i = p; }
+    };
+    Heap.prototype.pop = function () {
+      var a = this.a, top = a[0], last = a.pop();
+      if (a.length) {
+        a[0] = last;
+        var i = 0;
+        for (;;) {
+          var l = 2 * i + 1, r = l + 1, m = i;
+          if (l < a.length && a[l][0] < a[m][0]) m = l;
+          if (r < a.length && a[r][0] < a[m][0]) m = r;
+          if (m === i) break;
+          var t = a[m]; a[m] = a[i]; a[i] = t; i = m;
+        }
+      }
+      return top;
+    };
+    var DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];
+    function dirOfSide(side) { return side === 'r' ? 0 : side === 'b' ? 1 : side === 'l' ? 2 : 3; }
+    // The cheapest orthogonal path from the source stub to the target stub.
+    function search(g, j) {
+      var sx = nearestIndex(g.xs, j.sStub.x), sy = nearestIndex(g.ys, j.sStub.y);
+      var tx = nearestIndex(g.xs, j.tStub.x), ty = nearestIndex(g.ys, j.tStub.y);
+      var W = g.W, N = W * g.H;
+      var best = new Float64Array(N * 4).fill(Infinity);
+      var from = new Int32Array(N * 4).fill(-1);
+      var heap = new Heap();
+      var startDir = dirOfSide(j.sSide), endDir = (dirOfSide(j.tSide) + 2) % 4;
+      var s0 = (sy * W + sx) * 4 + startDir;
+      best[s0] = 0;
+      var h = function (xi, yi) { return Math.abs(g.xs[xi] - g.xs[tx]) + Math.abs(g.ys[yi] - g.ys[ty]); };
+      heap.push(h(sx, sy), s0);
+      var goal = -1, guard = 0;
+      while (heap.a.length && guard++ < 400000) {
+        var top = heap.pop(), st = top[1];
+        var cell = st >> 2, dir = st & 3, xi = cell % W, yi = (cell - xi) / W;
+        var cost = best[st];
+        if (top[0] > cost + h(xi, yi) + 0.001) continue;
+        if (xi === tx && yi === ty) { goal = st; break; }
+        for (var d = 0; d < 4; d++) {
+          if (d === (dir + 2) % 4) continue;
+          var nx = xi + DX[d], ny = yi + DY[d];
+          if (nx < 0 || ny < 0 || nx >= W || ny >= g.H) continue;
+          var ncell = ny * W + nx;
+          var isEnd = nx === tx && ny === ty;
+          if (g.blocked[ncell] === 2 && !isEnd) continue;
+          var seg = d === 0 ? g.blockR[cell] : d === 2 ? g.blockR[ncell] : d === 1 ? g.blockD[cell] : g.blockD[ncell];
+          if (seg === 2) continue;
+          var len = Math.abs(g.xs[nx] - g.xs[xi]) + Math.abs(g.ys[ny] - g.ys[yi]);
+          if (seg === 1 || g.blocked[ncell] === 1) len *= 3;
+          var key = Math.min(cell, ncell) + ':' + Math.max(cell, ncell);
+          var used = g.usage[key];
+          var share = 0;
+          if (used) for (var u in used) if (u !== j.tgt && u !== j.src) share++;
+          var c = cost + len * (1 + SHARE * Math.min(share, 3)) + (d !== dir ? BEND : 0);
+          if (isEnd && d !== endDir) c += BEND;
+          var ns = ncell * 4 + d;
+          if (c < best[ns]) { best[ns] = c; from[ns] = st; heap.push(c + h(nx, ny), ns); }
+        }
+      }
+      if (goal < 0) return null;
+      var cells = [];
+      for (var s = goal; s >= 0; s = from[s]) cells.push(s >> 2);
+      cells.reverse();
+      for (var k = 1; k < cells.length; k++) {
+        var a = cells[k - 1], b = cells[k];
+        var ukey = Math.min(a, b) + ':' + Math.max(a, b);
+        (g.usage[ukey] = g.usage[ukey] || {})[j.tgt] = true;
+      }
+      return cells.map(function (c) { var x = c % W; return { x: g.xs[x], y: g.ys[(c - x) / W] }; });
+    }
+    function simplify(pts) {
+      var out = [];
+      pts.forEach(function (p) {
+        if (out.length && Math.abs(out[out.length - 1].x - p.x) < 0.01 && Math.abs(out[out.length - 1].y - p.y) < 0.01) return;
+        out.push({ x: p.x, y: p.y });
+        while (out.length >= 3) {
+          var a = out[out.length - 3], b = out[out.length - 2], c = out[out.length - 1];
+          var col = (Math.abs(a.x - b.x) < 0.01 && Math.abs(b.x - c.x) < 0.01) || (Math.abs(a.y - b.y) < 0.01 && Math.abs(b.y - c.y) < 0.01);
+          if (!col) break;
+          out.splice(out.length - 2, 1);
+        }
+      });
+      return out;
+    }
+    // Lines whose runs lie on the same channel line and overlap are spread across it.
+    // Runs that end at the same box from the same direction may stay together.
+    function nudge(routes) {
+      ['v', 'h'].forEach(function (axis) {
+        var runs = [];
+        routes.forEach(function (r, ri) {
+          var p = r.pts;
+          for (var k = 2; k < p.length - 1; k++) {
+            var a = p[k - 1], b = p[k];
+            var vertical = Math.abs(a.x - b.x) < 0.01;
+            if ((axis === 'v') !== vertical) continue;
+            var c = vertical ? a.x : a.y;
+            var lo = vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x), hi = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
+            runs.push({ ri: ri, k: k, c: c, lo: lo, hi: hi, tgt: r.tgt, other: vertical ? (p[k + 1] ? p[k + 1].x : b.x) : (p[k + 1] ? p[k + 1].y : b.y) });
+          }
+        });
+        var byC = {};
+        runs.forEach(function (r) { (byC[Math.round(r.c * 2)] = byC[Math.round(r.c * 2)] || []).push(r); });
+        Object.keys(byC).forEach(function (key) {
+          var list = byC[key].sort(function (a, b) { return a.lo - b.lo; });
+          // Clusters of overlapping runs.
+          var clusters = [], cur = null, curHi = -Infinity;
+          list.forEach(function (r) {
+            if (cur && r.lo < curHi - 1) { cur.push(r); curHi = Math.max(curHi, r.hi); }
+            else { cur = [r]; clusters.push(cur); curHi = r.hi; }
+          });
+          clusters.forEach(function (cl) {
+            if (cl.length < 2) return;
+            var lanes = {};
+            cl.forEach(function (r) { (lanes[r.tgt] = lanes[r.tgt] || []).push(r); });
+            var keys = Object.keys(lanes).sort(function (a, b) { return lanes[a][0].other - lanes[b][0].other; });
+            if (keys.length < 2) return;
+            keys.forEach(function (lk, idx) {
+              var off = (idx - (keys.length - 1) / 2) * LANE;
+              lanes[lk].forEach(function (r) {
+                var p = routes[r.ri].pts;
+                if (axis === 'v') { p[r.k - 1].x += off; p[r.k].x += off; }
+                else { p[r.k - 1].y += off; p[r.k].y += off; }
+              });
+            });
+          });
+        });
+      });
+    }
+    // ---- curved: a smooth curve through the routed path ------------------------
+    var CLEAR = 9;
+    function segClear(a, b, obstacles) {
+      for (var k = 0; k < obstacles.length; k++) {
+        var o = obstacles[k];
+        var r = { l: o.l - CLEAR, r: o.r + CLEAR, t: o.t - CLEAR, b: o.b + CLEAR };
+        // Liang-Barsky clip of the segment against the rectangle.
+        var t0 = 0, t1 = 1, dx = b.x - a.x, dy = b.y - a.y;
+        var p = [-dx, dx, -dy, dy], q = [a.x - r.l, r.r - a.x, a.y - r.t, r.b - a.y];
+        var hit = true;
+        for (var i = 0; i < 4; i++) {
+          if (Math.abs(p[i]) < 1e-9) { if (q[i] < 0) { hit = false; break; } continue; }
+          var t = q[i] / p[i];
+          if (p[i] < 0) { if (t > t1) { hit = false; break; } if (t > t0) t0 = t; }
+          else { if (t < t0) { hit = false; break; } if (t < t1) t1 = t; }
+        }
+        if (hit && t1 - t0 > 1e-6) return false;
+      }
+      return true;
+    }
+    function inAny(p, obstacles, pad) {
+      for (var k = 0; k < obstacles.length; k++) {
+        var o = obstacles[k];
+        if (p.x > o.l - pad && p.x < o.r + pad && p.y > o.t - pad && p.y < o.b + pad) return true;
+      }
+      return false;
+    }
+    // Centripetal Catmull-Rom through the waypoints, sampled.
+    function spline(w) {
+      var out = [w[0]];
+      for (var i = 0; i < w.length - 1; i++) {
+        var p0 = w[i - 1] || { x: 2 * w[0].x - w[1].x, y: 2 * w[0].y - w[1].y };
+        var p1 = w[i], p2 = w[i + 1];
+        var p3 = w[i + 2] || { x: 2 * w[w.length - 1].x - w[w.length - 2].x, y: 2 * w[w.length - 1].y - w[w.length - 2].y };
+        var d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        var n = Math.max(2, Math.ceil(d / 14));
+        var t01 = Math.pow(Math.hypot(p1.x - p0.x, p1.y - p0.y), 0.5) || 1;
+        var t12 = Math.pow(d, 0.5) || 1;
+        var t23 = Math.pow(Math.hypot(p3.x - p2.x, p3.y - p2.y), 0.5) || 1;
+        var m1x = (p2.x - p1.x + t12 * ((p1.x - p0.x) / t01 - (p2.x - p0.x) / (t01 + t12)));
+        var m1y = (p2.y - p1.y + t12 * ((p1.y - p0.y) / t01 - (p2.y - p0.y) / (t01 + t12)));
+        var m2x = (p2.x - p1.x + t12 * ((p3.x - p2.x) / t23 - (p3.x - p1.x) / (t12 + t23)));
+        var m2y = (p2.y - p1.y + t12 * ((p3.y - p2.y) / t23 - (p3.y - p1.y) / (t12 + t23)));
+        for (var s = 1; s <= n; s++) {
+          var t = s / n, t2 = t * t, t3 = t2 * t;
+          var h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+          out.push({ x: h00 * p1.x + h10 * m1x + h01 * p2.x + h11 * m2x, y: h00 * p1.y + h10 * m1y + h01 * p2.y + h11 * m2y, leg: i });
+        }
+      }
+      return out;
+    }
+    // Curved lines take the shortest way around the boxes: a visibility graph over
+    // the corners of every box (with clearance), searched per line, then a smooth
+    // curve through the corners it passes. A corner several lines pass is taken a
+    // little wider by each, so curves keep their distance instead of stacking.
+    var CORNER = 16, SPREAD = 7;
+    function cornerGraph(obstacles) {
+      var nodes = [];
+      obstacles.forEach(function (o) {
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (d) {
+          var p = { x: (d[0] < 0 ? o.l : o.r) + d[0] * CORNER, y: (d[1] < 0 ? o.t : o.b) + d[1] * CORNER, dx: d[0], dy: d[1], uses: 0 };
+          if (!inAny(p, obstacles, 1)) nodes.push(p);
+        });
+      });
+      var vis = nodes.map(function () { return []; });
+      for (var a = 0; a < nodes.length; a++) {
+        for (var b = a + 1; b < nodes.length; b++) {
+          if (segClear(nodes[a], nodes[b], obstacles)) {
+            var d = Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y);
+            vis[a].push([b, d]); vis[b].push([a, d]);
+          }
+        }
+      }
+      return { nodes: nodes, vis: vis };
+    }
+    function anyAngle(cg, from, to, obstacles) {
+      if (segClear(from, to, obstacles)) return [];
+      var N = cg.nodes.length, S = N, T = N + 1;
+      var dist = new Float64Array(N + 2).fill(Infinity), prev = new Int32Array(N + 2).fill(-1), done = new Uint8Array(N + 2);
+      var startLinks = [], endLinks = [];
+      cg.nodes.forEach(function (p, k) {
+        if (segClear(from, p, obstacles)) startLinks.push([k, Math.hypot(p.x - from.x, p.y - from.y)]);
+        if (segClear(p, to, obstacles)) endLinks.push([k, Math.hypot(p.x - to.x, p.y - to.y)]);
+      });
+      var endOf = {};
+      endLinks.forEach(function (l) { endOf[l[0]] = l[1]; });
+      var heap = new Heap();
+      dist[S] = 0; heap.push(0, S);
+      while (heap.a.length) {
+        var top = heap.pop(), u = top[1];
+        if (done[u]) continue;
+        done[u] = 1;
+        if (u === T) break;
+        var links = u === S ? startLinks : cg.vis[u];
+        for (var i = 0; i < links.length; i++) {
+          var v = links[i][0], c = dist[u] + links[i][1] + (cg.nodes[v].uses * SPREAD);
+          if (c < dist[v]) { dist[v] = c; prev[v] = u; heap.push(c, v); }
+        }
+        if (u !== S && endOf[u] !== undefined && dist[u] + endOf[u] < dist[T]) { dist[T] = dist[u] + endOf[u]; prev[T] = u; heap.push(dist[T], T); }
+      }
+      if (prev[T] < 0) return null;
+      var path = [];
+      for (var x = prev[T]; x !== S && x >= 0; x = prev[x]) path.push(x);
+      path.reverse();
+      return path.map(function (k) {
+        var p = cg.nodes[k], off = p.uses * SPREAD;
+        p.uses++;
+        return { x: p.x + p.dx * off, y: p.y + p.dy * off };
+      });
+    }
+    function curveRoute(j, cg, obstacles) {
+      var mid = anyAngle(cg, j.sStub, j.tStub, obstacles);
+      var w = [j.sPort, j.sStub].concat(mid || [], [j.tStub, j.tPort]);
+      var sm = spline(w);
+      for (var s = 1; s < sm.length - 1; s++) {
+        // A curve that swings into a box falls back to the straight legs through the same corners.
+        if (inAny(sm[s], obstacles, 1)) return w;
+      }
+      return sm;
+    }
+    // From the routed (and spread) polyline: keep only the waypoints a straight
+    // line cannot skip without touching a box, then curve through them. Where the
+    // curve cuts a box's corner, the skipped route points come back in.
+    function curvePath(pts, obstacles) {
+      if (pts.length < 3) return pts;
+      var n = pts.length, keep = [0, 1];
+      var i = 1;
+      while (i < n - 2) {
+        var j = n - 2;
+        while (j > i + 1 && !segClear(pts[i], pts[j], obstacles)) j--;
+        keep.push(j);
+        i = j;
+      }
+      if (keep[keep.length - 1] !== n - 2) keep.push(n - 2);
+      keep.push(n - 1);
+      keep = keep.filter(function (v, k) { return k === 0 || v !== keep[k - 1]; });
+      for (var round = 0; round < 4; round++) {
+        var w = keep.map(function (k) { return pts[k]; });
+        var sm = spline(w);
+        var bad = -1;
+        // The kept leg the first sample inside a box falls on.
+        for (var s = 1; s < sm.length - 1; s++) {
+          if (inAny(sm[s], obstacles, 2)) { bad = sm[s].leg; break; }
+        }
+        if (bad < 0) return sm;
+        var a = keep[bad], b = keep[Math.min(bad + 1, keep.length - 1)];
+        if (b - a < 2) return pts;
+        keep.splice(bad + 1, 0, Math.floor((a + b) / 2));
+      }
+      return pts;
+    }
+    function apply() {
+      var mode = state.lineStyle;
+      var edges = cy.edges().filter(function (e) { return e.visible() && e.source().id() !== e.target().id(); });
+      var leaves = cy.nodes().filter(function (n) { return n.visible(); });
+      if (mode === 'straight' || leaves.length > MAX_NODES) {
+        cy.batch(function () { edges.forEach(function (e) { e.removeStyle(); }); });
+        return;
+      }
+      var rects = {};
+      leaves.forEach(function (n) { rects[n.id()] = rectOf(n); });
+      var jobs = [];
+      edges.forEach(function (e) {
+        var sr = rects[e.source().id()], tr = rects[e.target().id()];
+        if (!sr || !tr) return;
+        jobs.push({ edge: e, src: e.source().id(), tgt: e.target().id(), sr: sr, tr: tr, sSide: sideToward(sr, tr), tSide: sideToward(tr, sr) });
+      });
+      // Obstacles: every box except compound boxes, which lines may enter.
+      var obstacles = [];
+      leaves.forEach(function (n) { if (!n.isParent()) obstacles.push(rects[n.id()]); });
+      // A side whose way out runs straight into a neighbouring box (a tight stack)
+      // gives way to the other side facing the far end.
+      var blockedOut = function (r, side) {
+        var n = NORMAL[side];
+        var p = side === 'l' || side === 'r' ? { x: side === 'l' ? r.l : r.r, y: r.cy } : { x: r.cx, y: side === 't' ? r.t : r.b };
+        var q = { x: p.x + n.x * (STUB + 2), y: p.y + n.y * (STUB + 2) };
+        return obstacles.some(function (o) { return o !== r && q.x > o.l - 3 && q.x < o.r + 3 && q.y > o.t - 3 && q.y < o.b + 3; });
+      };
+      var otherSide = function (a, b, side) {
+        if (side === 'l' || side === 'r') return b.cy >= a.cy ? 'b' : 't';
+        return b.cx >= a.cx ? 'r' : 'l';
+      };
+      jobs.forEach(function (j) {
+        if (blockedOut(j.sr, j.sSide)) j.sSide = otherSide(j.sr, j.tr, j.sSide);
+        if (blockedOut(j.tr, j.tSide)) j.tSide = otherSide(j.tr, j.sr, j.tSide);
+      });
+      assignPorts(jobs);
+      var g = buildGrid(obstacles, jobs);
+      jobs.sort(function (a, b) {
+        return (Math.abs(a.sPort.x - a.tPort.x) + Math.abs(a.sPort.y - a.tPort.y)) - (Math.abs(b.sPort.x - b.tPort.x) + Math.abs(b.sPort.y - b.tPort.y));
+      });
+      var routes = [];
+      jobs.forEach(function (j) {
+        var mid = search(g, j);
+        var pts = mid ? [j.sPort].concat(mid, [j.tPort]) : [j.sPort, j.sStub, j.tStub, j.tPort];
+        // The search snaps to the grid: keep the stubs straight out of their ports.
+        pts = simplify(pts);
+        routes.push({ job: j, tgt: j.tgt, pts: pts });
+      });
+      nudge(routes);
+      if (mode === 'bezier') {
+        var cg = cornerGraph(obstacles);
+        routes.forEach(function (r) { r.pts = curveRoute(r.job, cg, obstacles); });
+      }
+      cy.batch(function () {
+        routes.forEach(function (r) {
+          var j = r.job, p = r.pts, e = j.edge;
+          var s = j.sPort, t = j.tPort;
+          var vx = t.x - s.x, vy = t.y - s.y, l2 = vx * vx + vy * vy;
+          if (l2 < 1) { e.removeStyle(); return; }
+          var l = Math.sqrt(l2), nx = -vy / l, ny = vx / l;
+          var ws = [], ds = [];
+          for (var k = 1; k < p.length - 1; k++) {
+            var dx = p[k].x - s.x, dy = p[k].y - s.y;
+            ws.push(((dx * vx + dy * vy) / l2).toFixed(4));
+            ds.push((dx * nx + dy * ny).toFixed(2));
+          }
+          if (!ws.length) { ws.push('0.5'); ds.push('0'); }
+          var srcC = e.source().position(), tgtC = e.target().position();
+          var st = {
+            'edge-distances': 'endpoints',
+            'source-endpoint': (s.x - srcC.x).toFixed(2) + 'px ' + (s.y - srcC.y).toFixed(2) + 'px',
+            'target-endpoint': (t.x - tgtC.x).toFixed(2) + 'px ' + (t.y - tgtC.y).toFixed(2) + 'px',
+          };
+          // Orthogonal draws the route itself; curved draws the sampled curve through it.
+          st['curve-style'] = 'segments';
+          st['segment-weights'] = ws.join(' ');
+          st['segment-distances'] = ds.join(' ');
+          e.style(st);
+        });
+      });
+    }
+    var timer = null;
+    function schedule() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { timer = null; apply(); }, 30);
+    }
+    return { apply: apply, schedule: schedule };
+  })();
+  edgeRouter.schedule();
   var pinnedProxy = null;
   positionView(true);
   renderCrumbs();
@@ -2026,6 +2843,7 @@ export function mountCanvas(host, model, opts = {}) {
     if (state.view.kind !== 'types' && state.layout !== 'layered' && !hasSaved) runNativeLayout();
     applySavedPositions();
     if (fit) cy.fit(undefined, 60);
+    if (typeof edgeRouter !== 'undefined' && edgeRouter) edgeRouter.schedule();
   }
   function rebuild(fit) {
     pinnedProxy = null;
@@ -2401,9 +3219,11 @@ export function mountCanvas(host, model, opts = {}) {
     tip.style.display = 'block';
   });
   cy.on('mouseout', 'edge.rel', function () { ROOT.getElementById('relTip').style.display = 'none'; });
-  cy.on('tap', 'edge.rel', function (ev) {
-    var ids = ev.target.data('rels') || '';
+  cy.on('tap', 'edge', function (ev) {
+    var ids = ev.target.is('.rel') ? (ev.target.data('rels') || '') : '';
     if (ids) select('relation', ids, false);
+    else select(null, null, false);
+    focusEdge(ev.target);
   });
 
   cy.on('tap', 'node', function (ev) {
@@ -2473,7 +3293,7 @@ export function mountCanvas(host, model, opts = {}) {
       select('subsystem', t.id, false);
     }
   });
-  cy.on('dragfree', 'node', function () { harvestPositions(); });
+  cy.on('dragfree', 'node', function () { harvestPositions(); edgeRouter.schedule(); });
 
   function parentViewOf(kind, id) {
     if (kind === 'subsystem') {
@@ -2594,6 +3414,7 @@ export function mountCanvas(host, model, opts = {}) {
         state.lineStyle = ev.target.value;
         persist();
         cy.style(buildStyle(THEMES[state.theme]));
+        edgeRouter.schedule();
       });
     }
   })();
@@ -2610,6 +3431,7 @@ export function mountCanvas(host, model, opts = {}) {
     state.theme = state.theme === 'syw' ? 'light' : 'syw';
     CBODY.setAttribute('data-theme', state.theme);
     cy.style(buildStyle(THEMES[state.theme]));
+    edgeRouter.schedule();
     renderLegend();
     persist();
   });
@@ -3000,10 +3822,26 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function downloadPng(cyInst, name) {
     if (!inBrowser) return;
-    var uri = cyInst.png({ full: true, scale: 2, bg: THEMES[state.theme].png });
-    var a = document.createElement('a');
-    a.href = uri; a.download = name;
-    CBODY.appendChild(a); a.click(); a.remove();
+    var save = function (uri) {
+      var a = document.createElement('a');
+      a.href = uri; a.download = name;
+      CBODY.appendChild(a); a.click(); a.remove();
+    };
+    if (cyInst !== cy) { save(cyInst.png({ full: true, scale: 2, bg: THEMES[state.theme].png })); return; }
+    // The main canvas draws its lines in the edge overlay: compose them under the boxes.
+    var bb = cy.elements().boundingBox();
+    var img = new Image();
+    img.onload = function () {
+      var out = document.createElement('canvas');
+      out.width = img.width; out.height = img.height;
+      var ctx = out.getContext('2d');
+      ctx.fillStyle = THEMES[state.theme].png;
+      ctx.fillRect(0, 0, out.width, out.height);
+      edgeOverlay.drawInto(ctx, bb, img.width / (bb.w || 1));
+      ctx.drawImage(img, 0, 0);
+      save(out.toDataURL('image/png'));
+    };
+    img.src = cy.png({ full: true, scale: 2 });
   }
   // Types (ERD) view exports through the same builders via a synthetic model.
   function typesExportModel() {
@@ -3674,7 +4512,20 @@ export function mountCanvas(host, model, opts = {}) {
 
   // Focus mode: lift the selected element's own edges above everything and let
   // the rest recede, so its relations read clearly in a busy graph.
-  function clearFocus() { cy.elements().removeClass('defocus edgeFocus edgeOut edgeIn'); }
+  function clearFocus() {
+    cy.elements().removeClass('defocus edgeFocus edgeOut edgeIn edgeEnd');
+    if (typeof edgeOverlay !== 'undefined' && edgeOverlay) edgeOverlay.stopFlow();
+  }
+  // A clicked line: it and the two boxes it joins stand out, everything else recedes.
+  function focusEdge(edge) {
+    clearFocus();
+    var ends = edge.connectedNodes();
+    var keep = edge.union(ends).union(ends.ancestors());
+    cy.elements().addClass('defocus');
+    keep.removeClass('defocus');
+    edge.addClass('edgeFocus');
+    ends.addClass('edgeEnd');
+  }
   function applyFocus(node) {
     clearFocus();
     if (!node || !node.length) return;
@@ -3698,6 +4549,7 @@ export function mountCanvas(host, model, opts = {}) {
     inE.addClass('edgeIn').removeClass('defocus');
     colorable.not(outE).not(inE).addClass('edgeFocus').removeClass('defocus');
     reveal.removeClass('defocus');
+    if (typeof edgeOverlay !== 'undefined' && edgeOverlay) edgeOverlay.startFlow(inE, outE);
   }
 
   // The Findings panel: EVERY finding of the model, errors first, then warnings, then notices - including one
