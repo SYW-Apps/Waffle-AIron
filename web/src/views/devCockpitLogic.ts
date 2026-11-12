@@ -19,6 +19,8 @@ export interface DevApprovalData {
   branch?: string;
   /** The checkout's HEAD commit, when the server sends it (shown short on a detached HEAD). */
   commit?: string;
+  /** The served project's name (its system spec's name); absent when unreadable. */
+  projectName?: string;
 }
 
 /** The part of a graph node this logic reads. */
@@ -180,4 +182,23 @@ export function subsystemOfRoute(route: string, nodes: ScopeNode[]): string | un
 /** The request body of POST /web/dev/commands for a lock. */
 export function lockBody(subsystem: string | undefined): { command: 'lock'; subsystem?: string } {
   return subsystem ? { command: 'lock', subsystem } : { command: 'lock' };
+}
+
+// Naming the page after the project it serves.
+
+/** The label shown in the dev header: the L0 system name, else the fallback. */
+export function projectLabel(systemName: string | undefined | null, fallback = 'project'): string {
+  const n = (systemName ?? '').trim();
+  return n || fallback;
+}
+
+/** document.title of a `wairon dev` page. */
+export function devPageTitle(name: string): string {
+  return `${name} · wairon dev`;
+}
+
+/** document.title of a hosted page; without a project it is just the product name. */
+export function hostedPageTitle(name?: string | null): string {
+  const n = (name ?? '').trim();
+  return n ? `${n} · wairon` : 'wairon';
 }
