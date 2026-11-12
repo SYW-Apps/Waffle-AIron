@@ -5,6 +5,7 @@ description: >-
   warm between jobs. Jobs run in arrival order; each binds its root only for its own run.
 contract: ivalidation_thread
 sourcePath: src/core/validation-runner.ts
+simPath: tests/core/validation-runner.test.ts
 methods:
   - name: run
     narrative:
@@ -49,6 +50,7 @@ methods:
         description: Answer the result the thread handed back
         type: return
         outcome: the gate's result
+    symbol: runOnThread
   - name: stop
     narrative:
       - stepNumber: 1
@@ -58,6 +60,7 @@ methods:
         description: Answer once it has exited
         type: return
         outcome: stopped
+    symbol: stopThread
 status: complete
 createdAt: '2026-11-11T23:26:18.619Z'
-updatedAt: '2026-11-11T23:26:20.029Z'
+updatedAt: '2026-11-12T00:30:48.614Z'

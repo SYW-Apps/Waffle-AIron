@@ -338,11 +338,15 @@ methods:
         optional: true
   - name: warm
     description: >-
-      Start both gates for the bound project in the background so the first page that needs them
-      finds them remembered. Failures are ignored: the page asks again.
-    signature: 'warm(): void'
+      Start both gates for the bound project in the background, with the options the page will ask
+      them with, so the first page that needs them finds them remembered. Failures are ignored: the
+      page asks again.
+    signature: 'warm(options?: ValidationOptions): void'
     returns: void
-    params: []
+    params:
+      - name: options
+        type: ValidationOptions
+        optional: true
   - name: stopBackground
     description: Stop the validation thread when it runs, for a serving process that shuts down.
     signature: 'stopBackground(): async void'
@@ -350,4 +354,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-11T23:26:36.150Z'
+updatedAt: '2026-11-12T00:39:35.099Z'

@@ -5,6 +5,7 @@ description: >-
   thread that exits is replaced on the next job.
 contract: ivalidation_runner
 sourcePath: src/core/validation-runner.ts
+simPath: tests/core/validation-runner.test.ts
 methods:
   - name: run
     narrative:
@@ -43,6 +44,7 @@ methods:
         description: Answer the result
         type: return
         outcome: the gate's result
+    symbol: run
   - name: stop
     narrative:
       - stepNumber: 1
@@ -54,6 +56,7 @@ methods:
         description: Answer
         type: return
         outcome: stopped
+    symbol: stop
 status: complete
 createdAt: '2026-11-11T23:26:23.500Z'
-updatedAt: '2026-11-11T23:26:24.687Z'
+updatedAt: '2026-11-12T00:30:50.668Z'
