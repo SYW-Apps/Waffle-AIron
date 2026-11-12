@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "6be62c58a206aa345d871aac4085770379afd956227d057fa3675c1615d38f76"
+    "digest": "d97abb330d221e7766b288d799982e29de7e7a25e80e1f921ee1de7f90c8c031"
   },
-  "lockedAt": "2026-11-11T23:58:10.194Z",
+  "lockedAt": "2026-11-12T00:23:25.488Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -13,7 +13,7 @@
   "validationResult": {
     "valid": true,
     "errors": 0,
-    "warnings": 0,
+    "warnings": 32,
     "notices": 1
   },
   "status": "ready",
@@ -436,7 +436,7 @@
     ".wai/specs/implementations/custom_exporter_impl.yaml": "6280330115de7493f8be303c757c77b54513d130d8735b17000119fc68dfed6a",
     ".wai/specs/implementations/demo_orchestrator_impl.yaml": "0ae57a70a372dc8478077c76169a253f6a562d61090c49795d7c98e6cab95bbd",
     ".wai/specs/implementations/design_exporter_impl.yaml": "d4a8583d2e3d77554f963927bc4ef8afa9259a6aed5207ec71d0ba4ba9f72ccb",
-    ".wai/specs/implementations/dev_cockpit_orchestrator_impl.yaml": "1e14e80d755d4497fa73494549f064d1e2a3cb32cf6c7dae2a4d61de4164e974",
+    ".wai/specs/implementations/dev_cockpit_orchestrator_impl.yaml": "32e07e4ec901c7772e9dcead8a03c1e6854775a8885680bef98dd31953d8c627",
     ".wai/specs/implementations/dev_tree_watcher_impl.yaml": "8fe9b3889b60b9bfd1c05aaf7209421e0749fa431ffb0c60fd17c336727da281",
     ".wai/specs/implementations/diagnostics_impl.yaml": "95288ad57bdf5a0ec72e185c1e9cd0481fb256f039642cdf9ebd09e349c55560",
     ".wai/specs/implementations/diagram_codec_impl.yaml": "7d11d608070597032b9a1809829a1294ccc214e01a18fc47b420661e7c818a76",
@@ -495,7 +495,7 @@
     ".wai/specs/implementations/host_server_impl.yaml": "a01ac6abb01753df3524236a543c89837113367a247b06a88471849a7abed8e1",
     ".wai/specs/implementations/host_surfaces_adapter_impl.yaml": "428abbb785beefb0348b6e62897c411a4198558f4ad516bc532b737f39295d6d",
     ".wai/specs/implementations/host_upgrade_adapter_impl.yaml": "f55f88ad71315386566ef0916e83f896e1e4cdb6ce87d05978666b75e1756f5c",
-    ".wai/specs/implementations/host_validator_adapter_impl.yaml": "42198cbdfaa2fee172936e8d30b6b35ead2bd1bf5fe3659d07ca78e26f96f4c1",
+    ".wai/specs/implementations/host_validator_adapter_impl.yaml": "79e160dd589bd8d8473172bdc9139c1761d8859506a0c1c27b585b9d830a3624",
     ".wai/specs/implementations/http_client_adapter_impl.yaml": "c85e1cd5e74c7ee489069135b13d94c147792f495ef046a459b81621da1e5fe3",
     ".wai/specs/implementations/identity_migration_impl.yaml": "203038e847a79ecd95196059c3dcb30be472a3408b3221bedcd7d549e2b7bd2d",
     ".wai/specs/implementations/identity_orchestrator_impl.yaml": "3952d64a4f054c8476bec9374cb70ae8c3da7112af9b924cb958a03d1649b8f6",
@@ -721,7 +721,7 @@
     ".wai/specs/implementations/version_stamp_impl.yaml": "3f252cba0bb1080f844c23447e9344bd311006cb07a4e03014e3a190861d47ae",
     ".wai/specs/implementations/visibility_rules_impl.yaml": "507a80a1b273a78865dbeb790c022010632a34bca64354f18ae04f9600b26a91",
     ".wai/specs/implementations/web_admin_orchestrator_impl.yaml": "642363bec4a21751ea22bea5885c61e9d424997015ab25f13944d52df292d08d",
-    ".wai/specs/implementations/web_graph_orchestrator_impl.yaml": "fef373126375c5540dc7784a9b827e95640dc17513ab34cdc550518789f98c88",
+    ".wai/specs/implementations/web_graph_orchestrator_impl.yaml": "5a9bcdd169034ee88a4cab8c97afd0a56f69f3fb970e65a55a74eb18ce2084ee",
     ".wai/specs/implementations/web_instance_admin_orchestrator_impl.yaml": "ba34a669dc77c705a719427bb490986b5c42100dd12409addef1899a65dcf095",
     ".wai/specs/implementations/web_portal_impl.yaml": "fc228c28dabfe59e8531880eef3dc47e375378660d08052a9ceb0267fca2f37e",
     ".wai/specs/implementations/web_project_orchestrator_impl.yaml": "f4d23da15874d11e1cc54013efd39c92124663867c74f2e39bdd7b1d7ddafe16",
@@ -851,7 +851,7 @@
     ".wai/specs/interfaces/ihost_server.yaml": "bc62111a2892c00faaf24804e2ae39ba6af3634bbe505257294f80f5b31cb217",
     ".wai/specs/interfaces/ihost_surfaces_adapter.yaml": "d733ea34eae105d5383d2589d27f449f8a892448b466a101150811a83350ccfe",
     ".wai/specs/interfaces/ihost_upgrade_adapter.yaml": "63976f611bcdcadfdae21e3336b7c173c59ab9282ea21f6dceca357a1e63e345",
-    ".wai/specs/interfaces/ihost_validator_adapter.yaml": "97970c515e66063b2425d75a583adb1a51afecc894d69818e79b8bbd6b5e25e4",
+    ".wai/specs/interfaces/ihost_validator_adapter.yaml": "f4fd90b6ed3b5aae5b4296674346b490513e2b39a8ac86f2473dfb98642a2195",
     ".wai/specs/interfaces/ihttp_client_adapter.yaml": "c68da364b0bfb2c249b7bbfa26bf8f57bd206cc025cba3928edbcde2cc667666",
     ".wai/specs/interfaces/iidentity_migration.yaml": "e0ca2e01f00c33bb04dd8f58caf1c819e412be046b91357d692307c4613bff21",
     ".wai/specs/interfaces/iidentity_orchestrator.yaml": "17171563a8aa26d14cd497bdb14f320d43e6c093d9611e40e88b18a37e5a617d",
@@ -1077,9 +1077,9 @@
     ".wai/specs/interfaces/iversion_stamp.yaml": "c80caacb06c2b26670f9146c59a1a367a028449497b0292f7a524d40f021148d",
     ".wai/specs/interfaces/ivisibility_rules.yaml": "c8e6c76ee1f0f68766c5cfc376a58f334d8a86b3bd0681b44ffbe03c477e99eb",
     ".wai/specs/interfaces/iweb_admin_orchestrator.yaml": "14df0615bb2ca92e1dc7042f9629bbf6ed5c3db85988fb946780cf7e39633b2b",
-    ".wai/specs/interfaces/iweb_graph_orchestrator.yaml": "43045fc652f9364224dc0ac67abcf4ef77618ad7e455e51904af6014d4d6ba89",
+    ".wai/specs/interfaces/iweb_graph_orchestrator.yaml": "d34c5b6466af93981843b145df91615ebcf0e5bb7aaf9775300ec372e78188cd",
     ".wai/specs/interfaces/iweb_instance_admin_orchestrator.yaml": "838ca780e3af9e0d67bf30ab0b900caa16352362449d91f7d721763d8b519eaa",
-    ".wai/specs/interfaces/iweb_portal.yaml": "e1cf8f49bc4292f00b697a6873c2040b78d183d56245edadcadb802082ecee57",
+    ".wai/specs/interfaces/iweb_portal.yaml": "709cbdf94e68f72a8f8b6975776f9b4c0ac238d80e01ba0a2f72b5ed93625d28",
     ".wai/specs/interfaces/iweb_project_orchestrator.yaml": "89d71d2d9cbf59a56e7623b49093a2432d89a0b4b63ce0f09eadf63ba2e22672",
     ".wai/specs/interfaces/iweb_session_index.yaml": "5b884ce83048a88f760eddfebd2c7210b7c18c7d45f311ffeed9878816b01575",
     ".wai/specs/interfaces/iweb_session_orchestrator.yaml": "66d459b8ee3615c9797cabf383fee82ea0dd6904a15fb4cb47f295282d84e206",
@@ -1220,7 +1220,7 @@
     ".wai/specs/types/design_type_ref.yaml": "c90b7e773f29230903fbce68d9854d4d760edb02f8d0540cf56e702a96f81621",
     ".wai/specs/types/detected_domain_candidate.yaml": "84e742609d6e48fa90f0a620af4f0e3f7455bacbc508e822f859b9e5466f3e93",
     ".wai/specs/types/detected_mcp_source.yaml": "03f446534108a45981eeedf926ea2b42d87344778476e3f905d76cce6c0a2bd9",
-    ".wai/specs/types/dev_approval.yaml": "7b1e256d2306ad7866eadd142241515b2d184e65fbc3a0d282d7a923363907e4",
+    ".wai/specs/types/dev_approval.yaml": "f7bed1948727e2dd40f126206a06541c4837c757c0fe8cec07955fa009753189",
     ".wai/specs/types/dev_command.yaml": "4e2af38f763d66215b68a71b793e43e008127b306e79918bda5cec7ebbedd6b0",
     ".wai/specs/types/dev_command_result.yaml": "061e3182821fec0695b142717f8fae0e6a6b049e600b5069a92a0f3a1a220f0f",
     ".wai/specs/types/dev_commands.yaml": "3dc1ebc4b7c7b1c2103dd6701e3aa3aa91d2cf328f5193a9b2c54a777f9ae979",
@@ -1870,7 +1870,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "9e0499cfdcbbe98a1cbcd98ea9087d1b7ddcabc278f45f103058b1f691d9ac63",
+    "design": "fc7baab4f81ddefc9cbb3baff20940205d71e5f85d3cb9dcccc6b2be2be4f18a",
     "release": "c1f13a75fdbc1a955c9ff6fa2a6272626739d4bc0502c110f3c4ce37e2706881",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1886,7 +1886,7 @@
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 13,
-    "notices": 101
+    "warnings": 20,
+    "notices": 97
   }
 }
