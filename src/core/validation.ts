@@ -45,6 +45,7 @@ import { readBindingModules } from './binding-modules.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
 import * as validationMemo from './validation-memo.js';
+import * as validationRunner from './validation-runner.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { project as projectReach } from './rules/reach-model-projector.js';
 import type { ReachModel } from '../models/reach.js';
@@ -1383,6 +1384,33 @@ export function validateDesign(options?: ValidationOptions): ValidationResult {
  */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
   return validationMemo.validateAsComplete(options);
+}
+
+/**
+ * validator_portal.validateProjectAsync — the owner's gate for the bound
+ * project, run on the validation thread so a serving process keeps answering.
+ */
+export function validateProjectAsync(options?: ValidationOptions): Promise<ValidationResult> {
+  return validationRunner.run('owner', options);
+}
+
+/** validator_portal.validateAsCompleteAsync — the as-complete gate, run on the validation thread. */
+export function validateAsCompleteAsync(options?: ValidationOptions): Promise<ValidationResult> {
+  return validationRunner.run('as_complete', options);
+}
+
+/**
+ * validator_portal.warm — start both gates for the bound project on the
+ * validation thread without waiting; a failure is ignored (the page asks again).
+ */
+export function warm(options?: ValidationOptions): void {
+  validationRunner.run('as_complete', options).catch(() => undefined);
+  validationRunner.run('owner', options).catch(() => undefined);
+}
+
+/** validator_portal.stopBackground — stop the validation thread when it runs. */
+export function stopBackground(): Promise<void> {
+  return validationRunner.stop();
 }
 
 /** spec_validator.validateAsComplete — the as-complete gate, always run. */

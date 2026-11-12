@@ -6,6 +6,7 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **The dev server stays responsive while the validator works.** Validation of a served project (the as-complete gate behind the canvas, and the owner's gate behind `sdd_validate_tree`) now runs on a background validation thread, so other requests are answered during a cold run. `wairon dev` starts both gates in the background at start, so the first page finds them remembered. The page header shows the served project's name, and the browser tab title carries it. Lock and approval paths stay synchronous.
 - **Every identity provider is configured as plain OIDC.** The provider type is gone; the admin UI offers an optional preset that only fills hints (issuer URL shape, groups-claim tip) and stores nothing. Endpoint templates are removed: an issuer must publish OIDC discovery, otherwise set the endpoints explicitly (a provider with neither is rejected, naming what to set). `WAIRON_OIDC_PROVIDER_TYPE` is ignored, and stored provider records that still carry a type keep working.
 - **`@wairon/sdk` reads a pack in memory and fails with stable codes.** New `readPack(archive, limits?)`
   returns the envelope, the inner pack manifest (`pack.yaml`, or `package.json` of a code pack) and the

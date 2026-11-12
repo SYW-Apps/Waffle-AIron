@@ -36,7 +36,7 @@ import type { DevApproval, DevCommandResult, DevFamilyAction, DevFamilyCommand, 
 import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import * as hostNetwork from './adapters/network.js';
-import { validateAsComplete } from './adapters/validator.js';
+import { validateAsCompleteAsync } from './adapters/validator.js';
 import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
@@ -516,7 +516,7 @@ export function getGraph(
   tier: string,
   projectId: string,
   level: number,
-): WebGraphModel {
+): Promise<WebGraphModel> {
   return getWebGraph(cfg, sessionId, tier, projectId, level); // step 1 (delegate)
 }
 
@@ -654,13 +654,13 @@ export function signOutEverywhere(cfg: HostConfig, sessionId: string): void {
  * its spec tree at the requested level, overlay validator issues as per-node issue
  * counts, and return it. An unknown tier is rejected.
  */
-export function getWebGraph(
+export async function getWebGraph(
   cfg: HostConfig,
   sessionId: string,
   tier: string,
   projectId: string,
   level: number,
-): WebGraphModel {
+): Promise<WebGraphModel> {
   const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
   if (!principal.authenticated) throw new UnauthenticatedError();
 
@@ -690,9 +690,9 @@ export function getWebGraph(
         throw new ForbiddenError('project not authorized or unknown');
       }
       // steps 7–11: bind the root for the host-core reads that follow.
-      return runWithProjectRoot(root, () => {
+      return runWithProjectRoot(root, async () => {
         const graph = hostCore.buildProjectGraph(level); // step 8
-        const validation = validateAsComplete(); // step 9
+        const validation = await validateAsCompleteAsync(); // step 9
         return overlayProjectIssues(graph, validation.issues, projectId, level); // steps 10–11
       });
     }
@@ -3646,7 +3646,7 @@ export async function handleWebRequest(
       const tier = url.searchParams.get('tier') ?? 'landscape';
       const projectId = tier === 'project' ? projectIdParam(url) : (url.searchParams.get('projectId') ?? '');
       const level = Number(url.searchParams.get('level') ?? '0');
-      return sendJson(res, 200, getGraph(cfg, sessionId, tier, projectId, level));
+      return sendJson(res, 200, await getGraph(cfg, sessionId, tier, projectId, level));
     }
 
     // GET /web/canvas?projectId= → one authorized project's interactive canvas HTML.
