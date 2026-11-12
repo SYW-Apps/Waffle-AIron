@@ -15,6 +15,7 @@ import * as backupSchedule from './backup-schedule.js';
 import * as devTreeWatcher from './dev-watcher.js';
 import * as devCockpit from './dev-commands.js';
 import { existingProjectRoot } from './projects.js';
+import * as hostValidator from './adapters/validator.js';
 import { bootstrapInstance } from './instance-bootstrap.js';
 import * as identityPortal from './identity-portal.js';
 import * as projectlifecycle from './projectlifecycle.js';
@@ -811,6 +812,8 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   if (cfg.devMode === true) {
     const servedRoot = existingProjectRoot(cfg.dataDir, 'local');
     if (servedRoot) {
+      // Step 10: both gates start in the background, so the first page finds them remembered.
+      hostValidator.warm(servedRoot);
       const watchProducers = (): void => {
         // Steps 11-12: the producers as the configuration now declares them, any earlier watch stopped.
         stopProducers?.();
@@ -838,6 +841,8 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
       backupSchedule.stop();
       stopWatching?.();
       stopProducers?.();
+      // Step 5: the validation thread stops; a thread that never ran is nothing to wait for.
+      void hostValidator.stopBackground().catch(() => undefined);
       getRealtimeHub().closeAll();
       dataServer.close();
       adminServer.close();

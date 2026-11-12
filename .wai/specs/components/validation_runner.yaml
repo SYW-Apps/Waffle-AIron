@@ -1,0 +1,15 @@
+id: validation_runner
+name: Validation Runner
+description: >-
+  Supervises the validation thread: starts it on first use, starts a fresh one after it exits, and
+  hands it jobs for the bound project. Callers waiting on the same project, gate and options share
+  one run. Owns the live thread and the in-flight runs (live handles, no domain state); holds no
+  persistence.
+subsystem: sdd_validator
+componentType: Supervisor
+owns: []
+dependsOn:
+  - validation_thread
+status: complete
+createdAt: '2026-11-11T23:25:37.410Z'
+updatedAt: '2026-11-11T23:26:14.150Z'

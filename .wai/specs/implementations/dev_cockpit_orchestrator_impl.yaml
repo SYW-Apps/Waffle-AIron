@@ -159,7 +159,12 @@ methods:
         targetComponent: git_head_adapter
         targetMethod: head
       - stepNumber: 8
-        description: Answer the approval state with the branch
+        description: Read the served project's system spec, for the name the page heads itself with
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 9
+        description: Answer the approval state with the branch and the project's name
         type: return
         outcome: the approval state
   - name: family
@@ -261,4 +266,4 @@ lint:
         the core approval portal, so the analyzer reads the core workflow behind each forward.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-10T19:01:13.482Z'
+updatedAt: '2026-11-12T00:17:51.990Z'

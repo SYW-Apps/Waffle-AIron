@@ -65,6 +65,8 @@ export interface DevApproval {
   verdict: ApprovalVerdict;
   /** The branch the served checkout has now; absent outside a git checkout or on a detached HEAD. */
   branch?: string;
+  /** The served project's name (its system spec's name); absent when the spec cannot be read. */
+  projectName?: string;
 }
 
 /** The id of the one project the development server serves. */
@@ -165,7 +167,14 @@ export function approval(cfg: HostConfig, sessionId: string): DevApproval {
     // Step 7.
     // Step 7: the branch the served checkout has now.
     const branch = gitHead.head(root)?.branch;
-    const branchOf = branch ? { branch } : {};
+    // Step 8: the served project's name, from its system spec; absent when unreadable.
+    let name: string | undefined;
+    try {
+      name = hostCore.loadSystemSpec()?.name;
+    } catch {
+      name = undefined;
+    }
+    const branchOf = { ...(branch ? { branch } : {}), ...(name ? { projectName: name } : {}) };
     if (!record) return { approved: false, verdict, ...branchOf };
     const state: DevApproval = { approved: true, verdict, ...branchOf };
     if (typeof record.lockedAt === 'string' && record.lockedAt !== '') state.approvedAt = record.lockedAt;

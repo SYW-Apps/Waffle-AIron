@@ -79,7 +79,7 @@ methods:
           validator issues
         type: call
         targetComponent: host_validator_adapter
-        targetMethod: validateAsComplete
+        targetMethod: validateAsCompleteAsync
       - stepNumber: 10
         description: >-
           Overlay the validation issues onto the project graph's nodes as per-node issueCounts of
@@ -401,4 +401,4 @@ methods:
     symbol: getWebProjectMembers
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-11-10T19:05:52.285Z'
+updatedAt: '2026-11-12T00:16:22.661Z'

@@ -29,7 +29,8 @@ import { FamilyPanel } from './views/FamilyPanel';
 import { DevBanner } from './views/DevBanner';
 import { BranchChip, CockpitProvider, LockInPlaceButton, SettingsCog, useApproval, useScopeNodes } from './views/DevCockpit';
 import { approvalStatusLine, subsystemOfRoute } from './views/devCockpitLogic';
-import { Tabs } from './ui';
+import { Select, Tabs } from './ui';
+import { devPageTitle, hostedPageTitle, projectLabel } from './views/devCockpitLogic';
 import { post, raw } from './api';
 
 /** The one project a `wairon dev` server ever serves: the cwd, registered as 'local'. */
@@ -172,11 +173,29 @@ function DevFamily() {
   );
 }
 
+/** The served project's display name: the L0 system name the approval read the page already polls carries. Falls back until it arrives. */
+function useDevProjectName(): string {
+  return projectLabel(useApproval()?.projectName);
+}
+
 function DevShell() {
+  return (
+    <CockpitProvider>
+      <DevFrame />
+    </CockpitProvider>
+  );
+}
+
+function DevFrame() {
+  const projectName = useDevProjectName();
+  useEffect(() => {
+    document.title = devPageTitle(projectName);
+  }, [projectName]);
   const nav = useNavigate();
   const { pathname } = useLocation();
   const tab = pathname.startsWith('/specs') ? 'specs' : pathname.startsWith('/family') ? 'family' : 'canvas';
 
+  const go = (id: string) => nav(id === 'specs' ? '/specs' : id === 'family' ? '/family' : '/canvas');
   return (
     <CockpitProvider>
     <div className="shell">
@@ -186,7 +205,13 @@ function DevShell() {
           <span className="dev-tag" data-tip="Local developer server — this project only" tabIndex={0}>
             dev
           </span>
-          <Tabs label="Workspace" className="dev-tabs" tabs={DEV_TABS} active={tab} onSelect={(id) => nav(id === 'specs' ? '/specs' : id === 'family' ? '/family' : '/canvas')} />
+          <span className="dev-project" title={projectName}>
+            {projectName}
+          </span>
+          <Tabs label="Workspace" className="dev-tabs" tabs={DEV_TABS} active={tab} onSelect={go} />
+          <span className="dev-nav-select">
+            <Select value={tab} onChange={go} options={DEV_TABS.map((t) => ({ value: t.id, label: t.label }))} />
+          </span>
           <span className="syw-header__spacer" />
           <BranchChip />
           <RealtimeStatus />
@@ -210,6 +235,12 @@ function DevShell() {
 function Shell() {
   const { ctx, adminVisible } = useSession();
   const { sidebarCollapsed, toggleSidebar } = useSettings();
+  const { pathname: hostedPath } = useLocation();
+  const hostedProject = hostedPath.split('/')[1] === 'projects' || hostedPath.split('/')[1] === 'canvas' ? hostedPath.split('/')[2] : undefined;
+  useEffect(() => {
+    if (ctx?.local) return;
+    document.title = hostedPageTitle(hostedProject ? decodeURIComponent(hostedProject) : null);
+  }, [ctx?.local, hostedProject]);
 
   async function signOut() {
     try {

@@ -1,0 +1,25 @@
+kind: value-object
+id: validation_job
+name: ValidationJob
+description: >-
+  One gate run handed to the validation thread: the project root it binds for the run, the gate, and
+  the options as the gate takes them. Plain data only: options that carry loaded extension code
+  never become a job.
+subsystem: sdd_validator
+fields:
+  - name: root
+    type: string
+    description: Absolute project root the run binds
+    optional: false
+  - name: gate
+    type: ValidationGate
+    description: Which gate to run
+    optional: false
+  - name: options
+    type: ValidationOptions
+    description: The gate's options (rules, project type, scope, member depth); never loaded extensions
+    optional: true
+methods: []
+sourcePath: src/core/validation-runner.ts
+createdAt: '2026-11-11T23:25:26.268Z'
+updatedAt: '2026-11-11T23:25:27.770Z'

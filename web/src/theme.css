@@ -329,6 +329,30 @@ select.syw-select:not([multiple]):not([size]) {
 .dev-bar { gap: 10px; }
 .dev-bar .dev-tabs { border-bottom: none; margin-left: 6px; }
 .dev-bar .theme-cog { position: static; }
+/* The project's name sits between the logo/DEV badge and the tabs, so several dev pages are
+   told apart at a glance. Theme tokens only, so light and dark both follow. */
+.dev-project {
+  flex: 0 1 auto;
+  min-width: 3ch;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 0 4px;
+}
+.dev-bar .dev-tabs { flex: 0 0 auto; }
+.dev-nav-select { display: none; flex: 0 0 auto; }
+.dev-nav-select .syw-select { width: auto; min-width: 0; }
+/* When the bar cannot hold the tab strip (logo + badge + name + tabs + branch/status/cog
+   measure ~720px), the tabs fold into a compact select and the name keeps shrinking. */
+.dev-bar { container-type: inline-size; }
+@container (max-width: 720px) {
+  .dev-bar .dev-tabs { display: none; }
+  .dev-bar .dev-nav-select { display: inline-flex; }
+  .dev-project { max-width: 18ch; }
+}
 .dev-banner { margin: 8px 14px 0; }
 .dev-banner-list { margin: 6px 0 0; padding-left: 18px; }
 .dev-banner-list li { margin: 2px 0; }

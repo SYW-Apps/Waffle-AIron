@@ -21,8 +21,9 @@ dependsOn:
   - dev_tree_watcher
   - project_repository
   - dev_cockpit_orchestrator
+  - host_validator_adapter
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-11-10T00:33:39.802Z'
+updatedAt: '2026-11-11T23:27:21.563Z'

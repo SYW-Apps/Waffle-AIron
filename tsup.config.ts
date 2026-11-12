@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     'cli/index': 'src/cli/index.ts',
     index: 'src/index.ts',
+    'core/validation-runner': 'src/core/validation-runner.ts',
   },
   format: ['cjs'],
   target: 'node22',

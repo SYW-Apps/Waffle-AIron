@@ -3,9 +3,10 @@ id: dev_approval
 name: DevApproval
 description: >-
   The served project's approval state for the dev page: whether the design moved since the last lock
-  and which specs, who locked it when, and the branch the checkout has. Drives the page's lock bar,
-  the lock confirmation, and what the page says when the checkout switched branches or a review
-  request was made on another branch.
+  and which specs, who locked it when, the branch the checkout has, and the project's name. Drives
+  the page's lock bar, the lock confirmation, the header and tab title naming which project the page
+  serves, and what the page says when the checkout switched branches or a review request was made on
+  another branch.
 fields:
   - name: approved
     type: bool
@@ -27,8 +28,14 @@ fields:
     type: string
     description: The branch the served checkout has now; absent outside a git checkout or on a detached HEAD
     optional: true
+  - name: projectName
+    type: string
+    description: >-
+      The served project's display name (its system spec's name); absent when the system spec cannot
+      be read
+    optional: true
 methods: []
 componentClass: dev_cockpit_orchestrator
 sourcePath: src/server/dev-commands.ts
 createdAt: '2026-11-07T15:07:10.520Z'
-updatedAt: '2026-11-10T19:01:07.376Z'
+updatedAt: '2026-11-12T00:17:56.753Z'

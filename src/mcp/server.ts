@@ -3396,7 +3396,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       },
       outputSchema: validateTreeOutput,
     },
-    ({ subsystem, recursive, family }) => {
+    async ({ subsystem, recursive, family }) => {
       // Step 1: the pending-transaction banner first — a crash mid-swap may
       // leave the tree below unreadable — each line a notice, never an error.
       const banner = pendingBanner();
@@ -3417,7 +3417,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // 3/5: the family run (within the request's reach, which it never
         // widens) or the owner's gate.
         const familyRun = selectsFamily(options, declaredMembers(config).length > 0, declaredExternals(config).length > 0);
-        const result = familyRun ? validateFamily(options) : validateProject(options);
+        const result = familyRun ? validateFamily(options) : await validateProject(options);
         // Step 6: the advisory live comparison of every external the run did
         // not compose (a family run hands over the aliases it composed in
         // reach) — marked advisory, never part of `valid`.

@@ -6,9 +6,10 @@ methods:
   - name: validateProject
     description: >-
       Forward the owner's gate to the validator portal: the bound project judged from its own files
-      alone
-    signature: 'validateProject(): ValidationResult'
-    returns: ValidationResult
+      alone, run off the serving thread so a server answering other requests stays responsive
+    signature: 'validateProject(): async ValidationResult'
+    returns: async ValidationResult
+    params: []
   - name: validateRegistry
     description: >-
       Forward to validator_portal.validateRegistry: judge the agent registry under the project's
@@ -100,4 +101,4 @@ methods:
     signatureFrom: validator_portal.listRules
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T11:59:56.245Z'
+updatedAt: '2026-11-11T23:27:13.445Z'

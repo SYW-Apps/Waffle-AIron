@@ -93,8 +93,8 @@ methods:
     description: >-
       Return the live level-of-detail graph for the requested tier/project/level by forwarding to
       the web orchestrator's getGraph.
-    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: int): WebGraphModel'
-    returns: WebGraphModel
+    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: int): async WebGraphModel'
+    returns: async WebGraphModel
     params:
       - name: sessionId
         type: string
@@ -1756,4 +1756,4 @@ methods:
       path: /web/projects/members
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-10T19:06:04.238Z'
+updatedAt: '2026-11-12T00:16:26.092Z'

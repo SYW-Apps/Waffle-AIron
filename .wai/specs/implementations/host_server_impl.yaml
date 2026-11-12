@@ -74,6 +74,13 @@ methods:
         targetMethod: existingRoot
       - stepNumber: 10
         description: >-
+          On the local development server only (devMode), start both gates for the served project in
+          the background, so the first page finds them remembered instead of waiting for a cold run
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: warm
+      - stepNumber: 11
+        description: >-
           On the local development server only (devMode), watch the served project's .wai/ folder: a
           `tree` change nudges the served project's realtime channel, so a spec written by another
           process (an agent's `wairon mcp serve`) or a terminal lock refreshes the open page, and
@@ -82,14 +89,14 @@ methods:
         type: call
         targetComponent: dev_tree_watcher
         targetMethod: watch
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           On the local development server only (devMode), name the producers on disk the served
           project reads: its members and the externals it declares by path
         type: call
         targetComponent: dev_cockpit_orchestrator
         targetMethod: producers
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           On the local development server only (devMode), stop any earlier producer watch and watch
           the producers' .wai/ folders: a member's change nudges the served project's realtime
@@ -98,14 +105,14 @@ methods:
         type: call
         targetComponent: dev_tree_watcher
         targetMethod: watchProducers
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Start the periodic backup schedule (git-bound project sweep + container-level backing
           sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
         targetComponent: backup_schedule
         targetMethod: start
-      - stepNumber: 14
+      - stepNumber: 15
         description: Return the running server handle
         type: return
         outcome: running
@@ -127,6 +134,11 @@ methods:
         description: Close the data-plane and admin-plane listeners
         type: local
       - stepNumber: 5
+        description: Stop the background validation thread
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: stopBackground
+      - stepNumber: 6
         description: Return once stopped
         type: return
         outcome: stopped
@@ -160,4 +172,4 @@ methods:
         outcome: ready or not
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-11-10T00:33:40.791Z'
+updatedAt: '2026-11-11T23:27:23.191Z'
