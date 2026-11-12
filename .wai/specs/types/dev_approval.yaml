@@ -34,8 +34,15 @@ fields:
       The served project's display name (its system spec's name); absent when the system spec cannot
       be read
     optional: true
+  - name: members
+    type: list<ProjectApproval>
+    description: >-
+      Each direct member project's approval, judged at its own root, so the page can offer its lock;
+      parts are approved with the served project and are not listed. Absent when the project
+      declares no member project
+    optional: true
 methods: []
 componentClass: dev_cockpit_orchestrator
 sourcePath: src/server/dev-commands.ts
 createdAt: '2026-11-07T15:07:10.520Z'
-updatedAt: '2026-11-12T00:17:56.753Z'
+updatedAt: '2026-11-12T01:02:16.565Z'

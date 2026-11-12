@@ -16,6 +16,7 @@ dependsOn:
   - authentication
   - project_repository
   - git_head_adapter
+  - host_validator_adapter
 status: complete
 createdAt: '2026-11-07T02:41:33.911Z'
-updatedAt: '2026-11-10T19:01:11.969Z'
+updatedAt: '2026-11-12T01:02:20.257Z'
