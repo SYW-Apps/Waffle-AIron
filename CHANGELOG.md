@@ -6,14 +6,14 @@ npm and the tags carry.
 
 ## Unreleased
 
-- **Canvas lines show every dependency and their direction.** The canvas now draws its lines itself. Chevrons along each line point its direction, and a boundary hop carries a thin red stripe. Every dependency between drawn nodes shows, tagged with the strongest way it is stated:
+- **Canvas lines show every dependency and their direction.** The canvas now draws its lines itself, each as a translucent tube with chevrons inside that point its direction; a boundary hop carries a thin red stripe. Overlapping tubes do not darken each other, and lines sharing a run show one row of chevrons. Every dependency between drawn nodes shows, tagged with the strongest way it is stated:
   - `depends`: a `dependsOn` entry, drawn full weight.
   - `calls`: a narrative call or register step with no `dependsOn` beside it, drawn full weight.
   - `uses`: a contract that names a type another project owns. It lands on that project's node and is drawn thinner and grey.
   - `declared`: a member or external a project declares but nothing else shows yet. It is drawn thin, grey and dotted.
 
   Folded edges keep their strongest kind. Line styles:
-  - Orthogonal lines leave and enter on the facing side and route around boxes. Lines into one box merge into one trunk, lines with different ends spread across a shared channel, and a horizontal run hops a vertical one it crosses.
+  - Orthogonal lines leave and enter on the facing side and route around boxes. Two boxes facing each other across a clear gap are joined by a straight line. Lines into one box merge into one trunk, lines with different ends spread across a shared channel, and a horizontal run hops a vertical one it crosses.
   - Curved lines take the shortest way around boxes as smooth curves.
   - A PNG export carries the lines as drawn.
 
