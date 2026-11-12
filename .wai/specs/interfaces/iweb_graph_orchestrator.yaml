@@ -21,8 +21,8 @@ methods:
       registry (rejecting cross-project access), project its spec tree at the requested level via
       the host core adapter, overlay validator issues as per-node issue counts, and return it. An
       unknown tier is rejected.
-    signature: 'get(sessionId: string, tier: string, projectId: string, level: int): WebGraphModel'
-    returns: WebGraphModel
+    signature: 'get(sessionId: string, tier: string, projectId: string, level: int): async WebGraphModel'
+    returns: async WebGraphModel
     params:
       - name: sessionId
         type: string
@@ -155,4 +155,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-11-10T19:05:50.631Z'
+updatedAt: '2026-11-12T00:16:20.962Z'
