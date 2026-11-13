@@ -1,6 +1,7 @@
 import {
   validateAsComplete as validateTreeAsComplete,
   validateAsCompleteAsync as validateTreeAsCompleteAsync,
+  validateProjectAsync as validateTreeAsync,
   warm as warmTree,
   stopBackground as stopTreeBackground,
   measurePackImpact as measureTreePackImpact,
@@ -52,6 +53,17 @@ export async function validateAsCompleteAsync(): Promise<ValidationResult> {
   const config = loadProjectConfig();
   if (!config) throw new ProjectNotInitializedError();
   return validateTreeAsCompleteAsync({ rules: config.rules, projectType: config.projectType });
+}
+
+/**
+ * host_validator_adapter.validateProjectAsync — the owner's gate for the bound
+ * project, judged by its own configuration and run off the serving thread. A
+ * root with no configuration is not an initialized project, and is refused.
+ */
+export async function validateProjectAsync(): Promise<ValidationResult> {
+  const config = loadProjectConfig();
+  if (!config) throw new ProjectNotInitializedError();
+  return validateTreeAsync({ rules: config.rules, projectType: config.projectType });
 }
 
 /**

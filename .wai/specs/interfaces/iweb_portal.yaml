@@ -1461,8 +1461,8 @@ methods:
       clickable to focus its node; and on the local development server (getDevStatus reports
       devMode) mounts the engine with its issues overlay ON by default, a reader's own toggle
       winning.
-    signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
-    returns: CanvasModel
+    signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): async CanvasModel'
+    returns: async CanvasModel
     params:
       - name: sessionId
         type: string
@@ -1766,4 +1766,4 @@ methods:
       path: /web/projects/members
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-12T01:03:25.660Z'
+updatedAt: '2026-11-13T01:36:59.349Z'

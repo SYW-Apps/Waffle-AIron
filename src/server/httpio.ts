@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { createHash } from 'crypto';
 
 // ---------------------------------------------------------------------------
 // Shared HTTP I/O helpers for the hosted server's route modules. These are
@@ -22,6 +23,28 @@ export function errorText(err: unknown): string {
 export function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
+}
+
+/**
+ * A 200 JSON read the browser revalidates: tagged by its content, with the
+ * top-level `generatedAt` stamp left out of the tag, and answered 304 with no
+ * body when the request already holds that tag. An unchanged model is then
+ * neither sent again nor parsed again by the page.
+ */
+export function sendJsonTagged(req: IncomingMessage, res: ServerResponse, body: unknown): void {
+  const text = JSON.stringify(body);
+  const stamped = body !== null && typeof body === 'object' && !Array.isArray(body) && 'generatedAt' in body;
+  const tagged = stamped ? JSON.stringify({ ...(body as Record<string, unknown>), generatedAt: undefined }) : text;
+  const etag = `"${createHash('sha1').update(tagged).digest('base64url')}"`;
+  const headers = { 'content-type': 'application/json', etag, 'cache-control': 'private, no-cache' };
+  const held = req.headers['if-none-match'];
+  if (typeof held === 'string' && held.split(',').some((t) => t.trim().replace(/^W\//, '') === etag)) {
+    res.writeHead(304, { etag, 'cache-control': 'private, no-cache' });
+    res.end();
+    return;
+  }
+  res.writeHead(200, headers);
+  res.end(text);
 }
 
 // ── The web session cookie ─────────────────────────────────────────────────

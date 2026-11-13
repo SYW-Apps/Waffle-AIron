@@ -278,6 +278,25 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(json(ghost)).toEqual({ error: 'forbidden' });
     });
 
+    it('GET /web/canvas-model is tagged: a read holding the current tag is answered 304 with no body', async () => {
+      const cookie = adminCookie();
+      createPlacedProject(cfg, MASTER, 'demo');
+      const first = await get('/web/canvas-model?projectId=demo', cookie);
+      expect(first.status).toBe(200);
+      const etag = first.headers['etag'] as string;
+      expect(etag).toMatch(/^"[A-Za-z0-9_-]+"$/);
+      expect(first.headers['cache-control']).toMatch(/no-cache/);
+
+      // The model is built again (a new generatedAt), yet the tag holds while nothing changed.
+      const again = await raw({ method: 'GET', path: '/web/canvas-model?projectId=demo', headers: { cookie, 'if-none-match': etag } });
+      expect(again.status).toBe(304);
+      expect(again.body).toBe('');
+
+      const stale = await raw({ method: 'GET', path: '/web/canvas-model?projectId=demo', headers: { cookie, 'if-none-match': '"other"' } });
+      expect(stale.status).toBe(200);
+      expect(stale.headers['etag']).toBe(etag);
+    });
+
     it('a missing projectId is refused by name (400), not read as a forbidden project', async () => {
       const cookie = adminCookie();
       createPlacedProject(cfg, MASTER, 'demo');

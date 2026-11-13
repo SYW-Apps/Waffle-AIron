@@ -3270,14 +3270,23 @@ function walkDeclaredRoots(
 // ---------------------------------------------------------------------------
 
 /**
- * Parsed source files reused across runs, keyed on what a parse depends on:
+ * Parsed source files shared within one run, keyed on what a parse depends on:
  * the compiler module, the options it was parsed under and the file's exact
- * text. A long-lived process never answers from a stale parse — a changed
- * file, or a different compiler, misses — and a run over an unchanged tree
- * parses nothing twice (the language library alone is most of the cost).
+ * text. A file the program asks for twice is parsed once; a changed file, or a
+ * different compiler, misses. Released once the run's reading is taken.
  */
 const parsedSources = new Map<string, { ts: TsModule; settings: string; text: string; sf: import('typescript').SourceFile }>();
 const PARSED_SOURCES_MAX = 4000;
+
+/**
+ * Once a reading is taken, every parse is let go. The checker bound them to
+ * the program it built, so holding them holds that program's symbols in a
+ * long-lived process (about 0.5 GB on a large tree), for a saving of a few
+ * seconds on the next run, which a code edit starts afresh anyway.
+ */
+function releaseParsedSources(): void {
+  parsedSources.clear();
+}
 
 /** The compiler options the program is built under: the project's tsconfig module resolution, with emit, ambient types and the DOM library left out. */
 function checkerOptions(ts: TsModule, projectRoot: string): import('typescript').CompilerOptions {
@@ -4765,6 +4774,8 @@ export function buildCodeModel(
     } catch {
       resolved = new Map();
       imports = new Map();
+    } finally {
+      releaseParsedSources();
     }
     const held = new Set<string>();
     for (const facts of files) {

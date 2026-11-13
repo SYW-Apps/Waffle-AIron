@@ -6,6 +6,10 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **`wairon dev` no longer drops its live connection while the canvas loads.** The canvas read ran the full validation on the server's main thread whenever the remembered result no longer held (after a rebuild of wairon or a code edit), which held up every other request, the page's pings included, for up to half a minute, so the page reconnected and could show "Offline". The canvas now takes its findings from the background validation thread; a cold load keeps the pings answered within a second. Also:
+  - The page tolerates one late ping before it reconnects.
+  - The canvas model and the graph carry an `ETag`: a re-read of an unchanged model is answered `304` with no body.
+  - A long-lived process lets go of the source parses once the code model is read, so the memory it holds between runs is about 0.5 GB lower on a large project.
 - **Canvas lines show every dependency and their direction.** The canvas now draws its lines itself, each as a translucent tube with chevrons inside that point its direction; a boundary hop carries a thin red stripe. Overlapping tubes do not darken each other, and lines sharing a run show one row of chevrons. Every dependency between drawn nodes shows, tagged with the strongest way it is stated:
   - `depends`: a `dependsOn` entry, drawn full weight.
   - `calls`: a narrative call or register step with no `dependsOn` beside it, drawn full weight.

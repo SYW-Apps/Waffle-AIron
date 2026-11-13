@@ -197,7 +197,7 @@ methods:
   - name: buildCanvasDataModel
     narrative:
       - stepNumber: 1
-        description: Forward to the architecture diagrams, relation health included
+        description: Forward to the architecture diagrams, relation health and findings included
         type: call
         targetComponent: architecture_diagrams
         targetMethod: buildCanvasDataModel
@@ -413,4 +413,4 @@ methods:
         targetMethod: familyMembers
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-10T19:05:35.535Z'
+updatedAt: '2026-11-12T21:50:19.326Z'

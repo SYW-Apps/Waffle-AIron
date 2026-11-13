@@ -40,7 +40,7 @@ import { validateAsCompleteAsync } from './adapters/validator.js';
 import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
-import { sendJson, setSessionCookie, clearSessionCookie, errorText } from './httpio.js';
+import { sendJson, sendJsonTagged, setSessionCookie, clearSessionCookie, errorText } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
@@ -534,7 +534,7 @@ export function getProjectCanvas(cfg: HostConfig, sessionId: string, projectId: 
  * the web graph orchestrator, which authenticates the session and scopes the
  * result to the principal's authorized projects.
  */
-export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): Promise<unknown> {
   return getWebProjectCanvasModel(cfg, sessionId, projectId); // step 1 (delegate)
 }
 
@@ -756,7 +756,7 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
  * bound tree. Consumed by the web app's in-React canvas renderer so it mounts the
  * shared renderer directly instead of iframing the static HTML.
  */
-export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+export async function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): Promise<unknown> {
   const principal = authenticateSession(cfg.dataDir, sessionId);
   if (!principal.authenticated) throw new UnauthenticatedError();
   if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
@@ -771,9 +771,14 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
   // producer outside it is unavailable, never ok.
   const listed = webproject.listProjects(cfg, sessionId);
   const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations());
-  // Step 7: the model, each consumption edge carrying its relation's health.
-  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations));
-  // Steps 8-10: the family canvas — a member project node is linked to its
+  // Step 7: the owner's gate, off the serving thread, so a cold run does not hold up
+  // the server's other requests and its live connections.
+  // A gate that cannot run draws no findings rather than fail the read, as the build itself does.
+  const issues = await runWithProjectRoot(root, () => hostValidator.validateProjectAsync()).then((v) => v.issues, () => []);
+  // Step 8: the model, each consumption edge carrying its relation's health, drawn
+  // with the step-7 findings so the build runs no gate of its own.
+  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations, issues));
+  // Steps 9-11: the family canvas — a member project node is linked to its
   // member's record, and an external project node to the hosted record its
   // external names, only when the caller may read that record; any other node
   // stays unlinked (no id leaks).
@@ -3655,7 +3660,7 @@ export async function handleWebRequest(
       const tier = url.searchParams.get('tier') ?? 'landscape';
       const projectId = tier === 'project' ? projectIdParam(url) : (url.searchParams.get('projectId') ?? '');
       const level = Number(url.searchParams.get('level') ?? '0');
-      return sendJson(res, 200, await getGraph(cfg, sessionId, tier, projectId, level));
+      return sendJsonTagged(req, res, await getGraph(cfg, sessionId, tier, projectId, level));
     }
 
     // GET /web/canvas?projectId= → one authorized project's interactive canvas HTML.
@@ -3674,7 +3679,7 @@ export async function handleWebRequest(
     // canvas renderer directly rather than iframing the HTML. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
       const projectId = projectIdParam(url);
-      return sendJson(res, 200, getProjectCanvasModel(cfg, sessionId, projectId));
+      return sendJsonTagged(req, res, await getProjectCanvasModel(cfg, sessionId, projectId));
     }
 
     // GET /web/dev/status → what did not load of the dev server's family (unreadable

@@ -158,8 +158,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Build the canvas model from the loaded specs, the tree's current findings and the relation
-          health passed in (none when omitted) — the same model the canvas render embeds
+          Build the canvas model from the loaded specs, the findings passed in — or, when none are
+          passed, the tree's current findings from the owner's gate run on the caller's thread — and
+          the relation health passed in (none when omitted): the same model the canvas render embeds
         type: local
       - stepNumber: 2
         description: Return it as data
@@ -467,4 +468,4 @@ lint:
         above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-11-10T19:05:28.615Z'
+updatedAt: '2026-11-12T21:50:16.409Z'

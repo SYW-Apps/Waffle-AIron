@@ -219,12 +219,20 @@ methods:
     description: >-
       Published read: the canvas model renderDiagram('canvas') draws, returned as data for a client
       that mounts the shared renderer itself.
-    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
+    signature: >-
+      buildCanvasDataModel(relations?: list<ProjectRelations>, issues?: list<ValidationIssue>):
+      CanvasModel
     returns: CanvasModel
     params:
       - name: relations
         type: list<ProjectRelations>
         description: The family's relation health to carry on the model; omitted, it carries none
+        optional: true
+      - name: issues
+        type: list<ValidationIssue>
+        description: >-
+          The tree's findings to draw, when the caller already holds them; omitted, the owner's gate
+          is run on the caller's thread
         optional: true
   - name: resolveSubsystemExports
     description: >-
@@ -588,4 +596,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-10T19:05:33.792Z'
+updatedAt: '2026-11-12T21:49:55.619Z'

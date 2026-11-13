@@ -73,8 +73,8 @@ methods:
       with what failed carried as findings (a finding naming no spec when no spec can carry it), and
       only a tree that yields nothing at all answers an empty model holding that one error finding.
       A failed build is never an HTTP error in place of a graph.
-    signature: 'getProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
-    returns: CanvasModel
+    signature: 'getProjectCanvasModel(sessionId: string, projectId: string): async CanvasModel'
+    returns: async CanvasModel
     params:
       - name: sessionId
         type: string
@@ -155,4 +155,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-11-12T00:16:20.962Z'
+updatedAt: '2026-11-13T01:36:55.260Z'
