@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "4b3914aae6fda87bd59d720afa429d972f28ba85b4b6c87329110514bfabf4cc"
+    "digest": "70e1da32edbd6680167bcc39c1f3b8b1645a6f99b555788b2d7aa316af0bb870"
   },
-  "lockedAt": "2026-11-13T18:39:14.494Z",
+  "lockedAt": "2026-11-13T23:42:00.048Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -14,7 +14,7 @@
     "valid": true,
     "errors": 0,
     "warnings": 0,
-    "notices": 1
+    "notices": 0
   },
   "status": "ready",
   "projectId": "waffle-airon",
@@ -722,7 +722,7 @@
     ".wai/specs/implementations/version_stamp_impl.yaml": "3f252cba0bb1080f844c23447e9344bd311006cb07a4e03014e3a190861d47ae",
     ".wai/specs/implementations/visibility_rules_impl.yaml": "507a80a1b273a78865dbeb790c022010632a34bca64354f18ae04f9600b26a91",
     ".wai/specs/implementations/web_admin_orchestrator_impl.yaml": "642363bec4a21751ea22bea5885c61e9d424997015ab25f13944d52df292d08d",
-    ".wai/specs/implementations/web_graph_orchestrator_impl.yaml": "12e2a5da4ee5b5f82cfd48f970fff69afb511c03ab20076a6ba4687161d08a59",
+    ".wai/specs/implementations/web_graph_orchestrator_impl.yaml": "c1b14be897c9ad5a2804c611501e29db8f4e74a64140bee525cee77fe9ea6aa0",
     ".wai/specs/implementations/web_instance_admin_orchestrator_impl.yaml": "ba34a669dc77c705a719427bb490986b5c42100dd12409addef1899a65dcf095",
     ".wai/specs/implementations/web_portal_impl.yaml": "fc228c28dabfe59e8531880eef3dc47e375378660d08052a9ceb0267fca2f37e",
     ".wai/specs/implementations/web_project_orchestrator_impl.yaml": "f4d23da15874d11e1cc54013efd39c92124663867c74f2e39bdd7b1d7ddafe16",
@@ -731,7 +731,7 @@
     ".wai/specs/implementations/web_session_registry_impl.yaml": "55ae610b0fead804d5eab6b3c95b8a4ac0e2799eeaa4d747008fea9c47e2c94b",
     ".wai/specs/implementations/web_session_repository_impl.yaml": "16c9bcd7887ebeb2e3a5fe0883ab97998eeb4de585bfa2e6acd47b20b279b419",
     ".wai/specs/implementations/web_session_store_impl.yaml": "3d7db61cd60f3eaccd22ed114c83cc7c6fe1527312a4e93ac5a42bdc1a582e37",
-    ".wai/specs/implementations/web_view_cache_impl.yaml": "b1dff3c8d0873adf229fc5a472bec0ec2b79f41ae1718d60510f30ce98b2dbdb",
+    ".wai/specs/implementations/web_view_cache_impl.yaml": "6a211b4dbf49cb862be0496d403cbecbee755caac1776c9508b1452bd8c9dad4",
     ".wai/specs/implementations/wiring_rules_impl.yaml": "43688265577ed0344a9d8855591f32c7fb6acb67cab7d345efeeb97d81bf1427",
     ".wai/specs/interfaces/iadmin_orchestrator.yaml": "64f4a2e282d76389d2f3206a54f3b94c308495d6319357e22529b802a4513f32",
     ".wai/specs/interfaces/iadmin_portal.yaml": "fb20212ad2ec5266d229e60b8c12f935ccfee272bfc3ab8e9c131e492b14bf85",
@@ -1088,7 +1088,7 @@
     ".wai/specs/interfaces/iweb_session_registry.yaml": "ce8dbd38706423df7edc95f988b642a698b76ba100cc89fb6b209e34b3fffdf9",
     ".wai/specs/interfaces/iweb_session_repository.yaml": "a0ac020d61c5ccf90e47af9ac86089f273a85445c5efa73089d2c3c7cd4e1769",
     ".wai/specs/interfaces/iweb_session_store.yaml": "af17ef8622f833779d6cef7462c8f5272d780289fb6b8014ae66b6614ed857fe",
-    ".wai/specs/interfaces/iweb_view_cache.yaml": "1ea2ee8b77e5f6264fadf0eab48e1e9b1bd27ed07d7c9ddc7bb46c98bc3d2035",
+    ".wai/specs/interfaces/iweb_view_cache.yaml": "13dd85c0e89814c60657154ee96a0cb9f1d757309191761b3efbff3fdc362a4e",
     ".wai/specs/interfaces/iwiring_rules.yaml": "c71fe8020e628a3cb673e274e2a382f5d3f55b0738b9d09a81a78f1aeed8453b",
     ".wai/specs/subsystems/sdd_authoring.yaml": "035e8c40fe8f61583d89b1940465b35e87ba4f40cf04a21ede5bd2eca33ded94",
     ".wai/specs/subsystems/sdd_cli.yaml": "39d077f8691cb28a350f1257cd7667fc6dcd9cad13fe8fbdb15e379b8576df49",
@@ -1876,7 +1876,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "0b4e31f36554201a8654c239564d47af0413fdad74524c34b90ecc101a7610ae",
+    "design": "69e5edf8c7b17dbc8c3326c298db8e5fc515928475c9fe0e88064a03b8b9d443",
     "release": "c1f13a75fdbc1a955c9ff6fa2a6272626739d4bc0502c110f3c4ce37e2706881",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1892,7 +1892,7 @@
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 6,
-    "notices": 101
+    "warnings": 0,
+    "notices": 54
   }
 }

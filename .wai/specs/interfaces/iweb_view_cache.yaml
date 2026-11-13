@@ -32,6 +32,15 @@ methods:
     returns: void
     params: []
     effect: write
+  - name: version
+    description: >-
+      How many times the kept views have been outdated so far. A reader takes it before a build and
+      again before keeping the result: a view built across a change is kept as not current, so a
+      change that lands while the gate is awaited is never hidden behind a current view.
+    signature: 'version(): int'
+    returns: int
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-11-13T16:01:46.107Z'
-updatedAt: '2026-11-13T16:01:47.998Z'
+updatedAt: '2026-11-13T20:06:39.561Z'
