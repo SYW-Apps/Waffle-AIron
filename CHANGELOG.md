@@ -6,6 +6,18 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **Canvas lines show every dependency and their direction.** The canvas now draws its lines itself, each as a translucent tube with chevrons inside that point its direction; a boundary hop carries a thin red stripe. Overlapping tubes do not darken each other, and lines sharing a run show one row of chevrons. Every dependency between drawn nodes shows, tagged with the strongest way it is stated:
+  - `depends`: a `dependsOn` entry, drawn full weight.
+  - `calls`: a narrative call or register step with no `dependsOn` beside it, drawn full weight.
+  - `uses`: a contract that names a type another project owns. It lands on that project's node and is drawn thinner and grey.
+  - `declared`: a member or external a project declares but nothing else shows yet. It is drawn thin, grey and dotted.
+
+  Folded edges keep their strongest kind. Line styles:
+  - Orthogonal lines leave and enter on the facing side and route around boxes. Two boxes facing each other across a clear gap are joined by a straight line. Lines into one box merge into one trunk, lines with different ends spread across a shared channel, and a horizontal run hops a vertical one it crosses.
+  - Curved lines take the shortest way around boxes as smooth curves.
+  - A PNG export carries the lines as drawn.
+
+  Clicking a line focuses it and the two boxes it joins. While an element is selected, a glowing dot runs along its lines in their direction: every incoming line first, then every outgoing one, repeating. It runs only while the page is visible and is off when the reader asks for reduced motion. Incoming lines of a selection now take their "used by" colour again.
 - **`wairon dev` locks and reviews member projects from the parent.** The approval state the page reads now carries each direct member project's approval, judged at the member's own root. The Lock confirmation offers "member project <alias>" for each one that is not approved, and runs the CLI's lock in that member's folder, exactly as `wairon lock` there would; afterwards the parent shows its pin of the member as changed, so the parent's own lock is next. A review request made inside a member project shows on the parent's page, labelled with the member, and is decided (and, for a lock, locked) at that member's root. Parts are still approved with their parent and are not listed.
 - **The Specs page shows what changed since the lock.** No approval banner is shown while the design is approved and unchanged. Once something moved, one row says how many specs changed (and which member projects), with a "Show changes" toggle and Lock. The spec tree marks changed and added specs and offers a "Changed only" filter, and the floating bar has an "N changes" button that lists the changed specs by subsystem, plus member projects owed a lock; a click opens the spec.
 - **The dev server stays responsive while the validator works.** Validation of a served project (the as-complete gate behind the canvas, and the owner's gate behind `sdd_validate_tree`) now runs on a background validation thread, so other requests are answered during a cold run. `wairon dev` starts both gates in the background at start, so the first page finds them remembered. The page header shows the served project's name, and the browser tab title carries it. Lock and approval paths stay synchronous.
