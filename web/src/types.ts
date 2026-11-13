@@ -504,6 +504,28 @@ export interface ReviewRequest {
   commit?: string;
 }
 
+/** A direct member project's approval state (mirrors the server's ProjectApproval). */
+export type MemberApprovalState = 'approved' | 'drifted' | 'never';
+export interface MemberApproval {
+  /** The member's key (its location in the family). */
+  key: string;
+  alias?: string;
+  projectId?: string;
+  state: MemberApprovalState;
+  as?: 'part' | 'project';
+  /** False when its own tree holds nothing to approve. */
+  approvable?: boolean;
+  /** Why the approval on record does not cover it, when drifted. */
+  owed?: string;
+  pinned?: 'matches' | 'moved' | 'unpinned';
+}
+
+/** One entry of GET /web/dev/reviews: the request, and the member project it was made in (its alias), when not the served one. */
+export interface DevReview {
+  request: ReviewRequest;
+  member?: string;
+}
+
 /** What a human command run from the dev page printed. */
 export interface DevCommandResult {
   command: string;

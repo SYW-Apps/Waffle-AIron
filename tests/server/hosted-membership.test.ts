@@ -592,7 +592,9 @@ describe('the UI routes', () => {
     platformConsumesBilling();
     const snapshot = captureSnapshot(dataDir, principalOf('u-view'), 'platform', 'canvas', ['html']);
     const model = JSON.parse(snapshot.canvasModel) as RelModel;
-    expect(model.relations).toEqual([expect.objectContaining({ id: '→billing', health: 'ok', comparedAt: expect.stringMatching(/^\d{4}-/) })]);
+    // The family's bare declarations (billing ⊃ payments, docs → billing) are drawn too, each naming its own relation.
+    expect(model.relations).toContainEqual(expect.objectContaining({ id: '→billing', health: 'ok', comparedAt: expect.stringMatching(/^\d{4}-/) }));
+    expect(model.relations?.every((r) => /^\d{4}-/.test(r.comparedAt))).toBe(true);
     expect(model.subsystems.some((s) => s.recordId !== undefined)).toBe(false);
     expect(snapshot.html).toContain('"relations":[');
     expect(snapshot.html).not.toContain('"recordId"');

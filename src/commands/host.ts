@@ -477,7 +477,7 @@ function familyArgv(program: Command, command: DevFamilyCommand): string[] {
  * each parsed by a fresh copy of the CLI's own command tree, which the CLI hands in.
  */
 export function devCommandsFor(root: string, commandTree?: () => Command): DevCommands {
-  const lock: DevCommand = (subsystem) => captureCommand('lock', root, async () => {
+  const lock: DevCommand = (subsystem, at) => captureCommand('lock', at ?? root, async () => {
     // Imported on use: the runner imports this module's siblings.
     const { lockCommand } = await import('../cli/runner.js');
     await lockCommand({ yes: true, subsystem: subsystem ?? undefined });

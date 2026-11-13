@@ -47,15 +47,21 @@ fields:
   - name: edges
     type: list<any>
     description: >-
-      Dependency and ownership edges between the nodes, each flagged when it crosses a subsystem
-      boundary; a dependency on a referenced project's public name, or on a declared external's,
-      lands on that project's node (a consumption edge, stage 8). A consumption edge — one whose
-      source and target lie in different projects of the family, or that lands on a referenced or
-      external project node — is flagged as one (`consumption`) whether or not health was computed,
-      so the canvas can draw it neutral and say health was not checked; it names the relation it
-      belongs to (`relation`: a CanvasRelation id, `<consumer>→<producer>`) when the model carries
-      relations, and takes that relation's health; an edge between two projects with relations
-      computed but no entry for its pair names an unavailable relation, never none.
+      Every dependency between the nodes, each flagged when it crosses a subsystem boundary and
+      tagged with its `kind`, the strongest form the specs state it in: `depends` (a `dependsOn`
+      entry, or ownership), `calls` (a narrative call or register step naming the target, with no
+      `dependsOn` beside it), `uses` (the source uses a type, field or return the target project
+      owns: one project reading another's content), or `declared` (the bound project or a member
+      declares the target as an external or a member, with no use the specs name). One edge per
+      source-target pair and kind, the strongest kind kept when a pair is stated several ways. A
+      dependency on a referenced project's public name, or on a declared external's, lands on that
+      project's node (a consumption edge, stage 8). A consumption edge — one whose source and target
+      lie in different projects of the family, or that lands on a referenced or external project
+      node — is flagged as one (`consumption`) whether or not health was computed, so the canvas can
+      draw it neutral and say health was not checked; it names the relation it belongs to
+      (`relation`: a CanvasRelation id, `<consumer>→<producer>`) when the model carries relations,
+      and takes that relation's health; an edge between two projects with relations computed but no
+      entry for its pair names an unavailable relation, never none.
     optional: false
   - name: relations
     type: list<CanvasRelation>
@@ -105,4 +111,4 @@ fields:
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-10-23T22:22:12.235Z'
+updatedAt: '2026-11-12T13:45:19.056Z'
