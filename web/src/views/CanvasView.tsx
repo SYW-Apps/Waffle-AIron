@@ -178,9 +178,21 @@ export function CanvasView({
     handleRef.current?.setTheme(canvasTheme, canvasVars);
   }, [canvasTheme, canvasVars]);
 
+  // While the gate runs on after a change (or has not answered yet), the canvas is drawn with the
+  // last known findings, or none: say so, until the server's nudge brings the gate's answer.
+  const findingsState = (model as { findingsState?: string } | undefined)?.findingsState;
   return (
     <AsyncView state={state}>
-      {() => <div ref={hostRef} className="canvas-host" />}
+      {() => (
+        <>
+          <div ref={hostRef} className="canvas-host" />
+          {findingsState === 'stale' || findingsState === 'pending' ? (
+            <div className="canvas-findings-state" role="status">
+              {findingsState === 'stale' ? 'Checking… findings are from before the last change' : 'Checking… findings appear when the check finishes'}
+            </div>
+          ) : null}
+        </>
+      )}
     </AsyncView>
   );
 }

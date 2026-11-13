@@ -1,4 +1,5 @@
 import type { LockRecord } from '../core/lockfile.js';
+import type { FindingsState } from '../core/canvas.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ProfileFamily } from '../core/extensions.js';
@@ -1303,6 +1304,8 @@ export interface WebGraphModel {
   level: number;
   generatedAt: string;
   scope?: string;
+  /** Project tier: how current the overlaid findings are; absent means current. */
+  findingsState?: FindingsState;
 }
 
 /** A project's editable configuration view for the web UI: the project-level

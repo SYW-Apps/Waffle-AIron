@@ -223,6 +223,16 @@ function refPartsOf(text: string): readonly string[] {
 }
 
 /**
+ * The last normalized segment of a reference or id, or undefined when it has
+ * none. A reference matches a type id only when their last segments are equal,
+ * so a caller comparing many references with many types indexes the types by it.
+ */
+export function refTail(text: string): string | undefined {
+  const parts = refPartsOf(text);
+  return parts.length === 0 ? undefined : parts[parts.length - 1];
+}
+
+/**
  * reference_resolution.nameKey — the one key a bare name is compared by,
  * locally and through imports alike: lower-cased, every character outside
  * [a-z0-9] removed, so `SharedError`, `shared-error` and `shared_error` are

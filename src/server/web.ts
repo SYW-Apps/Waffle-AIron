@@ -41,6 +41,11 @@ import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
 import { sendJson, sendJsonTagged, setSessionCookie, clearSessionCookie, errorText } from './httpio.js';
+import * as viewCache from './view-cache.js';
+import type { CachedView } from './view-cache.js';
+import { publishNudge } from './realtime.js';
+import type { FindingsState } from '../core/canvas.js';
+import type { ValidationResult } from '../core/validation.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
@@ -698,15 +703,28 @@ export async function getWebGraph(
       if (!root) {
         throw new ForbiddenError('project not authorized or unknown');
       }
-      // steps 7–11: bind the root for the host-core reads that follow.
+      // Steps 7-9: the graph kept for this project and level, if any.
+      const key = 'graph\u0000' + projectId + '\u0000' + String(level);
+      const kept = viewCache.read(key);
+      // Step 10: nothing changed since it was built with the gate's current findings.
+      if (kept?.current) return kept.model as WebGraphModel; // step 21
       return runWithProjectRoot(root, async () => {
-        const graph = hostCore.buildProjectGraph(level); // step 8
-        const validation = await validateAsCompleteAsync(); // step 9
-        return overlayProjectIssues(graph, validation.issues, projectId, level); // steps 10–11
+        const version = viewCache.version(); // step 11
+        const graph = hostCore.buildProjectGraph(level); // step 12
+        // Step 13: the gate, waited for at most a moment; a gate that fails fails the read, as before.
+        const gate = validateAsCompleteAsync();
+        const drawn = await findingsWithin(gate, kept, 'throw'); // step 14
+        // Step 15: overlay and stamp.
+        const model: WebGraphModel = { ...overlayProjectIssues(graph, drawn.issues, projectId, level), findingsState: drawn.state };
+        // Steps 16-17: kept current only when its findings are and nothing changed while it was built.
+        viewCache.write(key, { model, issues: drawn.issues, current: drawn.state === 'current' && viewCache.version() === version });
+        // Steps 18-19: a gate still running nudges the page when it answers.
+        if (drawn.state !== 'current') nudgeWhenAnswered(gate, projectId);
+        return model; // step 20
       });
     }
     default:
-      throw new Error('unsupported graph tier'); // step 12
+      throw new Error('unsupported graph tier'); // step 22
   }
 }
 
@@ -770,27 +788,93 @@ export async function getWebProjectCanvasModel(cfg: HostConfig, sessionId: strin
   // the listed projects, exactly as the Relations tab reads — so a member or
   // producer outside it is unavailable, never ok.
   const listed = webproject.listProjects(cfg, sessionId);
-  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations());
-  // Step 7: the owner's gate, off the serving thread, so a cold run does not hold up
-  // the server's other requests and its live connections.
-  // A gate that cannot run draws no findings rather than fail the read, as the build itself does.
-  const issues = await runWithProjectRoot(root, () => hostValidator.validateProjectAsync()).then((v) => v.issues, () => []);
-  // Step 8: the model, each consumption edge carrying its relation's health, drawn
-  // with the step-7 findings so the build runs no gate of its own.
-  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations, issues));
-  // Steps 9-11: the family canvas — a member project node is linked to its
+  // Steps 6-7: the model kept for this project and this reach (the reach decides the relation
+  // health and the project links, so callers with different reach never share one).
+  const key = 'canvas\u0000' + projectId + '\u0000' + listed.map((r) => r.id).sort().join(',');
+  const kept = viewCache.read(key);
+  // Step 8: nothing changed since it was built with the gate's current findings.
+  if (kept?.current) return kept.model; // step 22
+  const version = viewCache.version(); // step 9
+  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations()); // step 10
+  // Step 11: the owner's gate, off the serving thread, waited for at most a moment, so a cold run
+  // holds up neither this read nor the server's other requests and its live connections.
+  const gate = runWithProjectRoot(root, () => hostValidator.validateProjectAsync());
+  // Step 12: a gate that cannot run draws no findings rather than fail the read, as the build itself does.
+  const drawn = await findingsWithin(gate, kept, 'none');
+  // Step 13: the model, each consumption edge carrying its relation's health, drawn
+  // with the step-12 findings so the build runs no gate of its own.
+  const built = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations, drawn.issues));
+  // Steps 14-16: the family canvas — a member project node is linked to its
   // member's record, and an external project node to the hosted record its
   // external names, only when the caller may read that record; any other node
   // stays unlinked (no id leaks).
   const readable = new Set(listed.map((r) => r.id));
   const members = new Set(listFamilyRecords(cfg.dataDir, projectId).filter((r) => r.parentProjectId !== undefined).map((r) => r.id));
   const hostedOf = externalRecords(runWithProjectRoot(root, () => hostCore.loadProjectConfig()));
-  return withProjectLinks(model, (node) => {
+  const model = withProjectLinks(built, (node) => {
     const id = node.external ? hostedOf.get(node.id) : node.id;
     if (id === undefined || !readable.has(id)) return undefined;
     return node.external || members.has(id) ? id : undefined;
   });
+  model.findingsState = drawn.state;
+  // Steps 17-18: kept current only when its findings are and nothing changed while it was built.
+  viewCache.write(key, { model, issues: drawn.issues, current: drawn.state === 'current' && viewCache.version() === version });
+  // Steps 19-20: a gate still running nudges the page when it answers.
+  if (drawn.state !== 'current') nudgeWhenAnswered(gate, projectId);
+  return model; // step 21
 }
+
+/** How long a read waits for the gate before it draws the last known findings. */
+export const GATE_WAIT_MS = 1500;
+
+/** The findings a view is drawn with, and how current they are. */
+export interface DrawnFindings {
+  issues: ValidationIssue[];
+  state: FindingsState;
+}
+
+/**
+ * The gate's findings, as current, when it answers within GATE_WAIT_MS; else the kept view's
+ * findings, as stale, or none, as pending. A gate that fails within the wait draws no findings
+ * ('none') or fails the read ('throw').
+ */
+export async function findingsWithin(gate: Promise<ValidationResult>, kept: CachedView | undefined, onFailure: 'none' | 'throw'): Promise<DrawnFindings> {
+  const late = Symbol('late');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = new Promise<typeof late>((resolve) => {
+    timer = setTimeout(() => resolve(late), GATE_WAIT_MS);
+  });
+  const answer = gate.then(
+    (v) => v.issues,
+    (err: unknown) => {
+      if (onFailure === 'throw') throw err;
+      return [] as ValidationIssue[];
+    },
+  );
+  try {
+    const first = await Promise.race([answer, wait]);
+    if (first !== late) return { issues: first, state: 'current' };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+  // The late answer is awaited by nudgeWhenAnswered; its failure is no unhandled rejection.
+  answer.catch(() => undefined);
+  return kept ? { issues: kept.issues, state: 'stale' } : { issues: [], state: 'pending' };
+}
+
+/** When a gate the read left running answers (or fails), nudge the project's channel without outdating the kept views. */
+function nudgeWhenAnswered(gate: Promise<unknown>, projectId: string): void {
+  const nudge = (): void => publishNudge('project:' + projectId);
+  gate.then(nudge, nudge);
+}
+
+/**
+ * web_graph_orchestrator.outdate — every kept view stops being current, keeping each view
+ * and its findings. The realtime change publication calls it before each change nudge.
+ */
+export function outdateViews(): void {
+  viewCache.outdate(); // step 1
+} // step 2
 
 /** Each declared external's alias → the hosted record its `source.hosted` names. */
 function externalRecords(config: { externals?: Record<string, { source?: unknown } | null> } | null): Map<string, string> {

@@ -6,6 +6,7 @@ import { authenticateSession } from './auth.js';
 import { authorize, isInstanceAdmin } from './authorization.js';
 import { sessionCookieValue } from './httpio.js';
 import type { HostConfig, Principal } from './types.js';
+import { outdateViews } from './web.js';
 
 // ---------------------------------------------------------------------------
 // Realtime channel hub (sdd_host) — live invalidation over WebSocket.
@@ -141,8 +142,22 @@ export function getRealtimeHub(): RealtimeHub {
   return hub;
 }
 
-/** Broadcast a channel change (no-op when nothing is listening). */
+/**
+ * Broadcast a channel change (no-op when nothing is listening). Something changed,
+ * so every kept web view is outdated first: the page's refetch builds again,
+ * drawing the last known findings as stale while the gate runs.
+ */
 export function publishChange(channel: string): void {
+  outdateViews();
+  getRealtimeHub().publish(channel);
+}
+
+/**
+ * Broadcast a refetch nudge that is no change: a gate the read left running has
+ * answered, so the open page reads again and finds the answer remembered. The
+ * kept views stay as they are.
+ */
+export function publishNudge(channel: string): void {
   getRealtimeHub().publish(channel);
 }
 

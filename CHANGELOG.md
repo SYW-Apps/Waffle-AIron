@@ -6,6 +6,10 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **`wairon dev` switches pages faster and draws the canvas before validation finishes.** The server keeps the canvas model and the graph it last built. An unchanged read is answered from them at once, where each read used to build the model again. After a change, a read waits at most a second and a half for the validator. If the validator is still running, the canvas is drawn at once with the last known findings, and the page shows "Checking…" until they are current. When validation finishes, the page reads the model again by itself. Also:
+  - `wairon dev` now watches the project's code as well as `.wai/`, so a code edit refreshes the open page and its findings. Changes inside `.git` and `node_modules` folders are ignored.
+  - The canvas model is built faster on large projects, and is serialized once per answer instead of twice.
+  - The page does not start a second load of the same data while one is in flight, and a page switch sends one subscription update instead of two.
 - **`wairon dev` no longer drops its live connection while the canvas loads.** The canvas read ran the full validation on the server's main thread whenever the remembered result no longer held (after a rebuild of wairon or a code edit), which held up every other request, the page's pings included, for up to half a minute, so the page reconnected and could show "Offline". The canvas now takes its findings from the background validation thread; a cold load keeps the pings answered within a second. Also:
   - The page tolerates one late ping before it reconnects.
   - The canvas model and the graph carry an `ETag`: a re-read of an unchanged model is answered `304` with no body.

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { watch, watchProducers, DEV_WATCH_DEBOUNCE_MS } from '../../src/server/dev-watcher.js';
+import { watch, watchProducers, isCodePath, DEV_WATCH_DEBOUNCE_MS } from '../../src/server/dev-watcher.js';
 import type { DevChangeKind, DevProducer } from '../../src/server/dev-watcher.js';
 
 // ---------------------------------------------------------------------------
@@ -100,6 +100,51 @@ describe('dev tree watcher (sdd_host)', () => {
     await settle();
     expect(seen).toEqual([]);
     stop = undefined;
+  });
+
+  it('says `code` for a change of the project\'s code, once per burst', async () => {
+    project();
+    fs.mkdirSync(path.join(root, 'src'));
+    const seen: DevChangeKind[] = [];
+    stop = watch(root, (k) => seen.push(k));
+    fs.writeFileSync(path.join(root, 'src', 'a.ts'), 'export const a = 1;');
+    fs.writeFileSync(path.join(root, 'src', 'b.ts'), 'export const b = 1;');
+    await settle();
+    expect(seen).toEqual(['code']);
+
+    seen.length = 0;
+    fs.writeFileSync(path.join(root, 'src', 'a.ts'), 'export const a = 2;');
+    fs.writeFileSync(path.join(root, '.wai', 'specs', 'a.yaml'), 'a: 1');
+    await settle();
+    expect([...seen].sort()).toEqual(['code', 'tree']);
+  });
+
+  it('says nothing for node_modules, git\'s folder or a lock file outside .wai/', async () => {
+    project();
+    fs.mkdirSync(path.join(root, 'node_modules', 'pkg'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'packages', 'x', 'node_modules'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.git', 'objects'), { recursive: true });
+    await sleep(100);
+    const seen: DevChangeKind[] = [];
+    stop = watch(root, (k) => seen.push(k));
+    fs.writeFileSync(path.join(root, 'node_modules', 'pkg', 'index.js'), 'x');
+    fs.writeFileSync(path.join(root, 'packages', 'x', 'node_modules', 'y.js'), 'x');
+    fs.writeFileSync(path.join(root, '.git', 'objects', 'ab'), 'x');
+    fs.writeFileSync(path.join(root, 'build.lock'), 'x');
+    await settle();
+    expect(seen).toEqual([]);
+  });
+
+  it('reads a path as code only outside .wai/, .git and node_modules', () => {
+    expect(isCodePath('src/a.ts')).toBe(true);
+    expect(isCodePath('README.md')).toBe(true);
+    expect(isCodePath('.wai/specs/a.yaml')).toBe(false);
+    expect(isCodePath('.wai')).toBe(false);
+    expect(isCodePath('.git/HEAD')).toBe(false);
+    expect(isCodePath('node_modules/x/index.js')).toBe(false);
+    expect(isCodePath('web/node_modules/x.js')).toBe(false);
+    expect(isCodePath('package.lock')).toBe(false);
+    expect(isCodePath('')).toBe(false);
   });
 
   it('answers a stop function that does nothing for a folder with no .wai/', () => {
