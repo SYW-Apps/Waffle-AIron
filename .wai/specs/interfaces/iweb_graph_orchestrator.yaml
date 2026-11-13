@@ -19,8 +19,11 @@ methods:
       stays reachable without leaking its siblings. For tier 'project', resolve and bind the
       requested project's isolated root within the principal's authorized set through the project
       registry (rejecting cross-project access), project its spec tree at the requested level via
-      the host core adapter, overlay validator issues as per-node issue counts, and return it. An
-      unknown tier is rejected.
+      the host core adapter, overlay validator issues as per-node issue counts, and return it. A
+      project graph is kept between reads per level, as the canvas model is: an unchanged project
+      answers the kept graph, and a changed one is built again at once with the gate's findings when
+      it answers within a moment, else the last known ones marked stale (or pending), while the gate
+      runs on in the background. An unknown tier is rejected.
     signature: 'get(sessionId: string, tier: string, projectId: string, level: int): async WebGraphModel'
     returns: async WebGraphModel
     params:
@@ -72,7 +75,11 @@ methods:
       whenever ANYTHING loaded: a tree that fails to load or validate in part is drawn partially,
       with what failed carried as findings (a finding naming no spec when no spec can carry it), and
       only a tree that yields nothing at all answers an empty model holding that one error finding.
-      A failed build is never an HTTP error in place of a graph.
+      A failed build is never an HTTP error in place of a graph. The model is kept between reads: an
+      unchanged project answers the kept model. A changed one is built again at once; its findings
+      are the gate's when the gate answers within a moment, else the last known ones, marked stale
+      (pending when the gate never answered for it), while the gate runs on in the background and
+      the project's channel is nudged when it answers.
     signature: 'getProjectCanvasModel(sessionId: string, projectId: string): async CanvasModel'
     returns: async CanvasModel
     params:
@@ -151,8 +158,23 @@ methods:
       - name: projectId
         type: string
     effect: read
+  - name: outdate
+    description: >-
+      Mark every kept graph and canvas model as no longer current, so the next read draws the
+      project as it now is. Called for every change the server publishes to the pages — a project's
+      tree or code, a producer, the externals, the projects list — and never for the nudge that only
+      says a background gate has answered.
+    signature: 'outdate(): void'
+    returns: void
+    params: []
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The server's realtime change publication: each time it publishes a change of a project, the
+        externals or the projects list to the open pages (the dev server's watcher, an applied MCP
+        write, a successful web mutation), it first outdates the kept views
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-11-13T01:36:55.260Z'
+updatedAt: '2026-11-13T16:02:08.952Z'

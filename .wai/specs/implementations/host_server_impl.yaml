@@ -81,11 +81,14 @@ methods:
         targetMethod: warm
       - stepNumber: 11
         description: >-
-          On the local development server only (devMode), watch the served project's .wai/ folder: a
-          `tree` change nudges the served project's realtime channel, so a spec written by another
-          process (an agent's `wairon mcp serve`) or a terminal lock refreshes the open page, and
-          re-runs the next two steps, since the configuration may have declared, moved or removed a
-          producer; a `reviews` change nudges the reviews channel, so a new review request pops up
+          On the local development server only (devMode), watch the served project's .wai/ folder
+          and its code: a `tree` change nudges the served project's realtime channel, so a spec
+          written by another process (an agent's `wairon mcp serve`) or a terminal lock refreshes
+          the open page, and re-runs the next two steps, since the configuration may have declared,
+          moved or removed a producer; a `code` change nudges the same channel, so the page's
+          findings follow an edit of the code; a `reviews` change nudges the reviews channel, so a
+          new review request pops up. Every change nudge first outdates the kept graph and canvas
+          views
         type: call
         targetComponent: dev_tree_watcher
         targetMethod: watch
@@ -172,4 +175,4 @@ methods:
         outcome: ready or not
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-11-11T23:27:23.191Z'
+updatedAt: '2026-11-13T16:03:40.930Z'

@@ -1,0 +1,24 @@
+id: web_view_cache
+name: Web View Cache
+description: >-
+  The built views the web UI reads — a project's canvas model and its level-of-detail graph per
+  level — kept between reads, keyed by the project, the view, the level and the caller's reach (the
+  projects the caller may read, which decide the relation health and the project links a view
+  carries). A read of an unchanged project answers the kept view instead of building it again. A
+  change of the tree, the code or a producer marks every kept view as no longer current instead of
+  dropping it: the view's findings stay the last known ones a rebuild draws while the gate runs
+  again. Evictable and loss-safe: a missing entry is built again.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+durability: cache
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Simple keyed state: built views read and written by one key, with no lookup beyond the key
+        and one bulk outdate; its one consumer is the web graph orchestrator, a workflow.
+status: complete
+createdAt: '2026-11-13T16:01:31.776Z'
+updatedAt: '2026-11-13T16:04:32.458Z'
