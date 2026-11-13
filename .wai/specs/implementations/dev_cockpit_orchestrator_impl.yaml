@@ -35,7 +35,28 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: pendingReviews
       - stepNumber: 6
-        description: Return them
+        description: >-
+          Name the direct member projects, each judged at its own root (parts are approved with this
+          project and ask here)
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 7
+        description: For each direct member project
+        type: loop
+        loopKind: forEach
+        over: the direct member projects
+        endStep: 9
+      - stepNumber: 8
+        description: Bind the member's root, its folder from the served project's member declarations
+        type: local
+      - stepNumber: 9
+        description: Read its pending requests, tagged with its alias
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: pendingReviews
+      - stepNumber: 10
+        description: Return them all, the served project's own first
         type: return
         outcome: the pending requests
   - name: decide
@@ -60,36 +81,62 @@ methods:
         targetComponent: project_repository
         targetMethod: existingRoot
       - stepNumber: 5
+        description: Was the request made in a member project?
+        type: branch
+        condition: a member alias is named
+        onFalseStep: 10
+      - stepNumber: 6
+        description: Name the direct member projects
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 7
+        description: Does the alias name one of them?
+        type: branch
+        condition: the alias names no direct member project
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Refuse an alias that names no direct member project
+        type: throw
+        error: no member project of that alias
+      - stepNumber: 9
+        label: memberRoot
+        description: >-
+          Bind the member's root, its folder from the served project's member declarations: the
+          request is read, decided and, for a lock, locked there
+        type: local
+      - stepNumber: 10
+        label: read
         description: Read the request brought up to date, for its kind and subsystem
         type: call
         targetComponent: host_core_adapter
         targetMethod: reviewStatus
-      - stepNumber: 6
+      - stepNumber: 11
         description: Is the decision to lock?
         type: branch
         condition: the outcome is locked
-        onFalseStep: 10
-      - stepNumber: 7
+        onFalseStep: 15
+      - stepNumber: 12
         description: >-
-          Run the CLI's lock (of the request's subsystem when it names one), capturing what it
-          prints
+          Run the CLI's lock at the bound root (of the request's subsystem when it names one),
+          capturing what it prints
         type: local
-      - stepNumber: 8
+      - stepNumber: 13
         description: 'A failed lock leaves the request pending: answer it with the lock''s output'
         type: branch
         condition: the lock failed
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 15
+      - stepNumber: 14
         description: Answer the pending request and the failed lock
         type: return
         outcome: not locked
-      - stepNumber: 10
+      - stepNumber: 15
         label: record
         description: Record the decision with the comment and the notes
         type: call
         targetComponent: host_core_adapter
         targetMethod: decideReview
-      - stepNumber: 11
+      - stepNumber: 16
         description: Answer the decided request and, for a lock, its output
         type: return
         outcome: the decision
@@ -114,11 +161,39 @@ methods:
         targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 4
-        description: >-
-          Run the command the CLI handed over, capturing every line it prints with colour codes
-          removed
-        type: local
+        description: Is a member project named?
+        type: branch
+        condition: a member alias is named
+        onFalseStep: 9
       - stepNumber: 5
+        description: Name the direct member projects
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 6
+        description: Is it a lock of one of them?
+        type: branch
+        condition: >-
+          the command is not lock, or the alias names no direct member project (a part is approved
+          with the served project)
+        onFalseStep: 8
+      - stepNumber: 7
+        description: 'Refuse: only a direct member project''s lock runs at another root'
+        type: throw
+        error: only a direct member project can be locked from here
+      - stepNumber: 8
+        label: memberRoot
+        description: >-
+          Resolve the member's folder from the served project's member declarations: the lock runs
+          there, as `wairon lock` in that folder would
+        type: local
+      - stepNumber: 9
+        label: runIt
+        description: >-
+          Run the command the CLI handed over, at the member's folder when one is named, capturing
+          every line it prints with colour codes removed
+        type: local
+      - stepNumber: 10
         description: Answer whether it succeeded and its output
         type: return
         outcome: the command's result
@@ -164,7 +239,14 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 9
-        description: Answer the approval state with the branch and the project's name
+        description: Read each direct member project's approval at its own root, so the page can offer its lock
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 10
+        description: >-
+          Answer the approval state with the branch, the project's name and its member projects'
+          approvals
         type: return
         outcome: the approval state
   - name: family
@@ -266,4 +348,4 @@ lint:
         the core approval portal, so the analyzer reads the core workflow behind each forward.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-12T00:17:51.990Z'
+updatedAt: '2026-11-12T01:03:09.642Z'

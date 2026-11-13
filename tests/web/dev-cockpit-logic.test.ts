@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  barState, branchChipText, inPlaceScope, lockBody, movedScope, offersLockInPlace, parseMoved, subsystemOfRoute, subsystemOfSpec,
+  bannerState, barState, branchChipText, changeCount, changeMarks, groupMoved, inPlaceScope, lockBody, memberName, memberOfScope, membersToLock, movedKind, movedScope,
+  offersLockInPlace, parseMoved, pendingReviews, specRoute, subsystemOfRoute, subsystemOfSpec,
   type DevApprovalData, type ScopeNode,
 } from '../../web/src/views/devCockpitLogic.js';
 
@@ -83,5 +84,60 @@ describe('branch chip text', () => {
     expect(branchChipText({ commit: 'abcdef0123' })).toBe('abcdef0');
     expect(branchChipText({})).toBeUndefined();
     expect(branchChipText(undefined)).toBeUndefined();
+  });
+});
+
+describe('dev cockpit changes and member projects', () => {
+  const member = (state: 'approved' | 'drifted' | 'never', extra = {}) => ({ key: 'svc', alias: 'svc', state, ...extra });
+  const withMembers = (a: DevApprovalData, members: any[]): DevApprovalData => ({ ...a, members });
+  const movedList = ['~ .wai/specs/components/a_comp.yaml', '~ .wai/specs/interfaces/a_iface.yaml', '+ .wai/specs/types/t.yaml', '- .wai/specs/components/gone.yaml'];
+
+  it('lists the members that are owed a lock', () => {
+    expect(membersToLock(withMembers(clean, [member('approved'), member('drifted'), { ...member('never'), key: 'x', alias: undefined, approvable: false }]))).toHaveLength(1);
+    expect(membersToLock(undefined)).toEqual([]);
+    expect(memberName({ key: 'k' })).toBe('k');
+  });
+  it('shows the bar for a drifted member of an approved design', () => {
+    const s = barState(withMembers(clean, [member('drifted')]), 0);
+    expect(s).toMatchObject({ show: true, action: 'lock' });
+    expect(s.line).toContain('svc');
+    expect(barState(withMembers(clean, [member('approved')]), 0).show).toBe(false);
+  });
+  it('shows no banner for an approved, unchanged design and one row when anything changed', () => {
+    expect(bannerState(clean).show).toBe(false);
+    expect(bannerState(withMembers(clean, [member('approved')])).show).toBe(false);
+    expect(bannerState(undefined).show).toBe(false);
+    const b = bannerState(drifted(movedList));
+    expect(b).toMatchObject({ show: true, never: false, specs: 4 });
+    expect(b.text).toBe('4 specs changed');
+    const both = bannerState(withMembers(drifted(['~ .wai/specs/components/a_comp.yaml']), [member('drifted')]));
+    expect(both.text).toBe('1 spec changed · member project svc changed');
+    expect(bannerState(withMembers(clean, [member('drifted')])).text).toBe('Member project svc changed');
+    expect(bannerState({ approved: false, verdict: { text: '', drifted: false } })).toMatchObject({ show: true, never: true });
+  });
+  it('counts moved specs plus members owed a lock', () => {
+    expect(changeCount(withMembers(drifted(movedList), [member('drifted')]))).toBe(5);
+    expect(changeCount(clean)).toBe(0);
+  });
+  it('marks changed tree nodes, rolling interfaces up to their component and skipping removals', () => {
+    const typeNodes: ScopeNode[] = [...nodes, { id: 't', kind: 'type' }];
+    const marks = changeMarks(parseMoved(movedList), typeNodes);
+    expect(Object.fromEntries(marks)).toEqual({ a_comp: '~', t: '+' });
+  });
+  it('groups moved specs by subsystem with unplaced and removed ones last', () => {
+    const groups = groupMoved(parseMoved(movedList), nodes);
+    expect(groups.map((g) => g.subsystem)).toEqual(['a', '']);
+    expect(groups[0].items.map((i) => i.id)).toEqual(['a_comp', 'a_iface']);
+    expect(groups[1].items.map((i) => `${i.mark}${i.id}`)).toEqual(['-gone', '+t']);
+  });
+  it('builds spec routes, member scopes, lock bodies and pending reviews', () => {
+    expect(specRoute('component', 'x::y z')).toBe('/specs/component/x/y%20z');
+    expect(movedKind({ folder: 'interfaces' })).toBe('interface');
+    expect(memberOfScope('member:svc')).toBe('svc');
+    expect(memberOfScope('a')).toBeUndefined();
+    expect(lockBody(undefined, 'svc')).toEqual({ command: 'lock', member: 'svc' });
+    const r = [{ request: { status: 'pending' }, member: 'svc' }, { request: { status: 'locked' } }];
+    expect(pendingReviews(r)).toHaveLength(1);
+    expect(pendingReviews(undefined)).toEqual([]);
   });
 });
