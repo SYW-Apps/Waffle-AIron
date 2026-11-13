@@ -30,8 +30,11 @@ const RealtimeStatusContext = createContext<RealtimeStatus>('connecting');
 export const useRealtime = () => useContext(RealtimeContext);
 export const useRealtimeStatus = () => useContext(RealtimeStatusContext);
 
-/** App-level heartbeat interval; a ping unanswered by the next tick = half-open → reconnect. */
+/** App-level heartbeat interval. */
 const HEARTBEAT_MS = 20_000;
+/** Ticks a ping may go unanswered before the socket counts as half-open and is reconnected:
+ *  one late pong (a server busy for a moment) is tolerated, two in a row are not. */
+const MISSED_PINGS_ALLOWED = 1;
 /** Reconnect attempts before the socket is considered offline (and surfaced to the user). */
 const OFFLINE_AFTER_ATTEMPTS = 3;
 
@@ -58,12 +61,12 @@ export function RealtimeProvider(props: { children: ReactNode }) {
     stopped.current = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
-    let awaitingPong = false;
+    let unanswered = 0;
 
     const stopHeartbeat = () => {
       if (heartbeat) clearInterval(heartbeat);
       heartbeat = undefined;
-      awaitingPong = false;
+      unanswered = 0;
     };
 
     const scheduleReconnect = () => {
@@ -91,7 +94,7 @@ export function RealtimeProvider(props: { children: ReactNode }) {
       wsRef.current = ws;
       ws.onopen = () => {
         attempts.current = 0;
-        awaitingPong = false;
+        unanswered = 0;
         setStatus('connected');
         pushSubscription();
         // App-level heartbeat: catches a HALF-OPEN socket (a proxy silently dropping
@@ -102,9 +105,9 @@ export function RealtimeProvider(props: { children: ReactNode }) {
           if (ws.readyState !== WebSocket.OPEN) return;
           // A hidden page's timers and frames are delayed by the browser, so a late
           // pong there is not a dead socket.
-          if (awaitingPong && !document.hidden) {
+          if (unanswered > MISSED_PINGS_ALLOWED && !document.hidden) {
             try {
-              ws.close(); // last ping went unanswered → force a reconnect
+              ws.close(); // the pings went unanswered → force a reconnect
             } catch {
               /* ignore */
             }
@@ -112,14 +115,14 @@ export function RealtimeProvider(props: { children: ReactNode }) {
           }
           try {
             ws.send(JSON.stringify({ type: 'ping' }));
-            awaitingPong = true;
+            unanswered += 1;
           } catch {
             /* ignore */
           }
         }, HEARTBEAT_MS);
       };
       ws.onmessage = (ev) => {
-        awaitingPong = false; // any inbound frame proves the connection is alive
+        unanswered = 0; // any inbound frame proves the connection is alive
         let msg: { type?: string; channel?: string };
         try {
           msg = JSON.parse(String(ev.data));

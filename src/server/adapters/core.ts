@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 import { buildCanvasDataModel as buildCoreCanvasDataModel, loadSystemSpec, familyMembers as coreFamilyMembers, type FamilyMember } from '../../core/index.js';
 import type { CanvasModel } from '../../core/canvas.js';
+import type { ValidationIssue } from '../../core/validation.js';
 import type { ProjectRelations } from '../../models/index.js';
 
 export {
@@ -78,10 +79,10 @@ export function familyMembers(): FamilyMember[] {
  * outright answers an EMPTY model holding that one error finding with the cause, never a thrown error —
  * a failed build is not an HTTP error in place of a graph. Used by the web app's canvas and share snapshots.
  */
-export function buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel {
+export function buildCanvasDataModel(relations?: ProjectRelations[], issues?: ValidationIssue[]): CanvasModel {
   let cause: string;
   try {
-    const model = buildCoreCanvasDataModel(relations);
+    const model = buildCoreCanvasDataModel(relations, issues);
     // A tree that yields nothing at all (no system spec, nothing drawn, nothing found) says so rather than draw an empty page.
     if (model.subsystems.length > 0 || model.components.length > 0 || model.issues.length > 0 || loadSystemSpec() !== null) return model;
     cause = 'the project holds no system spec (.wai/specs/system.yaml)';

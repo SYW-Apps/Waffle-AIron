@@ -63,10 +63,12 @@ export function renderDiagram(format: DiagramFormat, relations?: ProjectRelation
  * `renderDiagram('canvas')` renders to the standalone HTML, but returned as data
  * so the React web app can mount the shared renderer directly (no iframe) and,
  * later, receive it in on-demand scope slices. Pure derivation, no side effects;
- * relation health is drawn only when passed in.
+ * relation health is drawn only when passed in. Findings passed in are drawn as
+ * given (a server runs the gate off its serving thread first); without them the
+ * owner's gate runs here, on the caller's thread.
  */
-export function buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel {
-  return buildCanvasModel(diagramIssues(), relations);
+export function buildCanvasDataModel(relations?: ProjectRelations[], issues?: ValidationIssue[]): CanvasModel {
+  return buildCanvasModel(issues ?? diagramIssues(), relations);
 }
 
 function diagramIssues(): ValidationIssue[] {
