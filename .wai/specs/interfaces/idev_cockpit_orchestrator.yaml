@@ -4,9 +4,11 @@ description: Reviews, human commands and the family panel on the local developme
 component: dev_cockpit_orchestrator
 methods:
   - name: reviews
-    description: The served project's pending review requests, newest first.
-    signature: 'reviews(sessionId: string): list<ReviewRequest>'
-    returns: list<ReviewRequest>
+    description: >-
+      The pending review requests of the served project and of each direct member project, each
+      member's read at its own root and tagged with its alias.
+    signature: 'reviews(sessionId: string): list<dev_review>'
+    returns: list<dev_review>
     params:
       - name: sessionId
         type: string
@@ -20,7 +22,7 @@ methods:
       per-spec notes) are recorded as given.
     signature: >-
       decide(sessionId: string, id: string, outcome: ReviewStatus, comment?: string, notes?:
-      list<ReviewNote>): async DevReviewDecision
+      list<ReviewNote>, member?: string): async DevReviewDecision
     returns: async DevReviewDecision
     params:
       - name: sessionId
@@ -40,13 +42,21 @@ methods:
         type: list<ReviewNote>
         description: Notes pinned to specs
         optional: true
+      - name: member
+        type: string
+        description: >-
+          The alias of the direct member project the request was made in; the request is read,
+          decided and, for a lock, locked at that member's root
+        optional: true
     effect: write
   - name: run
     description: >-
       Run one human command the CLI handed the server (`lock`, optionally of one subsystem,
       `generate`, or `doctor`) and answer what it printed. One command runs at a time: a second one
       while another runs is refused.
-    signature: 'run(sessionId: string, command: string, subsystem?: string): async DevCommandResult'
+    signature: >-
+      run(sessionId: string, command: string, subsystem?: string, member?: string): async
+      DevCommandResult
     returns: async DevCommandResult
     params:
       - name: sessionId
@@ -58,6 +68,12 @@ methods:
       - name: subsystem
         type: string
         description: For lock, the one subsystem to re-approve
+        optional: true
+      - name: member
+        type: string
+        description: >-
+          With lock only: the alias of a direct member project, locked at its own root as `wairon
+          lock` run in its folder would
         optional: true
     effect: write
   - name: approval
@@ -102,4 +118,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-11-07T02:41:40.170Z'
-updatedAt: '2026-11-10T00:33:01.737Z'
+updatedAt: '2026-11-12T01:02:29.078Z'

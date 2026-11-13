@@ -1636,8 +1636,8 @@ methods:
       (sdd_validate_tree; a request with errors is never made), a comment box and a note box per
       spec, with Lock (a lock request, through the lock confirmation), Approve (a review request)
       and Request changes.
-    signature: 'getDevReviews(sessionId: string): list<ReviewRequest>'
-    returns: list<ReviewRequest>
+    signature: 'getDevReviews(sessionId: string): list<dev_review>'
+    returns: list<dev_review>
     params:
       - name: sessionId
         type: string
@@ -1652,7 +1652,7 @@ methods:
       output. Mounted only under devMode.
     signature: >-
       decideDevReview(sessionId: string, id: string, outcome: ReviewStatus, comment?: string,
-      notes?: list<ReviewNote>): async DevReviewDecision
+      notes?: list<ReviewNote>, member?: string): async DevReviewDecision
     returns: async DevReviewDecision
     params:
       - name: sessionId
@@ -1667,6 +1667,10 @@ methods:
       - name: notes
         type: list<ReviewNote>
         optional: true
+      - name: member
+        type: string
+        description: The alias of the direct member project the request was made in
+        optional: true
     endpoint:
       transport: HTTP
       method: POST
@@ -1678,7 +1682,9 @@ methods:
       (dev_cockpit_orchestrator.run). Mounted only under devMode. CLIENT CONTRACT: the dev page
       offers these in a Commands panel, each with a one-line explanation of what it does, and shows
       the output when it finishes.
-    signature: 'runDevCommand(sessionId: string, command: string, subsystem?: string): async DevCommandResult'
+    signature: >-
+      runDevCommand(sessionId: string, command: string, subsystem?: string, member?: string): async
+      DevCommandResult
     returns: async DevCommandResult
     params:
       - name: sessionId
@@ -1687,6 +1693,10 @@ methods:
         type: string
       - name: subsystem
         type: string
+        optional: true
+      - name: member
+        type: string
+        description: 'With lock only: the alias of a direct member project to lock at its own root'
         optional: true
     endpoint:
       transport: HTTP
@@ -1756,4 +1766,4 @@ methods:
       path: /web/projects/members
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-12T00:16:26.092Z'
+updatedAt: '2026-11-12T01:03:25.660Z'

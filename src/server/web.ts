@@ -32,8 +32,8 @@ import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import type { FamilyMember } from '../core/index.js';
 import * as devCockpit from './dev-commands.js';
-import type { DevApproval, DevCommandResult, DevFamilyAction, DevFamilyCommand, DevReviewDecision } from './dev-commands.js';
-import type { ReviewNote, ReviewRequest, ReviewStatus } from '../core/reviews.js';
+import type { DevApproval, DevCommandResult, DevReview, DevFamilyAction, DevFamilyCommand, DevReviewDecision } from './dev-commands.js';
+import type { ReviewNote, ReviewStatus } from '../core/reviews.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import * as hostNetwork from './adapters/network.js';
 import { validateAsCompleteAsync } from './adapters/validator.js';
@@ -547,8 +547,16 @@ export function getDevStatus(cfg: HostConfig, sessionId: string): DevStatus {
   return webproject.devStatus(cfg, sessionId); // step 1 (delegate)
 }
 
-/** Forward the session to the dev cockpit orchestrator: the served project's pending review requests. */
-export function getDevReviews(cfg: HostConfig, sessionId: string): ReviewRequest[] {
+/** The member project alias a dev route body names; refuses one that is not text. */
+function memberOf(body: Record<string, unknown> | undefined | null): string | undefined {
+  const member = body?.member;
+  if (member === undefined || member === null || member === '') return undefined;
+  if (typeof member !== 'string') throw new Error('member must be text');
+  return member;
+}
+
+/** Forward the session to the dev cockpit orchestrator: the pending review requests of the served project and its member projects. */
+export function getDevReviews(cfg: HostConfig, sessionId: string): DevReview[] {
   return devCockpit.reviews(cfg, sessionId); // step 1 (call)
 }
 
@@ -560,8 +568,9 @@ export function decideDevReview(
   outcome: ReviewStatus,
   comment?: string,
   notes?: ReviewNote[],
+  member?: string,
 ): Promise<DevReviewDecision> {
-  return devCockpit.decide(cfg, sessionId, id, outcome, comment, notes); // step 1 (call)
+  return devCockpit.decide(cfg, sessionId, id, outcome, comment, notes, member); // step 1 (call)
 }
 
 /** Forward the session to the dev cockpit orchestrator: the served project's approval state. */
@@ -570,8 +579,8 @@ export function getDevApproval(cfg: HostConfig, sessionId: string): DevApproval 
 }
 
 /** Forward the session and the decoded arguments to the dev cockpit orchestrator: run one command the CLI handed the server. */
-export function runDevCommand(cfg: HostConfig, sessionId: string, command: string, subsystem?: string): Promise<DevCommandResult> {
-  return devCockpit.run(cfg, sessionId, command, subsystem); // step 1 (call)
+export function runDevCommand(cfg: HostConfig, sessionId: string, command: string, subsystem?: string, member?: string): Promise<DevCommandResult> {
+  return devCockpit.run(cfg, sessionId, command, subsystem, member); // step 1 (call)
 }
 
 /** Forward the session and the decoded family command to the dev cockpit orchestrator: a preview, or the change itself. */
@@ -3686,7 +3695,7 @@ export async function handleWebRequest(
     if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'approval') {
       return sendJson(res, 200, getDevApproval(cfg, sessionId));
     }
-    // POST /web/dev/reviews/decide { id, outcome, comment?, notes? } → { request, lock? }.
+    // POST /web/dev/reviews/decide { id, outcome, comment?, notes?, member? } → { request, lock? }.
     if (cfg.devMode === true && req.method === 'POST' && parts.length === 4 && parts[1] === 'dev' && parts[2] === 'reviews' && parts[3] === 'decide') {
       return sendJson(res, 200, await decideDevReview(
         cfg,
@@ -3695,15 +3704,17 @@ export async function handleWebRequest(
         String(body?.outcome ?? '') as ReviewStatus,
         typeof body?.comment === 'string' ? body.comment : undefined,
         Array.isArray(body?.notes) ? (body.notes as ReviewNote[]) : undefined,
+        memberOf(body),
       ));
     }
-    // POST /web/dev/commands { command, subsystem? } → { command, ok, output }.
+    // POST /web/dev/commands { command, subsystem?, member? } → { command, ok, output }.
     if (cfg.devMode === true && req.method === 'POST' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'commands') {
       return sendJson(res, 200, await runDevCommand(
         cfg,
         sessionId,
         String(body?.command ?? ''),
         typeof body?.subsystem === 'string' && body.subsystem !== '' ? body.subsystem : undefined,
+        memberOf(body),
       ));
     }
     // POST /web/dev/family { action, args, options, report } → { command, ok, output }. The orchestrator

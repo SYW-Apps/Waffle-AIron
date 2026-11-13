@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, asList, get, mcpCall, post } from '../api';
 import {
@@ -19,6 +19,7 @@ import {
 } from '../ui';
 import type { AvailableProfile } from '../types';
 import { buildDelta, type SpecKind } from './specDelta';
+import { changeMarks, type ChangeMark, type MovedSpec } from './devCockpitLogic';
 
 /**
  * Stage F — the project Specs VALUE-editor.
@@ -1173,9 +1174,14 @@ function Picker(props: {
   activeComponentId: string | null;
   selected: Selected | null;
   onSelect: (s: Selected) => void;
+  /** Dev only: the specs changed since the lock, by tree node id. */
+  marks?: Map<string, ChangeMark>;
 }) {
   const { graph, activeComponentId, selected, onSelect } = props;
+  const marks = props.marks ?? new Map<string, ChangeMark>();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [changedOnly, setChangedOnly] = useState(false);
+  const onlyChanged = changedOnly && marks.size > 0;
 
   const nodes = graph.nodes ?? [];
   const sys = nodes.find((n) => n.kind === 'project');
@@ -1209,6 +1215,19 @@ function Picker(props: {
   // its Interface and Implementation are one tab-click away.
   const openComponent = (c: GraphNode) => onSelect({ kind: 'component', id: c.id, label: c.label });
 
+  // Changed-only keeps a changed spec and the ancestors that lead to it.
+  const compVisible = (c: GraphNode): boolean => marks.has(c.id) || owned(c.id).some(compVisible);
+  const subVisible = (s: GraphNode): boolean => marks.has(s.id) || topComps(s.id).some(compVisible);
+
+  const ChangeMarker = (p: { id: string }) => {
+    const m = marks.get(p.id);
+    return m ? (
+      <span className={`tree-change mark-${m === '+' ? 'add' : 'chg'}`} title={m === '+' ? 'added since the lock' : 'changed since the lock'}>
+        {m}
+      </span>
+    ) : null;
+  };
+
   const SimpleRow = (p: { kind: SpecKind; id: string; label: string; depth: number; hasKids?: boolean }) => (
     <div className="tree-row" style={{ paddingLeft: 6 + p.depth * 14 }}>
       {p.hasKids ? (
@@ -1223,12 +1242,13 @@ function Picker(props: {
       >
         <span className={`tree-kind k-${p.kind}`}>{p.kind[0].toUpperCase()}</span>
         <span className="tree-name">{p.label}</span>
+        <ChangeMarker id={p.id} />
       </button>
     </div>
   );
 
   const renderComponent = (c: GraphNode, depth: number): JSX.Element => {
-    const kids = owned(c.id);
+    const kids = onlyChanged ? owned(c.id).filter(compVisible) : owned(c.id);
     const expanded = !collapsed.has(c.id);
     return (
       <div key={c.id}>
@@ -1245,6 +1265,7 @@ function Picker(props: {
           >
             <span className="tree-kind k-component">C</span>
             <span className="tree-name">{c.label}</span>
+            <ChangeMarker id={c.id} />
           </button>
         </div>
         {expanded && kids.map((k) => renderComponent(k, depth + 1))}
@@ -1254,10 +1275,15 @@ function Picker(props: {
 
   return (
     <div className="spec-picker">
+      {marks.size > 0 && (
+        <label className="tree-filter">
+          <input type="checkbox" checked={changedOnly} onChange={(e) => setChangedOnly(e.target.checked)} /> Changed only
+        </label>
+      )}
       <div className="spec-tree">
-        {sys && <SimpleRow kind="system" id={sys.id} label={sys.label} depth={0} />}
-        {subs.map((s) => {
-          const comps = topComps(s.id);
+        {sys && (!onlyChanged || marks.has(sys.id)) && <SimpleRow kind="system" id={sys.id} label={sys.label} depth={0} />}
+        {subs.filter((s) => !onlyChanged || subVisible(s)).map((s) => {
+          const comps = onlyChanged ? topComps(s.id).filter(compVisible) : topComps(s.id);
           return (
             <div key={s.id}>
               <SimpleRow kind="subsystem" id={s.id} label={s.label} depth={0} hasKids={comps.length > 0} />
@@ -1265,10 +1291,10 @@ function Picker(props: {
             </div>
           );
         })}
-        {types.length > 0 && (
+        {(onlyChanged ? types.filter((t) => marks.has(t.id)) : types).length > 0 && (
           <div className="tree-section">
             <span className="tree-section-head">Types</span>
-            {types.map((t) => <SimpleRow key={t.id} kind="type" id={t.id} label={t.label} depth={0} />)}
+            {(onlyChanged ? types.filter((t) => marks.has(t.id)) : types).map((t) => <SimpleRow key={t.id} kind="type" id={t.id} label={t.label} depth={0} />)}
           </div>
         )}
       </div>
@@ -1366,18 +1392,13 @@ function ComponentUnitEditor(props: {
 
 // ── Project config (projectType + lock banner) — degrades if the route is absent ─
 
-function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectConfigResp | null>; profiles: AvailableProfile[]; approvalLine?: string | null }) {
+function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectConfigResp | null>; profiles: AvailableProfile[] }) {
   const toast = useToast();
   const cfg = props.config.data;
   const [projectType, setProjectType] = useState(cfg?.projectType ?? 'backend');
   useEffect(() => setProjectType(cfg?.projectType ?? 'backend'), [cfg?.projectType]);
 
   if (!cfg) return null; // route not deployed / not readable — hide, keep the rest working
-
-  // Dev passes the live approval line (null while unknown); hosted has only the config's locked flag.
-  const statusLine = props.approvalLine !== undefined
-    ? props.approvalLine
-    : cfg.locked ? 'This project is approved — saving a spec change puts this spec back in flux until it is approved again.' : null;
 
   // Adoptable options (server-global pack profiles not yet registered in this
   // project) get a label suffix via the shared labelAdoptable() — see its doc
@@ -1403,7 +1424,6 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
 
   return (
     <div className="syw-card stack-lg">
-      {statusLine && <div className="hint approval-line">{statusLine}</div>}
       {cfg.profileResolvable === false && (
         <div className="syw-alert syw-alert--warning lock-banner">
           The recorded project type “{cfg.projectType}” doesn't resolve to a loaded profile, so its rules aren't being applied. Pick a profile from the list below to fix this.
@@ -1441,15 +1461,18 @@ export function SpecsTab({
   projectId,
   selection,
   onSelectSpec,
-  approvalLine,
+  approvalBanner,
+  changedSpecs,
 }: {
   projectId: string;
   /** The open spec, from the URL path (ProjectOps owns the routing). */
   selection: { kind: string; id: string } | null;
   /** Push a new selection into the URL; null clears it. */
   onSelectSpec: (sel: { kind: string; id: string } | null) => void;
-  /** Dev only: the live approval state as one line (null = unknown). Left out on hosted, which falls back to the config's locked flag. */
-  approvalLine?: string | null;
+  /** Dev only: the approval banner (renders nothing while the design is approved and unchanged). Hosted passes none. */
+  approvalBanner?: ReactNode;
+  /** Dev only: the specs changed since the lock, to mark in the tree. */
+  changedSpecs?: MovedSpec[];
 }) {
   const enc = encodeURIComponent(projectId);
   // Tree-wide validation lives at the tab level so results persist across spec
@@ -1576,7 +1599,8 @@ export function SpecsTab({
 
   return (
     <div className="stack-lg">
-      <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} approvalLine={approvalLine} />
+      {approvalBanner}
+      <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} />
       <AsyncView state={graph}>
         {(g) => (
           <div className="spec-layout">
@@ -1585,6 +1609,7 @@ export function SpecsTab({
               activeComponentId={activeComponentId}
               selected={selected}
               onSelect={(s) => onSelectSpec({ kind: s.kind, id: s.id })}
+              marks={changedSpecs ? changeMarks(changedSpecs, g.nodes ?? []) : undefined}
             />
             <div className="spec-detail">
               {selected ? (

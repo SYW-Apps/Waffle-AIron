@@ -121,7 +121,7 @@ describe('dev cockpit (sdd_host)', () => {
     it('lists the pending requests of the served project', () => {
       const r = ask('review');
       const listed = reviews(cfg, session);
-      expect(listed.map((x) => x.id)).toEqual([r.id]);
+      expect(listed.map((x) => x.request.id)).toEqual([r.id]);
     });
 
     it('is refused outside the local development server', () => {
@@ -175,7 +175,7 @@ describe('dev cockpit (sdd_host)', () => {
       const out = await decide(cfg, session, r.id, 'locked');
       expect(out.lock).toEqual({ command: 'lock', ok: false, output: ['Cannot lock: 2 errors'] });
       expect(out.request.status).toBe('pending');
-      expect(reviews(cfg, session).map((x) => x.id)).toEqual([r.id]);
+      expect(reviews(cfg, session).map((x) => x.request.id)).toEqual([r.id]);
     });
 
     it('turns a lock that throws into a failed result and keeps the request pending', async () => {
@@ -343,6 +343,76 @@ describe('dev cockpit (sdd_host)', () => {
     });
   });
 
+  describe('member projects', () => {
+    let memberDir: string;
+    let partDir: string;
+
+    const declare = (extra: Record<string, unknown>): void => {
+      const file = path.join(root, '.wai', 'project.yaml');
+      fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), ...extra }));
+      invalidateSpecCache();
+    };
+
+    beforeEach(() => {
+      memberDir = path.join(root, 'services', 'billing');
+      partDir = path.join(root, 'services', 'part');
+      makeProject(memberDir);
+      const memberFile = path.join(memberDir, '.wai', 'project.yaml');
+      fs.writeFileSync(memberFile, JSON.stringify({ ...JSON.parse(fs.readFileSync(memberFile, 'utf8')), id: 'billing-svc' }));
+      fs.mkdirSync(path.join(partDir, '.wai'), { recursive: true });
+      declare({ members: { billing: 'services/billing', part: { source: 'services/part', as: 'part' } } });
+    });
+
+    const askAtMember = () => runWithProjectRoot(memberDir, () => requestReview('lock', 'lock it', undefined).request);
+
+    it('approval lists a direct member project with its state and not a part', () => {
+      const state = approval(cfg, session);
+      expect((state.members ?? []).map((m) => m.alias)).toEqual(['billing']);
+      expect(state.members?.[0]?.as).not.toBe('part');
+      expect(state.members?.[0]?.state).toBe('never');
+    });
+
+    it('reviews tag a member project request with its alias, the served project first', () => {
+      const own = ask('review');
+      const theirs = askAtMember();
+      const listed = reviews(cfg, session);
+      expect(listed.map((x) => [x.request.id, x.member])).toEqual([[own.id, undefined], [theirs.id, 'billing']]);
+    });
+
+    it('decide refuses an alias that names no direct member project', async () => {
+      const theirs = askAtMember();
+      await expect(decide(cfg, session, theirs.id, 'approved', undefined, undefined, 'nope')).rejects.toThrow(/no member project of that alias/);
+      await expect(decide(cfg, session, theirs.id, 'approved', undefined, undefined, 'part')).rejects.toThrow(/no member project of that alias/);
+    });
+
+    it('decide locks a member project request at the member root', async () => {
+      const theirs = askAtMember();
+      const roots: (string | undefined)[] = [];
+      cfg.devCommands = {
+        ...commands(),
+        lock: async (_s, at) => { roots.push(at); runWithProjectRoot(at as string, () => writeLock(at as string)); return ok('lock', ['Specs locked']); },
+      };
+      const out = await decide(cfg, session, theirs.id, 'locked', undefined, undefined, 'billing');
+      expect(roots).toEqual([memberDir]);
+      expect(out.request.status).toBe('locked');
+    });
+
+    it('run lock with a member runs at the member root', async () => {
+      const roots: (string | undefined)[] = [];
+      cfg.devCommands = { ...commands(), lock: async (_s, at) => { roots.push(at); return ok('lock'); } };
+      await run(cfg, session, 'lock', undefined, 'billing');
+      expect(roots).toEqual([memberDir]);
+      await run(cfg, session, 'lock');
+      expect(roots).toEqual([memberDir, undefined]);
+    });
+
+    it('run with a member refuses any other command, and a part', async () => {
+      await expect(run(cfg, session, 'generate', undefined, 'billing')).rejects.toThrow(/only a direct member project can be locked from here/);
+      await expect(run(cfg, session, 'lock', undefined, 'part')).rejects.toThrow(/only a direct member project can be locked from here/);
+      expect(calls).toEqual([]);
+    });
+  });
+
   describe('routes', () => {
     let server: http.Server;
     let base: string;
@@ -374,7 +444,7 @@ describe('dev cockpit (sdd_host)', () => {
 
       const listed = await call('GET', '/web/dev/reviews');
       expect(listed.status).toBe(200);
-      expect(listed.json.map((x: { id: string }) => x.id)).toEqual([r.id]);
+      expect(listed.json.map((x: { request: { id: string } }) => x.request.id)).toEqual([r.id]);
 
       const decided = await call('POST', '/web/dev/reviews/decide', {
         id: r.id, outcome: 'changes_requested', comment: 'no', notes: [{ specId: 'worker', note: 'n' }],

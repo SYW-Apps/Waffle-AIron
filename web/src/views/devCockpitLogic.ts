@@ -4,6 +4,8 @@
  * on its own.
  */
 
+import type { MemberApproval } from '../types';
+
 /** What the server's GET /web/dev/approval answers (the DevApproval type). */
 export interface ApprovalVerdictData {
   text: string;
@@ -21,6 +23,8 @@ export interface DevApprovalData {
   commit?: string;
   /** The served project's name (its system spec's name); absent when unreadable. */
   projectName?: string;
+  /** Direct member projects and their own approval state (absent without members). */
+  members?: MemberApproval[];
 }
 
 /** The part of a graph node this logic reads. */
@@ -116,12 +120,17 @@ export function barState(approval: DevApprovalData | undefined, pendingCount: nu
   }
   if (!approval) return { show: false, action: 'none', line: '' };
   if (!approval.approved) return { show: true, action: 'lock', line: 'This design has not been locked yet.' };
+  const driftedMembers = membersToLock(approval);
+  if (!approval.verdict.drifted && driftedMembers.length > 0) {
+    return { show: true, action: 'lock', line: memberChangedText(driftedMembers) };
+  }
   if (approval.verdict.drifted) {
     const stamp = approval.approvedBy || approval.approvedAt
       ? `Last locked${approval.approvedBy ? ` by ${approval.approvedBy}` : ''}${approval.approvedAt ? ` ${new Date(approval.approvedAt).toLocaleString()}` : ''}. `
       : '';
     const n = approval.verdict.moved?.length ?? 0;
-    return { show: true, action: 'lock', line: `${stamp}${n > 0 ? `${n} spec${n === 1 ? '' : 's'} changed since.` : 'The design changed since.'}` };
+    const tail = driftedMembers.length > 0 ? ` ${memberChangedText(driftedMembers)}` : '';
+    return { show: true, action: 'lock', line: `${stamp}${n > 0 ? `${n} spec${n === 1 ? '' : 's'} changed since.` : 'The design changed since.'}${tail}` };
   }
   return { show: false, action: 'none', line: '' };
 }
@@ -180,8 +189,125 @@ export function subsystemOfRoute(route: string, nodes: ScopeNode[]): string | un
 }
 
 /** The request body of POST /web/dev/commands for a lock. */
-export function lockBody(subsystem: string | undefined): { command: 'lock'; subsystem?: string } {
+export function lockBody(subsystem: string | undefined, member?: string): { command: 'lock'; subsystem?: string; member?: string } {
+  if (member) return { command: 'lock', member };
   return subsystem ? { command: 'lock', subsystem } : { command: 'lock' };
+}
+
+// Member projects.
+
+/** The label a member goes by: its alias, else its key. */
+export function memberName(m: Pick<MemberApproval, 'alias' | 'key'>): string {
+  return m.alias || m.key;
+}
+
+/** The direct members whose own approval is owed and that hold something to approve. */
+export function membersToLock(approval: Pick<DevApprovalData, 'members'> | undefined): MemberApproval[] {
+  return (approval?.members ?? []).filter((m) => m.state !== 'approved' && m.approvable !== false);
+}
+
+function memberChangedText(members: MemberApproval[]): string {
+  const names = members.map(memberName).join(', ');
+  return `Member project${members.length === 1 ? '' : 's'} ${names} ${members.length === 1 ? 'is' : 'are'} not approved.`;
+}
+
+/** The lock dialog's scope select encodes a member project as `member:<alias>`. */
+export const MEMBER_SCOPE_PREFIX = 'member:';
+export function memberOfScope(scope: string): string | undefined {
+  return scope.startsWith(MEMBER_SCOPE_PREFIX) ? scope.slice(MEMBER_SCOPE_PREFIX.length) : undefined;
+}
+
+/** A review entry's pending requests are the ones to act on; `member` names the member project it was made in. */
+export function pendingReviews<T extends { request: { status: string } }>(reviews: T[] | undefined): T[] {
+  return (reviews ?? []).filter((r) => r.request.status === 'pending');
+}
+
+// Changed specs: the specs page banner, tree markers and the changes panel.
+
+export type ChangeMark = '~' | '+' | '-';
+
+/** The route kind of a moved spec's folder (the SpecKind the specs page opens). */
+export function movedKind(m: Pick<MovedSpec, 'folder'>): string | undefined {
+  return m.folder ? FOLDER_KIND[m.folder] : undefined;
+}
+
+/** The specs-page path of a spec: /specs/<kind>/<id with :: as path segments>. */
+export function specRoute(kind: string, id: string): string {
+  return `/specs/${kind}/${id.split('::').map(encodeURIComponent).join('/')}`;
+}
+
+/**
+ * Which tree node each added/changed spec marks. An interface or implementation marks the component it
+ * belongs to (the tree lists components only); a removed spec is not in the tree and marks nothing.
+ * An id the tree does not hold is left out.
+ */
+export function changeMarks(moved: MovedSpec[], nodes: ScopeNode[]): Map<string, ChangeMark> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out = new Map<string, ChangeMark>();
+  for (const m of moved) {
+    if (m.mark === '-') continue;
+    let node = byId.get(m.id);
+    if (!node) continue;
+    if ((node.kind === 'interface' || node.kind === 'implementation') && node.parentId) node = byId.get(node.parentId) ?? node;
+    // An added (+) spec stays added even when a changed one lands on the same node.
+    if (out.get(node.id) !== '+') out.set(node.id, m.mark);
+  }
+  return out;
+}
+
+export interface ChangeGroup {
+  /** The subsystem; '' for specs the data cannot place. */
+  subsystem: string;
+  items: MovedSpec[];
+}
+
+/** The moved specs grouped by subsystem (placed groups sorted, unplaced last), each group sorted by id. */
+export function groupMoved(moved: MovedSpec[], nodes: ScopeNode[]): ChangeGroup[] {
+  const groups = new Map<string, MovedSpec[]>();
+  for (const m of moved) {
+    const kind = movedKind(m);
+    const sub = kind ? subsystemOfSpec(kind, m.id, nodes) ?? '' : '';
+    groups.set(sub, [...(groups.get(sub) ?? []), m]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
+    .map(([subsystem, items]) => ({ subsystem, items: items.slice().sort((x, y) => x.id.localeCompare(y.id)) }));
+}
+
+/** What the changes button counts: moved specs plus member projects owed an approval. */
+export function changeCount(approval: DevApprovalData | undefined): number {
+  if (!approval) return 0;
+  return (approval.verdict.moved?.length ?? 0) + membersToLock(approval).length;
+}
+
+export interface BannerState {
+  show: boolean;
+  /** Whether the project was never locked (no change list). */
+  never: boolean;
+  /** The banner line. */
+  text: string;
+  /** Own specs that changed. */
+  specs: number;
+  /** Member projects owed an approval. */
+  members: MemberApproval[];
+}
+
+/** The specs page's approval banner: none for an approved, unchanged design (members included). */
+export function bannerState(approval: DevApprovalData | undefined): BannerState {
+  const none: BannerState = { show: false, never: false, text: '', specs: 0, members: [] };
+  if (!approval) return none;
+  const members = membersToLock(approval);
+  if (!approval.approved) {
+    return { show: true, never: true, text: 'This design has not been locked yet.', specs: 0, members };
+  }
+  const specs = approval.verdict.moved?.length ?? 0;
+  if (!approval.verdict.drifted && members.length === 0) return none;
+  const parts: string[] = [];
+  if (specs > 0) parts.push(`${specs} spec${specs === 1 ? '' : 's'} changed`);
+  else if (approval.verdict.drifted) parts.push('The design changed');
+  if (members.length > 0) parts.push(`member project ${members.map(memberName).join(', ')} changed`);
+  const text = parts.join(' · ');
+  return { show: true, never: false, text: text.charAt(0).toUpperCase() + text.slice(1), specs, members };
 }
 
 // Naming the page after the project it serves.
