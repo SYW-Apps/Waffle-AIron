@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "b58e513381c957644cfaa52f39125aaf2bbb0dea5dd0718bb57bd7f8caec054d"
+    "digest": "39fbaffcece720eb7f22dc068fefc6d6744e700ff5f569658e84b8e257b89b65"
   },
-  "lockedAt": "2026-11-14T16:28:30.403Z",
+  "lockedAt": "2026-11-14T17:39:54.896Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -14,7 +14,7 @@
     "valid": true,
     "errors": 0,
     "warnings": 0,
-    "notices": 1
+    "notices": 0
   },
   "status": "ready",
   "projectId": "waffle-airon",
@@ -871,7 +871,7 @@
     ".wai/specs/interfaces/iinstance_identity_store.yaml": "2e3600d867dff18af766fe36cbacd3eec396afdb2630149b8b7a4f93f068f245",
     ".wai/specs/interfaces/iinstance_upgrade.yaml": "fa5a17527ab956633f472cfef4254bfd82f54dce73dbbd8d52885d95df14e24a",
     ".wai/specs/interfaces/iinstance_version_store.yaml": "1650cacad1babb73f5bbc2adc5c716a5b8cad5018a98e5907a915c9d84b218fc",
-    ".wai/specs/interfaces/iintegrity_rules.yaml": "5246a37d36409cfe574a81733154f3a30b5178b10f6ec62b811c13363dcf5f39",
+    ".wai/specs/interfaces/iintegrity_rules.yaml": "b01521ba8550e989fbec8a33f524247c30af620ca6cd2b8825c8b7d84ce21116",
     ".wai/specs/interfaces/iintrinsic_rules.yaml": "61b04e4511118b8f965812ca3c8c48a34bff2b234c3c9e830b0e34483864d1cc",
     ".wai/specs/interfaces/ilandscape_graph.yaml": "9732a5604ea9557516b2e3b85a901b5d2108c4c77c77fa78f0f9029a6560c57c",
     ".wai/specs/interfaces/ilandscape_orchestrator.yaml": "9fd4d4499025aaed299f613de3d0f69fad8ef8a79ca996f89c106331efa7628c",
@@ -1887,7 +1887,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "6033e0ba2abe79638ad6253f9f999ea771aafedd4c4b16e577077e0c7fd38d09",
+    "design": "2c068df29df6ada18b3b8901be43145d699d0186b967c6942295a11169275ed8",
     "release": "c1f13a75fdbc1a955c9ff6fa2a6272626739d4bc0502c110f3c4ce37e2706881",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1903,7 +1903,7 @@
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 27,
-    "notices": 101
+    "warnings": 0,
+    "notices": 4
   }
 }
