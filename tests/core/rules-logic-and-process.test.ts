@@ -106,15 +106,24 @@ describe('logic-dependency-class: an Orchestrator\'s dependencyClass bounds its 
     expect(byCode(proj.validate(), 'DEPENDENCY_CLASS_VIOLATION')).toEqual([]);
   });
 
-  it('read logic depending on a Store is DEPENDENCY_CLASS_VIOLATION, with the Repository resolution', () => {
+  it('read logic may depend on a Store directly', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
     proj.component('refill-projector', 'pharmacy', 'Orchestrator', 'dependencyClass: read\ndependsOn: [refill-store]');
     proj.component('refill-store', 'pharmacy', 'Store', 'durability: ram-projection');
+    expect(byCode(proj.validate(), 'DEPENDENCY_CLASS_VIOLATION')).toEqual([]);
+  });
+
+  it('pure logic depending on a Store is DEPENDENCY_CLASS_VIOLATION, reached through an Orchestrator that may', () => {
+    const proj = createTempProject();
+    proj.subsystem('pharmacy');
+    proj.component('refill-arbiter', 'pharmacy', 'Orchestrator', 'dependencyClass: pure\ndependsOn: [refill-store]');
+    proj.component('refill-store', 'pharmacy', 'Store', 'durability: ram-projection');
     const found = byCode(proj.validate(), 'DEPENDENCY_CLASS_VIOLATION');
-    expect(found.map(i => i.specId)).toEqual(['refill-projector']);
-    expect(found[0].message).toContain('dependencyClass read');
-    expect(found[0].message).toContain('Repository facade');
+    expect(found.map(i => i.specId)).toEqual(['refill-arbiter']);
+    expect(found[0].message).toContain('dependencyClass pure');
+    expect(found[0].message).toContain('through an Orchestrator that may depend on it');
+    expect(found[0].message).toContain('a Store needs no Repository around it');
     expect(found[0].message).toContain('Never resolve this by merging');
   });
 

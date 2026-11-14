@@ -20,8 +20,6 @@
  *    a Portal facade AND at least one routed child.
  *  - VISIBILITY_VIOLATION (error): nobody reaches a block privately owned by
  *    ANOTHER pattern; the facade, the owner itself, and siblings are legal.
- *  - UNOWNED_STORE (warning): recommended shape for held state is a
- *    Repository; a standalone Store is the acknowledged lightweight form.
  *  - REGISTRY_WITHOUT_STORE (warning): a standalone Registry with no Store to
  *    write to is mistyped or orphaned; Repository-owned Registries reach
  *    their Store as a sibling and are exempt (documented).
@@ -542,46 +540,6 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
-  // UNOWNED_STORE
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'UNOWNED_STORE',
-    severity: 'warning',
-    anchoredTo: 'appointment-note-store',
-    expectFire: true,
-    scenario:
-      'The appointment note store stands alone outside any Repository pattern, so the recommended held-state shape is not in place.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [{ id: 'scheduling', description: 'Appointment booking and slot management.' }],
-      components: [
-        { id: 'appointment-note-store', componentType: 'Store', description: 'Holds free-text notes attached to appointments.' },
-      ],
-    },
-  }),
-  defineRuleFixture({
-    code: 'UNOWNED_STORE',
-    expectFire: false,
-    reason: 'The Store is owned by a Repository pattern — the RECOMMENDED shape for held state, so the advisory has nothing to say.',
-    scenario:
-      'The appointment note store lives inside the appointment note repository together with its write registry.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [{ id: 'scheduling', description: 'Appointment booking and slot management.' }],
-      components: [
-        {
-          id: 'appointment-note-repository',
-          componentType: 'Repository',
-          description: 'Facade over the appointment note data blocks.',
-          owns: ['appointment-note-store', 'appointment-note-registry'],
-        },
-        { id: 'appointment-note-store', componentType: 'Store', description: 'Holds free-text notes attached to appointments.' },
-        { id: 'appointment-note-registry', componentType: 'Registry', description: 'Validated write path for appointment notes.' },
-      ],
-    },
-  }),
-
-  // -------------------------------------------------------------------------
   // REGISTRY_WITHOUT_STORE
   // -------------------------------------------------------------------------
   defineRuleFixture({
@@ -723,27 +681,6 @@ export default [
         { id: 'patient-shell-portal', componentType: 'Portal', transport: 'Custom', description: 'The routing facade of the patient-facing pharmacy shell.' },
         { id: 'staff-shell-portal', componentType: 'Portal', transport: 'Custom', description: 'The routing facade of the staff-facing pharmacy shell.' },
         { id: 'refill-request-view', componentType: 'View', description: 'Renders the refill request form.' },
-      ],
-    },
-  }),
-  defineRuleFixture({
-    code: 'UNOWNED_STORE',
-    severity: 'warning',
-    anchoredTo: 'dose-plan-store',
-    expectFire: true,
-    scenario:
-      'The dose scheduling orchestrator claims the dose plan store through owns, which only a pattern may use, so the store is still owned by no pattern.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [PHARMACY_SUB],
-      components: [
-        {
-          id: 'dose-scheduling-orchestrator',
-          componentType: 'Orchestrator',
-          description: 'Schedules medication doses for admitted patients.',
-          owns: ['dose-plan-store'],
-        },
-        { id: 'dose-plan-store', componentType: 'Store', description: 'Holds the planned dose schedules.' },
       ],
     },
   }),

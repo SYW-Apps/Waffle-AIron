@@ -452,6 +452,11 @@ function indexKnownIssueCodes(): RuleCode[] {
   return listRules().flatMap(r => r.codes);
 }
 
+/** rule_index: every code a registered rule names as retired — the lint.allow audit's "it used to exist" set. */
+function indexRetiredIssueCodes(): Set<string> {
+  return new Set(listRules().flatMap(r => r.retiredCodes ?? []));
+}
+
 // ── rule_repository: the facade (1:1 forwarding) ───────────────────────────
 // The only names this module exports for the rule set. Each forwards to its
 // member, so the repository -> registry/index hop is a call the facade's
@@ -475,6 +480,11 @@ export function ruleSequence(): SddRule[] {
 /** The spec-intrinsic rules, through the repository facade. */
 export function specScopedRules(): SddRule[] {
   return indexSpecScopedRules();
+}
+
+/** Every code a registered rule has retired, through the repository facade. */
+export function retiredIssueCodes(): Set<string> {
+  return indexRetiredIssueCodes();
 }
 
 /** Every issue code a registered rule can emit, through the repository facade. */
