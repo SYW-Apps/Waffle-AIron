@@ -6,6 +6,8 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **The `wairon dev` page no longer answers "unauthorized" to a lock or another action after another dev server ran on the same host, or after this one restarted.** Session cookies are shared by every port of a host, so the page could hold a session its own server did not know. Reads kept working, because a read re-establishes the local session, but the next action was refused until the page was reloaded or the action retried. An action refused this way now re-establishes the session and is sent once more. A hosted instance is unchanged: a refused action still asks the user to sign in.
+
 - **The assistant can change a project's rules, its debt register and its settings, and a rule set below its default is reported on every run.** Three new MCP tools write `.wai/project.yaml`, so an agent no longer has to edit the file by hand. Each answers what it changed (before and after), takes `dryRun`, and says which parts of the approval it moves, so the human re-locks.
   - **Rules:** `sdd_update_rules` sets, unsets, adds to and removes from the rules, checking each value against the rules schema. A rule set below its default severity needs a reason (`why`), which is written beside it.
   - **Debt register:** `sdd_carry_findings` adds a reason group, extends or revises it, or removes findings from it. Only a finding a rule declares carryable can be carried.
