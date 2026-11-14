@@ -197,6 +197,8 @@ export function mountCanvas(host, model, opts = {}) {
     internals: typeof saved.internals === 'boolean' ? saved.internals : false,
     externals: typeof saved.externals === 'boolean' ? saved.externals : true,
     dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
+    busyStubs: typeof saved.busyStubs === 'boolean' ? saved.busyStubs : true,
+    busyAt: [5, 8, 12, 20].indexOf(saved.busyAt) >= 0 ? saved.busyAt : 8,
     // The overlay's first-visit default is the host's showIssues option (off for a standalone file or a
     // shared page, on for the local development server); once the reader has used the toggle, theirs wins.
     issuesChosen: saved.issuesChosen === true || saved.showIssues === true,
@@ -242,6 +244,8 @@ export function mountCanvas(host, model, opts = {}) {
         internals: state.internals,
         externals: state.externals,
         dataCoupling: state.dataCoupling,
+        busyStubs: state.busyStubs,
+        busyAt: state.busyAt,
         showIssues: state.showIssues,
         issuesChosen: state.issuesChosen,
       }));
@@ -471,6 +475,8 @@ export function mountCanvas(host, model, opts = {}) {
       // A focused line keeps the weight its kind gives it, only lifted.
       { selector: 'edge.k-uses.edgeFocus, edge.k-uses.edgeOut, edge.k-uses.edgeIn', style: { width: 1.8 } },
       { selector: 'edge.k-declared.edgeFocus, edge.k-declared.edgeOut, edge.k-declared.edgeIn', style: { width: 1.5 } },
+      { selector: 'edge.busy', style: { 'text-opacity': 0, events: 'no' } },
+      { selector: 'edge.busy.edgeFocus, edge.busy.edgeOut, edge.busy.edgeIn, edge.busy.stubHover', style: { 'text-opacity': 1 } },
       { selector: 'node.typeCluster', style: {
         'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText,
         'font-weight': 'bold', 'font-size': 12, 'border-width': 2, 'text-wrap': 'wrap',
@@ -1945,6 +1951,23 @@ export function mountCanvas(host, model, opts = {}) {
   // hidden (line-opacity 0): the overlay below the boxes draws each line itself, so
   // a line is a translucent tube with chevrons inside showing its direction, a
   // boundary hop a thin red stripe through it, and an orthogonal line hops another.
+  // ---- busy boxes ------------------------------------------------------------
+  // A box many lines go into (a shared adapter everything uses) is a web of
+  // lines however they are routed. From state.busyAt lines on (View: Busy
+  // boxes), each line into it is drawn as a short stub at its source, labelled
+  // with the box; selecting or hovering either end draws it in full again.
+  function busyTargets() {
+    var out = {};
+    if (!state.busyStubs) return out;
+    var count = {};
+    cy.edges().forEach(function (e) {
+      if (!e.visible() || e.source().id() === e.target().id()) return;
+      var t = e.target().id();
+      count[t] = (count[t] || 0) + 1;
+    });
+    Object.keys(count).forEach(function (t) { if (count[t] >= state.busyAt) out[t] = true; });
+    return out;
+  }
   var edgeOverlay = (function () {
     var host = ROOT.getElementById('cy');
     var canvas = document.createElement('canvas');
@@ -2000,7 +2023,7 @@ export function mountCanvas(host, model, opts = {}) {
       var vert = [], rows = {};
       list.forEach(function (it, li) {
         it.hops = {};
-        if (!it.path || !it.path.ortho) return;
+        if (!it.path || !it.path.ortho || it.busy) return;
         var q = it.path.pts;
         for (var k = 1; k < q.length; k++) {
           var a = q[k - 1], b = q[k];
@@ -2061,13 +2084,14 @@ export function mountCanvas(host, model, opts = {}) {
         refs.push(r);
         if (same && cache.refs[idx] !== r) same = false;
       });
-      if (same && cache.list && cache.lineStyle === state.lineStyle) return cache.list;
-      var list = [];
+      var busyKey = state.busyStubs + ':' + state.busyAt;
+      if (same && cache.list && cache.lineStyle === state.lineStyle && cache.busyKey === busyKey) return cache.list;
+      var list = [], busy = busyTargets();
       edges.forEach(function (e) {
-        list.push({ edge: e, src: e.data('source'), tgt: e.data('target'), path: pathOf(e) });
+        list.push({ edge: e, src: e.data('source'), tgt: e.data('target'), path: pathOf(e), busy: !!busy[e.data('target')] });
       });
       hopsFor(list);
-      cache = { refs: refs, list: list, lineStyle: state.lineStyle };
+      cache = { refs: refs, list: list, lineStyle: state.lineStyle, busyKey: busyKey };
       return list;
     }
     function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
@@ -2134,6 +2158,24 @@ export function mountCanvas(host, model, opts = {}) {
       }
     }
     // How a line looks: a translucent tube as wide as its weight, chevrons inside.
+    // The first BUSY_LEN of a line, its arrowhead just past the end.
+    var BUSY_LEN = 44;
+    function stubOf(it) {
+      var q = it.path.pts, out = [q[0]], acc = 0;
+      for (var k = 1; k < q.length; k++) {
+        var a = q[k - 1], b = q[k], d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d > 0.001 && acc + d >= BUSY_LEN) {
+          var f = (BUSY_LEN - acc) / d, g = Math.min(1, (BUSY_LEN + 9 - acc) / d);
+          out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+          return { edge: it.edge, src: it.src, tgt: it.tgt, hops: {}, path: { pts: out, tip: { x: a.x + (b.x - a.x) * g, y: a.y + (b.y - a.y) * g }, ortho: it.path.ortho } };
+        }
+        out.push(b);
+        acc += d;
+      }
+      return null;
+    }
+    // A box's name: the first line of its label.
+    function labelOf(n) { return String(n.data('label') || n.id()).split(String.fromCharCode(10))[0]; }
     function look(it) {
       var e = it.edge;
       if (!it.path || !e.visible()) return null;
@@ -2141,7 +2183,9 @@ export function mountCanvas(host, model, opts = {}) {
       if (op <= 0.001) return null;
       var w = e.pstyle('width').pfValue, ls = e.pstyle('line-style').value;
       var tube = Math.min(13, Math.max(4, w * 4));
-      return { it: it, e: e, op: op, w: w, tube: tube, color: e.pstyle('line-color').value,
+      var full = !it.busy || e.hasClass('stubHover') || e.hasClass('edgeFocus') || e.hasClass('edgeOut') || e.hasClass('edgeIn') || e.hasClass('revealEdge');
+      var stub = full ? null : stubOf(it);
+      return { it: stub || it, stubTo: stub ? labelOf(e.target()) : null, e: e, op: op, w: w, tube: tube, color: e.pstyle('line-color').value,
         arrow: e.pstyle('target-arrow-color').value, dash: ls === 'dotted' ? 'dot' : ls === 'dashed' ? 'dash' : '' };
     }
     // The tubes of one tier: lines of one look are stroked as one shape, so an
@@ -2211,8 +2255,28 @@ export function mountCanvas(host, model, opts = {}) {
           ctx.fill();
         }
       }
+      if (l.stubTo && z >= 0.3) {
+        var p = it.path.tip || end, prev = q[q.length - 1], dx = p.x - prev.x, dy = p.y - prev.y;
+        var horizontal = Math.abs(dx) >= Math.abs(dy);
+        ctx.fillStyle = rgba(l.color, l.op * 0.95);
+        ctx.font = '600 9px system-ui, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = horizontal ? (dx >= 0 ? 'left' : 'right') : 'center';
+        var tx = p.x + (horizontal ? (dx >= 0 ? 4 : -4) : 0), ty = p.y + (horizontal ? 0 : (dy >= 0 ? 8 : -8));
+        // A label that would overlap one already drawn is left out: the stub still
+        // shows, and selecting its box draws the line in full.
+        var tw = ctx.measureText(l.stubTo).width;
+        var box = { l: horizontal ? (dx >= 0 ? tx : tx - tw) : tx - tw / 2, t: ty - 6, w: tw, h: 12 };
+        var hit = stubLabels.some(function (o) { return box.l < o.l + o.w && o.l < box.l + box.w && box.t < o.t + o.h && o.t < box.t + box.h; });
+        if (!hit) {
+          stubLabels.push(box);
+          ctx.fillText(l.stubTo, tx, ty);
+        }
+      }
     }
+    var stubLabels = [];
     function paint(ctx, z) {
+      stubLabels = [];
       var theme = THEMES[state.theme];
       var list = items();
       // Receding lines first, lifted ones last; per tier the tubes, then what sits in them.
@@ -2569,6 +2633,8 @@ export function mountCanvas(host, model, opts = {}) {
       cells.reverse();
       for (var k = 1; k < cells.length; k++) {
         var a = cells[k - 1], b = cells[k];
+        // A stubbed line is drawn in full only on demand: it takes no channel space.
+        if (j.busy) break;
         var ukey = Math.min(a, b) * 2 + (Math.abs(a - b) === W ? 1 : 0);
         if (!g.usage.has(ukey)) g.usage.set(ukey, new Set());
         g.usage.get(ukey).add(j.tgt);
@@ -2814,6 +2880,8 @@ export function mountCanvas(host, model, opts = {}) {
     }
     function apply() {
       var mode = state.lineStyle;
+      var busy = busyTargets();
+      cy.batch(function () { cy.edges().forEach(function (e) { e.toggleClass('busy', !!busy[e.target().id()]); }); });
       var edges = cy.edges().filter(function (e) { return e.visible() && e.source().id() !== e.target().id(); });
       var leaves = cy.nodes().filter(function (n) { return n.visible(); });
       if (mode === 'straight' || leaves.length > MAX_NODES) {
@@ -2826,7 +2894,7 @@ export function mountCanvas(host, model, opts = {}) {
       edges.forEach(function (e) {
         var sr = rects[e.source().id()], tr = rects[e.target().id()];
         if (!sr || !tr) return;
-        jobs.push({ edge: e, src: e.source().id(), tgt: e.target().id(), sr: sr, tr: tr, sSide: sideToward(sr, tr), tSide: sideToward(tr, sr) });
+        jobs.push({ edge: e, src: e.source().id(), tgt: e.target().id(), sr: sr, tr: tr, sSide: sideToward(sr, tr), tSide: sideToward(tr, sr), busy: !!busy[e.target().id()] });
       });
       // Obstacles: every box except compound boxes, which lines may enter.
       var obstacles = [];
@@ -2860,7 +2928,7 @@ export function mountCanvas(host, model, opts = {}) {
         pts = simplify(pts);
         routes.push({ job: j, tgt: j.tgt, pts: pts });
       });
-      nudge(routes, obstacles);
+      nudge(routes.filter(function (r) { return !r.job.busy; }), obstacles);
       if (mode === 'bezier') {
         var cg = cornerGraph(obstacles);
         routes.forEach(function (r) { r.pts = curveRoute(r.job, cg, obstacles); });
@@ -3484,6 +3552,10 @@ export function mountCanvas(host, model, opts = {}) {
   ROOT.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; persist(); rebuild(true); });
   ROOT.getElementById('dataCouplingToggle').checked = state.dataCoupling;
   ROOT.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; persist(); renderLegend(); rebuild(true); });
+  ROOT.getElementById('busyToggle').checked = state.busyStubs;
+  ROOT.getElementById('busyToggle').addEventListener('change', function (ev) { state.busyStubs = ev.target.checked; persist(); edgeRouter.schedule(); });
+  ROOT.getElementById('busyAtSelect').value = String(state.busyAt);
+  ROOT.getElementById('busyAtSelect').addEventListener('change', function (ev) { state.busyAt = Number(ev.target.value); persist(); edgeRouter.schedule(); });
   ROOT.getElementById('issuesToggle').checked = state.showIssues;
   ROOT.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; state.issuesChosen = true; persist(); rebuild(false); renderPanel(); });
   ROOT.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
