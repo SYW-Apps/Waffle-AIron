@@ -6,6 +6,8 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **The `wairon dev` page no longer answers "unauthorized" to a lock or another action after another dev server ran on the same host, or after this one restarted.** Session cookies are shared by every port of a host, so the page could hold a session its own server did not know. Reads kept working, because a read re-establishes the local session, but the next action was refused until the page was reloaded or the action retried. An action refused this way now re-establishes the session and is sent once more. A hosted instance is unchanged: a refused action still asks the user to sign in.
+
 - **A Store is the default data component; an Index does no IO.** Simple state no longer needs a Repository, a Registry or an Index around it.
   - **Standalone Store:** a Store with no owning Repository raises nothing. `UNOWNED_STORE` is retired. A `lint.allow` that still names it is reported as `RETIRED_LINT_ALLOW_CODE`, a notice, so `wairon validate --ci` keeps passing; remove the allow when convenient.
   - **Read logic:** an Orchestrator with `dependencyClass: read` may depend on a Store directly, as workflows and Actors already may. A Portal still reaches a Store through an Orchestrator.

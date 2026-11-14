@@ -12,12 +12,35 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
+function send(path: string, init: RequestInit): Promise<Response> {
   return fetch(path, {
     ...init,
     credentials: 'same-origin',
     headers: { ...WEB_HEADER, ...(init.headers ?? {}) },
   });
+}
+
+/**
+ * On a `wairon dev` server only a GET re-establishes the local session (the server
+ * mints it on any bearerless GET). Session cookies are not port-scoped, so another
+ * dev server on the same host, or a restart of this one, can leave the page holding
+ * a session this server does not know; the next mutation then answers 401 although
+ * every read still works. So a non-GET that answers 401 asks the dev-only
+ * /web/dev-login route (404 on a hosted instance) to re-establish the session, and
+ * is sent once more when it did. A hosted 401 is returned unchanged.
+ */
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  const res = await send(path, init);
+  const method = (init.method ?? 'GET').toUpperCase();
+  if (res.status !== 401 || method === 'GET' || method === 'HEAD') return res;
+  let renewed: Response;
+  try {
+    renewed = await send('/web/dev-login', { redirect: 'manual' });
+  } catch {
+    return res;
+  }
+  if (renewed.status === 404) return res;
+  return send(path, init);
 }
 
 /** GET → parsed JSON. Throws ApiError(status) on a non-2xx, preferring the
