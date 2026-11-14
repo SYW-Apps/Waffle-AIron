@@ -3531,11 +3531,12 @@ var MODEL = __MODEL_JSON__;
     function along(r, side) { return side === 't' || side === 'b' ? r.cx : r.cy; }
     function sideRange(r, side) { return side === 't' || side === 'b' ? [r.l, r.r] : [r.t, r.b]; }
     // Ports. A line whose two boxes face each other with room to spare runs
-    // straight across. Every other end sits at the point of its side nearest the
-    // box at the line's other end, where a straight line would leave. The ends on
-    // one side, leaving and arriving alike, are then spread a lane apart without
-    // crossing: ordered by the direction their other end lies in, so the line to
-    // the steepest corner leaves nearest that corner.
+    // straight across. A leaving end sits at the point of its side nearest the
+    // box at the line's other end, where a straight line would leave; the lines
+    // arriving on a side share one trunk port at its middle. The ends on one side
+    // are then spread a lane apart without crossing: ordered by the direction
+    // their other end lies in, so the line to the steepest corner leaves nearest
+    // that corner.
     function assignPorts(jobs, obstacles) {
       var place = function (r, side, c) {
         var n = NORMAL[side];
@@ -3557,17 +3558,30 @@ var MODEL = __MODEL_JSON__;
       });
       var bySide = {};
       jobs.forEach(function (j) {
-        [{ j: j, end: 's', box: j.src, r: j.sr, side: j.sSide, far: j.tr }, { j: j, end: 't', box: j.tgt, r: j.tr, side: j.tSide, far: j.sr }].forEach(function (e) {
+        [{ jobs: [j], end: 's', box: j.src, r: j.sr, side: j.sSide, far: [j.tr] }, { jobs: [j], end: 't', box: j.tgt, r: j.tr, side: j.tSide, far: [j.sr] }].forEach(function (e) {
           (bySide[e.box + '|' + e.side] = bySide[e.box + '|' + e.side] || []).push(e);
         });
       });
       Object.keys(bySide).forEach(function (key) {
-        var ends = bySide[key], side = ends[0].side, r = ends[0].r, n = NORMAL[side];
+        var list = bySide[key], side = list[0].side, r = list[0].r, n = NORMAL[side];
         var range = sideRange(r, side), lo = range[0] + PAD, hi = range[1] - PAD;
+        // Lines arriving on one side flow the same way, into one trunk: they share
+        // one port and run together, so a box many lines use takes them as one.
+        // A straight line keeps its own end.
+        var ends = list.filter(function (e) { return e.end === 's' || e.jobs[0].straight !== null; });
+        var arriving = list.filter(function (e) { return e.end === 't' && e.jobs[0].straight === null; });
+        if (arriving.length) {
+          ends.push({ end: 't', jobs: arriving.map(function (e) { return e.jobs[0]; }), far: arriving.map(function (e) { return e.far[0]; }), trunk: true });
+        }
         ends.forEach(function (e) {
-          var reach = Math.max(1, (e.far.cx - r.cx) * n.x + (e.far.cy - r.cy) * n.y);
-          e.slope = (along(e.far, side) - along(r, side)) / reach;
-          e.want = e.j.straight !== null ? e.j.straight : clamp(along(e.far, side), lo, hi);
+          var slope = 0, want = 0;
+          e.far.forEach(function (o) {
+            var reach = Math.max(1, (o.cx - r.cx) * n.x + (o.cy - r.cy) * n.y);
+            slope += (along(o, side) - along(r, side)) / reach;
+            want += clamp(along(o, side), lo, hi);
+          });
+          e.slope = slope / e.far.length;
+          e.want = e.trunk ? clamp(along(r, side), lo, hi) : e.jobs[0].straight !== null ? e.jobs[0].straight : want / e.far.length;
         });
         ends.sort(function (a, b) { return a.slope - b.slope || a.want - b.want; });
         var gap = ends.length > 1 ? Math.min(LANE, (hi - lo) / (ends.length - 1)) : 0;
@@ -3577,7 +3591,9 @@ var MODEL = __MODEL_JSON__;
         ends.forEach(function (e) {
           e.at = clamp(e.at, lo, hi);
           var p = place(r, side, e.at);
-          if (e.end === 's') { e.j.sPort = p.port; e.j.sStub = p.stub; } else { e.j.tPort = p.port; e.j.tStub = p.stub; }
+          e.jobs.forEach(function (j) {
+            if (e.end === 's') { j.sPort = p.port; j.sStub = p.stub; } else { j.tPort = p.port; j.tStub = p.stub; }
+          });
         });
       });
     }
@@ -3621,7 +3637,7 @@ var MODEL = __MODEL_JSON__;
       var xIndex = {}, yIndex = {};
       xs.forEach(function (v, k) { xIndex[Math.round(v * 2)] = k; });
       ys.forEach(function (v, k) { yIndex[Math.round(v * 2)] = k; });
-      return { xs: xs, ys: ys, W: W, H: H, blocked: blocked, blockR: blockR, blockD: blockD, xIndex: xIndex, yIndex: yIndex, usage: {} };
+      return { xs: xs, ys: ys, W: W, H: H, blocked: blocked, blockR: blockR, blockD: blockD, xIndex: xIndex, yIndex: yIndex, usage: new Map() };
     }
     function nearestIndex(arr, v) {
       var best = 0;
@@ -3657,19 +3673,22 @@ var MODEL = __MODEL_JSON__;
       var sx = nearestIndex(g.xs, j.sStub.x), sy = nearestIndex(g.ys, j.sStub.y);
       var tx = nearestIndex(g.xs, j.tStub.x), ty = nearestIndex(g.ys, j.tStub.y);
       var W = g.W, N = W * g.H;
-      var best = new Float64Array(N * 4).fill(Infinity);
-      var from = new Int32Array(N * 4).fill(-1);
+      // One set of arrays per grid, reused by every line: a state counts only when
+      // stamped by this search, so nothing is cleared between searches.
+      if (!g.best) { g.best = new Float64Array(N * 4); g.from = new Int32Array(N * 4); g.seen = new Uint32Array(N * 4); g.run = 0; }
+      var run = ++g.run, seen = g.seen, best = g.best, from = g.from;
+      var costOf = function (st) { return seen[st] === run ? best[st] : Infinity; };
       var heap = new Heap();
       var startDir = dirOfSide(j.sSide), endDir = (dirOfSide(j.tSide) + 2) % 4;
       var s0 = (sy * W + sx) * 4 + startDir;
-      best[s0] = 0;
+      best[s0] = 0; from[s0] = -1; seen[s0] = run;
       var h = function (xi, yi) { return Math.abs(g.xs[xi] - g.xs[tx]) + Math.abs(g.ys[yi] - g.ys[ty]); };
       heap.push(h(sx, sy), s0);
       var goal = -1, guard = 0;
       while (heap.a.length && guard++ < 400000) {
         var top = heap.pop(), st = top[1];
         var cell = st >> 2, dir = st & 3, xi = cell % W, yi = (cell - xi) / W;
-        var cost = best[st];
+        var cost = costOf(st);
         if (top[0] > cost + h(xi, yi) + 0.001) continue;
         if (xi === tx && yi === ty) { goal = st; break; }
         for (var d = 0; d < 4; d++) {
@@ -3683,14 +3702,14 @@ var MODEL = __MODEL_JSON__;
           if (seg === 2) continue;
           var len = Math.abs(g.xs[nx] - g.xs[xi]) + Math.abs(g.ys[ny] - g.ys[yi]);
           if (seg === 1 || g.blocked[ncell] === 1) len *= NEAR_COST;
-          var key = Math.min(cell, ncell) + ':' + Math.max(cell, ncell);
-          var used = g.usage[key];
+          // A grid edge's number: its lower cell, twice, plus one when it runs down.
+          var used = g.usage.get(Math.min(cell, ncell) * 2 + (d & 1));
           var share = 0;
-          if (used) for (var u in used) if (u !== j.tgt && u !== j.src) share++;
+          if (used) used.forEach(function (u) { if (u !== j.tgt && u !== j.src) share++; });
           var c = cost + len * (1 + SHARE * Math.min(share, 3)) + (d !== dir ? BEND : 0);
           if (isEnd && d !== endDir) c += BEND;
           var ns = ncell * 4 + d;
-          if (c < best[ns]) { best[ns] = c; from[ns] = st; heap.push(c + h(nx, ny), ns); }
+          if (c < costOf(ns)) { best[ns] = c; from[ns] = st; seen[ns] = run; heap.push(c + h(nx, ny), ns); }
         }
       }
       if (goal < 0) return null;
@@ -3699,8 +3718,9 @@ var MODEL = __MODEL_JSON__;
       cells.reverse();
       for (var k = 1; k < cells.length; k++) {
         var a = cells[k - 1], b = cells[k];
-        var ukey = Math.min(a, b) + ':' + Math.max(a, b);
-        (g.usage[ukey] = g.usage[ukey] || {})[j.tgt] = true;
+        var ukey = Math.min(a, b) * 2 + (Math.abs(a - b) === W ? 1 : 0);
+        if (!g.usage.has(ukey)) g.usage.set(ukey, new Set());
+        g.usage.get(ukey).add(j.tgt);
       }
       return cells.map(function (c) { var x = c % W; return { x: g.xs[x], y: g.ys[(c - x) / W] }; });
     }
@@ -3774,11 +3794,15 @@ var MODEL = __MODEL_JSON__;
       });
     }
     // ---- curved: a smooth curve through the routed path ------------------------
-    var CLEAR = 16;
-    function segClear(a, b, obstacles) {
+    // A box's clearance (CLEAR) is kept free where there is room; a narrow gap
+    // between two boxes may still be passed, closer (HARD), at a cost (NEAR), so
+    // a line takes the gap instead of a long way round the whole column.
+    var CLEAR = 16, HARD = 5, NEAR = 2.5;
+    function segClear(a, b, obstacles, pad) {
+      var P = pad === undefined ? CLEAR : pad;
       for (var k = 0; k < obstacles.length; k++) {
         var o = obstacles[k];
-        var r = { l: o.l - CLEAR, r: o.r + CLEAR, t: o.t - CLEAR, b: o.b + CLEAR };
+        var r = { l: o.l - P, r: o.r + P, t: o.t - P, b: o.b + P };
         // Liang-Barsky clip of the segment against the rectangle.
         var t0 = 0, t1 = 1, dx = b.x - a.x, dy = b.y - a.y;
         var p = [-dx, dx, -dy, dy], q = [a.x - r.l, r.r - a.x, a.y - r.t, r.b - a.y];
@@ -3828,25 +3852,34 @@ var MODEL = __MODEL_JSON__;
     // the corners of every box (with clearance), searched per line, then a smooth
     // curve through the corners it passes. A corner several lines pass is taken a
     // little wider by each, so curves keep their distance instead of stacking.
-    var CORNER = 28, SPREAD = 7;
+    var CORNER = 28, SPREAD = 7, CORNER_STEPS = [CORNER, 18, 10];
     function cornerGraph(obstacles) {
       var nodes = [];
       obstacles.forEach(function (o) {
         [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (d) {
-          var p = { x: (d[0] < 0 ? o.l : o.r) + d[0] * CORNER, y: (d[1] < 0 ? o.t : o.b) + d[1] * CORNER, dx: d[0], dy: d[1], uses: 0 };
-          if (!inAny(p, obstacles, 1)) nodes.push(p);
+          // As far out as the neighbouring boxes leave room for.
+          for (var i = 0; i < CORNER_STEPS.length; i++) {
+            var off = CORNER_STEPS[i];
+            var p = { x: (d[0] < 0 ? o.l : o.r) + d[0] * off, y: (d[1] < 0 ? o.t : o.b) + d[1] * off, dx: d[0], dy: d[1], uses: 0 };
+            if (!inAny(p, obstacles, HARD)) { nodes.push(p); break; }
+          }
         });
       });
       var vis = nodes.map(function () { return []; });
       for (var a = 0; a < nodes.length; a++) {
         for (var b = a + 1; b < nodes.length; b++) {
-          if (segClear(nodes[a], nodes[b], obstacles)) {
-            var d = Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y);
-            vis[a].push([b, d]); vis[b].push([a, d]);
-          }
+          var d = linkCost(nodes[a], nodes[b], obstacles);
+          if (d >= 0) { vis[a].push([b, d]); vis[b].push([a, d]); }
         }
       }
       return { nodes: nodes, vis: vis };
+    }
+    // The cost of a straight leg: its length, more where it passes a box closer
+    // than its clearance; -1 where it would touch one.
+    function linkCost(a, b, obstacles) {
+      if (!segClear(a, b, obstacles, HARD)) return -1;
+      var d = Math.hypot(a.x - b.x, a.y - b.y);
+      return segClear(a, b, obstacles) ? d : d * NEAR;
     }
     function anyAngle(cg, from, to, obstacles) {
       if (segClear(from, to, obstacles)) return [];
@@ -3854,13 +3887,17 @@ var MODEL = __MODEL_JSON__;
       var dist = new Float64Array(N + 2).fill(Infinity), prev = new Int32Array(N + 2).fill(-1), done = new Uint8Array(N + 2);
       var startLinks = [], endLinks = [];
       cg.nodes.forEach(function (p, k) {
-        if (segClear(from, p, obstacles)) startLinks.push([k, Math.hypot(p.x - from.x, p.y - from.y)]);
-        if (segClear(p, to, obstacles)) endLinks.push([k, Math.hypot(p.x - to.x, p.y - to.y)]);
+        var ds = linkCost(from, p, obstacles), dt = linkCost(p, to, obstacles);
+        if (ds >= 0) startLinks.push([k, ds]);
+        if (dt >= 0) endLinks.push([k, dt]);
       });
       var endOf = {};
       endLinks.forEach(function (l) { endOf[l[0]] = l[1]; });
       var heap = new Heap();
       dist[S] = 0; heap.push(0, S);
+      // Straight across, passing close: allowed at its cost, against the way round.
+      var direct = linkCost(from, to, obstacles);
+      if (direct >= 0) { dist[T] = direct; prev[T] = S; heap.push(direct, T); }
       while (heap.a.length) {
         var top = heap.pop(), u = top[1];
         if (done[u]) continue;
