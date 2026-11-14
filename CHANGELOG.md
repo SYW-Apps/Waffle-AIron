@@ -6,6 +6,12 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **The assistant can change a project's rules, its debt register and its settings, and a rule set below its default is reported on every run.** Three new MCP tools write `.wai/project.yaml`, so an agent no longer has to edit the file by hand. Each answers what it changed (before and after), takes `dryRun`, and says which parts of the approval it moves, so the human re-locks.
+  - **Rules:** `sdd_update_rules` sets, unsets, adds to and removes from the rules, checking each value against the rules schema. A rule set below its default severity needs a reason (`why`), which is written beside it.
+  - **Debt register:** `sdd_carry_findings` adds a reason group, extends or revises it, or removes findings from it. Only a finding a rule declares carryable can be carried.
+  - **Project settings:** `sdd_configure_project` changes the name, description, project type, execution tier, selected packs, targets and composition.
+  - **Lowered rules stay visible:** a rule set below its default severity is reported on every run as `RULE_LOWERED` (a notice) with its reason. A lowering with no reason is `RULE_LOWERED_WITHOUT_REASON`, and a reason kept for a rule that is no longer lowered is `STALE_SEVERITY_REASON`; both are warnings. A project that already lowers a rule without a reason therefore fails `wairon validate --ci` until the reason is added: one `sdd_update_rules` call per rule, or a `rules.severityReasons` entry.
+
 - **Canvas lines attach where they point, keep their distance and hop cleanly.**
   - **Ends:** each line leaves and enters its box at the point of the side nearest the box at its other end. The ends on one side are spread a lane apart without crossing, ordered by direction: the line to the steepest corner sits nearest that corner. This holds for leaving and arriving lines alike, so lines no longer start on the far end of a side or overlap where they arrive.
   - **Clearance:** lines keep more room around boxes they do not start or end at. Both line styles route farther around a box, and an orthogonal line pays more to pass close to one.

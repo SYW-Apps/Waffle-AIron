@@ -98,6 +98,8 @@ function walk(ids: Ids): { tool: string; args: Record<string, unknown>; kind: st
 const NOT_SPEC_AUTHORING = new Set([
   'sdd_add_member', 'sdd_move_member', 'sdd_rename_project', 'sdd_rename_member_alias', 'sdd_add_external',
   'sdd_update_external', 'sdd_set_network',
+  // The project configuration tools write .wai/project.yaml, never a spec.
+  'sdd_update_rules', 'sdd_carry_findings', 'sdd_configure_project',
 ]);
 
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\${c}`);

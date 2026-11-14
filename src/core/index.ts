@@ -521,6 +521,9 @@ export {
   setProjectType,
   describeProject,
   setNetwork,
+  reviseRules,
+  reviseDebt,
+  reviseProject,
   recordProfileSelection,
   setExecutionTier,
   // project_config_portal setId / declareExternal: the deliberate identity and

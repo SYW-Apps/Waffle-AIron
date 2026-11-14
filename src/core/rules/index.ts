@@ -1116,6 +1116,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     lintAllows,
     sitesReported,
     severityOf,
+    defaultSeverityOf: (code) => codeDefaults.get(code),
     knownIssueCodes: opts.knownIssueCodes,
     carriedFindings,
     carryableIssueCodes: opts.carryableIssueCodes ?? new Set<string>(),

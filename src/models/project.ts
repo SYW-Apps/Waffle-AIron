@@ -413,6 +413,14 @@ export const RulesConfigSchema = z.object({
    */
   sddRuleSeverity: z.record(z.string(), z.enum(['error', 'warning', 'notice', 'off'])).default({}),
 
+  /**
+   * Why a rule code is set below its default severity, keyed by the code in
+   * sddRuleSeverity. A lowered rule is never silent: every run reports it with
+   * its reason (RULE_LOWERED), and a lowered rule with no reason here is
+   * RULE_LOWERED_WITHOUT_REASON.
+   */
+  severityReasons: z.record(z.string(), z.string()).optional(),
+
   /** Dynamic naming conventions and stereotype suffix rules */
   naming: NamingRuleConfigSchema.optional(),
 
@@ -863,6 +871,108 @@ export const ProjectConfigSchema = z.object({
 });
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
+
+/** One granular change to a project's `rules` (sdd_update_rules). Paths are relative to `rules` and dotted. */
+export interface RulesChange {
+  /** Path to value: each value is written at its path and checked against the rules schema. */
+  set?: Record<string, unknown>;
+  /** Paths removed, so the setting falls back to its default. */
+  unset?: string[];
+  /** List path to entries appended when absent. */
+  add?: Record<string, string[]>;
+  /** List path to entries removed. */
+  remove?: Record<string, string[]>;
+  /** Why the change lowers a rule below its default severity; written as that code's severityReasons entry. */
+  why?: string;
+}
+
+/** A rule code set below its default severity, and why. */
+export interface RuleLowering {
+  /** The rule code. */
+  code: string;
+  /** Its default severity. */
+  from: string;
+  /** The severity the project sets (warning, notice or off). */
+  to: string;
+  /** The project's reason, from severityReasons; absent when none is given. */
+  why?: string;
+}
+
+/** What a RulesChange did, or with dryRun would do. */
+export interface RulesRevision {
+  /** The rules as stored before the change. */
+  before: RulesConfig;
+  /** The rules the change writes. */
+  after: RulesConfig;
+  /** Every rule the change newly sets below its default severity, with the reason written for it. */
+  lowered: RuleLowering[];
+  /** Whether the configuration was written (false for a dry run and for a change that changes nothing). */
+  wrote: boolean;
+}
+
+/** What a DebtChange does to the conformance debt register. */
+export const DebtActionSchema = z.enum(['add', 'extend', 'revise', 'remove']);
+export type DebtAction = z.infer<typeof DebtActionSchema>;
+
+/** One change to the conformance debt register (`rules.conformance.carried`, sdd_carry_findings). */
+export interface DebtChange {
+  /** What the change does. */
+  action: DebtAction;
+  /** The reason group's position (0-based); required for extend, revise and remove. */
+  group?: number;
+  /** The group's kind: required for add, optional for revise. */
+  kind?: CarriedDebtKind;
+  /** The group's reason: required for add, optional for revise. */
+  why?: string;
+  /** What would settle a provisional classification; null on revise removes it. */
+  revisit?: string | null;
+  /** The findings to add (add, extend) or remove (remove; by code, spec and at). */
+  findings?: CarriedFinding[];
+}
+
+/** What a DebtChange did, or with dryRun would do. */
+export interface DebtRevision {
+  /** The register as stored before the change. */
+  before: CarriedDebt[];
+  /** The register the change writes. */
+  after: CarriedDebt[];
+  /** Whether the configuration was written. */
+  wrote: boolean;
+}
+
+/** One change to the bound project's own settings in .wai/project.yaml (sdd_configure_project). */
+export interface ProjectChange {
+  /** The project's human-readable name. */
+  name?: string;
+  /** The project's description. */
+  description?: string;
+  /** The governing profile (backend, frontend, ...). */
+  projectType?: string;
+  /** execution.tier. */
+  executionTier?: string;
+  /** Packs to select (a re-selected pack moves last). */
+  selectPacks?: PackSelection[];
+  /** Pack names to deselect. */
+  deselectPacks?: string[];
+  /** extensions.useGlobalPacks. */
+  useGlobalPacks?: boolean;
+  /** The output targets, replacing the stored list. */
+  targets?: TargetConfig[];
+  /** The composition policy, replacing the stored one. */
+  composition?: CompositionConfig;
+}
+
+/** What a ProjectChange did, or with dryRun would do. */
+export interface ProjectRevision {
+  /** The configuration as stored before the change. */
+  before: ProjectConfig;
+  /** The configuration the change writes. */
+  after: ProjectConfig;
+  /** The parts of the approval the change moves (packs, composition, rules); empty when none. */
+  approvalMoves: string[];
+  /** Whether the configuration was written. */
+  wrote: boolean;
+}
 
 /**
  * project_config.activeTargetTypes — the target types this configuration

@@ -1610,7 +1610,7 @@ its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in 
 content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
 `which -a wairon` elsewhere), then reconnect the assistant.
 
-The local server offers 55 tools:
+The local server offers 58 tools:
 
 | Group | Tools |
 |-------|-------|
@@ -1623,6 +1623,7 @@ The local server offers 55 tools:
 | Externals | `sdd_add_external`, `sdd_update_external`, `sdd_remove_external`, `sdd_pin_externals`, `sdd_get_externals_status` |
 | Public surface (the producer's side) | `sdd_list_consumers`, `sdd_surface_diff` |
 | Network | `sdd_set_network`, `sdd_get_network_flows`, `sdd_explain_flow` |
+| Project configuration (each takes `dryRun`; the human re-locks after a write) | `sdd_update_rules` (rules; a rule set below its default severity needs a reason (why) and is reported on every run), `sdd_carry_findings` (the conformance debt register), `sdd_configure_project` (name, description, project type, execution tier, packs, targets, composition) |
 | Packs | `sdd_pack_impact` |
 | Delegation | `sdd_get_agent_brief` (the live brief for one agent; also served as the `wairon-agent://` resource) |
 | Review | `sdd_request_review` (ask the human to review the design, or to approve it with a lock; validates first, records the request under `.wai/.local/reviews/`), `sdd_await_review` (wait for the answer: the decision, its comment and the notes pinned to specs) |
