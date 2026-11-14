@@ -10,6 +10,19 @@ dependsOn:
   - project_store
   - host_core_adapter
   - files_adapter
+lint:
+  allow:
+    - code: INDEX_DOES_IO
+      at: files_adapter
+      reason: >-
+        Known debt under the 6.x data-block standard: this Index walks the project family on disk
+        itself. In 7.0 the read moves to its Store and the Index projects what the Store holds.
+    - code: INDEX_DOES_IO
+      at: host_core_adapter
+      reason: >-
+        Known debt under the 6.x data-block standard: this Index reads each project's configuration
+        through the core client itself. In 7.0 the read moves to its Store and the Index projects
+        what the Store holds.
 status: complete
 createdAt: '2026-07-19T08:59:51.799Z'
-updatedAt: '2026-10-31T23:23:37.505Z'
+updatedAt: '2026-11-14T19:08:45.649Z'

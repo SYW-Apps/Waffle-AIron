@@ -78,10 +78,10 @@ These ten are the **only** atomic component types.
 | **Orchestrator** | **Logic as a flowchart** — ordered steps, conditions, branches, loops and parallel dispatch — calling its collaborators, other Orchestrators among them, nested down to leaf logic. One or more cohesive methods sharing those collaborators, realized as a class or a module of functions. Its `dependencyClass` (`pure` or `read`) bounds what it may depend on; unset, it is a **workflow** | dependencies only | domain-specific methods |
 | **Supervisor** | Owns the **set** of live Actors and their lifecycle; may supervise other Supervisors | runtime state (the set of Actors) | `start/stop`, find-or-start by id |
 | **Actor** | Owns **one** live thing — a session, a connection, a timer, or an entity instance — and handles its events one at a time. Its methods are full flowcharts, not shims | that thing's runtime state | `start/stop` + its messages |
-| **Store** | Authoritative state boundary for **one aggregate** | the aggregate's entities | `get`, `list`, `write`, `remove` |
-| **Index** | Read path; optimized derived lookup maps over a Store | derived lookup state | `get_by_<key>`, `list_by_<key>` |
+| **Store** | Authoritative state boundary for **one aggregate** — the **default data component**: it holds the data and is its one interface | the aggregate's entities | `get`, `list`, `write`, `remove` |
+| **Index** | **Optional** read path; derived lookup maps kept in memory over a Store's entries — **no IO** | derived lookup state | `get_by_<key>`, `list_by_<key>` |
 | **Query** | A **Repository member** for computed reads over its Store — results the backend computes per call (an aggregate, a ranking, a report) | dependencies only | one method per computed read |
-| **Registry** | Write path (CUD) for one aggregate | dependencies only | `create`, `update`, `delete` |
+| **Registry** | **Optional** write path (CUD) for one aggregate (the write-path Registry retires in 7.0) | dependencies only | `create`, `update`, `delete` |
 | **Adapter** | A **client to an external system/protocol** (DB, FS, HTTP, gRPC, WS, message bus). The client block for an outside system: **recommended, not required** — one place to change or migrate a library, and one step for other components to make an outside call; using a library's simple API directly, or creating and using a handle, is also valid | a connection/resource handle | protocol-shaped (`query`/`execute`, `send`/`receive`, `publish`…) |
 | **Observer** | Subscribes to events and forwards them to one workflow | a subscription | `on_event(event)` |
 
@@ -126,10 +126,10 @@ standard.
 - **Orchestrator** — its `dependencyClass` bounds its dependencies. The class is
   checked on every hop, so by induction nothing below pure logic reaches data or I/O:
   - `pure` depends only on pure Orchestrators;
-  - `read` also depends on read Orchestrators, Repositories, Indexes and Adapters,
+  - `read` also depends on read Orchestrators, Stores, Repositories, Indexes and Adapters,
     and never calls their write methods (judged once facade methods carry effect tags);
   - unset, it is a **workflow**: it may depend on whatever the other rules allow —
-    Repositories, other Orchestrators, Adapters, and Supervisors to reach live Actors.
+    Stores, Repositories, other Orchestrators, Adapters, and Supervisors to reach live Actors.
 - **Supervisor** depends on its Actors, Orchestrators, Adapters and other
   Supervisors, and never on a presentation block
   (`ARCHITECTURE_VIOLATION_SUPERVISOR_DEP`). Its held state has two homes:
@@ -168,9 +168,12 @@ standard.
   neither, and a durable Store needs a hydration read-back for both.
 - **Store** may depend on an **Adapter** (its backend), another Store, or pure
   logic. It is depended *upon* by Registries, Indexes and Queries — never the reverse.
-- **Index** is a read-only **projection over a Store**: it shares the Store's
-  per-entry references. It may depend on its Store, an Adapter for cold reads, and
-  pure logic. It **never** depends on a Registry — read and write paths are decoupled.
+- **Index** is an optional, read-only **projection over a Store**: it shares the
+  Store's per-entry references and is kept in memory. It may depend on its Store and
+  pure logic, and does **no IO** — reading data is the Store's work, so an Index
+  that depends on an Adapter is `INDEX_DOES_IO` (a warning while the standard
+  moves, an error in 7.0): put the read on the Store, which may depend on the
+  Adapter. It **never** depends on a Registry — read and write paths are decoupled.
   As an **exceptional case**, when one Index's projection is itself worth
   re-presenting another way, a derived Index may depend on another Index — only
   one **owned by the same Repository**, and never in a cycle of Index edges
@@ -184,7 +187,7 @@ standard.
 - **Query** computes reads over its own Repository's Store: it depends **only on
   its Store, a backend Adapter or pure logic**, and it lives only inside a
   Repository (`UNOWNED_QUERY`).
-- **Registry** is the write path to a Store; it may depend on its Store, Adapters
+- **Registry** is an optional write path to a Store (retiring in 7.0); it may depend on its Store, Adapters
   (e.g. a message-bus Adapter to publish), and pure logic for validation. It does
   **not** depend on Indexes, and it drives no workflow.
 - **Adapter** is a dependency-sink toward the system (its other side is external).
@@ -258,7 +261,7 @@ instantiation lifecycle is irrelevant to correctness.
   | `dependencyClass` | May depend on | Typical shapes |
   |---|---|---|
   | `pure` | pure Orchestrators only | a verdict over supplied facts, a format translation, a view or text derived from values it is handed |
-  | `read` | pure and read Orchestrators, Repositories, Indexes, Adapters — reading, never writing | a derivation that loads its own source, a lookup that gathers the facts for a verdict |
+  | `read` | pure and read Orchestrators, Stores, Repositories, Indexes, Adapters — reading, never writing | a derivation that loads its own source, a lookup that gathers the facts for a verdict |
   | unset (a workflow) | whatever the other rules allow | writes, sequences, transactions, reaching live Actors |
 
   Choose the narrowest class that holds, and split to reach it: loading in the
@@ -508,11 +511,12 @@ one component (a facade)*. A pattern owns **only building blocks** — never ano
 pattern (§9).
 
 ### Repository
-> The data-access-layer component for **one aggregate**. It **owns** exactly one
+> The data-access-layer component for **one aggregate**, for state whose lookups or
+> backend are worth keeping private behind one facade. It **owns** exactly one
 > **Store** — the aggregate's entity and everything that must stay consistent with
-> it, across as many tables as that takes — and the faces over it: a **Registry**
-> (write face), one-or-more **Indexes** (read faces), any **Queries** (computed
-> reads), and optionally one **Adapter** (the backend). It contains **no logic of
+> it, across as many tables as that takes — and the faces over it: optionally a
+> optional **Registry** (write face), optional **Indexes** (read faces, in memory, no IO), any
+> **Queries** (computed reads), and optionally one **Adapter** (the backend). It contains **no logic of
 > its own**. The Store and Adapter are **private behind** the Registry, Indexes and
 > Queries. Its facade **forwards 1:1** to the Registry (writes) and to the Indexes
 > and Queries (reads); **consumers depend on the Repository facade only** — never
@@ -551,13 +555,13 @@ cross-aggregate projections and view-mapped keyless entities are read-model
 **Queries**. The one habit the model pushes against is querying the context
 straight from a workflow.
 
-**When the full pattern is overkill — the two sanctioned shapes for held state.**
-The Repository is the RECOMMENDED shape wherever read and write consumers diverge
-or write-time constraints exist. For genuinely simple held state, a **deliberately
-standalone Store** is the sanctioned lightweight form: the state stays visible as a
-component, reachable from the workflow layer (a workflow Orchestrator or an Actor),
-acknowledged with a `lint.allow` reason on the `UNOWNED_STORE` warning — and it
-declares its `durability` like every Store (`durable` | `read-through` |
+**The Store is the default; the Repository is earned.** Held state is **one
+Store**: read logic, workflows and Actors depend on it directly (a Portal still goes
+through an Orchestrator), and a standalone Store needs no `lint.allow` — the
+`UNOWNED_STORE` warning is retired, and an allow naming it is the notice
+`RETIRED_LINT_ALLOW_CODE`. A Repository earns its place when Indexes, Queries or a
+backend Adapter are worth keeping private behind one facade, or write-time
+constraints exist. A Store declares its `durability` like every Store (`durable` | `read-through` |
 `ram-projection` | `cache`). The durability axis is **orthogonal** to the shape:
 an in-memory Repository (`ram-projection` Store inside) and a persisted bare Store
 (`read-through` file backing) are both legal quadrants. What is NEVER sanctioned is
@@ -678,7 +682,7 @@ to dispatch; a **Facade** does *no* routing (the caller already chose the method
 ```
 Ingress:   Portal  (with the gateway variant when it authenticates, authorizes, validates or rate-limits first)
 Workflow:  Orchestrators: workflows, over read and pure logic
-Data:      Repository = Store (one aggregate) + Registry (write+constraints) + Indexes/Queries (read) + Adapter (private)
+Data:      Store (default, one aggregate); Repository = Store + optional Registry (write) + optional Indexes (in memory, no IO) / Queries (read) + Adapter (private)
 Process:   a Supervisor tree + Actors (sessions, connections, timers, live entity instances)
 ```
 
@@ -935,7 +939,7 @@ microservice / distributed / concurrent complexity on a system that doesn't need
   Without a message bus, in-process events are fire-and-forget calls; the simplest
   systems call the next step directly.
 - **Use the smallest set of blocks/patterns the system needs.** A tiny app might be
-  one Portal + a couple of Orchestrators + one Repository. Don't add blocks,
+  one Portal + a couple of Orchestrators + one Store. Don't add blocks,
   patterns, or layers a system doesn't require.
 
 The *discipline* is the same everywhere (right block for the job, correct
@@ -1083,7 +1087,7 @@ tell apart components that share a noun, and it matches the block:
 7. All logic is a flowchart: an Orchestrator's methods, or an Actor's or
    Supervisor's own methods over its runtime state. An Orchestrator's
    `dependencyClass` bounds its dependencies — `pure` on pure logic only, `read` also
-   on read logic, Repositories, Indexes and Adapters, unset a workflow — and pure
+   on read logic, Stores, Repositories, Indexes and Adapters, unset a workflow — and pure
    logic may be used by every block. Local control flow → anywhere.
 8. Behavior lives where it can be performed autonomously; coordinated/external
    behavior lives on the acting block, taking the entity as an argument.
@@ -1103,8 +1107,9 @@ tell apart components that share a noun, and it matches the block:
 11. Structure is L2/L3; the concurrency variant is L4 (neutral strategy here,
     primitives in the language-bindings appendix). The bus client, composition root,
     and cross-cutting concerns are infrastructure, not blocks.
-12. A Store covers one aggregate. Registry (write), Index and Query (read) are
-    decoupled — all work on the Store; Indexes are reference-sharing projections,
+12. A Store covers one aggregate and is the default data component. An optional
+    Registry (write), Index and Query (read) are decoupled — all work on the Store;
+    Indexes are in-memory, reference-sharing projections that do no IO,
     Queries compute per call inside their Repository, and the Registry updates
     neither. Reads across aggregates go through read logic or a read-model Repository.
 13. Right-size: L1, concurrency, and events are all optional; use the smallest set

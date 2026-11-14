@@ -747,6 +747,8 @@ export interface RuleContext {
   }[];
   /** Every issue code a registered rule or loaded declarative assertion can emit, gathered by the validator (for allow validation). */
   knownIssueCodes: Set<string>;
+  /** Every code a registered rule names as retired (it reported it once and no longer does), gathered by the validator for the lint-allow audit: an allow of one is RETIRED_LINT_ALLOW_CODE, a notice. */
+  retiredIssueCodes: Set<string>;
 
   /**
    * What the run's findings of one code said about WHERE they landed on one
@@ -872,5 +874,11 @@ export interface SddRule {
    * everywhere.
    */
   needsWholeTree?: boolean;
+  /**
+   * Codes this rule reported once and no longer does, kept so an allow naming
+   * one is told it can go (RETIRED_LINT_ALLOW_CODE, a notice) instead of
+   * failing --ci as an unknown code.
+   */
+  retiredCodes?: string[];
   check(ctx: RuleContext): void;
 }

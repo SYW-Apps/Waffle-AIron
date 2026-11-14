@@ -38,6 +38,19 @@ dependsOn:
   - git_source_adapter
   - signature_resolver
   - files_adapter
+lint:
+  allow:
+    - code: INDEX_DOES_IO
+      at: files_adapter
+      reason: >-
+        Known debt under the 6.x data-block standard: the spec scan walks the tree and reads the
+        files itself. In 7.0 (with the dev-dashboard performance work, which reworks the scan) the
+        reads move to spec_file_store and the Index projects what it holds.
+    - code: INDEX_DOES_IO
+      at: git_source_adapter
+      reason: >-
+        Known debt under the 6.x data-block standard: the spec scan reads a git-sourced member's
+        files itself. In 7.0 the reads move to spec_file_store and the Index projects what it holds.
 status: complete
 createdAt: '2026-07-18T22:57:53.159Z'
-updatedAt: '2026-10-31T23:21:38.575Z'
+updatedAt: '2026-11-14T19:08:48.323Z'

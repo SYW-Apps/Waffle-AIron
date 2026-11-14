@@ -2,17 +2,18 @@ import { SddRule } from '../types.js';
 import { maintainedRegistries } from './entrypoint-dependencies.js';
 
 /**
- * The data blocks that stand outside every pattern. A Store may do so
- * deliberately; a Registry with no Store to write to and a Query with no
- * Repository to read over may not — each is either mistyped or orphaned.
+ * The data blocks that stand outside every pattern. A Store standing alone is
+ * the default shape and raises nothing (UNOWNED_STORE is retired); a Registry
+ * with no Store to write to and a Query with no Repository to read over may
+ * not — each is either mistyped or orphaned.
  */
 export const unownedBlocksRule: SddRule = {
   name: 'unowned-blocks',
   judges: 'design',
   description:
-    'Judges the data blocks no owner (a pattern, or a Supervisor keeping its supervision state) owns. A Store may stand alone deliberately — the sanctioned lightweight form for genuinely simple state, acknowledged with a lint.allow — while the recommended shape stays a Repository; what must never happen is folding the state into a consuming component, where no spec, diagram or conformance check can see it again. A Registry standing alone with no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent store that belongs typed Store) or orphaned — unless a Supervisor maintains it through lifecycle-effect calls: then it is that Supervisor\'s directory of live handles, which holds the handles itself and writes to no Store. A Query has no standalone form at all: it computes reads over its own Repository\'s Store.',
+    'Judges the data blocks no owner (a pattern, or a Supervisor keeping its supervision state) owns. A Store standing alone is the default shape for state with no lookup needs and raises nothing (UNOWNED_STORE, which once warned about it, is retired): a Repository earns its place only when Indexes, Queries or a backend Adapter are worth keeping private behind one facade. What must never happen is folding the state into a consuming component, where no spec, diagram or conformance check can see it again. A Registry standing alone with no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent store that belongs typed Store) or orphaned — unless a Supervisor maintains it through lifecycle-effect calls: then it is that Supervisor\'s directory of live handles, which holds the handles itself and writes to no Store. A Query has no standalone form at all: it computes reads over its own Repository\'s Store.',
+  retiredCodes: ['UNOWNED_STORE'],
   codes: [
-    { code: 'UNOWNED_STORE', defaultSeverity: 'warning', summary: 'Store not owned by any pattern — recommended shape is a Repository; a deliberate standalone Store needs a lint.allow' },
     { code: 'REGISTRY_WITHOUT_STORE', defaultSeverity: 'warning', summary: 'Standalone Registry with no Store to write to — either mistyped (a fused file-backed store belongs typed Store) or orphaned; a Supervisor\'s directory of live handles excepted' },
     { code: 'UNOWNED_QUERY', defaultSeverity: 'error', summary: 'Query not owned by a Repository — a Query computes reads over its own Repository\'s Store' },
   ],
@@ -29,23 +30,6 @@ export const unownedBlocksRule: SddRule = {
     for (const comp of ctx.components) {
       if (ownership.ownedMembers.has(comp.id)) continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
-
-      // A Store is held state. The RECOMMENDED shape is a Repository (Store +
-      // Registry + Index behind one facade); a deliberately standalone Store is
-      // the sanctioned LIGHTWEIGHT form for genuinely simple state — visible to
-      // the spec, reachable from the workflow layer, acknowledged via
-      // lint.allow. What must never happen is the third path: an implementer
-      // "solving" a refused link by folding the state into the consumer, where
-      // no spec, diagram, or conformance check can ever see it again.
-      if (comp.componentType === 'Store') {
-        ctx.addIssue(
-          'warning',
-          'UNOWNED_STORE',
-          `Store "${comp.id}" is not owned by any pattern. The recommended shape for held state is a Repository (owns: ["${comp.id}", its Registry, its Index]) with consumers on the facade. For genuinely simple state a deliberately standalone Store is the sanctioned lightweight form — keep it visible as this Store, reachable from the workflow layer (Orchestrator/Supervisor/Actor), and acknowledge it with a lint.allow reason. Never take the third path of merging the state into a consuming component: state hidden inside a logic block disappears from the architecture permanently.`,
-          comp.id,
-          isDraftCtx,
-        );
-      }
 
       // The symmetric tripwire: a Registry is by definition the WRITE PATH to a
       // Store. Standalone with no Store dependency it is either mistyped (the

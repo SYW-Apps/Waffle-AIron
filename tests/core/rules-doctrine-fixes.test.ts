@@ -82,14 +82,14 @@ function createTempProject() {
 const byCode = (issues: Issue[], code: string) => issues.filter(i => i.code === code);
 
 describe('pattern-membership: only a pattern\'s owns makes it an owner', () => {
-  it('a building block owning a Store does not hide that Store from UNOWNED_STORE', () => {
+  it('a building block owning a Store is BLOCK_OWNS_MEMBERS and the Store stays standalone', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
     proj.component('dose-orchestrator', 'pharmacy', 'Orchestrator', 'owns: [dose-plan-store]');
     proj.component('dose-plan-store', 'pharmacy', 'Store', 'durability: ram-projection');
     const issues = proj.validate();
     expect(byCode(issues, 'BLOCK_OWNS_MEMBERS').map(i => i.specId)).toEqual(['dose-orchestrator']);
-    expect(byCode(issues, 'UNOWNED_STORE').map(i => i.specId)).toEqual(['dose-plan-store']);
+    expect(byCode(issues, 'UNOWNED_STORE')).toEqual([]);
   });
 
   it('a building block owning a Registry does not exempt it from REGISTRY_WITHOUT_STORE', () => {

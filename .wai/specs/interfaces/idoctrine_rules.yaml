@@ -181,9 +181,10 @@ methods:
     description: >-
       Rule logic-dependency-class. Bounds an Orchestrator's dependencies by the dependencyClass it
       declares: pure logic depends only on pure Orchestrators; read logic also on read
-      Orchestrators, Repositories, Indexes and Adapters; an Orchestrator that declares no class is a
-      workflow and may depend on anything the rest of the matrix allows. Whether read logic calls a
-      WRITE method on one of those is judged only once facade methods carry effect tags.
+      Orchestrators, Stores, Repositories, Indexes and Adapters; an Orchestrator that declares no
+      class is a workflow and may depend on anything the rest of the matrix allows. Whether read
+      logic calls a WRITE method on one of those is judged only once facade methods carry effect
+      tags.
     signature: 'logicDependencyClass(ctx: RuleContext): void'
     returns: void
     params:
@@ -195,18 +196,21 @@ methods:
         severity: error
         summary: >-
           Orchestrator depending on a component its dependencyClass does not allow: pure logic
-          depends only on pure Orchestrators; read logic also on read Orchestrators, Repositories,
-          Indexes and Adapters
+          depends only on pure Orchestrators; read logic also on read Orchestrators, Stores,
+          Repositories, Indexes and Adapters
   - name: dataBlockDependencies
     description: >-
-      Rule data-block-dependencies. Keeps the data layer facing down. A Store may depend only on
-      another Store, a backend Adapter or pure logic — Registries and Indexes depend on the Store,
-      never the reverse. A Registry is the write path to its Store and may depend on that Store, a
-      backend Adapter, or the pure logic that validates the write. An Index is a read projection and
-      a Query a computed read, each over its Store through a backend Adapter where one serves it; as
-      an exceptional case an Index may project another Index of the same Repository, never in a
-      cycle. An Adapter is a sink toward the system: it may use pure logic, but never a Store or any
-      other Orchestrator.
+      Rule data-block-dependencies. Keeps the data layer facing down. A Store holds the data and is
+      its one interface: it may depend only on another Store, a backend Adapter or pure logic —
+      Registries and Indexes depend on the Store, never the reverse. A Registry is an optional write
+      path to its Store and may depend on that Store, a backend Adapter, or the pure logic that
+      validates the write. An Index is an optional lookup projection kept in memory over its Store's
+      entries: it may depend on its Store and pure logic, and, as an exceptional case, project
+      another Index of the same Repository, never in a cycle. It does no IO: reading data is the
+      Store's work, so an Index depending on an Adapter is INDEX_DOES_IO (a warning while the
+      standard moves; the read belongs on the Store). A Query is a computed read over its Store
+      through a backend Adapter where one serves it. An Adapter is a sink toward the system: it may
+      use pure logic, but never a Store or any other Orchestrator.
     signature: 'dataBlockDependencies(ctx: RuleContext): void'
     returns: void
     params:
@@ -228,11 +232,16 @@ methods:
       - code: ARCHITECTURE_VIOLATION_INDEX_DEP
         severity: error
         summary: >-
-          Index depending on anything but its Store, an Adapter, pure logic or another Index of its
-          own Repository (never in a cycle)
+          Index depending on anything but its Store, pure logic, an Adapter (reported apart as
+          INDEX_DOES_IO) or another Index of its own Repository (never in a cycle)
       - code: ARCHITECTURE_VIOLATION_QUERY_DEP
         severity: error
         summary: Query depending on anything but its Store, a backend Adapter or pure logic
+      - code: INDEX_DOES_IO
+        severity: warning
+        summary: >-
+          Index depending on an Adapter: an Index is an in-memory lookup over its Store's entries
+          and does no IO — the read belongs on the Store
   - name: entrypointDependencies
     description: >-
       Rule entrypoint-dependencies. Judges the edges at the system's entry points and its process
@@ -364,9 +373,10 @@ methods:
   - name: unownedBlocks
     description: >-
       Rule unowned-blocks. Judges the data blocks no owner (a pattern, or a Supervisor keeping its
-      supervision state) owns. A Store may stand alone deliberately — the sanctioned lightweight
-      form for genuinely simple state, acknowledged with a lint.allow — while the recommended shape
-      stays a Repository; what must never happen is folding the state into a consuming component,
+      supervision state) owns. A Store standing alone is the default shape for state with no lookup
+      needs and raises nothing (UNOWNED_STORE, which once warned about it, is retired): a Repository
+      earns its place only when Indexes, Queries or a backend Adapter are worth keeping private
+      behind one facade. What must never happen is folding the state into a consuming component,
       where no spec, diagram or conformance check can see it again. A Registry standing alone with
       no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent
       store that belongs typed Store) or orphaned — unless a Supervisor maintains it through
@@ -380,11 +390,6 @@ methods:
         type: RuleContext
         description: The validation run's shared read model and issue sink
     findings:
-      - code: UNOWNED_STORE
-        severity: warning
-        summary: >-
-          Store not owned by any pattern — recommended shape is a Repository; a deliberate
-          standalone Store needs a lint.allow
       - code: REGISTRY_WITHOUT_STORE
         severity: warning
         summary: >-
@@ -561,4 +566,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-31T21:51:52.040Z'
+updatedAt: '2026-11-14T19:07:20.823Z'

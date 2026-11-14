@@ -1,5 +1,5 @@
 # A standalone Store — demo-strict DISCOURAGES the stereotype and raises the
-# UNOWNED_STORE warning to an error through its profile rules block.
+# PROFILE_DISCOURAGED_STEREOTYPE warning to an error through its profile rules block.
 schemaVersion: 1.0.0
 id: flow_store
 name: Flow Store

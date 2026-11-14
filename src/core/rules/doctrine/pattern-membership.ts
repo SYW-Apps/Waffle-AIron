@@ -56,7 +56,7 @@ export const patternMembershipRule: SddRule = {
         }
         // Any other building block's owns is wholly the BLOCK_OWNS_MEMBERS
         // finding above: the block records no owner, so a Store or Registry it
-        // claims stays standalone for UNOWNED_STORE / REGISTRY_WITHOUT_STORE,
+        // claims stays standalone (a Registry for REGISTRY_WITHOUT_STORE),
         // and its dependants are judged as if the claim were absent.
         if (!pattern && !supervisor) continue;
         if (isPattern(member)) {

@@ -180,7 +180,11 @@ methods:
         condition: ctx.knownIssueCodes does not contain a.code, and neither do the family codes
         onFalseStep: 6
       - stepNumber: 4
-        description: Report UNKNOWN_LINT_ALLOW_CODE (warning) naming the spec and the unknown allowed code.
+        description: >-
+          Report the allow: RETIRED_LINT_ALLOW_CODE (notice) when ctx.retiredIssueCodes contains
+          a.code — the finding it silenced is no longer reported, so the allow can be removed, and a
+          project upgraded across the retirement keeps passing --ci — else UNKNOWN_LINT_ALLOW_CODE
+          (warning) naming the spec and the unknown allowed code.
         type: local
       - stepNumber: 5
         description: Continue with the next lint allow (mirrors the source's continue).
@@ -1760,4 +1764,4 @@ methods:
     exportedVia: loweredSeveritiesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-11-14T16:14:12.332Z'
+updatedAt: '2026-11-14T19:09:58.119Z'

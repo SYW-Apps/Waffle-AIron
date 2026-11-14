@@ -53,7 +53,7 @@ import {
   type SpecId,
 } from './types.js';
 import { buildCodeIndex, buildDependencyEdges, buildImplementationMethods, buildImportGraph, buildOwnershipIndex, buildRealizationIndex, buildSpecIds } from './read-model.js';
-import { SDD_RULES } from './repository.js';
+import { SDD_RULES, retiredIssueCodes } from './repository.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { emptyCodeModel } from '../source-analysis.js';
 
@@ -294,6 +294,8 @@ export interface BuildContextOptions {
   roundTripIssues: ValidationIssue[];
   /** Every code the registered rules and loaded declarative assertions can report, gathered by the caller (see RuleContext.knownIssueCodes). */
   knownIssueCodes: Set<string>;
+  /** Every code a registered rule has retired, gathered by the caller (see RuleContext.retiredIssueCodes); the registered rules' own when omitted. */
+  retiredIssueCodes?: Set<string>;
   /** Each known code's default severity, gathered by the caller beside knownIssueCodes (see RuleContext.severityOf); a loaded assertion's own severity is added here. */
   issueCodeSeverities?: Map<string, Severity>;
   /** Every code a registered rule declares CARRYABLE, gathered by the caller (see RuleContext.carryableIssueCodes). */
@@ -1118,6 +1120,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     severityOf,
     defaultSeverityOf: (code) => codeDefaults.get(code),
     knownIssueCodes: opts.knownIssueCodes,
+    retiredIssueCodes: opts.retiredIssueCodes ?? retiredIssueCodes(),
     carriedFindings,
     carryableIssueCodes: opts.carryableIssueCodes ?? new Set<string>(),
     addIssue,

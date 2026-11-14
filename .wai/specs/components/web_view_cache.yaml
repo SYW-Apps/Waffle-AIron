@@ -14,11 +14,7 @@ owns: []
 dependsOn: []
 durability: cache
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Simple keyed state: built views read and written by one key, with no lookup beyond the key
-        and one bulk outdate; its one consumer is the web graph orchestrator, a workflow.
+  allow: []
 status: complete
 createdAt: '2026-11-13T16:01:31.776Z'
-updatedAt: '2026-11-13T16:04:32.458Z'
+updatedAt: '2026-11-14T19:08:36.101Z'
