@@ -108,7 +108,14 @@ fields:
       own groups, then the shared types' groups) and sums counts for a folded container without
       loading its types. Absent when the tree has no groups.
     optional: true
+  - name: findingsState
+    type: findings_state
+    description: >-
+      How current `issues` are: current, stale (the last gate's findings while the gate runs again)
+      or pending (no gate answered yet). Absent reads as current: a build that ran the gate itself,
+      as the static export does
+    optional: true
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-11-12T13:45:19.056Z'
+updatedAt: '2026-11-13T16:01:20.922Z'

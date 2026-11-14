@@ -13,7 +13,7 @@ import {
   graph,
 } from './specs.js';
 import type { ValidationIssue } from './validation.js';
-import { deriveTypeSignature, familyNode, parseTypeExpression, typeIsMany, writtenTypeRefs, isOwnComponentEntry, matchTypeRef, methodTypeRefs, relationHealth, type ExternalStatus, type ProjectNode, type ProjectRelations, type RelationHealth } from '../models/index.js';
+import { deriveTypeSignature, familyNode, parseTypeExpression, typeIsMany, writtenTypeRefs, isOwnComponentEntry, matchTypeRef, qualifiedTypeId, refTail, methodTypeRefs, relationHealth, type ExternalStatus, type ProjectNode, type ProjectRelations, type RelationHealth } from '../models/index.js';
 import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +41,10 @@ import { buildDrawioXml, buildExcalidrawScene } from './diagram-export.js';
 //
 // ---------------------------------------------------------------------------
 
+/** How current the findings a drawn view carries are: the gate's answer for the tree as it is now,
+ *  the last answer while the gate runs again after a change, or none yet. */
+export type FindingsState = 'current' | 'stale' | 'pending';
+
 export interface CanvasModel {
   system: {
     name: string;
@@ -50,6 +54,8 @@ export interface CanvasModel {
     diagram?: { lineStyle?: 'bezier' | 'straight' | 'taxi'; defaultView?: 'architecture' | 'types' | 'databases' | 'network'; showDatabases?: boolean };
   };
   generatedAt: string;
+  /** How current the drawn findings are; absent means current. */
+  findingsState?: FindingsState;
   subsystems: {
     id: string;
     name: string;
@@ -563,22 +569,46 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
   // Usage trace: every interface method whose params/returns reference a type.
   // Each method's references are parsed once, not once per type.
   const methodRefs = interfaces.flatMap((intf) => intf.methods.map((m) => ({ component: intf.component, method: m.name, refs: methodTypeRefs(m) })));
-  const usedByFor = (t: (typeof typeSpecs)[number]): { component: string; method: string }[] => {
-    const qualified = t.subsystem && !t.id.startsWith(`${t.subsystem}::`) ? `${t.subsystem}::${t.id}` : t.id;
-    const seen = new Set<string>();
-    const out: { component: string; method: string }[] = [];
-    for (const { component, method, refs } of methodRefs) {
-      if (!refs.some((ref) => matchTypeRef(ref, qualified))) continue;
-      const k = `${component}#${method}`;
-      if (!seen.has(k)) { seen.add(k); out.push({ component, method }); }
-    }
-    return out;
+  // The types indexed by the last segment of their qualified id: a reference can only match a type
+  // whose last segment is its own, so each lookup compares a handful of candidates, not every type.
+  // Each bucket keeps the types' order, so the first match is the one a scan of every type finds.
+  const qualifiedOf = new Map(typeSpecs.map((t) => [t, qualifiedTypeId(t)] as const));
+  const typesByTail = new Map<string, (typeof typeSpecs)[number][]>();
+  for (const t of typeSpecs) {
+    const tail = refTail(qualifiedOf.get(t)!);
+    if (tail === undefined) continue;
+    const bucket = typesByTail.get(tail);
+    if (bucket) bucket.push(t);
+    else typesByTail.set(tail, [t]);
+  }
+  const typesMatching = (ref: string): (typeof typeSpecs)[number][] => {
+    const tail = refTail(ref);
+    const bucket = tail === undefined ? undefined : typesByTail.get(tail);
+    return bucket ? bucket.filter((t) => matchTypeRef(ref, qualifiedOf.get(t)!)) : [];
   };
+  const firstTypeMatching = (ref: string): (typeof typeSpecs)[number] | undefined => {
+    const tail = refTail(ref);
+    const bucket = tail === undefined ? undefined : typesByTail.get(tail);
+    return bucket?.find((t) => matchTypeRef(ref, qualifiedOf.get(t)!));
+  };
+  // Each type's users, in method order, each method once: one pass over the methods' references.
+  const usedByOf = new Map<(typeof typeSpecs)[number], { seen: Set<string>; out: { component: string; method: string }[] }>();
+  for (const { component, method, refs } of methodRefs) {
+    const k = `${component}#${method}`;
+    for (const ref of refs) {
+      for (const t of typesMatching(ref)) {
+        let users = usedByOf.get(t);
+        if (!users) usedByOf.set(t, (users = { seen: new Set(), out: [] }));
+        if (!users.seen.has(k)) { users.seen.add(k); users.out.push({ component, method }); }
+      }
+    }
+  }
+  const usedByFor = (t: (typeof typeSpecs)[number]): { component: string; method: string }[] => usedByOf.get(t)?.out ?? [];
 
   // `uses`: a component naming, in its params or returns, a type another
   // project of the family (or a declared external) owns lands on that project's node.
   const typeOwnerProject = (ref: string): string | undefined => {
-    const t = typeSpecs.find((other) => matchTypeRef(ref, other.subsystem && !other.id.startsWith(`${other.subsystem}::`) ? `${other.subsystem}::${other.id}` : other.id));
+    const t = firstTypeMatching(ref);
     return t ? ownerOfSpec(t.id) : undefined;
   };
   for (const { component, refs } of methodRefs) {
@@ -682,12 +712,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
       }
 
       for (const ref of refs) {
-        const target = typeSpecs.find(other => {
-          const qualified = other.subsystem && !other.id.startsWith(`${other.subsystem}::`)
-            ? `${other.subsystem}::${other.id}`
-            : other.id;
-          return matchTypeRef(ref, qualified);
-        });
+        const target = firstTypeMatching(ref);
         // No edge to an enum or a named scalar: each is a value domain, not an entity relation.
         if (target && target.id !== t.id && target.kind !== 'enum' && target.holds === undefined) {
           const card = multiplicity(field);

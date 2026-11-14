@@ -563,7 +563,14 @@ describe('web graph orchestrator (sdd_host)', () => {
       if (iss.specId) expectedCounts.set(iss.specId, (expectedCounts.get(iss.specId) ?? 0) + 1);
     }
 
-    const graph = await getGraph(cfg, s.id, 'project', 'proj-a', 3);
+    // A read whose gate runs longer than the wait is drawn with the findings pending, and a later
+    // read draws the gate's answer. Read until the findings are current.
+    let graph = await getGraph(cfg, s.id, 'project', 'proj-a', 3);
+    for (let i = 0; i < 120 && graph.findingsState !== 'current'; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      graph = await getGraph(cfg, s.id, 'project', 'proj-a', 3);
+    }
+    expect(graph.findingsState).toBe('current');
     expect(graph.tier).toBe('project');
     expect(graph.scope).toBe('proj-a');
     expect(graph.level).toBe(3);

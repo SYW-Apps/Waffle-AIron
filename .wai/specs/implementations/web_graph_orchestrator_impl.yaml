@@ -27,7 +27,7 @@ methods:
             step: 3
           - value: project
             step: 6
-        defaultStep: 12
+        defaultStep: 22
       - stepNumber: 3
         description: >-
           Landscape tier: delegate to the landscape orchestrator's already-scoped landscape
@@ -67,31 +67,91 @@ methods:
         description: Bind the resolved target project root for the host-core reads that follow
         type: local
       - stepNumber: 8
+        description: 'Name the kept view: the project, the graph and the requested level'
+        type: local
+      - stepNumber: 9
+        description: Read the graph kept under that key, if any
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: read
+      - stepNumber: 10
+        description: >-
+          Is a graph kept, and still current (nothing changed since it was built with the gate's
+          current findings)?
+        type: branch
+        condition: a kept graph exists and is current
+        onTrueStep: 21
+        onFalseStep: 11
+      - stepNumber: 11
+        description: Take the kept views' version before the build
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: version
+      - stepNumber: 12
         description: >-
           Project the bound project's spec tree into a level-filtered WebGraphModel via the host
           core adapter
         type: call
         targetComponent: host_core_adapter
         targetMethod: buildProjectGraph
-      - stepNumber: 9
+      - stepNumber: 13
         description: >-
-          Run the as-complete conformance gate over the bound project to gather its current
-          validator issues
+          Run the as-complete conformance gate over the bound project through the host validator
+          adapter, off the serving thread, waiting for its answer at most a moment (a second and a
+          half): a remembered gate answers within it; a cold or re-run gate keeps running in the
+          background and does not hold up this read
         type: call
         targetComponent: host_validator_adapter
         targetMethod: validateAsCompleteAsync
-      - stepNumber: 10
+      - stepNumber: 14
         description: >-
-          Overlay the validation issues onto the project graph's nodes as per-node issueCounts of
-          errors and warnings and, apart from them, noticeCounts of notices (grouping each issue by
-          the component/spec id it references), and stamp tier 'project', scope = the project id,
-          level = the requested level, generatedAt = now
+          Take the findings the graph is drawn with: the gate's, as current, when it answered in
+          time; else the kept graph's findings from step 9, as stale, or none, as pending, when no
+          graph was kept
         type: local
-      - stepNumber: 11
+      - stepNumber: 15
+        description: >-
+          Overlay the findings from step 13 onto the project graph's nodes as per-node issueCounts
+          of errors and warnings and, apart from them, noticeCounts of notices (grouping each issue
+          by the component/spec id it references), and stamp tier 'project', scope = the project id,
+          level = the requested level, the findings state from step 13, generatedAt = now
+        type: local
+      - stepNumber: 16
+        description: Take the kept views' version again, after the gate's wait
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: version
+      - stepNumber: 17
+        description: >-
+          Keep the graph under the step-8 key with its findings, current only when its findings are
+          and the version from step 16 is still the one from step 11 (a graph built across a change
+          is kept as not current)
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: write
+      - stepNumber: 18
+        description: Are the findings current?
+        type: branch
+        condition: the findings state is current
+        onTrueStep: 20
+        onFalseStep: 19
+      - stepNumber: 19
+        description: >-
+          Leave the gate running in the background: when it answers, nudge the project's realtime
+          channel without outdating the kept views, so the open page reads again and finds the gate
+          remembered
+        type: local
+      - stepNumber: 20
+        label: answerGraph
         description: Return the project-tier web graph model with issue counts overlaid
         type: return
         outcome: project web graph model
-      - stepNumber: 12
+      - stepNumber: 21
+        label: keptGraph
+        description: Return the kept graph as it is
+        type: return
+        outcome: kept project web graph model
+      - stepNumber: 22
         description: Reject an unsupported graph tier
         type: throw
         error: unsupported graph tier
@@ -187,58 +247,121 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
+          Name the kept view: the project, the canvas, and the caller's reach from step 5 (the reach
+          decides the relation health and the project links the model carries, so callers with
+          different reach never share one)
+        type: local
+      - stepNumber: 7
+        description: Read the canvas model kept under that key, if any
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: read
+      - stepNumber: 8
+        description: >-
+          Is a model kept, and still current (nothing changed since it was built with the gate's
+          current findings)?
+        type: branch
+        condition: a kept model exists and is current
+        onTrueStep: 22
+        onFalseStep: 9
+      - stepNumber: 9
+        description: Take the kept views' version before the build
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: version
+      - stepNumber: 10
+        description: >-
           Read the family's relation health over the bound root through the host validator adapter:
           each project's externals status at its own root, per use, stamped with when it was
           compared — the same comparison the Relations tab shows
         type: call
         targetComponent: host_validator_adapter
         targetMethod: familyRelations
-      - stepNumber: 7
+      - stepNumber: 11
         description: >-
           Run the owner's gate over the bound project through the host validator adapter, off the
-          serving thread, for the findings the canvas draws: a cold run takes its time without
-          holding up the server's other requests and its live connections
+          serving thread, waiting for its answer at most a moment (a second and a half): a
+          remembered gate answers within it; a cold or re-run gate keeps running in the background
+          and does not hold up this read, the server's other requests or its live connections
         type: call
         targetComponent: host_validator_adapter
         targetMethod: validateProjectAsync
-      - stepNumber: 8
+      - stepNumber: 12
+        description: >-
+          Take the findings the model is drawn with: the gate's, as current, when it answered in
+          time; else the kept model's findings from step 7, as stale, or none, as pending, when no
+          model was kept. A gate that fails draws no findings, as current, rather than fail the read
+        type: local
+      - stepNumber: 13
         description: >-
           Build the canvas model over the bound spec tree through the host core adapter, handing it
-          the relations so each consumption edge carries its health and the gate's findings from
-          step 7, so the build runs no gate of its own. The build does not fail the read: whatever
-          loaded is drawn and each part that failed to load or validate is carried as a finding (one
-          naming no spec when no spec can carry it); a tree that yields nothing at all is answered
-          as an empty model holding one error finding with the cause
+          the relations so each consumption edge carries its health and the findings from step 11,
+          so the build runs no gate of its own. The build does not fail the read: whatever loaded is
+          drawn and each part that failed to load or validate is carried as a finding (one naming no
+          spec when no spec can carry it); a tree that yields nothing at all is answered as an empty
+          model holding one error finding with the cause
         type: call
         targetComponent: host_core_adapter
         targetMethod: buildCanvasDataModel
-      - stepNumber: 9
+      - stepNumber: 14
         description: >-
           Read the project's hosted family — the member records the canvas's member project nodes
           stand for
         type: call
         targetComponent: project_repository
         targetMethod: family
-      - stepNumber: 10
+      - stepNumber: 15
         description: >-
           Read the project's configuration through the host core adapter: the hosted record each
           declared external names (`source.hosted`), the record its external project node stands for
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 11
+      - stepNumber: 16
         description: >-
           Give each member project node its member's record id, and each external project node the
           hosted record its external names, only when that record is in the caller's listed projects
           from step 2 (read, write or administer); any other node stays one without one (no id
           leaks). The engine opens that project's own page from exactly those nodes through the
           app's open-project hook; a node without an id is drawn without a link (and an external out
-          of reach is already unavailable in the relations)
+          of reach is already unavailable in the relations). Stamp the model's findings state from
+          step 11
         type: local
-      - stepNumber: 12
+      - stepNumber: 17
+        description: Take the kept views' version again, after the gate's wait and the build
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: version
+      - stepNumber: 18
+        description: >-
+          Keep the model under the step-6 key with its findings, current only when its findings are
+          and the version from step 17 is still the one from step 9 (a model built across a change
+          is kept as not current)
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: write
+      - stepNumber: 19
+        description: Are the findings current?
+        type: branch
+        condition: the findings state is current
+        onTrueStep: 21
+        onFalseStep: 20
+      - stepNumber: 20
+        description: >-
+          Leave the gate running in the background: when it answers, nudge the project's realtime
+          channel without outdating the kept views, so the open page reads again and this read's
+          next run finds the gate remembered
+        type: local
+      - stepNumber: 21
+        label: answer
         description: Return the model
         type: return
         outcome: project canvas model
+      - stepNumber: 22
+        label: kept
+        description: Return the kept model as it is
+        type: return
+        outcome: kept canvas model
     symbol: getWebProjectCanvasModel
   - name: getProjectOpenApi
     narrative:
@@ -408,6 +531,18 @@ methods:
         outcome: FamilyMember[]
     detail: full
     symbol: getWebProjectMembers
+  - name: outdate
+    narrative:
+      - stepNumber: 1
+        description: Mark every kept view as no longer current, keeping each view and its findings
+        type: call
+        targetComponent: web_view_cache
+        targetMethod: outdate
+      - stepNumber: 2
+        description: Return
+        type: return
+        outcome: outdated
+    symbol: outdateViews
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-11-12T21:50:22.119Z'
+updatedAt: '2026-11-13T20:07:07.745Z'

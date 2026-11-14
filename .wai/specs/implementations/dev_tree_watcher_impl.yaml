@@ -1,8 +1,8 @@
 id: dev_tree_watcher_impl
 name: Dev Tree Watcher Implementation
 description: >-
-  src/server/dev-watcher.ts: one recursive watch on the served project's .wai/ folder, and one on
-  each producer's, debounced.
+  src/server/dev-watcher.ts: one recursive watch on the served project's .wai/ folder, one on the
+  project's root for its code, and one on each producer's .wai/ folder, debounced.
 contract: idev_tree_watcher
 sourcePath: src/server/dev-watcher.ts
 methods:
@@ -28,13 +28,22 @@ methods:
         targetMethod: watchFolder
       - stepNumber: 4
         description: >-
-          On each change, ignore the spec tree's own write lock and other lock files, note whether
-          the path is under .local/reviews/, and (re)start a 250 ms timer; when it fires, call
-          onChange once with `reviews` when any noted change was a review request and once with
-          `tree` when any other was
-        type: local
+          Watch <root> recursively for the project's code: a change outside .wai/ (watched in step
+          1), git's own folder and any node_modules folder is a `code` change. It errs toward more:
+          a build output or a file no gate reads nudges too, and the gate then finds its remembered
+          answer
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchTree
       - stepNumber: 5
-        description: Return the function that clears the timer and stops both watches
+        description: >-
+          On each change, ignore the spec tree's own write lock and other lock files, note whether
+          the path is under .local/reviews/ or is code, and (re)start a 250 ms timer; when it fires,
+          call onChange once with `tree` when any noted change was in the tree or HEAD, once with
+          `code` when any was code, and once with `reviews` when any was a review request
+        type: local
+      - stepNumber: 6
+        description: Return the function that clears the timer and stops every watch
         type: return
         outcome: the stop function
   - name: watchProducers
@@ -61,4 +70,4 @@ methods:
         outcome: the stop function
 status: complete
 createdAt: '2026-11-07T02:40:44.472Z'
-updatedAt: '2026-11-10T19:00:33.601Z'
+updatedAt: '2026-11-13T16:03:28.260Z'

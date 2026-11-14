@@ -281,13 +281,20 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
     it('GET /web/canvas-model is tagged: a read holding the current tag is answered 304 with no body', async () => {
       const cookie = adminCookie();
       createPlacedProject(cfg, MASTER, 'demo');
-      const first = await get('/web/canvas-model?projectId=demo', cookie);
+      // A cold gate may not answer within the read's wait: the model is then drawn with its findings
+      // pending, and a later read draws the gate's answer. Read until the findings are current.
+      let first = await get('/web/canvas-model?projectId=demo', cookie);
+      for (let i = 0; i < 40 && json(first).findingsState !== 'current'; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        first = await get('/web/canvas-model?projectId=demo', cookie);
+      }
       expect(first.status).toBe(200);
+      expect(json(first).findingsState).toBe('current');
       const etag = first.headers['etag'] as string;
       expect(etag).toMatch(/^"[A-Za-z0-9_-]+"$/);
       expect(first.headers['cache-control']).toMatch(/no-cache/);
 
-      // The model is built again (a new generatedAt), yet the tag holds while nothing changed.
+      // Nothing changed: the kept model is answered, and the tag holds.
       const again = await raw({ method: 'GET', path: '/web/canvas-model?projectId=demo', headers: { cookie, 'if-none-match': etag } });
       expect(again.status).toBe(304);
       expect(again.body).toBe('');

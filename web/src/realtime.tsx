@@ -50,12 +50,28 @@ export function RealtimeProvider(props: { children: ReactNode }) {
     [],
   );
 
-  const pushSubscription = useCallback(() => {
+  // The channel list last sent on the open socket, and whether a send is queued. A page switch
+  // unsubscribes the old view and subscribes the new one in the same tick: both changes go out as
+  // one frame, and a list equal to the one the socket already holds is not sent again.
+  const lastSent = useRef<string | undefined>(undefined);
+  const pushQueued = useRef(false);
+  const sendSubscription = useCallback(() => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'subscribe', channels: activeChannels() }));
-    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const channels = activeChannels();
+    const key = [...channels].sort().join('|');
+    if (key === lastSent.current) return;
+    lastSent.current = key;
+    ws.send(JSON.stringify({ type: 'subscribe', channels }));
   }, [activeChannels]);
+  const pushSubscription = useCallback(() => {
+    if (pushQueued.current) return;
+    pushQueued.current = true;
+    queueMicrotask(() => {
+      pushQueued.current = false;
+      sendSubscription();
+    });
+  }, [sendSubscription]);
 
   useEffect(() => {
     stopped.current = false;
@@ -96,7 +112,9 @@ export function RealtimeProvider(props: { children: ReactNode }) {
         attempts.current = 0;
         unanswered = 0;
         setStatus('connected');
-        pushSubscription();
+        // A new socket holds no subscription yet: send the whole list.
+        lastSent.current = undefined;
+        sendSubscription();
         // App-level heartbeat: catches a HALF-OPEN socket (a proxy silently dropping
         // traffic) that never fires onclose. The server answers {type:'ping'} with
         // {type:'pong'}; any inbound frame counts as proof of life.
@@ -173,7 +191,7 @@ export function RealtimeProvider(props: { children: ReactNode }) {
         /* ignore */
       }
     };
-  }, [pushSubscription]);
+  }, [sendSubscription]);
 
   const subscribe = useCallback(
     (channels: string[], handler: ChangeHandler) => {

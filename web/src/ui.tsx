@@ -41,9 +41,15 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[], channels?
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
   const realtime = useRealtime();
+  // A realtime nudge that lands while a load is in flight does not start a second one beside it:
+  // it is remembered, and one reload follows when the load in flight settles.
+  const inFlight = useRef(false);
+  const reloadAfter = useRef(false);
 
   useEffect(() => {
     let live = true;
+    inFlight.current = true;
+    reloadAfter.current = false;
     setLoading(true);
     setError(undefined);
     loader()
@@ -54,7 +60,13 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[], channels?
         if (live) setError(e instanceof Error ? e.message : String(e));
       })
       .finally(() => {
-        if (live) setLoading(false);
+        if (!live) return;
+        inFlight.current = false;
+        setLoading(false);
+        if (reloadAfter.current) {
+          reloadAfter.current = false;
+          reload();
+        }
       });
     return () => {
       live = false;
@@ -70,7 +82,10 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[], channels?
     let debounce: ReturnType<typeof setTimeout> | undefined;
     const onChange = () => {
       if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(reload, 150);
+      debounce = setTimeout(() => {
+        if (inFlight.current) reloadAfter.current = true;
+        else reload();
+      }, 150);
     };
     const unsub = realtime.subscribe(channelKey.split('|'), onChange);
     return () => {

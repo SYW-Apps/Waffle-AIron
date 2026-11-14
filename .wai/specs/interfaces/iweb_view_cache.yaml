@@ -1,0 +1,46 @@
+id: iweb_view_cache
+name: Web View Cache Interface
+description: >-
+  Keyed reads and writes of the built views, and the one change that marks them all as no longer
+  current.
+component: web_view_cache
+methods:
+  - name: read
+    description: The view kept under the key, current or not, or none when nothing is kept under it.
+    signature: 'read(key: string): cached_view?'
+    returns: cached_view?
+    params:
+      - name: key
+        type: string
+        description: The project, the view (canvas, or graph with its level) and the caller's reach, joined
+    effect: read
+  - name: write
+    description: Keep the view under the key, replacing what was kept there.
+    signature: 'write(key: string, view: cached_view): void'
+    returns: void
+    params:
+      - name: key
+        type: string
+        description: As for read
+      - name: view
+        type: cached_view
+        description: The view, its findings and whether it is current
+    effect: write
+  - name: outdate
+    description: Mark every kept view as no longer current, keeping each view and its findings.
+    signature: 'outdate(): void'
+    returns: void
+    params: []
+    effect: write
+  - name: version
+    description: >-
+      How many times the kept views have been outdated so far. A reader takes it before a build and
+      again before keeping the result: a view built across a change is kept as not current, so a
+      change that lands while the gate is awaited is never hidden behind a current view.
+    signature: 'version(): int'
+    returns: int
+    params: []
+    effect: read
+status: complete
+createdAt: '2026-11-13T16:01:46.107Z'
+updatedAt: '2026-11-13T20:06:39.561Z'
