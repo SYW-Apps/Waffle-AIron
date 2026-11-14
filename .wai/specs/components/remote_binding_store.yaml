@@ -19,14 +19,7 @@ dependsOn:
   - files_adapter
 durability: read-through
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Deliberately standalone (the sanctioned lightweight form): two small key→value files read
-        straight from disk, with exactly one workflow-layer consumer (remote_orchestrator) and no
-        query surface. A Repository + Registry + Index around "read one binding, read one token"
-        would be pure ceremony — there is nothing to index, nothing to project, and no second reader
-        to keep consistent.
+  allow: []
 status: complete
 createdAt: '2026-08-12T18:41:35.884Z'
-updatedAt: '2026-10-31T23:24:02.504Z'
+updatedAt: '2026-11-14T19:08:20.223Z'

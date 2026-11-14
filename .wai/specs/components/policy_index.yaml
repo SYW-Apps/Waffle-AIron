@@ -9,6 +9,13 @@ owns: []
 dependsOn:
   - policy_store
   - files_adapter
+lint:
+  allow:
+    - code: INDEX_DOES_IO
+      at: files_adapter
+      reason: >-
+        Known debt under the 6.x data-block standard: this Index reads the policy files itself. In
+        7.0 the read moves to its Store and the Index projects what the Store holds.
 status: complete
 createdAt: '2026-07-08T21:59:13.986Z'
-updatedAt: '2026-10-31T23:23:21.630Z'
+updatedAt: '2026-11-14T19:08:42.990Z'

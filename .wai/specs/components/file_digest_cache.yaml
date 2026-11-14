@@ -11,12 +11,7 @@ owns: []
 dependsOn: []
 durability: cache
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Simple keyed state: one digest per absolute path, replaced whole, read only by its key; its
-        one writer and reader is the workflow content_fingerprint. No lookup beyond the key needs a
-        Registry or Index.
+  allow: []
 status: complete
 createdAt: '2026-11-10T19:01:42.173Z'
-updatedAt: '2026-11-10T19:01:50.290Z'
+updatedAt: '2026-11-14T19:08:04.175Z'

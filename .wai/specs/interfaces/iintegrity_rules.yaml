@@ -176,7 +176,9 @@ methods:
       nothing, and the finding says plainly that an error cannot be allowed rather than that the
       code never fired. A code the family run judges over every member (network_arbiter.familyCodes,
       ENTRY_UNPROVEN among them) is a known code on any spec, and an allow of one this gate saw no
-      finding of is the family run's to judge stale, not this gate's.
+      finding of is the family run's to judge stale, not this gate's. A code a rule has retired is
+      not unknown: an allow of one is RETIRED_LINT_ALLOW_CODE, a notice, so a project upgraded
+      across the retirement keeps passing --ci while it is told to remove the allow.
     signature: 'lintAllows(ctx: RuleContext): void'
     returns: void
     params:
@@ -192,6 +194,11 @@ methods:
         summary: >-
           lint.allow entry covers nothing this run — the code never fired, it fired at sites this
           allow does not name, or it is an error, which no allow can cover
+      - code: RETIRED_LINT_ALLOW_CODE
+        severity: notice
+        summary: >-
+          lint.allow names a code a rule has retired: the finding is no longer reported, so the
+          allow can be removed
   - name: publicSurfaceConsumers
     description: >-
       Rule public-surface-consumers. Every subsystem a published surface names as its consumer must
@@ -790,4 +797,4 @@ methods:
       - iintegrity_rules.loweredRules
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-11-14T17:13:03.634Z'
+updatedAt: '2026-11-14T19:07:03.807Z'
