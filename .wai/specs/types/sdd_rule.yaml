@@ -44,7 +44,13 @@ fields:
       since the excerpt carries only what the part references. Absent means false: a rule that
       judges what it is handed runs everywhere.
     optional: true
+  - name: retiredCodes
+    type: list<string>
+    description: >-
+      Codes this rule reported once and no longer does, kept so an allow naming one is told it can
+      go (RETIRED_LINT_ALLOW_CODE, a notice) instead of failing --ci as an unknown code
+    optional: true
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:52.909Z'
-updatedAt: '2026-10-04T23:40:33.084Z'
+updatedAt: '2026-11-14T19:07:16.398Z'

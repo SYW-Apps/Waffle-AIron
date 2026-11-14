@@ -187,6 +187,50 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // RETIRED_LINT_ALLOW_CODE — an allow of a code a rule has retired
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'RETIRED_LINT_ALLOW_CODE',
+    severity: 'notice',
+    anchoredTo: 'notification-preferences-store',
+    expectFire: true,
+    scenario:
+      'The notification preferences store still allows UNOWNED_STORE, a code the unowned-blocks rule has retired, so the allow can go.',
+    tree: {
+      subsystems: [{ id: 'notifications', description: 'Customer notification fan-out across channels.' }],
+      components: [
+        {
+          id: 'notification-preferences-store',
+          componentType: 'Store',
+          subsystem: 'notifications',
+          durability: 'durable',
+          description: 'Holds each customer\'s notification channel preferences.',
+          lint: { allow: [{ code: 'UNOWNED_STORE', reason: 'Simple keyed state, no lookups beyond the key.' }] },
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'RETIRED_LINT_ALLOW_CODE',
+    expectFire: false,
+    reason: 'The Store carries no allow: a standalone Store is the default shape and needs none.',
+    scenario:
+      'The notification preferences store stands alone with no lint allow at all.',
+    tree: {
+      subsystems: [{ id: 'notifications', description: 'Customer notification fan-out across channels.' }],
+      components: [
+        {
+          id: 'notification-preferences-store',
+          componentType: 'Store',
+          subsystem: 'notifications',
+          durability: 'durable',
+          description: 'Holds each customer\'s notification channel preferences.',
+        },
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
   // UNUSED_LINT_ALLOW — the stale-allow path
   // -------------------------------------------------------------------------
   defineRuleFixture({

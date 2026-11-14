@@ -13,12 +13,7 @@ dependsOn:
   - files_adapter
 durability: read-through
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Simple keyed state: review requests by id and one dev-server address, each a file replaced
-        whole and read by its key; its one reader and writer is the workflow review_orchestrator. No
-        lookup beyond the key needs a Registry or Index.
+  allow: []
 status: complete
 createdAt: '2026-11-07T02:36:46.573Z'
-updatedAt: '2026-11-07T02:36:50.066Z'
+updatedAt: '2026-11-14T19:08:22.831Z'

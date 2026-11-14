@@ -220,7 +220,7 @@ function verdictFor(consumer: MatrixType, target: MatrixType): Verdict | null {
   if (consumer === 'PureLogic' && target !== 'PureLogic') {
     return err(CLASS_VIOLATION);
   }
-  if (consumer === 'ReadLogic' && !within(target, ['PureLogic', 'ReadLogic', 'Repository', 'Index', 'Adapter'])) {
+  if (consumer === 'ReadLogic' && !within(target, ['PureLogic', 'ReadLogic', 'Store', 'Repository', 'Index', 'Adapter'])) {
     return err(CLASS_VIOLATION);
   }
   if (consumer === 'Store' && !within(target, ['Store', 'Adapter', 'PureLogic'])) {
@@ -432,6 +432,41 @@ const OPEN_SLOT_INDEX = {
   dependsOn: ['slot-by-clinician-index'],
 };
 
+fixtures.push(defineRuleFixture({
+  code: 'INDEX_DOES_IO',
+  severity: 'warning',
+  anchoredTo: 'slot-by-clinician-index',
+  expectFire: true,
+  scenario:
+    'In the MediBook clinic-booking system, the clinician slot index reads through the slot database adapter itself instead of projecting what its store holds.',
+  tree: {
+    system: SYSTEM,
+    subsystems: [{ id: 'patient-scheduling', description: SUBSYSTEM_DESCRIPTIONS['patient-scheduling'] }],
+    components: [
+      { id: 'slot-repository', componentType: 'Repository', description: 'The clinician slot aggregate: its store and read index.', owns: ['slot-store', 'slot-by-clinician-index'] },
+      SLOT_STORE,
+      { ...SLOT_INDEX, dependsOn: ['slot-store', 'slot-database-adapter'] },
+      { id: 'slot-database-adapter', componentType: 'Adapter', description: 'Client for the slot database.' },
+    ],
+  },
+}));
+fixtures.push(defineRuleFixture({
+  code: 'INDEX_DOES_IO',
+  expectFire: false,
+  reason: 'The Store depends on the Adapter and the Index only projects its Store, so the read stays on the Store.',
+  scenario:
+    'In the MediBook clinic-booking system, the slot store reads through the slot database adapter and the clinician slot index projects the store.',
+  tree: {
+    system: SYSTEM,
+    subsystems: [{ id: 'patient-scheduling', description: SUBSYSTEM_DESCRIPTIONS['patient-scheduling'] }],
+    components: [
+      { id: 'slot-repository', componentType: 'Repository', description: 'The clinician slot aggregate: its store and read index.', owns: ['slot-store', 'slot-by-clinician-index'] },
+      { ...SLOT_STORE, dependsOn: ['slot-database-adapter'] },
+      SLOT_INDEX,
+      { id: 'slot-database-adapter', componentType: 'Adapter', description: 'Client for the slot database.' },
+    ],
+  },
+}));
 fixtures.push(defineRuleFixture({
   code: INDEX_DEP,
   expectFire: false,

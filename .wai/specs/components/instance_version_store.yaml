@@ -12,12 +12,7 @@ durability: read-through
 previousIds:
   - data_dir_version_store
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Simple keyed state, no lookups beyond the key: one integer in one file, read and written
-        whole by two workflow-layer consumers — instance_bootstrap records it on a first boot,
-        instance_upgrade reads and moves it.
+  allow: []
 status: complete
 createdAt: '2026-10-18T14:27:33.137Z'
-updatedAt: '2026-10-31T23:20:24.813Z'
+updatedAt: '2026-11-14T19:08:09.483Z'

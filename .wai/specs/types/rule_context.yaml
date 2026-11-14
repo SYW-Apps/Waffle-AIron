@@ -280,6 +280,13 @@ fields:
       The agent roles a practice selection may name: the built-in agent templates wairon ships
       (architect, domain-owner, guardian, implementer, reviewer, tester).
     optional: false
+  - name: retiredIssueCodes
+    type: set<string>
+    description: >-
+      Every code a registered rule names as retired (it reported it once and no longer does),
+      gathered by the validator for the lint-allow audit: an allow of one is
+      RETIRED_LINT_ALLOW_CODE, a notice, not UNKNOWN_LINT_ALLOW_CODE
+    optional: false
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -519,4 +526,4 @@ methods:
       which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-11-06T22:00:46.817Z'
+updatedAt: '2026-11-14T19:07:10.075Z'

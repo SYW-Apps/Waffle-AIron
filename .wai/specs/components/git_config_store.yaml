@@ -12,13 +12,7 @@ dependsOn:
   - files_adapter
 durability: read-through
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Option F registry-taxonomy ruling (2026-07-19): deliberate standalone Store — per-project
-        git-backing configuration is genuinely simple held state (one config file per scoped repo),
-        consumed only by the git orchestrator. durability: read-through to be declared once the
-        level3 branch merges (the enum value does not exist in this branch's schema).
+  allow: []
 status: complete
 createdAt: '2026-07-04T16:31:20.264Z'
-updatedAt: '2026-10-31T23:20:16.587Z'
+updatedAt: '2026-11-14T19:08:06.842Z'

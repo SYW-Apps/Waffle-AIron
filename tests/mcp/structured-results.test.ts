@@ -145,12 +145,16 @@ describe('the tools answer with data, and still with the same sentence', () => {
   }, 60_000);
 
   it('a gate notice comes back as its own entry, not as a sentence to be split', async () => {
-    const created = await call('sdd_add_component', {
+    const input = {
       id: 'entries', name: 'Entries', description: 'Holds the posted entries',
-      subsystem: 'shop', componentType: 'Store', durability: 'durable',
-    });
-    expect(created.structuredContent.notices).toHaveLength(1);
-    expect(created.structuredContent.notices[0]).toContain('has no owning pattern yet');
+      subsystem: 'shop', componentType: 'Store' as const, durability: 'durable' as const,
+    };
+    // A standalone Store is the default shape: its creation raises no notice.
+    const created = await call('sdd_add_component', input);
+    expect(created.structuredContent.notices).toEqual([]);
+    const again = await call('sdd_add_component', input);
+    expect(again.structuredContent.notices.length).toBeGreaterThan(0);
+    expect(again.structuredContent.notices[0]).toContain('already existed');
   }, 60_000);
 
   it('a re-author reports the status the spec ACTUALLY holds, not the one asked for', async () => {

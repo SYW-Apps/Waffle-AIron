@@ -11,12 +11,7 @@ owns: []
 dependsOn: []
 durability: ram-projection
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Simple held state: one list of practice entries per server instance, replaced whole and read
-        whole; its one reader and writer is the workflow mcp_orchestrator. No lookup beyond the list
-        needs a Registry or Index.
+  allow: []
 status: complete
 createdAt: '2026-11-06T21:46:29.048Z'
-updatedAt: '2026-11-06T21:46:35.983Z'
+updatedAt: '2026-11-14T19:08:25.478Z'

@@ -8,6 +8,15 @@ npm and the tags carry.
 
 - **The `wairon dev` page no longer answers "unauthorized" to a lock or another action after another dev server ran on the same host, or after this one restarted.** Session cookies are shared by every port of a host, so the page could hold a session its own server did not know. Reads kept working, because a read re-establishes the local session, but the next action was refused until the page was reloaded or the action retried. An action refused this way now re-establishes the session and is sent once more. A hosted instance is unchanged: a refused action still asks the user to sign in.
 
+- **A Store is the default data component; an Index does no IO.** Simple state no longer needs a Repository, a Registry or an Index around it.
+  - **Standalone Store:** a Store with no owning Repository raises nothing. `UNOWNED_STORE` is retired. A `lint.allow` that still names it is reported as `RETIRED_LINT_ALLOW_CODE`, a notice, so `wairon validate --ci` keeps passing; remove the allow when convenient.
+  - **Read logic:** an Orchestrator with `dependencyClass: read` may depend on a Store directly, as workflows and Actors already may. A Portal still reaches a Store through an Orchestrator.
+  - **Index:** an Index is an in-memory lookup over its Store's entries. An Index that depends on an Adapter is now `INDEX_DOES_IO`, a warning, reported once per Adapter with the Adapter as its site, so a `lint.allow` can name it while the read moves to the Store. It becomes an error in 7.0.
+  - **Repository and Registry:** a Repository is for state whose Indexes, Queries or backend Adapter are worth keeping private behind one facade. Its Registry is optional.
+  - **Retired codes:** a rule can now declare the codes it retired, and an allow naming one of them is a notice instead of `UNKNOWN_LINT_ALLOW_CODE`.
+  - The architecture standard, the skills, the guide, the `sdd_add_component` description and the store hint in the dependency messages now describe this. Creating a standalone Store no longer prints a notice.
+  - **Upgrade note:** a project whose Index reads through an Adapter now gets a warning, which fails `wairon validate --ci`. Move the read to the Store, or add a `lint.allow` with a reason at the Adapter until 7.0.
+
 - **The assistant can change a project's rules, its debt register and its settings, and a rule set below its default is reported on every run.** Three new MCP tools write `.wai/project.yaml`, so an agent no longer has to edit the file by hand. Each answers what it changed (before and after), takes `dryRun`, and says which parts of the approval it moves, so the human re-locks.
   - **Rules:** `sdd_update_rules` sets, unsets, adds to and removes from the rules, checking each value against the rules schema. A rule set below its default severity needs a reason (`why`), which is written beside it.
   - **Debt register:** `sdd_carry_findings` adds a reason group, extends or revises it, or removes findings from it. Only a finding a rule declares carryable can be carried.

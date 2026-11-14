@@ -46,7 +46,7 @@ describe('dev demo packs (fixtures for manual profile-application testing)', () 
     // contributing pack was not installed in the project.
     expect(strict.rules?.documentation?.minDescriptionLength).toBe(120);
     expect(strict.rules?.complexity?.maxComponentDependencies).toBe(3);
-    expect(strict.rules?.sddRuleSeverity?.UNOWNED_STORE).toBe('error');
+    expect(strict.rules?.sddRuleSeverity?.PROFILE_DISCOURAGED_STEREOTYPE).toBe('error');
 
     // demo-frontend: flips the family and lowers the floor, so the SAME seed tree
     // yields a different verdict — that contrast is the A/B the README leans on.
@@ -61,7 +61,7 @@ describe('dev demo packs (fixtures for manual profile-application testing)', () 
   it('ship a seed spec tree whose descriptions sit BETWEEN the two floors', () => {
     // The A/B only works if the seeded descriptions trip demo-strict's floor of
     // 120 while passing demo-frontend's 40. Pin that, or the walkthrough's
-    // "6 findings vs 2" contrast quietly stops being true.
+    // "5 findings vs 1" contrast quietly stops being true.
     const seedDir = path.join(REPO_ROOT, 'dev', 'demo-specs', 'demo_flows');
     const specs = [
       path.join(seedDir, '.index.yaml'),

@@ -175,17 +175,15 @@ describe('component / interface / implementation parent-change notices', () => {
     expect(notices.some(n => n.includes('never moves') && n.includes('"igadget"'))).toBe(true);
   });
 
-  it('creating a Store without an owner returns the Repository-containment guidance notice', () => {
+  it('creating a standalone Store raises no notice (a Store is the default data component)', () => {
     flatProject();
     const notices = saveComponentSpec({
       id: 'loose-store', name: 'LS', description: 'd', subsystem: 'billing', componentType: 'Store',
       owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
     });
-    expect(notices.some(n => n.includes('create the Repository that owns it'))).toBe(true);
-    expect(notices.some(n => n.includes('standalone Store is the sanctioned lightweight form'))).toBe(true);
-    expect(notices.some(n => n.includes('Never fold the state into a consuming component'))).toBe(true);
+    expect(notices).toEqual([]);
 
-    // re-saving the same store does not repeat the guidance
+    // re-saving the same store stays silent too
     const again = saveComponentSpec({
       id: 'loose-store', name: 'LS', description: 'renamed', subsystem: 'billing', componentType: 'Store',
       owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,

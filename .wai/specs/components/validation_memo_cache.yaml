@@ -13,12 +13,7 @@ owns: []
 dependsOn: []
 durability: cache
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Simple keyed state: the last few entries per project root and options, found only by their
-        key and fingerprints; its one writer and reader is the workflow validation_memo. No lookup
-        beyond the key needs a Registry or Index.
+  allow: []
 status: complete
 createdAt: '2026-11-07T15:06:15.144Z'
-updatedAt: '2026-11-10T19:03:47.343Z'
+updatedAt: '2026-11-14T19:08:30.785Z'

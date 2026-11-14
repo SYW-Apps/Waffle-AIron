@@ -13,12 +13,7 @@ owns: []
 dependsOn: []
 durability: cache
 lint:
-  allow:
-    - code: UNOWNED_STORE
-      reason: >-
-        Simple keyed state: one entry per project root, replaced whole, read only by its key; its
-        one writer and reader is the workflow code_model_loader. No lookup beyond the key needs a
-        Registry or Index.
+  allow: []
 status: complete
 createdAt: '2026-10-25T18:57:42.800Z'
-updatedAt: '2026-11-10T19:02:48.107Z'
+updatedAt: '2026-11-14T19:07:56.140Z'
