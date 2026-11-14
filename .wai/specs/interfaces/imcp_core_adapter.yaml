@@ -433,6 +433,27 @@ methods:
         type: string
         description: The request id
     effect: write
+  - name: reviseRules
+    description: >-
+      Calls reviseRules on the core portal: one granular change to the bound project's rules (the
+      sdd_update_rules tool).
+    signatureFrom: project_config_portal.reviseRules
+    guarantees:
+      - idempotent
+  - name: reviseDebt
+    description: >-
+      Calls reviseDebt on the core portal: one change to the conformance debt register (the
+      sdd_carry_findings tool).
+    signatureFrom: project_config_portal.reviseDebt
+    guarantees:
+      - idempotent
+  - name: reviseProject
+    description: >-
+      Calls reviseProject on the core portal: one change to the bound project's own settings (the
+      sdd_configure_project tool).
+    signatureFrom: project_config_portal.reviseProject
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T02:39:28.607Z'
+updatedAt: '2026-11-14T16:10:19.377Z'

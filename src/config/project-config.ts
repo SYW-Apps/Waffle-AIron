@@ -27,6 +27,20 @@ import {
   withPack,
   type PartOf,
   type NetworkDeclaration,
+  RulesConfigSchema,
+  CarriedDebtSchema,
+  CarriedFindingSchema,
+  CarriedDebtKindSchema,
+  type RulesConfig,
+  type RulesChange,
+  type RulesRevision,
+  type RuleLowering,
+  type DebtChange,
+  type DebtRevision,
+  type CarriedDebt,
+  type CarriedFinding,
+  type ProjectChange,
+  type ProjectRevision,
 } from '../models/project.js';
 import { identifierProblem } from '../models/identifiers.js';
 import { ownGet } from '../utils/own.js';
@@ -77,6 +91,9 @@ export interface ProjectConfigRepository {
   updateMember(alias: string, changes: MemberDeclaration): boolean;
   setPartOf(partOf: PartOf | null): boolean;
   setNetwork(network: NetworkDeclaration | null): boolean;
+  reviseRules(change: RulesChange, defaults: Record<string, string>, dryRun: boolean): RulesRevision;
+  reviseDebt(change: DebtChange, carryable: string[], dryRun: boolean): DebtRevision;
+  reviseProject(change: ProjectChange, dryRun: boolean): ProjectRevision;
   removeMember(alias: string): boolean;
   importNames(alias: string, names: string[]): boolean;
   renameId(from: string, to: string): boolean;
@@ -658,11 +675,37 @@ class DocumentReconciler {
     });
   }
 
+  /**
+   * The items a shorter target keeps, when every target item equals an item
+   * of the sequence, in order: the rest were removed. Null when the target is
+   * not the sequence with items taken out (an item changed, or one was added).
+   */
+  private keptItems(seq: YAML.YAMLSeq, target: unknown[]): Set<number> | null {
+    if (target.length >= seq.items.length) return null;
+    const kept = new Set<number>();
+    seq.items.forEach((item, i) => {
+      if (kept.size < target.length && YAML.isNode(item) && sameValue(item.toJS(this.doc, { maxAliasCount: -1 }), target[kept.size])) kept.add(i);
+    });
+    return kept.size === target.length ? kept : null;
+  }
+
+  /** Remove one item with the comment block directly above it: the comment belongs to the item it sits above. */
+  private removeItem(item: YAML.Node): void {
+    const span = this.itemSpan(item);
+    this.splices.push({ start: this.commentBlockStart(span.start), end: span.end, text: '', rank: 0 });
+  }
+
   private sequence(seq: YAML.YAMLSeq, target: unknown[], at: (string | number)[]): void {
+    // Items taken out of the middle: drop exactly those, so every other item keeps its own comments.
+    const kept = this.keptItems(seq, target);
+    if (kept) {
+      seq.items.forEach((item, i) => { if (!kept.has(i)) this.removeItem(item as YAML.Node); });
+      return;
+    }
     seq.items.forEach((item, i) => {
       const span = this.itemSpan(item as YAML.Node);
       if (i >= target.length) {
-        this.splices.push({ start: span.start, end: span.end, text: '', rank: 0 });
+        this.removeItem(item as YAML.Node);
         return;
       }
       this.node(item, target[i], [...at, i], (value) => {
@@ -877,6 +920,332 @@ function networkReads(stored: NetworkDeclaration | undefined, value: NetworkDecl
 /** A network declaration as written: the short form `true` when it has no description. */
 function networkValue(network: NetworkDeclaration): NetworkDeclaration {
   return (network.description ? { description: network.description } : true) as unknown as NetworkDeclaration;
+}
+
+// ── the configuration revisions (reviseRules, reviseDebt, reviseProject) ────
+
+/** A severity's rank: a lowering sets a code strictly below its default. */
+const SEVERITY_RANK: Record<string, number> = { error: 3, warning: 2, notice: 1, off: 0 };
+
+/**
+ * A dotted rules path resolved against the rules schema: its segments (a
+ * record's key is everything after the record's name, so a code that carries a
+ * dot stays one key) and the schema there. A path that names no rules field is
+ * refused, naming it.
+ */
+function resolveRulesPath(dotted: string): { segments: string[]; schema: z.ZodTypeAny } {
+  const parts = dotted.split('.');
+  if (dotted === '' || parts.some((s) => s === '' || s === '__proto__' || s === 'constructor' || s === 'prototype')) {
+    throw new WaironError(`Refusing the rules path "${dotted}": a path is dotted names relative to rules, such as conformance.requireCode.`);
+  }
+  const segments: string[] = [];
+  let current: z.ZodTypeAny = RulesConfigSchema;
+  for (let i = 0; i < parts.length; i += 1) {
+    const shape = shapeOf(current);
+    if (shape instanceof z.ZodObject) {
+      const fields = shape.shape as Record<string, z.ZodTypeAny>;
+      if (!hasOwn(fields, parts[i])) {
+        throw new WaironError(`Refusing the rules path "${dotted}": "${parts[i]}" is not a rules field.`);
+      }
+      segments.push(parts[i]);
+      current = fields[parts[i]];
+    } else if (shape instanceof z.ZodRecord) {
+      segments.push(parts.slice(i).join('.'));
+      return { segments, schema: shape.def.valueType as z.ZodTypeAny };
+    } else {
+      throw new WaironError(`Refusing the rules path "${dotted}": nothing is nested under "${parts[i - 1]}".`);
+    }
+  }
+  return { segments, schema: current };
+}
+
+/** Whether a rules path is the debt register or inside it, which only reviseDebt edits. */
+function underCarried(dotted: string): boolean {
+  return dotted === 'conformance.carried' || dotted.startsWith('conformance.carried.');
+}
+
+/** The raw rules value at the segments, or undefined. */
+function rawAt(rules: Record<string, unknown>, segments: string[]): unknown {
+  let node: unknown = rules;
+  for (const segment of segments) {
+    if (!isPlainObject(node) || !hasOwn(node, segment)) return undefined;
+    node = node[segment];
+  }
+  return node;
+}
+
+/** Write a raw rules value at the segments, creating the mappings above it. */
+function writeRawAt(rules: Record<string, unknown>, segments: string[], value: unknown): void {
+  let node = rules;
+  for (const segment of segments.slice(0, -1)) {
+    if (!isPlainObject(node[segment])) node[segment] = {};
+    node = node[segment] as Record<string, unknown>;
+  }
+  node[segments[segments.length - 1]] = value;
+}
+
+/** Drop the raw rules value at the segments, and the mappings it leaves empty. */
+function dropRawAt(rules: Record<string, unknown>, segments: string[]): void {
+  const trail: Record<string, unknown>[] = [rules];
+  for (const segment of segments.slice(0, -1)) {
+    const next = trail[trail.length - 1][segment];
+    if (!isPlainObject(next)) return;
+    trail.push(next);
+  }
+  delete trail[trail.length - 1][segments[segments.length - 1]];
+  for (let i = trail.length - 1; i > 0; i -= 1) {
+    if (Object.keys(trail[i]).length > 0) break;
+    delete trail[i - 1][segments[i - 1]];
+  }
+}
+
+/** The raw `rules` section of the stored document: what is written, with no schema default added. */
+function rawRulesOf(store: ProjectConfigStore): Record<string, unknown> {
+  const raw = store.readField('rules');
+  return isPlainObject(raw) ? structuredClone(raw) : {};
+}
+
+/** The configuration with its raw rules section in place — the document is written as stated, not as defaulted. */
+function withRawRules(config: ProjectConfig, rules: Record<string, unknown>): ProjectConfig {
+  return { ...config, rules: rules as ProjectConfig['rules'] };
+}
+
+/** The rules a raw section reads as, or the refusal naming what the schema rejects. */
+function readRules(rules: Record<string, unknown>, root: string): RulesConfig {
+  const checked = RulesConfigSchema.safeParse(rules);
+  if (!checked.success) {
+    const issue = checked.error.issues[0];
+    const where = issue.path.length > 0 ? `rules.${issue.path.join('.')}` : 'rules';
+    throw new WaironError(`Refusing the change to ${where} at ${root}: ${issue.message}.`);
+  }
+  return checked.data;
+}
+
+/** The codes a change sets or unsets a severity for: every code when it names the whole map. */
+function severityCodesTouched(change: RulesChange, before: RulesConfig, after: RulesConfig): Set<string> {
+  const touched = new Set<string>();
+  for (const path of [...Object.keys(change.set ?? {}), ...(change.unset ?? [])]) {
+    const { segments } = resolveRulesPath(path);
+    if (segments[0] !== 'sddRuleSeverity') continue;
+    if (segments.length > 1) {
+      touched.add(segments[1]);
+    } else {
+      for (const code of [...Object.keys(before.sddRuleSeverity), ...Object.keys(after.sddRuleSeverity)]) touched.add(code);
+    }
+  }
+  return touched;
+}
+
+/** The finding an entry names, for refusals: code, spec and site. */
+function findingName(f: { code: string; spec: string; at: string }): string {
+  return `${f.code} on ${f.spec} at ${f.at}`;
+}
+
+/** What a rules change worked out: the section it writes, the rules before and after, and the codes it newly lowers. */
+interface RulesEdit {
+  next: Record<string, unknown>;
+  before: RulesConfig;
+  after: RulesConfig;
+  lowered: RuleLowering[];
+}
+
+/** Set, unset, add and remove on a copy of the stored rules, checking every path and value. */
+function editRulesPaths(stored: Record<string, unknown>, before: RulesConfig, change: RulesChange, root: string): Record<string, unknown> {
+  const paths = [...Object.keys(change.set ?? {}), ...(change.unset ?? []), ...Object.keys(change.add ?? {}), ...Object.keys(change.remove ?? {})];
+  for (const path of paths) {
+    if (underCarried(path)) {
+      throw new WaironError(`Refusing the rules path "${path}": the conformance debt register is changed on its own (sdd_carry_findings), never through the rules.`);
+    }
+  }
+  const next = structuredClone(stored);
+  for (const [path, value] of Object.entries(change.set ?? {})) {
+    const { segments, schema } = resolveRulesPath(path);
+    const checked = schema.safeParse(value);
+    if (!checked.success) throw new WaironError(`Refusing to set rules.${path} at ${root}: ${checked.error.issues[0].message}.`);
+    writeRawAt(next, segments, value);
+  }
+  for (const path of change.unset ?? []) dropRawAt(next, resolveRulesPath(path).segments);
+  const editList = (entries: Record<string, string[]> | undefined, edit: (held: unknown[], names: string[]) => unknown[]): void => {
+    for (const [path, names] of Object.entries(entries ?? {})) {
+      const { segments, schema } = resolveRulesPath(path);
+      if (!(shapeOf(schema) instanceof z.ZodArray)) {
+        throw new WaironError(`Refusing the rules path "${path}": it is not a list, so entries cannot be added or removed there.`);
+      }
+      // A list the document does not state holds what the schema defaults it to.
+      const held = rawAt(next, segments) ?? rawAt(before as unknown as Record<string, unknown>, segments) ?? [];
+      if (!Array.isArray(held)) throw new WaironError(`Refusing the rules path "${path}": it holds no list at ${root}.`);
+      writeRawAt(next, segments, edit(held, names));
+    }
+  };
+  editList(change.add, (held, names) => [...held, ...names.filter((n, i) => !held.includes(n) && names.indexOf(n) === i)]);
+  editList(change.remove, (held, names) => held.filter((entry) => !names.includes(entry as string)));
+  return next;
+}
+
+/**
+ * One severity the change touched: below its default it is a lowering and
+ * keeps its reason (refused without one); otherwise any reason is dropped.
+ */
+function settleSeverityReason(
+  next: Record<string, unknown>, code: string, severity: string | undefined, from: string | undefined,
+  why: string | undefined, root: string,
+): boolean {
+  if (severity === undefined || from === undefined || SEVERITY_RANK[severity] >= SEVERITY_RANK[from]) {
+    dropRawAt(next, ['severityReasons', code]);
+    return false;
+  }
+  if (!why) {
+    throw new WaironError(
+      `Refusing to set ${code} to ${severity} at ${root}: its default is ${from}, so this lowers it, and a lowering needs its reason — pass \`why\`. `
+      + 'Every run reports a lowered rule with its reason.',
+    );
+  }
+  writeRawAt(next, ['severityReasons', code], why);
+  return true;
+}
+
+/** The whole rules change: the paths edited, then each touched severity settled against its default. */
+function reviseRulesSection(stored: Record<string, unknown>, change: RulesChange, defaults: Record<string, string>, root: string): RulesEdit {
+  const before = readRules(stored, root);
+  const next = editRulesPaths(stored, before, change, root);
+  const edited = readRules(next, root);
+  const why = change.why?.trim();
+  const lowered: RuleLowering[] = [];
+  for (const code of severityCodesTouched(change, before, edited)) {
+    const severity = edited.sddRuleSeverity[code];
+    const from = ownGet(defaults, code);
+    if (settleSeverityReason(next, code, severity, from, why, root) && (before.sddRuleSeverity[code] !== severity || before.severityReasons?.[code] !== why)) {
+      lowered.push({ code, from: from!, to: severity!, why });
+    }
+  }
+  return { next, before, after: readRules(next, root), lowered };
+}
+
+/** The findings a debt change names, each checked against the schema and the carryable codes. */
+function carriedFindings(findings: CarriedFinding[] | undefined, carryable: string[], root: string): CarriedFinding[] {
+  const list = findings ?? [];
+  for (const finding of list) {
+    const checked = CarriedFindingSchema.safeParse(finding);
+    if (!checked.success) {
+      const issue = checked.error.issues[0];
+      throw new WaironError(`Refusing the finding ${JSON.stringify(finding)} at ${root}: ${issue.path.join('.')} — ${issue.message}.`);
+    }
+    if (!carryable.includes(finding.code)) {
+      throw new WaironError(
+        `Refusing to carry ${findingName(finding)} at ${root}: "${finding.code}" is not a code a rule declares carryable`
+        + `${carryable.length > 0 ? ` (carryable: ${[...carryable].sort().join(', ')})` : ''} — fix the spec or the code instead.`,
+      );
+    }
+  }
+  return list;
+}
+
+/** A debt kind the schema knows, or the refusal naming it. */
+function debtKind(kind: unknown, root: string): CarriedDebt['kind'] {
+  const checked = CarriedDebtKindSchema.safeParse(kind);
+  if (!checked.success) throw new WaironError(`Refusing the kind ${JSON.stringify(kind)} at ${root}: a reason group is drift, undecided or unreadable.`);
+  return checked.data;
+}
+
+/** The register as the schema reads it, or the refusal naming what it rejects. */
+function readDebt(groups: unknown, what: string, root: string): CarriedDebt[] {
+  const checked = z.array(CarriedDebtSchema).safeParse(groups);
+  if (!checked.success) {
+    const issue = checked.error.issues[0];
+    throw new WaironError(`Refusing the ${what} at ${root}: rules.conformance.carried.${issue.path.join('.')} — ${issue.message}.`);
+  }
+  return checked.data;
+}
+
+const sameFinding = (a: CarriedFinding, b: CarriedFinding): boolean => a.code === b.code && a.spec === b.spec && a.at === b.at;
+
+/** The reason group at the change's position, or the refusal naming the register's size. */
+function debtGroupAt(groups: CarriedDebt[], change: DebtChange, root: string): CarriedDebt {
+  const at = change.group;
+  if (at === undefined || !Number.isInteger(at) || at < 0 || at >= groups.length) {
+    throw new WaironError(
+      `Refusing to ${change.action} at position ${at ?? '(none)'} of the debt register at ${root}: it holds ${groups.length} reason group${groups.length === 1 ? '' : 's'}`
+      + `${groups.length > 0 ? ` (positions 0 to ${groups.length - 1})` : ''}.`,
+    );
+  }
+  return groups[at];
+}
+
+/** Apply one debt change to the groups, in place. */
+function applyDebtChange(groups: CarriedDebt[], change: DebtChange, carryable: string[], root: string): void {
+  switch (change.action) {
+    case 'add': {
+      if (change.kind === undefined || change.why === undefined || change.why.trim() === '') {
+        throw new WaironError(`Refusing to add a reason group to the debt register at ${root}: an add states its kind and its why.`);
+      }
+      groups.push({
+        kind: debtKind(change.kind, root),
+        why: change.why,
+        ...(change.revisit ? { revisit: change.revisit } : {}),
+        findings: carriedFindings(change.findings, carryable, root),
+      });
+      return;
+    }
+    case 'extend': {
+      const held = debtGroupAt(groups, change, root);
+      const added = carriedFindings(change.findings, carryable, root);
+      if (added.length === 0) throw new WaironError(`Refusing to extend group ${change.group} of the debt register at ${root}: an extend names the findings to add.`);
+      held.findings = [...held.findings, ...added.filter((f) => !held.findings.some((h) => sameFinding(h, f)))];
+      return;
+    }
+    case 'revise': {
+      const held = debtGroupAt(groups, change, root);
+      if (change.kind !== undefined) held.kind = debtKind(change.kind, root);
+      if (change.why !== undefined) held.why = change.why;
+      if (change.revisit === null) delete held.revisit;
+      else if (change.revisit !== undefined) held.revisit = change.revisit;
+      return;
+    }
+    case 'remove': {
+      const held = debtGroupAt(groups, change, root);
+      const named = change.findings ?? [];
+      if (named.length > 0) held.findings = held.findings.filter((f) => !named.some((n) => sameFinding(f, n)));
+      if (named.length === 0 || held.findings.length === 0) groups.splice(change.group!, 1);
+      return;
+    }
+    default:
+      throw new WaironError(`Refusing the debt action ${JSON.stringify((change as { action: unknown }).action)} at ${root}: it is add, extend, revise or remove.`);
+  }
+}
+
+/** The configuration a project change leads to, checked against the schema (naming what it rejects). */
+function reviseProjectSettings(config: ProjectConfig, change: ProjectChange, root: string): ProjectConfig {
+  let next: ProjectConfig = { ...config };
+  if (change.name !== undefined) next.name = change.name;
+  if (change.description !== undefined) next.description = change.description;
+  if (change.projectType !== undefined) next.projectType = change.projectType;
+  if (change.executionTier !== undefined) next.execution = { ...next.execution, tier: change.executionTier as ProjectConfig['execution']['tier'] };
+  for (const selection of change.selectPacks ?? []) next = withPacks(next, packsOf(withPack(next, selection)));
+  for (const packName of change.deselectPacks ?? []) {
+    if (packsOf(next).some((entry) => typeof entry !== 'string' && entry.name === packName)) {
+      next = withPacks(next, packsOf(withPack(next, { name: packName }, true)));
+    }
+  }
+  if (change.useGlobalPacks !== undefined) next = { ...next, extensions: { ...next.extensions, packs: packsOf(next), useGlobalPacks: change.useGlobalPacks } };
+  if (change.targets !== undefined) next.targets = change.targets;
+  if (change.composition !== undefined) next.composition = change.composition;
+  const checked = ProjectConfigSchema.safeParse(next);
+  if (!checked.success) {
+    const issue = checked.error.issues[0];
+    throw new WaironError(`Refusing the change to ${issue.path.length > 0 ? issue.path.join('.') : 'the configuration'} at ${root}: ${issue.message}.`);
+  }
+  return next;
+}
+
+/** The parts of what the lock approves that a project change moves. */
+function approvalMovesOf(before: ProjectConfig, after: ProjectConfig): string[] {
+  const moves: string[] = [];
+  const packsMoved = !sameValue(packsOf(before) as PlainValue, packsOf(after) as PlainValue)
+    || effectiveUseGlobalPacks(before) !== effectiveUseGlobalPacks(after);
+  if (packsMoved) moves.push('packs');
+  if (!sameValue(before.composition as PlainValue, after.composition as PlainValue)) moves.push('composition');
+  if (before.projectType !== after.projectType) moves.push('rules');
+  return moves;
 }
 
 function registryOver(store: ProjectConfigStore, root: string): ProjectConfigRegistry {
@@ -1106,6 +1475,36 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       const { network: _dropped, ...rest } = config;
       save(network === null ? rest as ProjectConfig : { ...rest, network: networkValue(network) } as ProjectConfig);
       return true;
+    },
+    reviseRules(change, defaults, dryRun) {
+      const config = current();
+      const edit = reviseRulesSection(rawRulesOf(store), change, defaults, root);
+      const wrote = !dryRun && !sameValue(edit.before as PlainValue, edit.after as PlainValue);
+      if (wrote) save(withRawRules(config, edit.next));
+      return { before: edit.before, after: edit.after, lowered: edit.lowered, wrote };
+    },
+    reviseDebt(change, carryable, dryRun) {
+      const config = current();
+      const rules = rawRulesOf(store);
+      const stored = rawAt(rules, ['conformance', 'carried']);
+      const before = readDebt(stored ?? [], 'stored debt register', root);
+      const groups = structuredClone(Array.isArray(stored) ? stored : []) as CarriedDebt[];
+      applyDebtChange(groups, change, carryable, root);
+      const after = readDebt(groups, 'debt register the change writes', root);
+      const wrote = !dryRun && !sameValue(before as PlainValue, after as PlainValue);
+      if (wrote) {
+        if (groups.length === 0) dropRawAt(rules, ['conformance', 'carried']);
+        else writeRawAt(rules, ['conformance', 'carried'], groups);
+        save(withRawRules(config, rules));
+      }
+      return { before, after, wrote };
+    },
+    reviseProject(change, dryRun) {
+      const config = current();
+      const next = reviseProjectSettings(config, change, root);
+      const wrote = !dryRun && !sameValue(config as PlainValue, next as PlainValue);
+      if (wrote) save(next);
+      return { before: config, after: next, approvalMoves: approvalMovesOf(config, next), wrote };
     },
     removeMember(alias) {
       const config = current();
@@ -1365,6 +1764,9 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     updateMember(alias, changes) { return registry.updateMember(alias, changes); },
     setPartOf(partOf) { return registry.setPartOf(partOf); },
     setNetwork(network) { return registry.setNetwork(network); },
+    reviseRules(change, defaults, dryRun) { return registry.reviseRules(change, defaults, dryRun); },
+    reviseDebt(change, carryable, dryRun) { return registry.reviseDebt(change, carryable, dryRun); },
+    reviseProject(change, dryRun) { return registry.reviseProject(change, dryRun); },
     removeMember(alias) { return registry.removeMember(alias); },
     importNames(alias, names) { return registry.importNames(alias, names); },
     renameId(from, to) { return registry.renameId(from, to); },
@@ -1413,6 +1815,9 @@ export const projectConfigRepository: ProjectConfigRepository = {
   updateMember(alias, changes) { return bound().updateMember(alias, changes); },
   setPartOf(partOf) { return bound().setPartOf(partOf); },
   setNetwork(network) { return bound().setNetwork(network); },
+  reviseRules(change, defaults, dryRun) { return bound().reviseRules(change, defaults, dryRun); },
+  reviseDebt(change, carryable, dryRun) { return bound().reviseDebt(change, carryable, dryRun); },
+  reviseProject(change, dryRun) { return bound().reviseProject(change, dryRun); },
   removeMember(alias) { return bound().removeMember(alias); },
   importNames(alias, names) { return bound().importNames(alias, names); },
   renameId(from, to) { return bound().renameId(from, to); },

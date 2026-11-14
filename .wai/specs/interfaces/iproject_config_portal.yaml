@@ -281,6 +281,58 @@ methods:
         description: The declaration, or null to remove it
     guarantees:
       - idempotent
+  - name: reviseRules
+    description: >-
+      Published write: apply one granular change to the bound project's rules; a lowered severity
+      carries its reason. Answers the rules before and after. Routed through the core orchestrator.
+    signature: 'reviseRules(change: RulesChange, defaults: map<string, string>, dryRun: bool): RulesRevision'
+    returns: RulesRevision
+    params:
+      - name: change
+        type: RulesChange
+        description: The change
+      - name: defaults
+        type: map<string, string>
+        description: Each rule code's default severity
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
+  - name: reviseDebt
+    description: >-
+      Published write: apply one change to the conformance debt register. Answers the register
+      before and after. Routed through the core orchestrator.
+    signature: 'reviseDebt(change: DebtChange, carryable: list<string>, dryRun: bool): DebtRevision'
+    returns: DebtRevision
+    params:
+      - name: change
+        type: DebtChange
+        description: The change
+      - name: carryable
+        type: list<string>
+        description: The codes the active rule set declares carryable
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
+  - name: reviseProject
+    description: >-
+      Published write: apply one change to the bound project's own settings. Answers the
+      configuration before and after and the approval parts it moves. Routed through the core
+      orchestrator.
+    signature: 'reviseProject(change: ProjectChange, dryRun: bool): ProjectRevision'
+    returns: ProjectRevision
+    params:
+      - name: change
+        type: ProjectChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-09-25T17:33:06.947Z'
-updatedAt: '2026-10-06T23:05:36.238Z'
+updatedAt: '2026-11-14T16:10:12.526Z'

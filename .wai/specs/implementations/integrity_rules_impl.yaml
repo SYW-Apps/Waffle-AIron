@@ -1689,6 +1689,75 @@ methods:
         type: local
     symbol: check
     exportedVia: publicSurfaceSharedRule
+  - name: loweredSeverities
+    sourcePath: src/core/rules/integrity/lowered-severities.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project's rules.sddRuleSeverity and rules.severityReasons from the run's
+          configuration
+        type: local
+      - stepNumber: 2
+        label: eachSet
+        description: For each code the project sets a severity for
+        type: loop
+        loopKind: forEach
+        over: rules.sddRuleSeverity
+        endStep: 8
+      - stepNumber: 3
+        description: >-
+          Is the code one a registered rule declares, set below that declared default (error >
+          warning > notice > off)?
+        type: branch
+        condition: ctx.knownIssueCodes holds the code and the set severity ranks below its default
+        onFalseStep: 8
+      - stepNumber: 4
+        description: Does severityReasons give a reason for it?
+        type: branch
+        condition: severityReasons holds a non-empty reason for the code
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report RULE_LOWERED (notice) naming the code, its default, the project's severity and the
+          reason
+        type: local
+      - stepNumber: 6
+        description: On to the next code
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: noReason
+        description: >-
+          Report RULE_LOWERED_WITHOUT_REASON (warning) naming the code and both severities, asking
+          for the reason (sdd_update_rules `why`) or for the default back
+        type: local
+      - stepNumber: 8
+        label: eachSetEnd
+        description: End of the codes set
+        type: local
+      - stepNumber: 9
+        label: eachReason
+        description: For each code severityReasons gives a reason for
+        type: loop
+        loopKind: forEach
+        over: rules.severityReasons
+        endStep: 12
+      - stepNumber: 10
+        description: Is the reason kept for a code the project does not lower?
+        type: branch
+        condition: sddRuleSeverity does not set the code below the default its rule declares
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report STALE_SEVERITY_REASON (warning): a reason kept for a rule the project does not
+          lower
+        type: local
+      - stepNumber: 12
+        label: eachReasonEnd
+        description: End of the reasons
+        type: local
+    symbol: check
+    exportedVia: loweredSeveritiesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-31T21:55:10.713Z'
+updatedAt: '2026-11-14T16:14:12.332Z'

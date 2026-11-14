@@ -1,0 +1,29 @@
+kind: value-object
+id: rules_revision
+name: RulesRevision
+description: >-
+  What a RulesChange did, or with dryRun would do: the `rules` section before and after, the rules
+  it leaves below their default severity, and whether it wrote.
+fields:
+  - name: before
+    type: RulesConfig
+    description: The rules as stored before the change
+    optional: false
+  - name: after
+    type: RulesConfig
+    description: The rules the change writes
+    optional: false
+  - name: lowered
+    type: list<RuleLowering>
+    description: Every rule the change newly sets below its default severity, with the reason written for it
+    optional: false
+  - name: wrote
+    type: bool
+    description: >-
+      Whether the configuration was written (false for a dry run and for a change that changes
+      nothing)
+    optional: false
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-11-14T16:08:44.004Z'
+updatedAt: '2026-11-14T16:13:04.152Z'

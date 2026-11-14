@@ -766,6 +766,13 @@ export interface RuleContext {
   severityOf(code: string, specId: string): IssueSeverity | 'off' | undefined;
 
   /**
+   * The severity a code is declared at, before any project or profile
+   * override: what a lowering is measured against (lowered-severities).
+   * Undefined for a code the run does not know.
+   */
+  defaultSeverityOf(code: string): Severity | undefined;
+
+  /**
    * The conformance debt register (`rules.conformance.carried`), flattened to
    * one entry per carried finding and carrying its reason group's kind and
    * why. Carrying happens inside addIssue — after the lint allows, so an

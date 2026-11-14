@@ -281,7 +281,28 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: reviewStatus
+  - name: reviseRules
+    narrative:
+      - stepNumber: 1
+        description: Forward the rules change to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: reviseRules
+  - name: reviseDebt
+    narrative:
+      - stepNumber: 1
+        description: Forward the debt register change to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: reviseDebt
+  - name: reviseProject
+    narrative:
+      - stepNumber: 1
+        description: Forward the settings change to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: reviseProject
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T02:39:29.672Z'
+updatedAt: '2026-11-14T16:10:20.625Z'

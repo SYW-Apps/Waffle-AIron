@@ -1479,6 +1479,84 @@ methods:
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_await_review
+  - name: updateRules
+    description: >-
+      Tool (scope: tree, a write): change the bound project's `rules` in .wai/project.yaml
+      granularly — `set` (path: value, e.g. {"conformance.requireCode": true,
+      "sddRuleSeverity.UNUSED_COMPONENT": "notice"}), `unset`, and `add`/`remove` on list fields
+      (conformance.unclaimed, sourceRoots, exclude, testRoots, metaAgentTags); paths are relative to
+      `rules`. Each value is checked against the rules schema. Setting a rule below its default
+      severity is a LOWERING: it needs `why`, which is written beside it, and every run keeps
+      reporting it (RULE_LOWERED) — quieting a rule is never a fix for its finding, only a decision
+      the human approves. The debt register is not changed here (sdd_carry_findings). The rules are
+      part of the approval, so the human re-locks after a written change. Use it instead of editing
+      .wai/project.yaml by hand. Answers the rules before and after and every rule lowered; dryRun
+      writes nothing.
+    signature: 'updateRules(change: RulesChange, dryRun?: bool): RulesRevision'
+    returns: RulesRevision
+    params:
+      - name: change
+        type: RulesChange
+        description: 'The change: set, unset, add, remove, and why when it lowers a rule'
+      - name: dryRun
+        type: bool
+        description: Answer what the change would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_update_rules
+    guarantees:
+      - idempotent
+  - name: carryFindings
+    description: >-
+      Tool (scope: tree, a write): change the conformance debt register
+      (`rules.conformance.carried`) in .wai/project.yaml — `add` a reason group (kind: drift |
+      undecided | unreadable, why, optional revisit) with its findings ({code, spec, at, covers?}),
+      `extend` a group with findings, `revise` a group's kind, why or revisit, or `remove` findings
+      from a group (the whole group when none are named). Groups are addressed by position; dryRun
+      shows which group that is. Only a code a rule declares carryable may be carried. An entry is
+      the claim that a finding is right and unpaid, never that it is wrong — for that, fix the spec
+      or the code. Run sdd_validate_tree after it: it names a unit a carried finding reports that
+      the entry does not list, and an entry that stopped applying. Use it instead of editing
+      .wai/project.yaml by hand. Answers the register before and after.
+    signature: 'carryFindings(change: DebtChange, dryRun?: bool): DebtRevision'
+    returns: DebtRevision
+    params:
+      - name: change
+        type: DebtChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer what the change would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_carry_findings
+    guarantees:
+      - idempotent
+  - name: configureProject
+    description: >-
+      Tool (scope: tree, a write): change the bound project's own settings in .wai/project.yaml —
+      name, description, projectType, execution tier, packs to select and deselect, useGlobalPacks,
+      targets and composition; each only when stated. Members, externals, network, practices and
+      rules have their own tools. Answers the configuration before and after and the parts of the
+      approval the change moves (packs, composition, projectType), which the human re-locks. Use it
+      instead of editing .wai/project.yaml by hand. dryRun writes nothing.
+    signature: 'configureProject(change: ProjectChange, dryRun?: bool): ProjectRevision'
+    returns: ProjectRevision
+    params:
+      - name: change
+        type: ProjectChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer what the change would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_configure_project
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T02:48:06.212Z'
+updatedAt: '2026-11-14T16:11:10.961Z'

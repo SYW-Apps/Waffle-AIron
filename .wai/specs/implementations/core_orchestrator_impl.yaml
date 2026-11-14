@@ -4212,6 +4212,27 @@ methods:
         type: call
         targetComponent: architecture_diagrams
         targetMethod: renderTypeDiagrams
+  - name: reviseRules
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: reviseRules
+  - name: reviseDebt
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: reviseDebt
+  - name: reviseProject
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: reviseProject
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T12:05:29.325Z'
+updatedAt: '2026-11-14T16:10:06.705Z'
