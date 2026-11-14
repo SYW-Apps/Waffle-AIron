@@ -1989,40 +1989,69 @@ export function mountCanvas(host, model, opts = {}) {
       else { for (i = 2; i + 1 < p.length; i += 2) pts.push({ x: p[i], y: p[i + 1] }); }
       if (!curved && rs.isRound && pts.length > 2) pts = rounded(pts, rs.radii || []);
       var tip = typeof rs.arrowEndX === 'number' && !isNaN(rs.arrowEndX) ? { x: rs.arrowEndX, y: rs.arrowEndY } : null;
-      return { pts: pts, tip: tip, ortho: !curved && pts.length > 2 };
+      // Every orthogonal line hops, a straight run between two facing boxes too.
+      return { pts: pts, tip: tip, ortho: !curved && state.lineStyle === 'taxi' };
     }
     // Where a horizontal run of one orthogonal line crosses a vertical run of
-    // another, the horizontal one hops. Lines that share an end box never hop
-    // each other: they meet there on purpose.
+    // another, the horizontal one hops. Lines that share an end box do not hop
+    // each other: they meet there on purpose. Lines drawn on top of each other
+    // hop together, so a hop never leaves a straight line running under it.
     function hopsFor(list) {
-      var vert = [];
-      list.forEach(function (it, li) {
-        if (!it.path || !it.path.ortho) return;
-        var q = it.path.pts;
-        for (var k = 1; k < q.length; k++) {
-          if (Math.abs(q[k].x - q[k - 1].x) < 0.5 && Math.abs(q[k].y - q[k - 1].y) > 1) {
-            vert.push({ li: li, x: q[k].x, y1: Math.min(q[k].y, q[k - 1].y), y2: Math.max(q[k].y, q[k - 1].y) });
-          }
-        }
-      });
+      var vert = [], rows = {};
       list.forEach(function (it, li) {
         it.hops = {};
         if (!it.path || !it.path.ortho) return;
         var q = it.path.pts;
         for (var k = 1; k < q.length; k++) {
-          if (Math.abs(q[k].y - q[k - 1].y) >= 0.5) continue;
-          var y = q[k].y, x1 = Math.min(q[k].x, q[k - 1].x), x2 = Math.max(q[k].x, q[k - 1].x);
-          var xs = [];
-          vert.forEach(function (v) {
-            if (v.li === li) return;
-            var o = list[v.li];
-            if (o.src === it.src || o.src === it.tgt || o.tgt === it.src || o.tgt === it.tgt) return;
-            if (v.x > x1 + 7 && v.x < x2 - 7 && y > v.y1 + 7 && y < v.y2 - 7) xs.push(v.x);
-          });
-          if (xs.length) it.hops[k] = xs;
+          var a = q[k - 1], b = q[k];
+          if (Math.abs(b.x - a.x) < 0.5 && Math.abs(b.y - a.y) > 1) {
+            vert.push({ li: li, x: b.x, y1: Math.min(a.y, b.y), y2: Math.max(a.y, b.y) });
+          } else if (Math.abs(b.y - a.y) < 0.5 && Math.abs(b.x - a.x) > 1) {
+            var row = Math.round(b.y);
+            (rows[row] = rows[row] || []).push({ li: li, k: k, y: b.y, x1: Math.min(a.x, b.x), x2: Math.max(a.x, b.x), xs: [] });
+          }
         }
       });
+      var inside = function (h, x) { return x > h.x1 + 7 && x < h.x2 - 7; };
+      Object.keys(rows).forEach(function (row) {
+        rows[row].forEach(function (h) {
+          var it = list[h.li];
+          vert.forEach(function (v) {
+            if (v.li === h.li) return;
+            var o = list[v.li];
+            if (o.src === it.src || o.src === it.tgt || o.tgt === it.src || o.tgt === it.tgt) return;
+            if (inside(h, v.x) && h.y > v.y1 + 7 && h.y < v.y2 - 7) h.xs.push(v.x);
+          });
+        });
+      });
+      Object.keys(rows).forEach(function (row) {
+        var near = (rows[row - 1] || []).concat(rows[row], rows[+row + 1] || []);
+        rows[row].forEach(function (h) {
+          var xs = h.xs.slice();
+          near.forEach(function (o) {
+            if (o === h || Math.abs(o.y - h.y) >= 1) return;
+            o.xs.forEach(function (x) { if (inside(h, x)) xs.push(x); });
+          });
+          if (!xs.length) return;
+          xs.sort(function (a, b) { return a - b; });
+          list[h.li].hops[h.k] = xs.filter(function (x, n) { return n === 0 || x - xs[n - 1] > 0.5; });
+        });
+      });
     }
+    // The bridges over a run's crossings (ascending x): crossings closer than a
+    // hop's width share one bridge, and a bridge keeps clear of the run's ends.
+    function hopSpans(xs, R, x1, x2) {
+      var lo = Math.min(x1, x2) + R, hi = Math.max(x1, x2) - R;
+      if (hi < lo) return [];
+      var spans = [];
+      xs.forEach(function (x) {
+        var c = clamp(x, lo, hi), last = spans[spans.length - 1];
+        if (last && c - last[1] < 2 * R + 4) last[1] = c;
+        else spans.push([c, c]);
+      });
+      return spans;
+    }
+    function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
     function items() {
       var edges = cy.edges();
       var same = cache.refs.length === edges.length;
@@ -2042,7 +2071,8 @@ export function mountCanvas(host, model, opts = {}) {
       return list;
     }
     function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
-    // A line's path, with a hop of radius R over each line it crosses.
+    // A line's path, bridging the lines it crosses: a half circle of radius R over
+    // one crossing, rising, running level and coming down over several close ones.
     function trace(ctx, it, R) {
       var q = it.path.pts;
       ctx.moveTo(q[0].x, q[0].y);
@@ -2050,10 +2080,20 @@ export function mountCanvas(host, model, opts = {}) {
         var xs = it.hops && it.hops[k];
         if (xs) {
           var dir = q[k].x > q[k - 1].x ? 1 : -1, y = q[k].y;
-          xs.slice().sort(function (a, b) { return dir * (a - b); }).forEach(function (xc) {
-            ctx.lineTo(xc - dir * R, y);
-            if (dir > 0) ctx.arc(xc, y, R, Math.PI, 0, false);
-            else ctx.arc(xc, y, R, 0, Math.PI, true);
+          var spans = hopSpans(xs, R, q[k - 1].x, q[k].x);
+          if (dir < 0) spans.reverse();
+          spans.forEach(function (s) {
+            var a = dir > 0 ? s[0] : s[1], b = dir > 0 ? s[1] : s[0];
+            ctx.lineTo(a - dir * R, y);
+            if (dir > 0) {
+              ctx.arc(a, y, R, Math.PI, 1.5 * Math.PI, false);
+              ctx.lineTo(b, y - R);
+              ctx.arc(b, y, R, 1.5 * Math.PI, 2 * Math.PI, false);
+            } else {
+              ctx.arc(a, y, R, 0, -0.5 * Math.PI, true);
+              ctx.lineTo(b, y - R);
+              ctx.arc(b, y, R, -0.5 * Math.PI, -Math.PI, true);
+            }
           });
         }
         ctx.lineTo(q[k].x, q[k].y);
@@ -2078,10 +2118,10 @@ export function mountCanvas(host, model, opts = {}) {
         var axisX = Math.abs(dy) < 0.5, axisY = Math.abs(dx) < 0.5;
         if (grid && (axisX || axisY) && len > arm * 2) {
           var from = axisX ? a.x : a.y, to = axisX ? b.x : b.y, sgn = to > from ? 1 : -1;
-          var hops = (it.hops && it.hops[k]) || [];
+          var spans = it.hops && it.hops[k] ? hopSpans(it.hops[k], R, a.x, b.x) : [];
           var c = sgn > 0 ? Math.ceil((from + arm) / GAP) * GAP : Math.floor((from - arm) / GAP) * GAP;
           for (; sgn > 0 ? c <= to - arm * 0.5 : c >= to + arm * 0.5; c += sgn * GAP) {
-            var onHop = hops.some(function (h) { return Math.abs(h - c) < R + arm; });
+            var onHop = spans.some(function (s) { return c > s[0] - R - arm && c < s[1] + R + arm; });
             if (onHop) continue;
             mark(axisX ? c : a.x, axisX ? a.y : c, ux, uy);
           }
@@ -2324,7 +2364,7 @@ export function mountCanvas(host, model, opts = {}) {
   // different ends run on top of each other. Orthogonal draws the path; curved draws
   // a smooth curve through its bends. Straight lines are not routed.
   var edgeRouter = (function () {
-    var MARGIN = 16, STUB = 18, BEND = 46, SHARE = 0.9, LANE = 16, PAD = 10, MAX_NODES = 220;
+    var MARGIN = 26, STUB = 30, BEND = 46, SHARE = 0.9, LANE = 16, PAD = 10, MAX_NODES = 220, NEAR_COST = 5;
     function rectOf(n) {
       var bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
       return { l: bb.x1, r: bb.x2, t: bb.y1, b: bb.y2, cx: (bb.x1 + bb.x2) / 2, cy: (bb.y1 + bb.y2) / 2, w: bb.w, h: bb.h };
@@ -2342,10 +2382,11 @@ export function mountCanvas(host, model, opts = {}) {
     function along(r, side) { return side === 't' || side === 'b' ? r.cx : r.cy; }
     function sideRange(r, side) { return side === 't' || side === 'b' ? [r.l, r.r] : [r.t, r.b]; }
     // Ports. A line whose two boxes face each other with room to spare runs
-    // straight across, at the target's middle when the overlap reaches it. Lines
-    // into one box from one side converge on its middle: they all flow the same
-    // way. The other lines leaving a side step away from the straight one (or
-    // from the middle), one lane apart, ordered by where their other end lies.
+    // straight across. Every other end sits at the point of its side nearest the
+    // box at the line's other end, where a straight line would leave. The ends on
+    // one side, leaving and arriving alike, are then spread a lane apart without
+    // crossing: ordered by the direction their other end lies in, so the line to
+    // the steepest corner leaves nearest that corner.
     function assignPorts(jobs, obstacles) {
       var place = function (r, side, c) {
         var n = NORMAL[side];
@@ -2367,44 +2408,27 @@ export function mountCanvas(host, model, opts = {}) {
       });
       var bySide = {};
       jobs.forEach(function (j) {
-        (bySide[j.src + '|' + j.sSide] = bySide[j.src + '|' + j.sSide] || []).push(j);
+        [{ j: j, end: 's', box: j.src, r: j.sr, side: j.sSide, far: j.tr }, { j: j, end: 't', box: j.tgt, r: j.tr, side: j.tSide, far: j.sr }].forEach(function (e) {
+          (bySide[e.box + '|' + e.side] = bySide[e.box + '|' + e.side] || []).push(e);
+        });
       });
       Object.keys(bySide).forEach(function (key) {
-        var list = bySide[key], side = key.split('|').pop(), r = list[0].sr;
+        var ends = bySide[key], side = ends[0].side, r = ends[0].r, n = NORMAL[side];
         var range = sideRange(r, side), lo = range[0] + PAD, hi = range[1] - PAD;
-        var other = function (j) { return along(j.tr, side); };
-        // One straight line per side and lane; the nearest to the middle wins.
-        var pinned = null;
-        list.slice().sort(function (a, b) { return Math.abs(a.straight - along(r, side)) - Math.abs(b.straight - along(r, side)); })
-          .forEach(function (j) {
-            if (j.straight === null) return;
-            if (pinned === null) { pinned = j.straight; j.sAt = j.straight; } else j.straight = null;
-          });
-        var rest = list.filter(function (j) { return j.straight === null; });
-        var anchor = pinned === null ? along(r, side) : pinned;
-        var before = [], after = [];
-        if (pinned === null) {
-          // No straight line: the leaving lines sit around the middle, one lane apart.
-          var all = rest.slice().sort(function (a, b) { return other(a) - other(b); });
-          var step = Math.min(LANE * 1.5, (hi - lo) / Math.max(1, all.length - 1));
-          all.forEach(function (j, k) { j.sAt = clamp(anchor + (k - (all.length - 1) / 2) * step, lo, hi); });
-        } else {
-          // A line goes to the side of the straight one its other end lies on, or
-          // the side its route turns to (j.flip, from a first routing pass).
-          var below = function (j) { return (other(j) >= anchor) !== !!j.flip; };
-          before = rest.filter(function (j) { return !below(j); }).sort(function (a, b) { return other(b) - other(a); });
-          after = rest.filter(below).sort(function (a, b) { return other(a) - other(b); });
-        }
-        var stepB = Math.min(LANE * 1.5, (anchor - lo) / Math.max(1, before.length));
-        before.forEach(function (j, k) { j.sAt = clamp(anchor - (k + 1) * stepB, lo, hi); });
-        var stepA = Math.min(LANE * 1.5, (hi - anchor) / Math.max(1, after.length));
-        after.forEach(function (j, k) { j.sAt = clamp(anchor + (k + 1) * stepA, lo, hi); });
-        list.forEach(function (j) {
-          j.anchor = pinned;
-          var s = place(r, side, j.sAt);
-          j.sPort = s.port; j.sStub = s.stub;
-          var t = place(j.tr, j.tSide, j.straight !== null ? j.straight : along(j.tr, j.tSide));
-          j.tPort = t.port; j.tStub = t.stub;
+        ends.forEach(function (e) {
+          var reach = Math.max(1, (e.far.cx - r.cx) * n.x + (e.far.cy - r.cy) * n.y);
+          e.slope = (along(e.far, side) - along(r, side)) / reach;
+          e.want = e.j.straight !== null ? e.j.straight : clamp(along(e.far, side), lo, hi);
+        });
+        ends.sort(function (a, b) { return a.slope - b.slope || a.want - b.want; });
+        var gap = ends.length > 1 ? Math.min(LANE, (hi - lo) / (ends.length - 1)) : 0;
+        // Forward: each end at its wish or a lane past the one before; back: within the side.
+        ends.forEach(function (e, k) { e.at = k ? Math.max(e.want, ends[k - 1].at + gap) : e.want; });
+        for (var k = ends.length - 1; k >= 0; k--) ends[k].at = Math.min(ends[k].at, k < ends.length - 1 ? ends[k + 1].at - gap : hi);
+        ends.forEach(function (e) {
+          e.at = clamp(e.at, lo, hi);
+          var p = place(r, side, e.at);
+          if (e.end === 's') { e.j.sPort = p.port; e.j.sStub = p.stub; } else { e.j.tPort = p.port; e.j.tStub = p.stub; }
         });
       });
     }
@@ -2509,7 +2533,7 @@ export function mountCanvas(host, model, opts = {}) {
           var seg = d === 0 ? g.blockR[cell] : d === 2 ? g.blockR[ncell] : d === 1 ? g.blockD[cell] : g.blockD[ncell];
           if (seg === 2) continue;
           var len = Math.abs(g.xs[nx] - g.xs[xi]) + Math.abs(g.ys[ny] - g.ys[yi]);
-          if (seg === 1 || g.blocked[ncell] === 1) len *= 3;
+          if (seg === 1 || g.blocked[ncell] === 1) len *= NEAR_COST;
           var key = Math.min(cell, ncell) + ':' + Math.max(cell, ncell);
           var used = g.usage[key];
           var share = 0;
@@ -2601,7 +2625,7 @@ export function mountCanvas(host, model, opts = {}) {
       });
     }
     // ---- curved: a smooth curve through the routed path ------------------------
-    var CLEAR = 9;
+    var CLEAR = 16;
     function segClear(a, b, obstacles) {
       for (var k = 0; k < obstacles.length; k++) {
         var o = obstacles[k];
@@ -2655,7 +2679,7 @@ export function mountCanvas(host, model, opts = {}) {
     // the corners of every box (with clearance), searched per line, then a smooth
     // curve through the corners it passes. A corner several lines pass is taken a
     // little wider by each, so curves keep their distance instead of stacking.
-    var CORNER = 16, SPREAD = 7;
+    var CORNER = 28, SPREAD = 7;
     function cornerGraph(obstacles) {
       var nodes = [];
       obstacles.forEach(function (o) {
@@ -2786,33 +2810,19 @@ export function mountCanvas(host, model, opts = {}) {
         if (blockedOut(j.sr, j.sSide)) j.sSide = otherSide(j.sr, j.tr, j.sSide);
         if (blockedOut(j.tr, j.tSide)) j.tSide = otherSide(j.tr, j.sr, j.tSide);
       });
-      var routes;
-      for (var pass = 0; pass < 2; pass++) {
-        assignPorts(jobs, obstacles);
-        var g = buildGrid(obstacles, jobs);
-        jobs.sort(function (a, b) {
-          return (Math.abs(a.sPort.x - a.tPort.x) + Math.abs(a.sPort.y - a.tPort.y)) - (Math.abs(b.sPort.x - b.tPort.x) + Math.abs(b.sPort.y - b.tPort.y));
-        });
-        routes = [];
-        jobs.forEach(function (j) {
-          var mid = search(g, j);
-          var pts = mid ? [j.sPort].concat(mid, [j.tPort]) : [j.sPort, j.sStub, j.tStub, j.tPort];
-          // The search snaps to the grid: keep the stubs straight out of their ports.
-          pts = simplify(pts);
-          routes.push({ job: j, tgt: j.tgt, pts: pts });
-        });
-        // A line placed beside the straight one whose route then turns back across
-        // it changes sides, and the side is routed again.
-        var flipped = false;
-        routes.forEach(function (r) {
-          var j = r.job, p = r.pts;
-          if (j.anchor === null || j.straight !== null || j.flip || p.length < 3) return;
-          var vert = j.sSide === 'l' || j.sSide === 'r';
-          var at = vert ? p[0].y : p[0].x, next = vert ? p[2].y : p[2].x;
-          if ((at > j.anchor && next < at - 1) || (at < j.anchor && next > at + 1)) { j.flip = true; flipped = true; }
-        });
-        if (!flipped) break;
-      }
+      assignPorts(jobs, obstacles);
+      var g = buildGrid(obstacles, jobs);
+      jobs.sort(function (a, b) {
+        return (Math.abs(a.sPort.x - a.tPort.x) + Math.abs(a.sPort.y - a.tPort.y)) - (Math.abs(b.sPort.x - b.tPort.x) + Math.abs(b.sPort.y - b.tPort.y));
+      });
+      var routes = [];
+      jobs.forEach(function (j) {
+        var mid = search(g, j);
+        var pts = mid ? [j.sPort].concat(mid, [j.tPort]) : [j.sPort, j.sStub, j.tStub, j.tPort];
+        // The search snaps to the grid: keep the stubs straight out of their ports.
+        pts = simplify(pts);
+        routes.push({ job: j, tgt: j.tgt, pts: pts });
+      });
       nudge(routes, obstacles);
       if (mode === 'bezier') {
         var cg = cornerGraph(obstacles);

@@ -6,6 +6,11 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **Canvas lines attach where they point, keep their distance and hop cleanly.**
+  - **Ends:** each line leaves and enters its box at the point of the side nearest the box at its other end. The ends on one side are spread a lane apart without crossing, ordered by direction: the line to the steepest corner sits nearest that corner. This holds for leaving and arriving lines alike, so lines no longer start on the far end of a side or overlap where they arrive.
+  - **Clearance:** lines keep more room around boxes they do not start or end at. Both line styles route farther around a box, and an orthogonal line pays more to pass close to one.
+  - **Hops:** on orthogonal lines, lines drawn on top of each other now hop together, so a hop no longer shows a straight line still running underneath. A straight line between two facing boxes hops too. Crossings closer together than a hop's width share one bridge (up, level, down) instead of looping back between half circles, and a hop keeps clear of a corner.
+
 - **`wairon dev` switches pages faster and draws the canvas before validation finishes.** The server keeps the canvas model and the graph it last built. An unchanged read is answered from them at once, where each read used to build the model again. After a change, a read waits at most a second and a half for the validator. If the validator is still running, the canvas is drawn at once with the last known findings, and the page shows "Checking…" until they are current. When validation finishes, the page reads the model again by itself. Also:
   - `wairon dev` now watches the project's code as well as `.wai/`, so a code edit refreshes the open page and its findings. Changes inside `.git` and `node_modules` folders are ignored.
   - The canvas model is built faster on large projects, and is serialized once per answer instead of twice.
