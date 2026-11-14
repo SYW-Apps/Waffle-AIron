@@ -197,6 +197,8 @@ export function mountCanvas(host, model, opts = {}) {
     internals: typeof saved.internals === 'boolean' ? saved.internals : false,
     externals: typeof saved.externals === 'boolean' ? saved.externals : true,
     dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
+    busyStubs: typeof saved.busyStubs === 'boolean' ? saved.busyStubs : true,
+    busyAt: [5, 8, 12, 20].indexOf(saved.busyAt) >= 0 ? saved.busyAt : 8,
     // The overlay's first-visit default is the host's showIssues option (off for a standalone file or a
     // shared page, on for the local development server); once the reader has used the toggle, theirs wins.
     issuesChosen: saved.issuesChosen === true || saved.showIssues === true,
@@ -242,6 +244,8 @@ export function mountCanvas(host, model, opts = {}) {
         internals: state.internals,
         externals: state.externals,
         dataCoupling: state.dataCoupling,
+        busyStubs: state.busyStubs,
+        busyAt: state.busyAt,
         showIssues: state.showIssues,
         issuesChosen: state.issuesChosen,
       }));
@@ -471,6 +475,8 @@ export function mountCanvas(host, model, opts = {}) {
       // A focused line keeps the weight its kind gives it, only lifted.
       { selector: 'edge.k-uses.edgeFocus, edge.k-uses.edgeOut, edge.k-uses.edgeIn', style: { width: 1.8 } },
       { selector: 'edge.k-declared.edgeFocus, edge.k-declared.edgeOut, edge.k-declared.edgeIn', style: { width: 1.5 } },
+      { selector: 'edge.busy', style: { 'text-opacity': 0, events: 'no' } },
+      { selector: 'edge.busy.edgeFocus, edge.busy.edgeOut, edge.busy.edgeIn, edge.busy.stubHover', style: { 'text-opacity': 1 } },
       { selector: 'node.typeCluster', style: {
         'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText,
         'font-weight': 'bold', 'font-size': 12, 'border-width': 2, 'text-wrap': 'wrap',
@@ -1945,6 +1951,23 @@ export function mountCanvas(host, model, opts = {}) {
   // hidden (line-opacity 0): the overlay below the boxes draws each line itself, so
   // a line is a translucent tube with chevrons inside showing its direction, a
   // boundary hop a thin red stripe through it, and an orthogonal line hops another.
+  // ---- busy boxes ------------------------------------------------------------
+  // A box many lines go into (a shared adapter everything uses) is a web of
+  // lines however they are routed. From state.busyAt lines on (View: Busy
+  // boxes), each line into it is drawn as a short stub at its source, labelled
+  // with the box; selecting or hovering either end draws it in full again.
+  function busyTargets() {
+    var out = {};
+    if (!state.busyStubs) return out;
+    var count = {};
+    cy.edges().forEach(function (e) {
+      if (!e.visible() || e.source().id() === e.target().id()) return;
+      var t = e.target().id();
+      count[t] = (count[t] || 0) + 1;
+    });
+    Object.keys(count).forEach(function (t) { if (count[t] >= state.busyAt) out[t] = true; });
+    return out;
+  }
   var edgeOverlay = (function () {
     var host = ROOT.getElementById('cy');
     var canvas = document.createElement('canvas');
@@ -2000,7 +2023,7 @@ export function mountCanvas(host, model, opts = {}) {
       var vert = [], rows = {};
       list.forEach(function (it, li) {
         it.hops = {};
-        if (!it.path || !it.path.ortho) return;
+        if (!it.path || !it.path.ortho || it.busy) return;
         var q = it.path.pts;
         for (var k = 1; k < q.length; k++) {
           var a = q[k - 1], b = q[k];
@@ -2061,13 +2084,14 @@ export function mountCanvas(host, model, opts = {}) {
         refs.push(r);
         if (same && cache.refs[idx] !== r) same = false;
       });
-      if (same && cache.list && cache.lineStyle === state.lineStyle) return cache.list;
-      var list = [];
+      var busyKey = state.busyStubs + ':' + state.busyAt;
+      if (same && cache.list && cache.lineStyle === state.lineStyle && cache.busyKey === busyKey) return cache.list;
+      var list = [], busy = busyTargets();
       edges.forEach(function (e) {
-        list.push({ edge: e, src: e.data('source'), tgt: e.data('target'), path: pathOf(e) });
+        list.push({ edge: e, src: e.data('source'), tgt: e.data('target'), path: pathOf(e), busy: !!busy[e.data('target')] });
       });
       hopsFor(list);
-      cache = { refs: refs, list: list, lineStyle: state.lineStyle };
+      cache = { refs: refs, list: list, lineStyle: state.lineStyle, busyKey: busyKey };
       return list;
     }
     function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
@@ -2134,6 +2158,24 @@ export function mountCanvas(host, model, opts = {}) {
       }
     }
     // How a line looks: a translucent tube as wide as its weight, chevrons inside.
+    // The first BUSY_LEN of a line, its arrowhead just past the end.
+    var BUSY_LEN = 44;
+    function stubOf(it) {
+      var q = it.path.pts, out = [q[0]], acc = 0;
+      for (var k = 1; k < q.length; k++) {
+        var a = q[k - 1], b = q[k], d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d > 0.001 && acc + d >= BUSY_LEN) {
+          var f = (BUSY_LEN - acc) / d, g = Math.min(1, (BUSY_LEN + 9 - acc) / d);
+          out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+          return { edge: it.edge, src: it.src, tgt: it.tgt, hops: {}, path: { pts: out, tip: { x: a.x + (b.x - a.x) * g, y: a.y + (b.y - a.y) * g }, ortho: it.path.ortho } };
+        }
+        out.push(b);
+        acc += d;
+      }
+      return null;
+    }
+    // A box's name: the first line of its label.
+    function labelOf(n) { return String(n.data('label') || n.id()).split(String.fromCharCode(10))[0]; }
     function look(it) {
       var e = it.edge;
       if (!it.path || !e.visible()) return null;
@@ -2141,7 +2183,9 @@ export function mountCanvas(host, model, opts = {}) {
       if (op <= 0.001) return null;
       var w = e.pstyle('width').pfValue, ls = e.pstyle('line-style').value;
       var tube = Math.min(13, Math.max(4, w * 4));
-      return { it: it, e: e, op: op, w: w, tube: tube, color: e.pstyle('line-color').value,
+      var full = !it.busy || e.hasClass('stubHover') || e.hasClass('edgeFocus') || e.hasClass('edgeOut') || e.hasClass('edgeIn') || e.hasClass('revealEdge');
+      var stub = full ? null : stubOf(it);
+      return { it: stub || it, stubTo: stub ? labelOf(e.target()) : null, e: e, op: op, w: w, tube: tube, color: e.pstyle('line-color').value,
         arrow: e.pstyle('target-arrow-color').value, dash: ls === 'dotted' ? 'dot' : ls === 'dashed' ? 'dash' : '' };
     }
     // The tubes of one tier: lines of one look are stroked as one shape, so an
@@ -2211,8 +2255,28 @@ export function mountCanvas(host, model, opts = {}) {
           ctx.fill();
         }
       }
+      if (l.stubTo && z >= 0.3) {
+        var p = it.path.tip || end, prev = q[q.length - 1], dx = p.x - prev.x, dy = p.y - prev.y;
+        var horizontal = Math.abs(dx) >= Math.abs(dy);
+        ctx.fillStyle = rgba(l.color, l.op * 0.95);
+        ctx.font = '600 9px system-ui, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = horizontal ? (dx >= 0 ? 'left' : 'right') : 'center';
+        var tx = p.x + (horizontal ? (dx >= 0 ? 4 : -4) : 0), ty = p.y + (horizontal ? 0 : (dy >= 0 ? 8 : -8));
+        // A label that would overlap one already drawn is left out: the stub still
+        // shows, and selecting its box draws the line in full.
+        var tw = ctx.measureText(l.stubTo).width;
+        var box = { l: horizontal ? (dx >= 0 ? tx : tx - tw) : tx - tw / 2, t: ty - 6, w: tw, h: 12 };
+        var hit = stubLabels.some(function (o) { return box.l < o.l + o.w && o.l < box.l + box.w && box.t < o.t + o.h && o.t < box.t + box.h; });
+        if (!hit) {
+          stubLabels.push(box);
+          ctx.fillText(l.stubTo, tx, ty);
+        }
+      }
     }
+    var stubLabels = [];
     function paint(ctx, z) {
+      stubLabels = [];
       var theme = THEMES[state.theme];
       var list = items();
       // Receding lines first, lifted ones last; per tier the tubes, then what sits in them.
@@ -2382,11 +2446,12 @@ export function mountCanvas(host, model, opts = {}) {
     function along(r, side) { return side === 't' || side === 'b' ? r.cx : r.cy; }
     function sideRange(r, side) { return side === 't' || side === 'b' ? [r.l, r.r] : [r.t, r.b]; }
     // Ports. A line whose two boxes face each other with room to spare runs
-    // straight across. Every other end sits at the point of its side nearest the
-    // box at the line's other end, where a straight line would leave. The ends on
-    // one side, leaving and arriving alike, are then spread a lane apart without
-    // crossing: ordered by the direction their other end lies in, so the line to
-    // the steepest corner leaves nearest that corner.
+    // straight across. A leaving end sits at the point of its side nearest the
+    // box at the line's other end, where a straight line would leave; the lines
+    // arriving on a side share one trunk port at its middle. The ends on one side
+    // are then spread a lane apart without crossing: ordered by the direction
+    // their other end lies in, so the line to the steepest corner leaves nearest
+    // that corner.
     function assignPorts(jobs, obstacles) {
       var place = function (r, side, c) {
         var n = NORMAL[side];
@@ -2408,17 +2473,30 @@ export function mountCanvas(host, model, opts = {}) {
       });
       var bySide = {};
       jobs.forEach(function (j) {
-        [{ j: j, end: 's', box: j.src, r: j.sr, side: j.sSide, far: j.tr }, { j: j, end: 't', box: j.tgt, r: j.tr, side: j.tSide, far: j.sr }].forEach(function (e) {
+        [{ jobs: [j], end: 's', box: j.src, r: j.sr, side: j.sSide, far: [j.tr] }, { jobs: [j], end: 't', box: j.tgt, r: j.tr, side: j.tSide, far: [j.sr] }].forEach(function (e) {
           (bySide[e.box + '|' + e.side] = bySide[e.box + '|' + e.side] || []).push(e);
         });
       });
       Object.keys(bySide).forEach(function (key) {
-        var ends = bySide[key], side = ends[0].side, r = ends[0].r, n = NORMAL[side];
+        var list = bySide[key], side = list[0].side, r = list[0].r, n = NORMAL[side];
         var range = sideRange(r, side), lo = range[0] + PAD, hi = range[1] - PAD;
+        // Lines arriving on one side flow the same way, into one trunk: they share
+        // one port and run together, so a box many lines use takes them as one.
+        // A straight line keeps its own end.
+        var ends = list.filter(function (e) { return e.end === 's' || e.jobs[0].straight !== null; });
+        var arriving = list.filter(function (e) { return e.end === 't' && e.jobs[0].straight === null; });
+        if (arriving.length) {
+          ends.push({ end: 't', jobs: arriving.map(function (e) { return e.jobs[0]; }), far: arriving.map(function (e) { return e.far[0]; }), trunk: true });
+        }
         ends.forEach(function (e) {
-          var reach = Math.max(1, (e.far.cx - r.cx) * n.x + (e.far.cy - r.cy) * n.y);
-          e.slope = (along(e.far, side) - along(r, side)) / reach;
-          e.want = e.j.straight !== null ? e.j.straight : clamp(along(e.far, side), lo, hi);
+          var slope = 0, want = 0;
+          e.far.forEach(function (o) {
+            var reach = Math.max(1, (o.cx - r.cx) * n.x + (o.cy - r.cy) * n.y);
+            slope += (along(o, side) - along(r, side)) / reach;
+            want += clamp(along(o, side), lo, hi);
+          });
+          e.slope = slope / e.far.length;
+          e.want = e.trunk ? clamp(along(r, side), lo, hi) : e.jobs[0].straight !== null ? e.jobs[0].straight : want / e.far.length;
         });
         ends.sort(function (a, b) { return a.slope - b.slope || a.want - b.want; });
         var gap = ends.length > 1 ? Math.min(LANE, (hi - lo) / (ends.length - 1)) : 0;
@@ -2428,7 +2506,9 @@ export function mountCanvas(host, model, opts = {}) {
         ends.forEach(function (e) {
           e.at = clamp(e.at, lo, hi);
           var p = place(r, side, e.at);
-          if (e.end === 's') { e.j.sPort = p.port; e.j.sStub = p.stub; } else { e.j.tPort = p.port; e.j.tStub = p.stub; }
+          e.jobs.forEach(function (j) {
+            if (e.end === 's') { j.sPort = p.port; j.sStub = p.stub; } else { j.tPort = p.port; j.tStub = p.stub; }
+          });
         });
       });
     }
@@ -2472,7 +2552,7 @@ export function mountCanvas(host, model, opts = {}) {
       var xIndex = {}, yIndex = {};
       xs.forEach(function (v, k) { xIndex[Math.round(v * 2)] = k; });
       ys.forEach(function (v, k) { yIndex[Math.round(v * 2)] = k; });
-      return { xs: xs, ys: ys, W: W, H: H, blocked: blocked, blockR: blockR, blockD: blockD, xIndex: xIndex, yIndex: yIndex, usage: {} };
+      return { xs: xs, ys: ys, W: W, H: H, blocked: blocked, blockR: blockR, blockD: blockD, xIndex: xIndex, yIndex: yIndex, usage: new Map() };
     }
     function nearestIndex(arr, v) {
       var best = 0;
@@ -2508,19 +2588,22 @@ export function mountCanvas(host, model, opts = {}) {
       var sx = nearestIndex(g.xs, j.sStub.x), sy = nearestIndex(g.ys, j.sStub.y);
       var tx = nearestIndex(g.xs, j.tStub.x), ty = nearestIndex(g.ys, j.tStub.y);
       var W = g.W, N = W * g.H;
-      var best = new Float64Array(N * 4).fill(Infinity);
-      var from = new Int32Array(N * 4).fill(-1);
+      // One set of arrays per grid, reused by every line: a state counts only when
+      // stamped by this search, so nothing is cleared between searches.
+      if (!g.best) { g.best = new Float64Array(N * 4); g.from = new Int32Array(N * 4); g.seen = new Uint32Array(N * 4); g.run = 0; }
+      var run = ++g.run, seen = g.seen, best = g.best, from = g.from;
+      var costOf = function (st) { return seen[st] === run ? best[st] : Infinity; };
       var heap = new Heap();
       var startDir = dirOfSide(j.sSide), endDir = (dirOfSide(j.tSide) + 2) % 4;
       var s0 = (sy * W + sx) * 4 + startDir;
-      best[s0] = 0;
+      best[s0] = 0; from[s0] = -1; seen[s0] = run;
       var h = function (xi, yi) { return Math.abs(g.xs[xi] - g.xs[tx]) + Math.abs(g.ys[yi] - g.ys[ty]); };
       heap.push(h(sx, sy), s0);
       var goal = -1, guard = 0;
       while (heap.a.length && guard++ < 400000) {
         var top = heap.pop(), st = top[1];
         var cell = st >> 2, dir = st & 3, xi = cell % W, yi = (cell - xi) / W;
-        var cost = best[st];
+        var cost = costOf(st);
         if (top[0] > cost + h(xi, yi) + 0.001) continue;
         if (xi === tx && yi === ty) { goal = st; break; }
         for (var d = 0; d < 4; d++) {
@@ -2534,14 +2617,14 @@ export function mountCanvas(host, model, opts = {}) {
           if (seg === 2) continue;
           var len = Math.abs(g.xs[nx] - g.xs[xi]) + Math.abs(g.ys[ny] - g.ys[yi]);
           if (seg === 1 || g.blocked[ncell] === 1) len *= NEAR_COST;
-          var key = Math.min(cell, ncell) + ':' + Math.max(cell, ncell);
-          var used = g.usage[key];
+          // A grid edge's number: its lower cell, twice, plus one when it runs down.
+          var used = g.usage.get(Math.min(cell, ncell) * 2 + (d & 1));
           var share = 0;
-          if (used) for (var u in used) if (u !== j.tgt && u !== j.src) share++;
+          if (used) used.forEach(function (u) { if (u !== j.tgt && u !== j.src) share++; });
           var c = cost + len * (1 + SHARE * Math.min(share, 3)) + (d !== dir ? BEND : 0);
           if (isEnd && d !== endDir) c += BEND;
           var ns = ncell * 4 + d;
-          if (c < best[ns]) { best[ns] = c; from[ns] = st; heap.push(c + h(nx, ny), ns); }
+          if (c < costOf(ns)) { best[ns] = c; from[ns] = st; seen[ns] = run; heap.push(c + h(nx, ny), ns); }
         }
       }
       if (goal < 0) return null;
@@ -2550,8 +2633,11 @@ export function mountCanvas(host, model, opts = {}) {
       cells.reverse();
       for (var k = 1; k < cells.length; k++) {
         var a = cells[k - 1], b = cells[k];
-        var ukey = Math.min(a, b) + ':' + Math.max(a, b);
-        (g.usage[ukey] = g.usage[ukey] || {})[j.tgt] = true;
+        // A stubbed line is drawn in full only on demand: it takes no channel space.
+        if (j.busy) break;
+        var ukey = Math.min(a, b) * 2 + (Math.abs(a - b) === W ? 1 : 0);
+        if (!g.usage.has(ukey)) g.usage.set(ukey, new Set());
+        g.usage.get(ukey).add(j.tgt);
       }
       return cells.map(function (c) { var x = c % W; return { x: g.xs[x], y: g.ys[(c - x) / W] }; });
     }
@@ -2625,11 +2711,15 @@ export function mountCanvas(host, model, opts = {}) {
       });
     }
     // ---- curved: a smooth curve through the routed path ------------------------
-    var CLEAR = 16;
-    function segClear(a, b, obstacles) {
+    // A box's clearance (CLEAR) is kept free where there is room; a narrow gap
+    // between two boxes may still be passed, closer (HARD), at a cost (NEAR), so
+    // a line takes the gap instead of a long way round the whole column.
+    var CLEAR = 16, HARD = 5, NEAR = 2.5;
+    function segClear(a, b, obstacles, pad) {
+      var P = pad === undefined ? CLEAR : pad;
       for (var k = 0; k < obstacles.length; k++) {
         var o = obstacles[k];
-        var r = { l: o.l - CLEAR, r: o.r + CLEAR, t: o.t - CLEAR, b: o.b + CLEAR };
+        var r = { l: o.l - P, r: o.r + P, t: o.t - P, b: o.b + P };
         // Liang-Barsky clip of the segment against the rectangle.
         var t0 = 0, t1 = 1, dx = b.x - a.x, dy = b.y - a.y;
         var p = [-dx, dx, -dy, dy], q = [a.x - r.l, r.r - a.x, a.y - r.t, r.b - a.y];
@@ -2679,25 +2769,34 @@ export function mountCanvas(host, model, opts = {}) {
     // the corners of every box (with clearance), searched per line, then a smooth
     // curve through the corners it passes. A corner several lines pass is taken a
     // little wider by each, so curves keep their distance instead of stacking.
-    var CORNER = 28, SPREAD = 7;
+    var CORNER = 28, SPREAD = 7, CORNER_STEPS = [CORNER, 18, 10];
     function cornerGraph(obstacles) {
       var nodes = [];
       obstacles.forEach(function (o) {
         [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (d) {
-          var p = { x: (d[0] < 0 ? o.l : o.r) + d[0] * CORNER, y: (d[1] < 0 ? o.t : o.b) + d[1] * CORNER, dx: d[0], dy: d[1], uses: 0 };
-          if (!inAny(p, obstacles, 1)) nodes.push(p);
+          // As far out as the neighbouring boxes leave room for.
+          for (var i = 0; i < CORNER_STEPS.length; i++) {
+            var off = CORNER_STEPS[i];
+            var p = { x: (d[0] < 0 ? o.l : o.r) + d[0] * off, y: (d[1] < 0 ? o.t : o.b) + d[1] * off, dx: d[0], dy: d[1], uses: 0 };
+            if (!inAny(p, obstacles, HARD)) { nodes.push(p); break; }
+          }
         });
       });
       var vis = nodes.map(function () { return []; });
       for (var a = 0; a < nodes.length; a++) {
         for (var b = a + 1; b < nodes.length; b++) {
-          if (segClear(nodes[a], nodes[b], obstacles)) {
-            var d = Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y);
-            vis[a].push([b, d]); vis[b].push([a, d]);
-          }
+          var d = linkCost(nodes[a], nodes[b], obstacles);
+          if (d >= 0) { vis[a].push([b, d]); vis[b].push([a, d]); }
         }
       }
       return { nodes: nodes, vis: vis };
+    }
+    // The cost of a straight leg: its length, more where it passes a box closer
+    // than its clearance; -1 where it would touch one.
+    function linkCost(a, b, obstacles) {
+      if (!segClear(a, b, obstacles, HARD)) return -1;
+      var d = Math.hypot(a.x - b.x, a.y - b.y);
+      return segClear(a, b, obstacles) ? d : d * NEAR;
     }
     function anyAngle(cg, from, to, obstacles) {
       if (segClear(from, to, obstacles)) return [];
@@ -2705,13 +2804,17 @@ export function mountCanvas(host, model, opts = {}) {
       var dist = new Float64Array(N + 2).fill(Infinity), prev = new Int32Array(N + 2).fill(-1), done = new Uint8Array(N + 2);
       var startLinks = [], endLinks = [];
       cg.nodes.forEach(function (p, k) {
-        if (segClear(from, p, obstacles)) startLinks.push([k, Math.hypot(p.x - from.x, p.y - from.y)]);
-        if (segClear(p, to, obstacles)) endLinks.push([k, Math.hypot(p.x - to.x, p.y - to.y)]);
+        var ds = linkCost(from, p, obstacles), dt = linkCost(p, to, obstacles);
+        if (ds >= 0) startLinks.push([k, ds]);
+        if (dt >= 0) endLinks.push([k, dt]);
       });
       var endOf = {};
       endLinks.forEach(function (l) { endOf[l[0]] = l[1]; });
       var heap = new Heap();
       dist[S] = 0; heap.push(0, S);
+      // Straight across, passing close: allowed at its cost, against the way round.
+      var direct = linkCost(from, to, obstacles);
+      if (direct >= 0) { dist[T] = direct; prev[T] = S; heap.push(direct, T); }
       while (heap.a.length) {
         var top = heap.pop(), u = top[1];
         if (done[u]) continue;
@@ -2777,6 +2880,8 @@ export function mountCanvas(host, model, opts = {}) {
     }
     function apply() {
       var mode = state.lineStyle;
+      var busy = busyTargets();
+      cy.batch(function () { cy.edges().forEach(function (e) { e.toggleClass('busy', !!busy[e.target().id()]); }); });
       var edges = cy.edges().filter(function (e) { return e.visible() && e.source().id() !== e.target().id(); });
       var leaves = cy.nodes().filter(function (n) { return n.visible(); });
       if (mode === 'straight' || leaves.length > MAX_NODES) {
@@ -2789,7 +2894,7 @@ export function mountCanvas(host, model, opts = {}) {
       edges.forEach(function (e) {
         var sr = rects[e.source().id()], tr = rects[e.target().id()];
         if (!sr || !tr) return;
-        jobs.push({ edge: e, src: e.source().id(), tgt: e.target().id(), sr: sr, tr: tr, sSide: sideToward(sr, tr), tSide: sideToward(tr, sr) });
+        jobs.push({ edge: e, src: e.source().id(), tgt: e.target().id(), sr: sr, tr: tr, sSide: sideToward(sr, tr), tSide: sideToward(tr, sr), busy: !!busy[e.target().id()] });
       });
       // Obstacles: every box except compound boxes, which lines may enter.
       var obstacles = [];
@@ -2823,7 +2928,7 @@ export function mountCanvas(host, model, opts = {}) {
         pts = simplify(pts);
         routes.push({ job: j, tgt: j.tgt, pts: pts });
       });
-      nudge(routes, obstacles);
+      nudge(routes.filter(function (r) { return !r.job.busy; }), obstacles);
       if (mode === 'bezier') {
         var cg = cornerGraph(obstacles);
         routes.forEach(function (r) { r.pts = curveRoute(r.job, cg, obstacles); });
@@ -3447,6 +3552,10 @@ export function mountCanvas(host, model, opts = {}) {
   ROOT.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; persist(); rebuild(true); });
   ROOT.getElementById('dataCouplingToggle').checked = state.dataCoupling;
   ROOT.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; persist(); renderLegend(); rebuild(true); });
+  ROOT.getElementById('busyToggle').checked = state.busyStubs;
+  ROOT.getElementById('busyToggle').addEventListener('change', function (ev) { state.busyStubs = ev.target.checked; persist(); edgeRouter.schedule(); });
+  ROOT.getElementById('busyAtSelect').value = String(state.busyAt);
+  ROOT.getElementById('busyAtSelect').addEventListener('change', function (ev) { state.busyAt = Number(ev.target.value); persist(); edgeRouter.schedule(); });
   ROOT.getElementById('issuesToggle').checked = state.showIssues;
   ROOT.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; state.issuesChosen = true; persist(); rebuild(false); renderPanel(); });
   ROOT.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });

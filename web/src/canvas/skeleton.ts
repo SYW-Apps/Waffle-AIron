@@ -58,6 +58,21 @@ export const CANVAS_SKELETON = `<header id="hdr">
         </select>
         </span>
       </div>
+      <label class="swrow">
+        <span class="lbl">Busy boxes<span class="sub">lines into a box many use as short stubs; hover or select to see them</span></span>
+        <span class="toggle"><input type="checkbox" id="busyToggle"><span class="track"></span></span>
+      </label>
+      <div class="swrow" style="flex-direction:column;align-items:flex-start;gap:6px;padding:8px 12px 10px;">
+        <span class="lbl" style="padding:0">Busy from<span class="sub" style="margin-top:2px">how many lines into one box make it busy</span></span>
+        <span class="selectWrap">
+        <select id="busyAtSelect" class="selectControl">
+          <option value="5">5 lines</option>
+          <option value="8">8 lines</option>
+          <option value="12">12 lines</option>
+          <option value="20">20 lines</option>
+        </select>
+        </span>
+      </div>
     </div>
   </div>
   <button class="tbtn" id="fitBtn" title="Fit graph to view">Fit</button>
