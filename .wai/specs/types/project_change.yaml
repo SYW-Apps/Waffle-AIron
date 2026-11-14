@@ -1,0 +1,48 @@
+kind: value-object
+id: project_change
+name: ProjectChange
+description: >-
+  One change to the bound project's own settings in .wai/project.yaml (sdd_configure_project): every
+  field it states is written, every field it leaves out is kept. Members, externals, network,
+  practices and rules have their own tools.
+fields:
+  - name: name
+    type: string
+    description: The project's human-readable name
+    optional: true
+  - name: description
+    type: string
+    description: The project's description
+    optional: true
+  - name: projectType
+    type: string
+    description: The governing profile (backend, frontend, ...)
+    optional: true
+  - name: executionTier
+    type: string
+    description: execution.tier
+    optional: true
+  - name: selectPacks
+    type: list<PackSelection>
+    description: Packs to select (a re-selected pack moves last)
+    optional: true
+  - name: deselectPacks
+    type: list<string>
+    description: Pack names to deselect
+    optional: true
+  - name: useGlobalPacks
+    type: bool
+    description: extensions.useGlobalPacks
+    optional: true
+  - name: targets
+    type: list<TargetConfig>
+    description: The output targets, replacing the stored list
+    optional: true
+  - name: composition
+    type: CompositionConfig
+    description: The composition policy, replacing the stored one
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-11-14T16:08:59.781Z'
+updatedAt: '2026-11-14T16:13:07.898Z'

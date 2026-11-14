@@ -1,0 +1,36 @@
+kind: value-object
+id: debt_change
+name: DebtChange
+description: >-
+  One change to the conformance debt register (`rules.conformance.carried`, sdd_carry_findings). A
+  reason group is addressed by its position in the register; a dry run names the group that position
+  holds.
+fields:
+  - name: action
+    type: DebtAction
+    description: What the change does
+    optional: false
+  - name: group
+    type: int
+    description: The reason group's position (0-based); required for extend, revise and remove
+    optional: true
+  - name: kind
+    type: CarriedDebtKind
+    description: 'The group''s kind: required for add, optional for revise'
+    optional: true
+  - name: why
+    type: string
+    description: 'The group''s reason: required for add, optional for revise'
+    optional: true
+  - name: revisit
+    type: string?
+    description: What would settle a provisional classification; null on revise removes it
+    optional: true
+  - name: findings
+    type: list<CarriedFinding>
+    description: The findings to add (add, extend) or remove (remove; by code, spec and at)
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-11-14T16:08:53.670Z'
+updatedAt: '2026-11-14T16:13:06.040Z'

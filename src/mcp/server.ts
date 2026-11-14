@@ -99,6 +99,8 @@ import { removeExternal as dropExternal, updateExternalUse as changeExternalUse 
 import { listConsumers as externalConsumers, diffSurface as surfaceDiff } from './adapters/surfaces.js';
 // The read-only network tools' workflows (mcp_network_orchestrator).
 import { flows as networkFlows, explain as explainNetworkFlow, declare as declareNetwork } from './network.js';
+import { reviseRules as reviseProjectRules, reviseDebt as reviseProjectDebt, reviseProject as reviseProjectSettings } from './configuration.js';
+import { PackSelectionSchema, TargetConfigSchema, CompositionConfigSchema, type PackSelection, type TargetConfig, type CompositionConfig } from '../models/project.js';
 import type { NetworkFlow } from './adapters/network.js';
 import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
 import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork, listRules } from './adapters/validator.js';
@@ -4060,6 +4062,114 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           ? (written ? `Declared this project's network${description ? ` ("${description}")` : ''}. Run sdd_validate_tree: the network rules now judge the design. The human re-locks once it validates.` : 'This project already declares that network: nothing was written.')
           : (written ? 'Removed this project\'s network declaration. Run sdd_validate_tree; the human re-locks.' : 'This project declares no network: nothing was removed.');
         return structured(text, { written, declared });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ set?: Record<string, unknown>; unset?: string[]; add?: Record<string, string[]>; remove?: Record<string, string[]>; why?: string; dryRun?: boolean }>(server,
+    'sdd_update_rules',
+    {
+      description: 'Change the bound project\'s `rules` in .wai/project.yaml granularly — `set` (path: value, e.g. {"conformance.requireCode": true, "sddRuleSeverity.UNUSED_COMPONENT": "notice"}), `unset`, and `add`/`remove` on list fields (conformance.unclaimed, sourceRoots, exclude, testRoots, metaAgentTags); paths are relative to `rules`. Each value is checked against the rules schema. Setting a rule below its default severity is a LOWERING: it needs `why`, which is written beside it, and every run keeps reporting it (RULE_LOWERED) — quieting a rule is never a fix for its finding, only a decision the human approves. The debt register is not changed here (sdd_carry_findings). The rules are part of the approval, so the human re-locks after a written change. Use it instead of editing .wai/project.yaml by hand. Answers the rules before and after and every rule lowered; dryRun writes nothing. A tree-scoped write.',
+      inputSchema: {
+        set: z.record(z.string(), z.unknown()).optional().describe('Path (relative to rules, dotted) to value: each value is written at its path and checked against the rules schema'),
+        unset: z.array(z.string()).optional().describe('Paths removed, so the setting falls back to its default'),
+        add: z.record(z.string(), z.array(z.string())).optional().describe('List path to entries appended when absent'),
+        remove: z.record(z.string(), z.array(z.string())).optional().describe('List path to entries removed'),
+        why: z.string().optional().describe('Why the change lowers a rule below its default severity; required when it does, and written as that code\'s severityReasons entry'),
+        dryRun: z.boolean().optional().describe('Answer what the change would do and write nothing'),
+      },
+    },
+    ({ dryRun, ...change }) => {
+      try {
+        const revision = reviseProjectRules(change, dryRun ?? false);
+        const lowered = revision.lowered.map((l) => `${l.code}: ${l.from} -> ${l.to} (${l.why ?? 'no reason'})`);
+        const head = !revision.wrote
+          ? (dryRun ? 'Dry run: nothing was written.' : 'The rules already read that way: nothing was written.')
+          : 'Wrote the rules to .wai/project.yaml.';
+        const text = [
+          head,
+          lowered.length > 0 ? `Lowered below their default (every run reports each as RULE_LOWERED with its reason): ${lowered.join('; ')}.` : 'No rule was newly lowered.',
+          revision.wrote ? 'The rules are part of the approval: the human re-locks. Run sdd_validate_tree.' : '',
+          JSON.stringify({ before: revision.before, after: revision.after }, null, 2),
+        ].filter((line) => line !== '').join('\n');
+        return structured(text, { ...revision });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ action: 'add' | 'extend' | 'revise' | 'remove'; group?: number; kind?: 'drift' | 'undecided' | 'unreadable'; why?: string; revisit?: string | null; findings?: { code: string; spec: string; at: string; covers?: string[] }[]; dryRun?: boolean }>(server,
+    'sdd_carry_findings',
+    {
+      description: 'Change the conformance debt register (`rules.conformance.carried`) in .wai/project.yaml — `add` a reason group (kind: drift | undecided | unreadable, why, optional revisit) with its findings ({code, spec, at, covers?}), `extend` a group with findings, `revise` a group\'s kind, why or revisit, or `remove` findings from a group (the whole group when none are named). Groups are addressed by position; dryRun shows which group that is. Only a code a rule declares carryable may be carried. An entry is the claim that a finding is right and unpaid, never that it is wrong — for that, fix the spec or the code. Run sdd_validate_tree after it: it names a unit a carried finding reports that the entry does not list, and an entry that stopped applying. Use it instead of editing .wai/project.yaml by hand. Answers the register before and after. A tree-scoped write.',
+      inputSchema: {
+        action: z.enum(['add', 'extend', 'revise', 'remove']).describe('What the change does'),
+        group: z.number().int().min(0).optional().describe('The reason group\'s position (0-based); required for extend, revise and remove'),
+        kind: z.enum(['drift', 'undecided', 'unreadable']).optional().describe('The group\'s kind: required for add, optional for revise'),
+        why: z.string().optional().describe('The group\'s reason: required for add, optional for revise'),
+        revisit: z.string().nullable().optional().describe('What would settle a provisional classification; null on revise removes it'),
+        findings: z.array(z.object({
+          code: z.string().describe('The finding\'s issue code, which a rule must declare carryable'),
+          spec: z.string().describe('The spec the finding is anchored to'),
+          at: z.string().describe('The site inside that spec the finding names'),
+          covers: z.array(z.string()).optional().describe('The units an aggregating finding covers'),
+        })).optional().describe('The findings to add (add, extend) or remove (remove; by code, spec and at)'),
+        dryRun: z.boolean().optional().describe('Answer what the change would do and write nothing'),
+      },
+    },
+    ({ dryRun, ...change }) => {
+      try {
+        const revision = reviseProjectDebt(change, dryRun ?? false);
+        const head = !revision.wrote
+          ? (dryRun ? 'Dry run: nothing was written.' : 'The register already reads that way: nothing was written.')
+          : 'Wrote the debt register to .wai/project.yaml.';
+        const text = [
+          head,
+          `The register held ${revision.before.length} reason group${revision.before.length === 1 ? '' : 's'} and now holds ${revision.after.length}.`,
+          'Run sdd_validate_tree: it names a unit a carried finding reports that its entry does not list, and an entry that stopped applying.',
+          JSON.stringify({ before: revision.before, after: revision.after }, null, 2),
+        ].join('\n');
+        return structured(text, { ...revision });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ name?: string; description?: string; projectType?: string; executionTier?: string; selectPacks?: PackSelection[]; deselectPacks?: string[]; useGlobalPacks?: boolean; targets?: TargetConfig[]; composition?: CompositionConfig; dryRun?: boolean }>(server,
+    'sdd_configure_project',
+    {
+      description: 'Change the bound project\'s own settings in .wai/project.yaml — name, description, projectType, execution tier, packs to select and deselect, useGlobalPacks, targets and composition; each only when stated. Members, externals, network, practices and rules have their own tools. Answers the configuration before and after and the parts of the approval the change moves (packs, composition, projectType), which the human re-locks. Use it instead of editing .wai/project.yaml by hand. dryRun writes nothing. A tree-scoped write.',
+      inputSchema: {
+        name: z.string().optional().describe('The project\'s human-readable name'),
+        description: z.string().optional().describe('The project\'s description'),
+        projectType: z.string().optional().describe('The governing profile (backend, frontend, ...)'),
+        executionTier: z.string().optional().describe('execution.tier, the execution-budget dial'),
+        selectPacks: z.array(PackSelectionSchema).optional().describe('Packs to select (a re-selected pack moves last)'),
+        deselectPacks: z.array(z.string()).optional().describe('Pack names to deselect'),
+        useGlobalPacks: z.boolean().optional().describe('extensions.useGlobalPacks'),
+        targets: z.array(TargetConfigSchema).optional().describe('The output targets, replacing the stored list'),
+        composition: CompositionConfigSchema.optional().describe('The composition policy, replacing the stored one'),
+        dryRun: z.boolean().optional().describe('Answer what the change would do and write nothing'),
+      },
+    },
+    ({ dryRun, ...change }) => {
+      try {
+        const revision = reviseProjectSettings(change, dryRun ?? false);
+        const head = !revision.wrote
+          ? (dryRun ? 'Dry run: nothing was written.' : 'The configuration already reads that way: nothing was written.')
+          : 'Wrote the project settings to .wai/project.yaml.';
+        const text = [
+          head,
+          revision.approvalMoves.length > 0
+            ? `The change moves what the lock approves (${revision.approvalMoves.join(', ')}): the human re-locks.`
+            : 'The change moves nothing the lock approves.',
+          JSON.stringify({ before: revision.before, after: revision.after }, null, 2),
+        ].join('\n');
+        return structured(text, { ...revision });
       } catch (e) {
         return errMessage(e);
       }

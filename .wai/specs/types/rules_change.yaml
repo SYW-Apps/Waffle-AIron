@@ -1,0 +1,37 @@
+kind: value-object
+id: rules_change
+name: RulesChange
+description: >-
+  One granular change to a project's `rules` (sdd_update_rules). Paths are relative to `rules` and
+  dotted (`conformance.requireCode`, `sddRuleSeverity.UNUSED_COMPONENT`); a map key is the segment
+  after the map's name. `rules.conformance.carried` is not reachable here: the debt register has its
+  own change (DebtChange).
+fields:
+  - name: set
+    type: map<string, any>
+    description: 'Path to value: each value is written at its path and checked against the rules schema'
+    optional: true
+  - name: unset
+    type: list<string>
+    description: Paths removed, so the setting falls back to its default
+    optional: true
+  - name: add
+    type: map<string, list<string>>
+    description: >-
+      List path to entries appended when absent (conformance.unclaimed, conformance.sourceRoots,
+      conformance.exclude, conformance.testRoots, metaAgentTags)
+    optional: true
+  - name: remove
+    type: map<string, list<string>>
+    description: List path to entries removed
+    optional: true
+  - name: why
+    type: string
+    description: >-
+      Why the change lowers a rule below its default severity; required when it does, and written as
+      that code's severityReasons entry
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-11-14T16:08:34.791Z'
+updatedAt: '2026-11-14T16:13:01.814Z'

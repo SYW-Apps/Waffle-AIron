@@ -17,6 +17,12 @@ import {
   type ExternalDeclaration,
   type ExternalSource,
   type NetworkDeclaration,
+  type RulesChange,
+  type RulesRevision,
+  type DebtChange,
+  type DebtRevision,
+  type ProjectChange,
+  type ProjectRevision,
 } from '../models/project.js';
 import { ensureDir, listFiles, pathExists, getProjectRoot, renamePath, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, readsV5Forms, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
@@ -9257,6 +9263,29 @@ export function describeProject(name: string, description?: string): void {
  */
 export function setNetwork(network: NetworkDeclaration | null): boolean {
   return projectConfigRepository.setNetwork(network);
+}
+
+/**
+ * core_orchestrator.reviseRules — one granular change to the bound project's
+ * rules, written through the project config Repository. `defaults` is each
+ * rule code's default severity, so a lowering is told apart.
+ */
+export function reviseRules(change: RulesChange, defaults: Record<string, string>, dryRun: boolean): RulesRevision {
+  return projectConfigRepository.reviseRules(change, defaults, dryRun);
+}
+
+/**
+ * core_orchestrator.reviseDebt — one change to the conformance debt register,
+ * written through the project config Repository. `carryable` is the codes the
+ * active rule set declares carryable.
+ */
+export function reviseDebt(change: DebtChange, carryable: string[], dryRun: boolean): DebtRevision {
+  return projectConfigRepository.reviseDebt(change, carryable, dryRun);
+}
+
+/** core_orchestrator.reviseProject — one change to the bound project's own settings, through the project config Repository. */
+export function reviseProject(change: ProjectChange, dryRun: boolean): ProjectRevision {
+  return projectConfigRepository.reviseProject(change, dryRun);
 }
 
 /** Record the profile selection hosted policy applied. */

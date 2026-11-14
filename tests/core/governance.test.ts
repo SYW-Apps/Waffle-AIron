@@ -234,6 +234,8 @@ describe('property: deviation-is-visible-not-blocking', () => {
       const rules = doc.rules as Record<string, unknown>;
       // UNUSED_LINT_ALLOW is a code the pack does not set: the member's own business.
       rules.sddRuleSeverity = { UNUSED_COMPONENT: 'warning', UNUSED_LINT_ALLOW: 'off' };
+      // A rule set below its default carries its reason, or the run warns.
+      rules.severityReasons = { UNUSED_LINT_ALLOW: 'The member keeps no lint allows.' };
       rules.designDepth = 'narratives';
       rules.naming = { components: 'kebab-case', stereotypes: { Orchestrator: { suffix: 'workflow' } } };
       rules.complexity = { maxMethodParams: 9 };

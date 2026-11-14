@@ -62,7 +62,16 @@ fields:
     type: DesignDepth
     description: How deep the design must go before it is complete. A subsystem may override it.
     optional: true
+  - name: severityReasons
+    type: map<string, string>
+    description: >-
+      Why a rule code is set below its default severity, keyed by the code in sddRuleSeverity. A
+      lowered rule is never silent: every run reports it with its reason (RULE_LOWERED, a notice),
+      and a lowered rule with no reason here is RULE_LOWERED_WITHOUT_REASON. sdd_update_rules writes
+      the reason it is given beside the severity it lowers, and drops it when the severity returns
+      to its default.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-21T21:19:54.128Z'
+updatedAt: '2026-11-14T16:08:28.062Z'

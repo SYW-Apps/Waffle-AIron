@@ -257,12 +257,15 @@ describe('wairon validate --ci (CLI)', () => {
   }, 60_000);
 
   it('the same finding set to notice is printed as a notice, counted, and --ci passes', async () => {
-    const dir = makeProject({ status: 'draft', rules: { sddRuleSeverity: { MISSING_ENDPOINT: 'notice' } } });
+    // The lowering states its reason; without one the run would warn (RULE_LOWERED_WITHOUT_REASON) and --ci would fail.
+    const dir = makeProject({ status: 'draft', rules: { sddRuleSeverity: { MISSING_ENDPOINT: 'notice' }, severityReasons: { MISSING_ENDPOINT: 'The endpoint waits on the gateway design.' } } as never });
     dirs.push(dir);
     const { code, out } = await validateCli(dir, true);
     expect(code).toBe(0);
+    // The finding itself, and the lowering that made it one.
+    expect(out).toContain('[RULE_LOWERED]');
     expect(out).toMatch(/notice +\[icomp-a\] \[MISSING_ENDPOINT\]/);
-    expect(out).toContain('1 notice(s) reported — never part of the failure decision (--ci does not fail on notices).');
+    expect(out).toContain('2 notice(s) reported — never part of the failure decision (--ci does not fail on notices).');
     expect(out).toContain('All checks passed');
   }, 60_000);
 

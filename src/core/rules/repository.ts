@@ -5,6 +5,7 @@ import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
 import { memberNamesRule } from './integrity/member-names.js';
 import { localIdsRule } from './integrity/local-ids.js';
 import { projectIdentityRule } from './integrity/project-identity.js';
+import { loweredSeveritiesRule } from './integrity/lowered-severities.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
@@ -149,6 +150,8 @@ export const SDD_RULES: SddRule[] = [
   // The project's own id, beside the spec ids: declared, well-formed, and the
   // one its lock approved.
   projectIdentityRule,
+  // A rule the project sets below its default is reported on every run, with its reason.
+  loweredSeveritiesRule,
   roundtripRule,
   // The type vocabulary in three questions: what a type declares about
   // itself, then the identifiers its fields name, then the ones its

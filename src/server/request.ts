@@ -275,6 +275,9 @@ const WRITE_TOOL_PREFIXES = [
   'sdd_write_',
   'sdd_define_',
   'sdd_set_',
+  // The project configuration tools: rules, the debt register and the project's own settings.
+  'sdd_carry_',
+  'sdd_configure_',
   'sdd_initialize_',
   'sdd_externalize_',
   'sdd_internalize_',

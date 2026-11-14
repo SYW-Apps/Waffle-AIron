@@ -1708,6 +1708,53 @@ methods:
     signature: 'renderTypeDiagrams(): list<TypeDiagram>'
     returns: list<TypeDiagram>
     params: []
+  - name: reviseRules
+    description: >-
+      Apply one granular change to the bound project's rules, through the project config Repository:
+      a lowered severity carries its reason, and the answer is the rules before and after.
+    signature: 'reviseRules(change: RulesChange, defaults: map<string, string>, dryRun: bool): RulesRevision'
+    returns: RulesRevision
+    params:
+      - name: change
+        type: RulesChange
+        description: The change
+      - name: defaults
+        type: map<string, string>
+        description: Each rule code's default severity
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
+  - name: reviseDebt
+    description: Apply one change to the conformance debt register, through the project config Repository.
+    signature: 'reviseDebt(change: DebtChange, carryable: list<string>, dryRun: bool): DebtRevision'
+    returns: DebtRevision
+    params:
+      - name: change
+        type: DebtChange
+        description: The change
+      - name: carryable
+        type: list<string>
+        description: The codes the active rule set declares carryable
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
+  - name: reviseProject
+    description: Apply one change to the bound project's own settings, through the project config Repository.
+    signature: 'reviseProject(change: ProjectChange, dryRun: bool): ProjectRevision'
+    returns: ProjectRevision
+    params:
+      - name: change
+        type: ProjectChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T12:04:16.427Z'
+updatedAt: '2026-11-14T16:10:01.490Z'
