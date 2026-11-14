@@ -1,0 +1,19 @@
+id: mcp_configuration_orchestrator
+name: MCP Configuration Orchestrator
+description: >-
+  The project configuration tools' workflows (sdd_update_rules, sdd_carry_findings,
+  sdd_configure_project): they read what the active rule set says (each code's default severity,
+  which codes are carryable) through the validator client adapter, hand the change to the project
+  configuration through the core client adapter, and answer the before and after as text and
+  structured content, saying what re-opens the approval. Its own component, because these workflows
+  share the validator and core adapters with no other MCP workflow's purpose: they are how an agent
+  changes .wai/project.yaml without editing it by hand.
+subsystem: sdd_mcp
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - mcp_core_adapter
+  - mcp_validator_adapter
+status: complete
+createdAt: '2026-11-14T16:10:33.236Z'
+updatedAt: '2026-11-14T16:10:34.122Z'

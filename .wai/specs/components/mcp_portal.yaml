@@ -13,6 +13,7 @@ dependsOn:
   - mcp_migration_orchestrator
   - mcp_network_orchestrator
   - mcp_lookup_orchestrator
+  - mcp_configuration_orchestrator
 transport: JSONRPC
 invokedBy:
   kind: entry
@@ -22,4 +23,4 @@ invokedBy:
     verbs to remote MCP clients through a server built from this Portal's router
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T18:58:05.483Z'
+updatedAt: '2026-11-14T16:10:55.263Z'

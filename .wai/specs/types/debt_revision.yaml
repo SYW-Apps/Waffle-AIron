@@ -1,0 +1,23 @@
+kind: value-object
+id: debt_revision
+name: DebtRevision
+description: >-
+  What a DebtChange did, or with dryRun would do: the register before and after, and whether it
+  wrote.
+fields:
+  - name: before
+    type: list<CarriedDebt>
+    description: The register as stored before the change
+    optional: false
+  - name: after
+    type: list<CarriedDebt>
+    description: The register the change writes
+    optional: false
+  - name: wrote
+    type: bool
+    description: Whether the configuration was written
+    optional: false
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-11-14T16:08:56.398Z'
+updatedAt: '2026-11-14T16:13:06.923Z'
