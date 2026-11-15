@@ -6038,6 +6038,8 @@ var MODEL = __MODEL_JSON__;
     return window.location.pathname.replace(/\\/$/, '') + '/openapi';
   }
   function openApiAllowed() {
+    // A host with no OpenAPI page to open (the static demo) turns the affordance off.
+    if (typeof opts !== 'undefined' && opts && opts.hideOpenApi) return false;
     return (typeof opts !== 'undefined' && opts && opts.onOpenApi) || openApiSiblingHref() !== null;
   }
   // The OpenAPI document is a PROJECT-level artifact (the whole project's external

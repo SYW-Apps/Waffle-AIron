@@ -66,6 +66,13 @@ export function sywTokensFromEngine(v: Record<string, string>): Record<(typeof S
   };
 }
 
+let fixedTokens: Record<string, string> = {};
+
+/** Fix `--syw-*` tokens to exact values, applied after every bridge run (empty: none fixed). */
+export function setFixedSywTokens(tokens: Record<string, string>): void {
+  fixedTokens = tokens;
+}
+
 /**
  * Apply the bridge plus the DS document attributes to <html>.
  *
@@ -82,6 +89,8 @@ export function applySywBridge(vars: Record<string, string>, mode: 'light' | 'da
   for (const [k, value] of Object.entries(sywTokensFromEngine(vars))) {
     if (value) root.style.setProperty(k, value);
   }
+  // Tokens a framing page fixed (the static demo) win over the bridge's own derivation.
+  for (const [k, value] of Object.entries(fixedTokens)) root.style.setProperty(k, value);
   root.dataset.density = 'compact';
   root.style.colorScheme = mode === 'light' ? 'light' : 'dark';
 }

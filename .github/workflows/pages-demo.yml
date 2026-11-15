@@ -1,0 +1,127 @@
+name: Publish demo
+
+# The static demo of wairon's own design (scripts/demo, docs there), published to GitHub Pages at
+#   https://syw-apps.github.io/Waffle-AIron/demos/wairon/
+# at the same address after every stable release, so a page that frames it never changes URL.
+#
+# Why workflow_run and not `on: release`: the release is created by the Release workflow with the
+# repository token, and an event made by that token starts no other workflow, so `on: release`
+# would never fire. This workflow instead follows the Release workflow's completion and asks
+# GitHub whether a stable (not pre-release, not draft) release exists for the tag that ran. It
+# does not require every Release job to have passed: a failed side publish (the CDN) must not hold
+# the demo back, and a tag with no published release builds nothing.
+#
+# Run by hand with a tag to publish that release's demo, or with none for the latest stable one.
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish the demo of (default is the latest stable release)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# One publish at a time; a later one waits rather than cancelling a deploy in flight.
+concurrency:
+  group: pages-demo
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the demo
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.target.outputs.publish }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_TAG: ${{ github.event.workflow_run.head_branch }}
+      INPUT_TAG: ${{ inputs.tag }}
+    steps:
+      # The tag to publish, and whether it is a stable release at all.
+      - name: Choose the release
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-}"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_run" ]; then TAG="${RUN_TAG}"; fi
+          if [ -z "${TAG}" ]; then
+            TAG="$(gh release list --exclude-pre-releases --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          fi
+          if [ -z "${TAG}" ]; then
+            echo "::notice::No stable release found; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! gh release view "${TAG}" --json isPrerelease,isDraft --jq '.isPrerelease or .isDraft' > flags.txt 2>/dev/null; then
+            echo "::notice::${TAG} has no published release (the Release workflow did not get that far); nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(cat flags.txt)" = "true" ]; then
+            echo "::notice::${TAG} is a pre-release or a draft; the demo follows stable releases only."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.target.outputs.publish == 'true'
+        with:
+          ref: ${{ steps.target.outputs.tag }}
+
+      - name: Setup Node.js
+        if: steps.target.outputs.publish == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.target.outputs.publish == 'true'
+        run: npm ci
+
+      # The demo records this checkout's own design through the built CLI, so both builds come first.
+      - name: Build web app
+        if: steps.target.outputs.publish == 'true'
+        run: npm run build:web
+
+      - name: Build TypeScript + copy assets
+        if: steps.target.outputs.publish == 'true'
+        run: npm run build
+
+      # Fails the job when the recording holds a name, an email, a branch, a path or a code-linkage
+      # field, or when the page outgrows its size budget.
+      - name: Build the demo
+        if: steps.target.outputs.publish == 'true'
+        run: npm run build:demo
+
+      - name: Upload the site
+        if: steps.target.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

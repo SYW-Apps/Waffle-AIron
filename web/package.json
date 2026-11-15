@@ -8,6 +8,7 @@
     "dev": "vite",
     "prebuild": "node ../scripts/gen-canvas-engine.mjs",
     "build": "tsc -b && vite build",
+    "build:demo": "vite build --mode demo",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

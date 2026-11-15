@@ -12,6 +12,8 @@ import {
 import { SywButton, SywTabs } from '@syw/design-react';
 import { InfoTip } from './components/InfoTip';
 import { useRealtime } from './realtime';
+import { DEMO } from './demo/flag';
+import { NOT_IN_DEMO_MESSAGE } from './demo/snapshot';
 
 /**
  * Shared UI primitives for the wairon web app, built on the SYW Design System
@@ -675,6 +677,12 @@ export function ErrorNote(props: { children: ReactNode; onRetry?: () => void }) 
  *  failure, otherwise the rendered children. Keeps every data view consistent. */
 export function AsyncView<T>(props: { state: Async<T>; children: (data: T) => ReactNode }) {
   if (props.state.loading && props.state.data === undefined) return <div className="pad"><Spinner /></div>;
+  if (DEMO && props.state.error === NOT_IN_DEMO_MESSAGE)
+    return (
+      <div className="pad">
+        <EmptyState>{NOT_IN_DEMO_MESSAGE}</EmptyState>
+      </div>
+    );
   if (props.state.error && props.state.data === undefined)
     return (
       <div className="pad">

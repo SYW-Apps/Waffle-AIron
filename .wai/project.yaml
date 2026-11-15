@@ -178,6 +178,16 @@ rules:
       - web/src/components/TooltipLayer.tsx
       - web/src/components/ThemeMenu.tsx
       - web/src/components/UnitSelect.tsx
+      # The static read-only demo build (vite --mode demo, behind __WAIRON_DEMO__):
+      # the recorded-snapshot reader, the embed protocol and its shell. Part of the
+      # same SPA as its siblings here, which are not spec'd as View components.
+      - web/src/demo/DemoApp.tsx
+      - web/src/demo/canon.d.mts
+      - web/src/demo/canon.mjs
+      - web/src/demo/embed.ts
+      - web/src/demo/flag.ts
+      - web/src/demo/snapshot.ts
+      - web/src/demo/tokens.ts
       - web/src/main.tsx
       - web/src/popover.d.ts
       - web/src/realtime.tsx

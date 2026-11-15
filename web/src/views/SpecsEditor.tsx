@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, asList, get, mcpCall, post } from '../api';
+import { DEMO } from '../demo/flag';
 import {
   AsyncButton,
   AsyncView,
@@ -735,7 +736,9 @@ function SpecForm(props: {
 }) {
   const { projectId, sel, spec, typeSuggestions } = props;
   const toast = useToast();
-  const [draft, setDraft] = useState<any>(() => clone(spec));
+  const [draft, setDraftState] = useState<any>(() => clone(spec));
+  // The static demo shows a spec as recorded: the form takes no edits.
+  const setDraft: typeof setDraftState = DEMO ? () => undefined : setDraftState;
   const formRef = useRef<HTMLDivElement>(null);
   const fieldFlags = props.fieldFlags ?? EMPTY_FIELD_FLAGS;
   const flagFor = (field: string) => fieldFlags.get(field);
@@ -843,7 +846,7 @@ function SpecForm(props: {
           <code className="subtle">{sel.id}</code>
         </div>
         <div className="row-actions">
-          <AsyncButton variant="primary" action={save} onError={toast.bad} disabled={!dirty}>Save changes</AsyncButton>
+          {!DEMO && <AsyncButton variant="primary" action={save} onError={toast.bad} disabled={!dirty}>Save changes</AsyncButton>}
         </div>
       </div>
 
@@ -1591,6 +1594,12 @@ export function SpecsTab({
     return map;
   }, [validation, selected]);
 
+  // The static demo shows its recorded validation result on load rather than waiting for a click.
+  useEffect(() => {
+    if (DEMO) void runValidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function runValidate() {
     const res = await mcpCall<{ errors?: any[]; warnings?: any[]; notices?: any[] }>(projectId, 'sdd_validate_tree', {});
     // An instance older than the notice severity sends no notices list.
@@ -1600,10 +1609,10 @@ export function SpecsTab({
   return (
     <div className="stack-lg">
       {approvalBanner}
-      <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} />
+      {!DEMO && <ProjectConfigPanel projectId={projectId} config={config} profiles={profiles.data ?? []} />}
       <AsyncView state={graph}>
         {(g) => (
-          <div className="spec-layout">
+          <div className={DEMO ? 'spec-layout demo-readonly' : 'spec-layout'}>
             <Picker
               graph={g}
               activeComponentId={activeComponentId}
