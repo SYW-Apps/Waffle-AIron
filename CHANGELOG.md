@@ -6,6 +6,12 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **A read-only demo of wairon's own design is published with each stable release.** It shows the `wairon dev` canvas and specs views as a static snapshot at https://syw-apps.github.io/Waffle-AIron/demos/wairon/, and the address stays the same across releases.
+  - **No server:** the page and its data files are all it loads, about 0.5 MB compressed at first load. Nothing can be changed, and there is no live connection.
+  - **What it holds:** two subsystems of wairon's own design. File paths and other code locations are removed. Names, email addresses and branch names are replaced, and the build fails if any remain.
+  - **Embedding:** a page on an allowed origin can frame the demo, choose its view and pass its theme to it through `postMessage`. Opened on its own, the page uses its own theme.
+  - **Building it locally:** `npm run build:demo` builds the demo into `site/`, and `scripts/demo/README.md` describes how. A new workflow publishes it to GitHub Pages after each stable release, and it can also be run by hand.
+
 - **The `wairon dev` page no longer answers "unauthorized" to a lock or another action after another dev server ran on the same host, or after this one restarted.** Session cookies are shared by every port of a host, so the page could hold a session its own server did not know. Reads kept working, because a read re-establishes the local session, but the next action was refused until the page was reloaded or the action retried. An action refused this way now re-establishes the session and is sent once more. A hosted instance is unchanged: a refused action still asks the user to sign in.
 
 - **A Store is the default data component; an Index does no IO.** Simple state no longer needs a Repository, a Registry or an Index around it.

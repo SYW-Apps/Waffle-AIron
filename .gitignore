@@ -54,3 +54,6 @@ STATE.md
 .wai/.spec-write.lock
 
 /docs/feedback
+# Static demo output
+web/dist-demo/
+site/
