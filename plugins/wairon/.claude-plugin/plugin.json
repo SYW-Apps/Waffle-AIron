@@ -1,0 +1,10 @@
+{
+  "name": "wairon",
+  "version": "6.7.3",
+  "description": "Spec-driven development: design the system as a machine-checked spec tree, get it approved, then implement against it. Adds the wairon MCP server and the five SDD skills.",
+  "author": { "name": "SYW" },
+  "homepage": "https://github.com/SYW-Apps/Waffle-AIron",
+  "repository": "https://github.com/SYW-Apps/Waffle-AIron",
+  "license": "MIT",
+  "keywords": ["spec-driven-development", "architecture", "mcp", "design", "conformance"]
+}

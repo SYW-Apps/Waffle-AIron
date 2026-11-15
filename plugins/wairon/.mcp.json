@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "wairon": {
+      "command": "npx",
+      "args": ["-y", "@wairon/cli@6.7.3", "mcp", "serve"],
+      "env": {
+        "WAIRON_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"
+      }
+    }
+  }
+}

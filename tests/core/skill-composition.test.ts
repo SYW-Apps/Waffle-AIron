@@ -102,9 +102,9 @@ describe('a pack extends a builtin skill', () => {
 
   it('leaves the other builtins byte-identical to their templates', () => {
     projectWithPack(EXTENDS_YAML, { 'skills/make-implementer/SKILL.md': EXTENDING_SKILL });
-    const templates = path.resolve(__dirname, '..', '..', 'src', 'templates', 'skills');
+    const templates = path.resolve(__dirname, '..', '..', 'plugins', 'wairon', 'skills');
     for (const untouched of ['sdd-architect', 'sdd-auditor', 'sdd-delegate', 'sdd-narrative']) {
-      expect(readSkillResource(untouched)).toBe(fs.readFileSync(path.join(templates, `${untouched}.md`), 'utf-8'));
+      expect(readSkillResource(untouched)).toBe(fs.readFileSync(path.join(templates, untouched, 'SKILL.md'), 'utf-8'));
     }
   });
 

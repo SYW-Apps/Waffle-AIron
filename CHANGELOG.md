@@ -6,6 +6,12 @@ npm and the tags carry.
 
 ## Unreleased
 
+- **wairon is packaged as a plugin for Claude Code, Codex, Cursor, Antigravity and the Gemini CLI.** One folder, `plugins/wairon/`, adds the wairon MCP server and the five SDD skills to each of them. Its listings in each tool's public catalogue come later, one at a time.
+  - **Server:** the plugin runs `npx -y @wairon/cli@<version> mcp serve`, pinned to the release the plugin ships with, so Node.js must be on your PATH.
+  - **Installing:** in Claude Code, `/plugin install wairon --marketplace SYW-Apps/Waffle-AIron`. In Codex, `codex plugin marketplace add SYW-Apps/Waffle-AIron`, then `codex plugin add wairon@wairon`. The plugin's README covers the other tools.
+  - **With `wairon init`:** for a Claude Code or Gemini CLI target, init also registers the server in the project. With the plugin installed, remove that `wairon` entry, or the agent sees every tool twice.
+  - **Skills:** the built-in skills now live in `plugins/wairon/skills/<name>/SKILL.md`. `wairon generate` copies them from there, and the MCP server publishes them from there; neither changes what a project receives.
+
 - **A read-only demo of wairon's own design is published with each stable release.** It shows the `wairon dev` canvas and specs views as a static snapshot at https://syw-apps.github.io/Waffle-AIron/demos/wairon/, and the address stays the same across releases.
   - **No server:** the page and its data files are all it loads, about 0.5 MB compressed at first load. Nothing can be changed, and there is no live connection.
   - **What it holds:** two subsystems of wairon's own design. File paths and other code locations are removed. Names, email addresses and branch names are replaced, and the build fails if any remain.

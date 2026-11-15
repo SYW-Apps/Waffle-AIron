@@ -1,0 +1,12 @@
+{
+  "name": "wairon",
+  "interface": { "displayName": "wairon" },
+  "plugins": [
+    {
+      "name": "wairon",
+      "source": { "source": "local", "path": "./plugins/wairon" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Developer Tools"
+    }
+  ]
+}

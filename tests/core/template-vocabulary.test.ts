@@ -10,14 +10,14 @@ import * as path from 'path';
 // ---------------------------------------------------------------------------
 
 const TEMPLATES = path.resolve(__dirname, '..', '..', 'src', 'templates');
+const SKILLS = path.resolve(__dirname, '..', '..', 'plugins', 'wairon', 'skills');
 
 /** The skill documents and the top-level agent templates, as [file, text] pairs. */
 function templates(): [string, string][] {
-  const skills = fs.readdirSync(path.join(TEMPLATES, 'skills'))
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => path.join('skills', f));
+  const skills: [string, string][] = fs.readdirSync(SKILLS)
+    .map((n) => [`skills/${n}.md`, fs.readFileSync(path.join(SKILLS, n, 'SKILL.md'), 'utf-8')]);
   const agents = fs.readdirSync(TEMPLATES).filter((f) => /\.ya?ml$/.test(f));
-  return [...skills, ...agents].map((rel) => [rel, fs.readFileSync(path.join(TEMPLATES, rel), 'utf-8')]);
+  return [...skills, ...agents.map((rel): [string, string] => [rel, fs.readFileSync(path.join(TEMPLATES, rel), 'utf-8')])];
 }
 
 describe('template stereotype vocabulary', () => {
@@ -41,7 +41,7 @@ describe('template stereotype vocabulary', () => {
   });
 
   it('gives sdd-implement a Query role and a pure/read Orchestrator role', () => {
-    const implement = fs.readFileSync(path.join(TEMPLATES, 'skills', 'sdd-implement.md'), 'utf-8');
+    const implement = fs.readFileSync(path.join(SKILLS, 'sdd-implement', 'SKILL.md'), 'utf-8');
     expect(implement).toMatch(/^\s*- `Query` \(/m);
     expect(implement).toMatch(/^\s*- pure\/read `Orchestrator` \(/m);
   });

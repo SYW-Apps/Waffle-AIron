@@ -88,13 +88,21 @@ function readFrontmatter(raw: string, fallbackName: string): { name: string; des
   return { name: field('name') || fallbackName, description: field('description') };
 }
 
+/**
+ * The built-in skills' source: `plugins/wairon/skills/<name>/SKILL.md`, the same
+ * folder the agent-tool plugins ship. The build copies it to
+ * `dist/templates/skills/`; running from source (tests, tsx) reads the plugin
+ * folder itself.
+ */
 function builtinSkillsDir(): string {
-  return path.resolve(__dirname, '..', 'templates', 'skills');
+  const packaged = path.resolve(__dirname, '..', 'templates', 'skills');
+  if (files.exists(packaged)) return packaged;
+  return path.resolve(__dirname, '..', '..', 'plugins', 'wairon', 'skills');
 }
 
-/** Built-in template source for a skill (always flat <name>.md). */
+/** Built-in source for a skill: `<name>/SKILL.md`, the plugin layout. */
 function skillTemplatePath(name: string): string {
-  return path.join(builtinSkillsDir(), `${name}.md`);
+  return path.join(builtinSkillsDir(), name, 'SKILL.md');
 }
 
 /**
@@ -255,7 +263,7 @@ export function activeTargetTypes(): string[] {
 // Cloud-only agents cannot receive the filesystem-exported skills above, so the
 // MCP server also publishes the five built-in SDD skills as read-only MCP
 // resources. The functions below resolve the SAME packaged templates that
-// exportSddSkills copies to disk (src/templates/skills/*.md) into MCP-safe
+// exportSddSkills copies to disk (plugins/wairon/skills/<name>/SKILL.md) into MCP-safe
 // descriptors and markdown content.
 //
 // Layering (mirroring exportSddSkills):

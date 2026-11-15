@@ -195,6 +195,26 @@ npm install --global @wairon/cli      # or machine-wide
 The dist-tags are the release channels: `latest` (stable), `beta`, `preview`
 and `dev`, e.g. `npm install -D @wairon/cli@dev`.
 
+### As a plugin for your AI tool
+
+The `wairon` plugin adds the wairon MCP server (pinned to the plugin's release)
+and the five SDD skills to an AI coding tool, with nothing to install first: the
+server runs through `npx`, so Node.js must be on your PATH. The plugin's files
+are in [`plugins/wairon/`](https://github.com/SYW-Apps/Waffle-AIron/tree/main/plugins/wairon).
+
+```text
+Claude Code:  /plugin install wairon --marketplace SYW-Apps/Waffle-AIron
+Codex:        codex plugin marketplace add SYW-Apps/Waffle-AIron
+              codex plugin add wairon@wairon
+```
+
+With the plugin installed, skip `wairon mcp install` for that tool: the plugin
+already provides the server, and a second registration gives the agent every
+tool twice. `wairon init` still sets up the project's `.wai/` tree, but for a
+Claude Code or Gemini CLI target it also registers the server in the project
+(`.mcp.json`, `.gemini/settings.json`) and copies the skills; remove that
+`wairon` server entry when the plugin provides it.
+
 ### Local development
 
 ```sh
