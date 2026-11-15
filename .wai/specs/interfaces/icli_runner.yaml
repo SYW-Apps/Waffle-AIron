@@ -7,8 +7,11 @@ methods:
     description: >-
       Initializes a new wairon workspace and exports static skills. Writes NO agent files:
       owner-file materialization (materializeAgentFiles) defaults OFF — per-subsystem agents are
-      served as live MCP briefs, and the injected guides + skills are the only per-tool artifacts.
-    signature: 'runInit(options: { yes?: boolean }): Promise<void>'
+      served as live MCP briefs, and the injected guides + skills are the only per-tool artifacts. A
+      chosen target whose tool has the wairon plugin — named with --plugin, or reported enabled by
+      the tool's own plugin listing (Claude Code, Codex) — is recorded `via: plugin`, and gets
+      neither the built-in skills nor a project MCP entry.
+    signature: 'runInit(options: { yes?: boolean, plugin?: string[] }): Promise<void>'
     returns: async void
   - name: runGenerate
     description: >-
@@ -1001,4 +1004,4 @@ methods:
     returns: async void
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-10T11:02:04.980Z'
+updatedAt: '2026-11-15T02:14:42.190Z'

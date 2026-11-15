@@ -1,0 +1,20 @@
+kind: enum
+id: target_source
+name: TargetSource
+description: >-
+  Where a target's tool gets the wairon MCP server and the built-in SDD skills from: written into
+  the project by wairon, or provided by the wairon plugin installed in that tool.
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+values:
+  - name: project
+    description: >-
+      wairon registers the MCP server in the project's configuration for the tool and copies the
+      built-in skills into its skills directory. The default.
+  - name: plugin
+    description: >-
+      The wairon plugin installed in the tool provides the server and the built-in skills, so wairon
+      writes neither into the project; a copy left there is a duplicate the agent would see twice.
+createdAt: '2026-11-15T02:12:39.077Z'
+updatedAt: '2026-11-15T02:12:39.546Z'

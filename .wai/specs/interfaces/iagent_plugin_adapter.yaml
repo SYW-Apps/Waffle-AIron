@@ -1,0 +1,22 @@
+id: iagent_plugin_adapter
+name: Agent Plugin Adapter Interface
+description: Asks one AI tool whether the wairon plugin is installed and enabled in it.
+component: agent_plugin_adapter
+methods:
+  - name: detectPlugin
+    description: >-
+      Whether the tool behind this target type lists the wairon plugin as installed and enabled,
+      from the tool's own machine-readable listing: `claude plugin list --json` for claude, `codex
+      plugin list --json` for codex. Any other target type answers unknown without running anything,
+      as does a tool whose command is not installed, a listing that fails, outlasts its time limit
+      or prints output that cannot be read. Reads only; writes nothing.
+    signature: 'detectPlugin(targetType: string): plugin_presence'
+    returns: plugin_presence
+    params:
+      - name: targetType
+        type: string
+        description: 'A target type: claude, codex, cursor, agy, gemini, copilot or a custom target''s name'
+    effect: io
+status: complete
+createdAt: '2026-11-15T02:13:01.988Z'
+updatedAt: '2026-11-15T02:13:04.176Z'

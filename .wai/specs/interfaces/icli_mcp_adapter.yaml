@@ -30,7 +30,10 @@ methods:
       `wairon` entry is written; every other server and key in the file is preserved. A file it
       replaces OUTSIDE the project root (a user or machine-wide configuration) is first copied
       beside itself as <file>.wairon-backup-<timestamp>, and the backup's path is printed, so the
-      previous value can always be restored.
+      previous value can always be restored. When no backend is named, a backend whose target the
+      wairon plugin serves gets no entry: its project file's wairon entry is removed instead, since
+      the plugin provides the server; naming that backend explicitly still writes it, with a
+      warning.
     signature: 'installMcpServer(options?: mcp_install_options): void'
     returns: void
     params:
@@ -57,8 +60,9 @@ methods:
     description: >-
       What installMcpServer would write for these options, computed exactly as it computes it and
       writing nothing: per resolved backend, the file, whether it lies outside the project root, the
-      wairon entry it holds now and the one it would get, and whether it is already up to date. The
-      plan a caller prints and confirms before it lets an install touch a machine-wide file.
+      wairon entry it holds now and the one it would get, whether it is already up to date, and
+      whether the write removes the entry because the wairon plugin serves that backend's target.
+      The plan a caller prints and confirms before it lets an install touch a machine-wide file.
     signature: 'planInstall(options: mcp_install_options): list<McpConfigWrite>'
     returns: list<McpConfigWrite>
     params:
@@ -69,9 +73,11 @@ methods:
       - idempotent
   - name: findLegacyPlugin
     description: >-
-      Where the legacy global Antigravity plugin sits (`<gemini home>/config/plugins/wairon`), or
-      null when there is none. A plugin named "wairon" collides with the wairon MCP server, so a
-      repair retires it. Pure read.
+      Where the legacy global Antigravity plugin sits (`<gemini home>/config/plugins/wairon` in the
+      layout wairon once installed: one `skills/wairon/SKILL.md`, no `plugin.json`), or null when
+      there is none. That plugin collided with the wairon MCP server, so a repair retires it; the
+      wairon plugin installed into Antigravity today carries a `plugin.json` and is never reported.
+      Pure read.
     signature: 'findLegacyPlugin(): string?'
     returns: string?
     params: []
@@ -88,4 +94,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-08-12T18:42:15.287Z'
-updatedAt: '2026-10-17T14:35:31.509Z'
+updatedAt: '2026-11-15T02:14:11.852Z'

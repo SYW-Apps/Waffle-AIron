@@ -1,0 +1,18 @@
+kind: enum
+id: plugin_presence
+name: PluginPresence
+description: What a tool's own plugin listing says about the wairon plugin.
+fields: []
+methods: []
+sourcePath: src/commands/agent-plugins.ts
+values:
+  - name: enabled
+    description: The tool lists the wairon plugin as installed and enabled.
+  - name: absent
+    description: The tool answered its listing, and the wairon plugin is not in it, or is disabled.
+  - name: unknown
+    description: >-
+      The tool has no machine-readable plugin listing, its command is not installed, or the listing
+      failed, timed out or could not be read. Never read as absent.
+createdAt: '2026-11-15T02:12:41.335Z'
+updatedAt: '2026-11-15T02:12:41.828Z'

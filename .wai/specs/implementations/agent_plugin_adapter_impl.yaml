@@ -1,0 +1,24 @@
+id: agent_plugin_adapter_impl
+name: Agent Plugin Adapter Implementation
+description: >-
+  src/commands/agent-plugins.ts — the per-tool plugin listing commands and the reading of their JSON
+  answer.
+contract: iagent_plugin_adapter
+sourcePath: src/commands/agent-plugins.ts
+methods:
+  - name: detectPlugin
+    narrative: []
+    detail: intent
+    intent: >-
+      For claude and codex, runs the tool's `plugin list --json` through the process adapter with a
+      time limit of a few seconds, and answers enabled when an entry names the wairon plugin (name
+      `wairon`, or `wairon@<marketplace>`) and does not mark it disabled, absent when the parsed
+      listing has no such enabled entry. Any other target type answers unknown without running a
+      command. A command that is not installed, exits non-zero, outlasts the limit or prints output
+      that is not the expected JSON answers unknown; it never throws, because it runs inside init
+      and doctor, and a broken tool must not break them.
+    calls:
+      - process_adapter.run
+status: complete
+createdAt: '2026-11-15T02:13:05.747Z'
+updatedAt: '2026-11-15T02:13:06.443Z'
