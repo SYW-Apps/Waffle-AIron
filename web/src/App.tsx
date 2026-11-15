@@ -16,6 +16,7 @@ import { Units } from './views/Units';
 import { Projects } from './views/Projects';
 import { ProjectOps } from './views/ProjectOps';
 import { CanvasRouter } from './views/CanvasRouter';
+import { NetworkView } from './views/NetworkView';
 import { Tokens } from './views/Tokens';
 import { Providers } from './views/Providers';
 import { Approvals } from './views/Approvals';
@@ -129,6 +130,15 @@ function DevCanvas() {
   const segments = splat.split('/').filter(Boolean);
   const route = (segments[0] === DEV_PROJECT_ID ? segments.slice(1) : segments).join('/');
   const nodes = useScopeNodes();
+  const nav = useNavigate();
+  // The network view is the app's own, beside the engine, as on the hosted canvas.
+  if (route === 'network') {
+    return (
+      <div className="canvas-view">
+        <NetworkView projectId={DEV_PROJECT_ID} onComponents={() => nav('/canvas', { state: { components: true } })} />
+      </div>
+    );
+  }
   return (
     <div className="canvas-view">
       <div className="lock-inplace">
