@@ -18,6 +18,7 @@ import {
   syncContextFiles,
 } from './adapters/core.js';
 import { exportSddSkills } from './adapters/skills.js';
+import { reportPluginSkills } from './skills.js';
 import { WAIRON_MANAGED_MARKER } from '../exporters/base.js';
 import { getProjectRoot, runWithProjectRoot, pathExists, isOutsideRoot, backupBeside } from '../utils/fs.js';
 import { activeTargetTypes } from '../models/project.js';
@@ -265,7 +266,7 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
   // Re-export the SDD skills when the spec tree exists.
   if (pathExists(AI_PATHS.specsSystem())) {
     try {
-      exportSddSkills();
+      reportPluginSkills(exportSddSkills());
       logger.verbose('SDD AI Skills synced.');
     } catch (err) {
       logger.warn(`Failed to export SDD Skills: ${String(err)}`);

@@ -22,7 +22,16 @@ fields:
     type: bool
     description: Whether this target is written on a generate run; true unless the project says otherwise.
     optional: true
+  - name: via
+    type: target_source?
+    description: >-
+      Where the tool gets the wairon MCP server and the built-in skills: `project` (the default)
+      when wairon writes them into the project, `plugin` when the wairon plugin installed in the
+      tool provides them. Accepted only on the built-in targets that have a plugin (claude, codex,
+      cursor, agy, gemini); copilot and a custom target have none, and naming it there is a
+      configuration error.
+    optional: true
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-20T19:47:35.866Z'
-updatedAt: '2026-10-04T10:21:16.343Z'
+updatedAt: '2026-11-15T02:12:45.456Z'

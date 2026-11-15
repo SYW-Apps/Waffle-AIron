@@ -16,7 +16,7 @@ import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core
 //
 // wairon owns the SDD model, so wairon must teach it — this text is the default,
 // not something each wrapper reimplements and drifts on. It stays deliberately
-// SHORT and POINTER-HEAVY: the depth already exists in templates/skills/*.md,
+// SHORT and POINTER-HEAVY: the depth already exists in plugins/wairon/skills/*/SKILL.md,
 // and this is the map that makes an agent go read them. A pack appends its
 // platform delta through `instructions` in pack.yaml (see extensions.ts); it
 // never restates what is below.

@@ -21,9 +21,20 @@ export function runSkillsList(): void {
   }
 }
 
+/** Say what an export left to the wairon plugin: the targets served by it, and the built-in copies it removed. */
+export function reportPluginSkills(result: { pluginServed: string[]; removed: string[] }): void {
+  if (result.pluginServed.length > 0) {
+    logger.info(`The wairon plugin provides the built-in skills for ${result.pluginServed.join(', ')}: only pack skills are written there. A pack section extending a built-in skill reaches that tool through the wairon-skill:// resource alone.`);
+  }
+  for (const p of result.removed) {
+    logger.info(`Removed the built-in skill copy ${p} (the wairon plugin provides it).`);
+  }
+}
+
 export function runSkillsInstall(): void {
   assertProjectInitialized();
   const result = exportSddSkills();
+  reportPluginSkills(result);
 
   if (result.destinations.length === 0) {
     logger.warn('No active target has a skills directory — nothing installed.');

@@ -271,6 +271,14 @@ methods:
       Whether this is a non-contained part's configuration: `partOf` is set. The test every reader
       that treats such a root differently from a project's (the owner's gate opened at a part,
       `externals pin` at a part, status) asks, so they cannot disagree about it.
+  - name: pluginTargetTypes
+    signature: 'pluginTargetTypes(): list<string>'
+    params: []
+    returns: list<string>
+    description: >-
+      The enabled target types whose tool gets the wairon MCP server and the built-in skills from
+      the wairon plugin (`via: plugin`), in declaration order: the targets wairon writes neither
+      into the project for. Empty when no target names the plugin.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-11-06T21:43:51.250Z'
+updatedAt: '2026-11-15T02:12:47.256Z'

@@ -1,0 +1,12 @@
+{
+  "name": "wairon",
+  "owner": { "name": "SYW" },
+  "metadata": { "pluginRoot": "plugins" },
+  "plugins": [
+    {
+      "name": "wairon",
+      "source": "wairon",
+      "description": "Spec-driven development: design the system as a machine-checked spec tree, get it approved, then implement against it. Adds the wairon MCP server and the five SDD skills."
+    }
+  ]
+}

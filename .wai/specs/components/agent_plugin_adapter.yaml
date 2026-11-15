@@ -1,0 +1,15 @@
+id: agent_plugin_adapter
+name: Agent Plugin Adapter
+description: >-
+  The client for the AI tools' own plugin listings: knows which tools answer `plugin list --json`
+  (Claude Code and Codex), how to run that listing with a time limit, and how to read whether the
+  wairon plugin is installed and enabled in it. Every other tool, a missing command, a failed or
+  slow listing and output it cannot read answer unknown, never absent. Holds no state.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - process_adapter
+status: complete
+createdAt: '2026-11-15T02:12:58.327Z'
+updatedAt: '2026-11-15T02:12:59.043Z'

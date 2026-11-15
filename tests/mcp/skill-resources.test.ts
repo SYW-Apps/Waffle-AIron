@@ -27,7 +27,7 @@ import { createScopedServer } from '../../src/server/adapters/mcp.js';
 // ---------------------------------------------------------------------------
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
-const TEMPLATES_DIR = path.join(REPO_ROOT, 'src', 'templates', 'skills');
+const TEMPLATES_DIR = path.join(REPO_ROOT, 'plugins', 'wairon', 'skills');
 
 // Alphabetical order — the stable publication order the specialist enumerates.
 const SKILL_IDS = ['sdd-architect', 'sdd-auditor', 'sdd-delegate', 'sdd-implement', 'sdd-narrative'];
@@ -57,7 +57,7 @@ describe('skills_resource_specialist (core descriptors + content)', () => {
   it('round-trips each skill to non-empty markdown matching the packaged template', () => {
     for (const id of SKILL_IDS) {
       const content = readSkillResource(id);
-      const packaged = fs.readFileSync(path.join(TEMPLATES_DIR, `${id}.md`), 'utf-8');
+      const packaged = fs.readFileSync(path.join(TEMPLATES_DIR, id, 'SKILL.md'), 'utf-8');
       expect(content.length).toBeGreaterThan(0);
       expect(content).toBe(packaged);
       expect(content).toContain(`# Skill: ${id}`);

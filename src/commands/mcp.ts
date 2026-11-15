@@ -8,7 +8,7 @@ import { loadProjectConfig } from '../core/index.js';
 import { aiDir, getProjectRoot, isOutsideRoot, backupBeside, writeFile, resolveProjectBinding } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
-import { effectiveProjectId } from '../models/project.js';
+import { effectiveProjectId, pluginTargetTypes } from '../models/project.js';
 
 /** The Gemini/Antigravity home dir. Precedence: override > GEMINI_CONFIG_DIR > ~/.gemini. */
 function geminiGlobalDir(override?: string): string {
@@ -276,6 +276,8 @@ export interface McpConfigWrite {
   before?: unknown;
   after: Record<string, unknown>;
   upToDate: boolean;
+  /** True when the write takes the wairon entry OUT of the file: the wairon plugin serves this backend's target. */
+  removes?: boolean;
 }
 
 /** One resolved backend's write, with what writing it needs. */
@@ -283,6 +285,42 @@ interface InstallTarget extends McpConfigWrite {
   configBase: string;
   settings: Record<string, unknown>;
   useGlobal: boolean;
+  /** The plugin serves this backend's target, though --backend named it, so the entry is still written. */
+  pluginServedExplicit?: boolean;
+}
+
+/** The target types each MCP backend serves. */
+function backendTargetTypes(backend: McpBackend): string[] {
+  return backend === 'claude' ? ['claude'] : ['gemini', 'agy'];
+}
+
+/** The enabled target types the wairon plugin serves; none when the configuration cannot be read. */
+function pluginServedTargetTypes(): string[] {
+  try {
+    const config = loadProjectConfig();
+    return config ? pluginTargetTypes(config) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Whether the wairon plugin serves this backend: every enabled target the backend serves
+ * (gemini and agy share one) is plugin-served, so removing its entry takes the server from
+ * no tool that still relies on it.
+ */
+function pluginServesBackend(backend: McpBackend, served: string[]): boolean {
+  let enabled: string[] = [];
+  try {
+    const config = loadProjectConfig();
+    enabled = (config?.targets ?? [])
+      .filter((t) => !('enabled' in t) || t.enabled)
+      .map((t) => t.type)
+      .filter((t) => backendTargetTypes(backend).includes(t));
+  } catch {
+    return false;
+  }
+  return enabled.length > 0 && enabled.every((t) => served.includes(t));
 }
 
 /** Steps 2-3 of installMcpServer: the explicit --backend, else the configured targets' backends, else Claude. */
@@ -318,6 +356,7 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
     throw new WaironError('--config-dir requires --backend (claude or gemini), since a config dir is agent-specific.');
   }
   const root = getProjectRoot();
+  const served = pluginServedTargetTypes();
   return resolveBackends(options).map((backend) => {
     if (options.configDir) validateConfigDir(options.configDir, backend);
     // An explicit --config-dir implies a global-style install into that dir.
@@ -372,6 +411,24 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
         : projectEntry(root, useDirectNode ? scriptPath : null);
 
     const existingEntry = mcpServers['wairon'];
+    const servedByPlugin = served.length > 0 && pluginServesBackend(backend, served);
+    // No --backend named: the plugin provides the server, so a project file's entry is taken out.
+    // A file outside the project root (a machine-wide configuration) is never touched this way.
+    if (servedByPlugin && !options.backend && !options.hostedUrl && !isOutsideRoot(root, settingsPath)) {
+      const { wairon: _removed, ...others } = mcpServers;
+      return {
+        backend,
+        path: settingsPath,
+        outsideProject: false,
+        ...(existingEntry !== undefined ? { before: existingEntry } : {}),
+        after: others,
+        upToDate: existingEntry === undefined,
+        removes: true,
+        configBase,
+        settings,
+        useGlobal,
+      };
+    }
     return {
       backend,
       path: settingsPath,
@@ -379,6 +436,7 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
       ...(existingEntry !== undefined ? { before: existingEntry } : {}),
       after: desiredEntry,
       upToDate: !!existingEntry && JSON.stringify(existingEntry) === JSON.stringify(desiredEntry),
+      ...(servedByPlugin && options.backend ? { pluginServedExplicit: true } : {}),
       configBase,
       settings,
       useGlobal,
@@ -422,14 +480,26 @@ function projectEntry(root: string, scriptPath: string | null): Record<string, u
  * machine-wide file.
  */
 export function planMcpInstall(options: McpInstallOptions): McpConfigWrite[] {
-  return resolveInstallTargets(options).map(({ backend, path: file, outsideProject, before, after, upToDate }) => ({
-    backend, path: file, outsideProject, ...(before !== undefined ? { before } : {}), after, upToDate,
+  return resolveInstallTargets(options).map(({ backend, path: file, outsideProject, before, after, upToDate, removes }) => ({
+    backend, path: file, outsideProject, ...(before !== undefined ? { before } : {}), after, upToDate, ...(removes ? { removes } : {}),
   }));
 }
 
 export function runMcpInstall(options: McpInstallOptions = {}): void {
   for (const target of resolveInstallTargets(options)) {
     const agentLabel = backendLabel(target);
+    if (target.removes) {
+      if (target.upToDate) {
+        logger.info(`The wairon plugin serves ${agentLabel}: no wairon entry to remove from ${chalk.gray(target.path)}.`);
+      } else {
+        removeInstallTarget(target);
+        logger.success(`Removed the wairon entry for ${agentLabel} from ${chalk.cyan(target.path)}: the wairon plugin provides the server, and both would give the agent every tool twice.`);
+      }
+      continue;
+    }
+    if (target.pluginServedExplicit) {
+      logger.warn(`The wairon plugin already provides the wairon server for ${agentLabel}: writing this entry too gives the agent every tool twice.`);
+    }
     // Self-heal: if an entry already exists but points somewhere else (e.g. a
     // stale path from a moved repo or an earlier machine), rewrite it instead of
     // skipping. Skipping is exactly how a broken `command`/`args` path survives
@@ -461,6 +531,16 @@ function writeInstallTarget(target: InstallTarget): void {
     logger.info(`Backed up ${chalk.gray(target.path)} to ${chalk.cyan(backupBeside(target.path))} before replacing it (outside the project root).`);
   }
   // Atomic, and keeps the file's line endings: a committed .mcp.json checked out with CRLF stays CRLF.
+  writeFile(target.path, JSON.stringify(settings, null, 2) + '\n');
+}
+
+/** Take the wairon entry out of a project file, every other server and key kept; the write is atomic and keeps the file's line endings. */
+function removeInstallTarget(target: InstallTarget): void {
+  // Re-read just before writing, as a write does: the agent tool may have changed the file since it was planned.
+  const settings = settingsAsTheyStand(target.path) ?? target.settings;
+  const mcpServers = settings['mcpServers'];
+  if (!mcpServers || typeof mcpServers !== 'object' || !('wairon' in (mcpServers as Record<string, unknown>))) return;
+  delete (mcpServers as Record<string, unknown>)['wairon'];
   writeFile(target.path, JSON.stringify(settings, null, 2) + '\n');
 }
 
@@ -622,7 +702,11 @@ function legacyPluginDir(): string {
  */
 export function findLegacyPlugin(): string | null {
   const dir = legacyPluginDir();
-  return files.exists(dir) ? dir : null;
+  // Only the layout wairon once installed: one skills/wairon/SKILL.md and no plugin manifest.
+  // The wairon plugin installed into Antigravity today carries a plugin.json and is never reported.
+  if (!files.exists(dir)) return null;
+  const legacy = files.exists(path.join(dir, 'skills', 'wairon', 'SKILL.md')) && !files.exists(path.join(dir, 'plugin.json'));
+  return legacy ? dir : null;
 }
 
 /**

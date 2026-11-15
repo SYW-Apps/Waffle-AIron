@@ -22,8 +22,8 @@ Thumbs.db
 
 # pkg compiled binaries
 bin/
-wairon
-wairon.exe
+/wairon
+/wairon.exe
 *.tar.gz
 *.zip
 *.sha256

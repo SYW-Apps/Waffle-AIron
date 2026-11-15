@@ -6,7 +6,9 @@ methods:
   - name: exportSddSkills
     description: >-
       Copies the built-in SDD skill templates into each active target's skills directory — the
-      passed target types, else the project's enabled targets — and reports what it wrote.
+      passed target types, else the project's enabled targets — leaving out the targets the wairon
+      plugin serves (it provides the built-in skills itself; their pack skills are still written),
+      and reports what it wrote.
     signature: 'exportSddSkills(targetTypes?: list<string>): SkillsExportResult'
     returns: SkillsExportResult
     params:
@@ -23,7 +25,8 @@ methods:
     description: >-
       Compare a target's installed SDD skills against what an export would write now — each built-in
       skill composed with the pack skills extending it — and report which are missing, stale and
-      current.
+      current; for a target the wairon plugin serves, report the built-in skills still copied into
+      the project as duplicates instead.
     signature: 'checkSkillFreshness(type: string): SkillFreshness'
     returns: SkillFreshness
     params:
@@ -32,4 +35,4 @@ methods:
         description: The target type
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-04T10:19:33.791Z'
+updatedAt: '2026-11-15T02:13:27.653Z'

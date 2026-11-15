@@ -86,23 +86,26 @@ methods:
         type: local
       - stepNumber: 2
         description: >-
-          When no --backend was given, read the project configuration through the core portal for
-          its enabled targets; a configuration that cannot be read contributes nothing, so the
-          Claude default applies.
+          Read the project configuration through the core portal: its enabled targets when no
+          --backend was given, and always the targets the wairon plugin serves
+          (project_config.pluginTargetTypes). A configuration that cannot be read contributes
+          nothing, so the Claude default applies and no target counts as plugin-served.
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
       - stepNumber: 3
         description: >-
           Resolve which backends to write: the explicit --backend, else the backends the project's
-          configured targets imply, else Claude.
+          configured targets imply, else Claude. An explicit --backend naming a tool whose target
+          the wairon plugin serves is still written, with a warning that the plugin already provides
+          the server and the agent will see every tool twice.
         type: local
       - stepNumber: 4
         description: Write the entry for each resolved backend.
         type: loop
         loopKind: forEach
         over: the resolved backends
-        endStep: 13
+        endStep: 16
       - stepNumber: 5
         description: >-
           Validate an explicit config dir for this backend (an implicit global-style install), then
@@ -111,25 +114,46 @@ methods:
           servers.
         type: local
       - stepNumber: 6
+        label: pluginServed
+        description: >-
+          Does the wairon plugin serve this backend's target, on an install no --backend named
+          (init, doctor --fix, a member registration)?
+        type: branch
+        condition: no --backend was given and a target this backend serves is plugin-served
+        onFalseStep: 9
+      - stepNumber: 7
+        description: >-
+          Take the wairon entry OUT of this backend's project file when it holds one, keeping every
+          other server and key, re-reading the file just before writing and replacing it atomically
+          with its line endings kept, exactly as a write does; a file outside the project root is
+          never touched here, and a file without the entry is left as it is. Report what was removed
+          and why: the plugin provides the server.
+        type: local
+      - stepNumber: 8
+        description: Nothing else to write for this backend.
+        type: jump
+        toStep: 16
+      - stepNumber: 9
+        label: readExisting
         description: >-
           Read the existing config, keeping every other server and key intact; an unparseable file
           starts fresh rather than aborting the install.
         type: local
-      - stepNumber: 7
+      - stepNumber: 10
         description: Was a hosted instance named?
         type: branch
         condition: options.hostedUrl is set
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
         description: >-
           Build the HOSTED entry: the instance's /mcp endpoint with the caller-resolved bearer and
           the project selector as headers. The instance is named by its base URL; one given with the
           data plane's own /mcp (the address the server prints) is read as its base, never doubled.
           A missing credential throws with the login command to run.
         type: jump
-        toStep: 10
-      - stepNumber: 9
+        toStep: 13
+      - stepNumber: 12
         description: >-
           Build the LOCAL stdio entry. A project-scoped entry is portable — it names the CLI as
           `wairon` on PATH, or by a project-relative path when the CLI lives inside the project, and
@@ -137,14 +161,14 @@ methods:
           so a committed project config works on every machine; a global entry names the CLI by
           absolute path, unpinned, and scopes per session.
         type: local
-      - stepNumber: 10
+      - stepNumber: 13
         label: merge
         description: Is the existing entry already exactly this one?
         type: branch
         condition: the registered entry equals the desired entry
-        onTrueStep: 13
-        onFalseStep: 11
-      - stepNumber: 11
+        onTrueStep: 16
+        onFalseStep: 14
+      - stepNumber: 14
         description: >-
           Write the entry under mcpServers.wairon — REWRITING a stale one rather than skipping,
           because a stale command path is exactly how an agent silently loses its wairon tools.
@@ -156,14 +180,14 @@ methods:
           first copy it beside itself as <file>.wairon-backup-<timestamp> and say where, so a
           machine-wide configuration is never replaced without its previous value kept.
         type: local
-      - stepNumber: 12
+      - stepNumber: 15
         description: >-
           Report where it wrote, what the entry points at, and what the agent must do to pick it up
           (restart, and for a project-scoped Claude server, approve it once). A hosted entry written
           to a project-scoped file carries the bearer, so warn that the file must stay out of
           version control (or be installed with --global).
         type: local
-      - stepNumber: 13
+      - stepNumber: 16
         label: backendEnd
         description: This backend is up to date.
         type: local
@@ -197,19 +221,25 @@ methods:
     narrative: []
     intent: >-
       Resolve the backends and, for each, the file it loads server definitions from and the entry an
-      install would write — the same resolution installMcpServer performs (steps 1-9 of its
-      narrative), read off one shared helper so the two can never disagree — and answer one write
-      per backend: the file, whether it lies outside the bound project root, the wairon entry it
-      holds now (null when none, or when the file is absent or unparseable), the entry it would get,
-      and whether the two are equal. Writes nothing; a hosted install with no credential refuses
-      exactly as the install would.
+      install would write — the same resolution installMcpServer performs (steps 1-12 of its
+      narrative, the plugin-served removal included), read off one shared helper so the two can
+      never disagree — and answer one write per backend: the file, whether it lies outside the bound
+      project root, the wairon entry it holds now (null when none, or when the file is absent or
+      unparseable), the entry it would get, whether the two are equal, and, for a backend whose
+      target the wairon plugin serves, `removes` with the file's entries without wairon (up to date
+      when it holds none). Writes nothing; a hosted install with no credential refuses exactly as
+      the install would.
     symbol: planMcpInstall
   - name: findLegacyPlugin
     narrative: []
     intent: >-
-      Answer `<gemini home>/config/plugins/wairon` when that directory exists, else null. The gemini
-      home is GEMINI_CONFIG_DIR when set, else ~/.gemini — the same home the global install writes
-      into.
+      Answer `<gemini home>/config/plugins/wairon` when that directory exists in the legacy layout
+      wairon once installed — a single `skills/wairon/SKILL.md` and no plugin manifest
+      (`plugin.json`) — else null. The wairon plugin installed into Antigravity today carries a
+      `plugin.json` and is never reported, so a repair never moves it aside. The gemini home is
+      GEMINI_CONFIG_DIR when set, else ~/.gemini — the same home the global install writes into.
+    calls:
+      - files_adapter.exists
   - name: retireLegacyPlugin
     narrative: []
     intent: >-
@@ -222,4 +252,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-31T23:36:19.685Z'
+updatedAt: '2026-11-15T02:14:01.643Z'
