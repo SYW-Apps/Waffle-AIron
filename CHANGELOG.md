@@ -4,7 +4,20 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
-## Unreleased
+## v6.7.4 (from v6.7.3)
+
+Upgrading:
+
+1. Install 6.7.4 the way you installed wairon (`wairon update`, or `@wairon/cli@6.7.4` from npm).
+2. Run `wairon generate` in each project. The guides and the built-in skills changed, and `wairon doctor` reports them as stale until you do.
+3. Restart your AI tool, or reconnect its MCP server, so the assistant talks to the new wairon.
+4. Run `wairon validate --ci`. Two new warnings can fail it on a design that passed 6.7.3:
+   - `INDEX_DOES_IO`: an Index that reads through an Adapter. Move the read to the Store, or add a `lint.allow` with a reason at the Adapter until 7.0.
+   - `RULE_LOWERED_WITHOUT_REASON`: a rule set below its default severity with no reason. Add the reason with `sdd_update_rules`, or as a `rules.severityReasons` entry.
+5. Optional: remove a `lint.allow` that names `UNOWNED_STORE`. It is now reported as `RETIRED_LINT_ALLOW_CODE`, a notice that does not fail `--ci`.
+6. Hosted servers only: an identity provider is plain OIDC now. An issuer that does not publish OIDC discovery needs its endpoints set explicitly; `WAIRON_OIDC_PROVIDER_TYPE` is ignored.
+
+A design approved under 6.7.3 stays approved: no re-lock is needed for the upgrade itself.
 
 - **wairon is packaged as a plugin for Claude Code, Codex, Cursor, Antigravity and the Gemini CLI.** One folder, `plugins/wairon/`, adds the wairon MCP server and the five SDD skills to each of them. Its listings in each tool's public catalogue come later, one at a time.
   - **Server:** the plugin runs `npx -y @wairon/cli@<version> mcp serve`, pinned to the release the plugin ships with, so Node.js must be on your PATH.

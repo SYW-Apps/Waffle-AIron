@@ -1,11 +1,11 @@
 {
   "name": "wairon",
-  "version": "6.7.3",
+  "version": "6.7.4",
   "description": "Spec-driven development: design the system as a machine-checked spec tree, get it approved, then implement against it. Adds the wairon MCP server and the five SDD skills.",
   "mcpServers": {
     "wairon": {
       "command": "npx",
-      "args": ["-y", "@wairon/cli@6.7.3", "mcp", "serve"],
+      "args": ["-y", "@wairon/cli@6.7.4", "mcp", "serve"],
       "cwd": "${workspacePath}",
       "env": {
         "WAIRON_PROJECT_DIR": "${workspacePath}"
