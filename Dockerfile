@@ -30,6 +30,7 @@ COPY tsconfig.json tsup.config.ts ./
 COPY sdk ./sdk
 COPY src ./src
 COPY scripts ./scripts
+COPY plugins/wairon/skills ./plugins/wairon/skills
 COPY web ./web
 # Build the @wairon/sdk workspace FIRST (sdk/dist) so the root build can bundle it
 # into dist (tsup noExternal), then the web bundle (web/dist/index.html), then the
