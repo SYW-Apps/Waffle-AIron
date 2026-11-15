@@ -208,12 +208,16 @@ Codex:        codex plugin marketplace add SYW-Apps/Waffle-AIron
               codex plugin add wairon@wairon
 ```
 
-With the plugin installed, skip `wairon mcp install` for that tool: the plugin
-already provides the server, and a second registration gives the agent every
-tool twice. `wairon init` still sets up the project's `.wai/` tree, but for a
-Claude Code or Gemini CLI target it also registers the server in the project
-(`.mcp.json`, `.gemini/settings.json`) and copies the skills; remove that
-`wairon` server entry when the plugin provides it.
+With the plugin installed, mark that tool's target `via: plugin` in
+`.wai/project.yaml`: the plugin already provides the server and the built-in
+skills, and a second copy in the project gives the agent every tool twice.
+Wairon then writes neither into the project for that target and removes a copy
+left there. `wairon init --plugin claude codex` records tools that already have
+the plugin; for Claude Code and Codex, `wairon init` also asks the tool's own
+plugin list and records an enabled plugin by itself. `wairon doctor` reports a
+duplicate or a disagreement between the configuration and the tool's list, and
+`wairon doctor --fix` removes the duplicates. Pack skills are still written for
+a plugin target. `wairon init` still sets up the project's `.wai/` tree.
 
 ### Local development
 

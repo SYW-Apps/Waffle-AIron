@@ -16,17 +16,33 @@ import { identifierProblem, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 // which output targets are active, project metadata, and high-level rules.
 // ---------------------------------------------------------------------------
 
+/** target_source — where a target's tool gets the wairon MCP server and the built-in skills: the project, or the wairon plugin. */
+export const TargetSourceSchema = z.enum(['project', 'plugin']);
+export type TargetSource = z.infer<typeof TargetSourceSchema>;
+
+/** The built-in targets whose tool has a wairon plugin; copilot and custom targets have none. */
+const PLUGIN_TARGET_TYPES = ['claude', 'codex', 'cursor', 'agy', 'gemini'];
+
 export const BuiltinTargetConfigSchema = z.object({
   type: z.enum(['claude', 'gemini', 'agy', 'cursor', 'copilot', 'codex']),
   /** Output directory for generated agent files, relative to project root */
   outputDir: z.string(),
   /** Whether this target is active */
   enabled: z.boolean().default(true),
+  /** Where the tool gets the wairon MCP server and built-in skills; `project` when absent. */
+  via: TargetSourceSchema.optional(),
+}).refine((t) => t.via !== 'plugin' || PLUGIN_TARGET_TYPES.includes(t.type), {
+  message: 'via: plugin is not available for this target: its tool has no wairon plugin',
+  path: ['via'],
 });
 export type BuiltinTargetConfig = z.infer<typeof BuiltinTargetConfigSchema>;
 
 export const CustomTargetConfigSchema = CustomTargetSchema.extend({
   enabled: z.boolean().default(true),
+  via: TargetSourceSchema.optional(),
+}).refine((t) => t.via !== 'plugin', {
+  message: 'via: plugin is not available for a custom target: it has no wairon plugin',
+  path: ['via'],
 });
 export type CustomTargetConfig = z.infer<typeof CustomTargetConfigSchema>;
 
@@ -985,6 +1001,18 @@ export function activeTargetTypes(config: ProjectConfig): string[] {
   return targets
     .filter((t) => typeof t === 'string' || t.enabled !== false)
     .map((t) => (typeof t === 'string' ? t : t.type));
+}
+
+/**
+ * project_config.pluginTargetTypes — the enabled target types whose tool gets the
+ * wairon MCP server and the built-in skills from the wairon plugin (`via: plugin`),
+ * in declaration order. Empty when no target names the plugin.
+ */
+export function pluginTargetTypes(config: ProjectConfig): string[] {
+  const targets = config.targets as ReadonlyArray<TargetConfig | string>;
+  return targets
+    .filter((t): t is TargetConfig => typeof t !== 'string' && t.enabled !== false && t.via === 'plugin')
+    .map((t) => t.type);
 }
 
 // ── project_config type behaviour ───────────────────────────────────────────

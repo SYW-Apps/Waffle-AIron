@@ -115,9 +115,10 @@ export function buildProgram(): Command {
     .command('init')
     .description('Initialize wairon and bootstrap the SDD Spec Tree (.wai/specs/) in the current project')
     .option('-y, --yes', 'use defaults without interactive prompts')
+    .option('--plugin <tools...>', 'tools that already have the wairon plugin installed (claude, codex, cursor, agy, gemini): their targets are recorded via: plugin')
     .option('--pack <source>', 'vendor + register an extension pack right after init (repeatable)', (v: string, all: string[]) => [...all, v], [] as string[])
     .action(async (opts) => {
-      await runInit({ yes: opts.yes });
+      await runInit({ yes: opts.yes, plugin: opts.plugin as string[] | undefined });
       // Each --pack is the runner's `pack add`, never the packs adapter called from here.
       for (const source of opts.pack as string[]) {
         await runPack('add', source, { global: false, yes: opts.yes });

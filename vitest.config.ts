@@ -22,7 +22,7 @@ export default defineConfig({
     // wairon's user cache (validation results, git producer clones) goes to a
     // throwaway folder, never the developer's real cache: every fixture root
     // would otherwise leave a results file there.
-    env: { WAIRON_CACHE_DIR: process.env.WAIRON_TEST_CACHE_DIR ?? path.join(os.tmpdir(), 'wairon-test-cache') },
+    env: { WAIRON_NO_PLUGIN_DETECT: '1', WAIRON_CACHE_DIR: process.env.WAIRON_TEST_CACHE_DIR ?? path.join(os.tmpdir(), 'wairon-test-cache') },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

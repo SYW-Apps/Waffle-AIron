@@ -144,6 +144,18 @@ export function removeFile(filePath: string): void {
   });
 }
 
+/** Delete a folder when it is empty, under the guard of its tree; absent or not empty is no error. */
+export function removeDirIfEmpty(dirPath: string): void {
+  guarded([dirPath], () => {
+    try {
+      if (fileIo.list(dirPath).length === 0) fileIo.removeEmptyDir(dirPath);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTEMPTY') throw e;
+    }
+  });
+}
+
 /** Write raw bytes back to a file (a restore), under the guard of its tree. */
 export function restoreFile(filePath: string, bytes: Buffer): void {
   ensureDir(path.dirname(filePath));

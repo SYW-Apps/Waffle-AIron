@@ -33,10 +33,12 @@ import {
   syncContextFiles,
 } from './adapters/core.js';
 import { exportSddSkills } from './adapters/skills.js';
+import { reportPluginSkills } from './skills.js';
 import { reportMemberPacks } from './subsystem.js';
 import type { MemberCreation } from '../core/index.js';
 import { defaultTargetConfig } from '../config/defaults.js';
-import { ProjectConfig, TargetConfig, activeTargetTypes, declaredMembers, effectiveProjectId } from '../models/project.js';
+import { ProjectConfig, TargetConfig, activeTargetTypes, pluginTargetTypes, declaredMembers, effectiveProjectId } from '../models/project.js';
+import { detectPlugin } from './agent-plugins.js';
 
 // ---------------------------------------------------------------------------
 // init command
@@ -44,6 +46,41 @@ import { ProjectConfig, TargetConfig, activeTargetTypes, declaredMembers, effect
 
 interface InitOptions {
   yes?: boolean;
+  /** Target types whose tool has the wairon plugin installed: recorded via: plugin without asking the tool. */
+  plugin?: string[];
+}
+
+/** The built-in targets whose tool has a wairon plugin. */
+const PLUGIN_TOOLS = ['claude', 'codex', 'cursor', 'agy', 'gemini'];
+
+/**
+ * Step 18 and the --plugin part of step 20: mark each chosen target `via: plugin` when --plugin named it
+ * or its tool's own plugin listing says the wairon plugin is enabled (and say which said so). A tool
+ * that answers absent or unknown leaves the target served by the project. --plugin naming a tool that
+ * is not a chosen target, or one with no plugin, is refused before anything is written.
+ */
+function recordPluginTargets(targets: TargetConfig[], named: string[] | undefined): TargetConfig[] {
+  const wanted = (named ?? []).map((n) => n.trim().toLowerCase()).filter((n) => n !== '');
+  for (const name of wanted) {
+    if (!PLUGIN_TOOLS.includes(name)) {
+      throw new WaironError(`--plugin ${name}: that tool has no wairon plugin (the tools with one: ${PLUGIN_TOOLS.join(', ')}).`);
+    }
+    if (!targets.some((t) => t.type === name)) {
+      throw new WaironError(`--plugin ${name}: ${name} is not one of the chosen targets (${targets.map((t) => t.type).join(', ')}).`);
+    }
+  }
+  return targets.map((t) => {
+    if (!PLUGIN_TOOLS.includes(t.type)) return t;
+    if (wanted.includes(t.type)) {
+      logger.info(`${t.type}: recorded as served by the wairon plugin (named with --plugin).`);
+      return { ...t, via: 'plugin' } as TargetConfig;
+    }
+    if (detectPlugin(t.type) === 'enabled') {
+      logger.info(`${t.type}: ${t.type === 'codex' ? 'codex plugin list' : 'claude plugin list'} shows the wairon plugin enabled, so the target is recorded as served by the plugin (via: plugin).`);
+      return { ...t, via: 'plugin' } as TargetConfig;
+    }
+    return t;
+  });
 }
 
 interface AiGuidePlan {
@@ -64,6 +101,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
     logger.info('Project already initialized.');
     logger.info('Design your spec tree with the SDD architect skill, validate it, then run `wairon lock` to approve it.');
     return;
+  }
+
+  // --plugin naming a tool that has no wairon plugin is refused before anything is asked or written.
+  for (const name of options.plugin ?? []) {
+    if (!PLUGIN_TOOLS.includes(name.trim().toLowerCase())) recordPluginTargets([], [name]);
   }
 
   // Every path below asks questions unless --yes. Without a terminal to ask
@@ -89,11 +131,11 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
 
   // Case (a): no ancestor project → bootstrap a fresh standalone project.
   if (options.yes) {
-    await runInitNonInteractive();
+    await runInitNonInteractive(options);
     return;
   }
 
-  await runInitInteractive();
+  await runInitInteractive(options);
 }
 
 // ---------------------------------------------------------------------------
@@ -221,14 +263,14 @@ function defaultProjectNameAt(cwd: string): string {
   return path.basename(cwd);
 }
 
-async function runInitNonInteractive(): Promise<void> {
+async function runInitNonInteractive(options: InitOptions): Promise<void> {
   const cwd = process.cwd();
   const projectName = defaultProjectNameAt(cwd);
   const now = new Date().toISOString();
 
   // Claude only: a tool nobody chose gets no files. Another target is one
   // `wairon init` question (interactive) or a project.yaml `targets` entry away.
-  const targets: TargetConfig[] = [defaultTargetConfig('claude')];
+  const targets: TargetConfig[] = recordPluginTargets([defaultTargetConfig('claude')], options.plugin);
   const projectConfig = buildProjectConfig(projectName, targets, now, 'backend');
 
   const guidePlan: AiGuidePlan = {
@@ -252,7 +294,7 @@ async function runInitNonInteractive(): Promise<void> {
 // Interactive path
 // ---------------------------------------------------------------------------
 
-async function runInitInteractive(): Promise<void> {
+async function runInitInteractive(options: InitOptions): Promise<void> {
   const cwd = process.cwd();
   const defaultProjectName = defaultProjectNameAt(cwd);
 
@@ -344,6 +386,9 @@ async function runInitInteractive(): Promise<void> {
     targets.push(defaultTargetConfig('claude'));
     logger.warn('No targets selected — defaulting to Claude Code.');
   }
+  // Which chosen tools have the wairon plugin: named with --plugin, or reported by the tool's own listing.
+  const plannedTargets = recordPluginTargets(targets, options.plugin);
+  targets.splice(0, targets.length, ...plannedTargets);
 
   // ------------------------------------------------------------------
   // Phase 3 — Guide scopes (Determined automatically to reduce prompts)
@@ -512,8 +557,21 @@ async function executeInit(
     rootPointer(projectRoot, 'codex', '.codexrules', 'pointing to .codex/agents/');
   }
 
+  // A target the wairon plugin serves gets no project MCP entry: the plugin provides the server.
+  const servedByPlugin = pluginTargetTypes(projectConfig);
+  if (servedByPlugin.length > 0) {
+    logger.info(`The wairon plugin provides the MCP server and the built-in skills for: ${servedByPlugin.join(', ')} — none is written into the project for them.`);
+    try {
+      const { runMcpInstall, planMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
+      // No backend named: a plugin-served backend's project file loses a wairon entry it holds.
+      if (planMcpInstall({ global: false }).some((w) => w.removes && !w.upToDate)) runMcpInstall({ global: false });
+    } catch (err) {
+      logger.warn(`Could not take the wairon MCP entry out of the project for the plugin-served tools: ${err}`);
+    }
+  }
+
   // Register MCP server locally for Claude Code target
-  if (targetTypes.includes('claude')) {
+  if (targetTypes.includes('claude') && !servedByPlugin.includes('claude')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
       runMcpInstall({ global: false, backend: 'claude' });
@@ -527,7 +585,11 @@ async function executeInit(
   // machine-wide mcp_config.json, which init never writes (global registration
   // is opt-in) — so for an agy target, say how to register instead of writing a
   // project file it ignores and then warning that it is ignored.
-  if (targetTypes.includes('gemini')) {
+  const geminiTypes = targetTypes.filter((t) => t === 'gemini' || t === 'agy');
+  const geminiServed = geminiTypes.length > 0 && geminiTypes.every((t) => servedByPlugin.includes(t));
+  if (geminiServed) {
+    // The plugin provides the server for every Gemini-backend target.
+  } else if (targetTypes.includes('gemini')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
       runMcpInstall({ backend: 'gemini', global: false });
@@ -551,6 +613,7 @@ async function executeInit(
   try {
     ensureProjectInitialized(projectName);
     const skillsResult = exportSddSkills(targetTypes);
+    reportPluginSkills(skillsResult);
     logger.success(`Bootstrapped SDD spec system and installed SDD skills into ${skillsResult.destinations.length} target(s).`);
   } catch (err) {
     logger.warn(`Failed to bootstrap SDD Specs: ${String(err)}`);

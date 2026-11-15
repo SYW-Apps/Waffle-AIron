@@ -1,8 +1,9 @@
 import * as path from 'path';
 import { files } from '../io/index.js';
-import { ensureDir, fromProjectRoot, writeFileIfChanged } from '../utils/fs.js';
+import { ensureDir, fromProjectRoot, removeDirIfEmpty, removeFile, writeFileIfChanged } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
-import { activeTargetTypes as configActiveTargetTypes } from '../models/project.js';
+import { activeTargetTypes as configActiveTargetTypes, pluginTargetTypes } from '../models/project.js';
+import type { ProjectConfig } from '../models/project.js';
 import type { LoadedPackSkill } from './extensions.js';
 import { buildServerInstructions as composeServerInstructions } from './instructions.js';
 // skills_core_adapter: the one seam this subsystem crosses into sdd_core
@@ -150,6 +151,25 @@ export interface SkillsExportResult {
   fileCount: number;
   /** Target types that have no skills directory (skipped). */
   skipped: string[];
+  /** Target types whose built-in skills the wairon plugin provides (`via: plugin`): only their pack skills were written. */
+  pluginServed: string[];
+  /** Built-in skill files removed from a plugin-served target's skills directory (paths). */
+  removed: string[];
+}
+
+/**
+ * The target types whose built-in skills the wairon plugin provides. A target that shares its
+ * skills directory with an active target the project serves is left out: that directory still
+ * has to hold the built-in skills for the other tool.
+ */
+function pluginServedSkillTargets(config: ProjectConfig | null): string[] {
+  if (!config) return [];
+  const served = pluginTargetTypes(config);
+  if (served.length === 0) return [];
+  const projectDirs = new Set(
+    configActiveTargetTypes(config).filter((t) => !served.includes(t)).map((t) => skillsDirForTarget(t)).filter((d): d is string => !!d),
+  );
+  return served.filter((t) => { const d = skillsDirForTarget(t); return !d || !projectDirs.has(d); });
 }
 
 /**
@@ -157,10 +177,14 @@ export interface SkillsExportResult {
  * If targetTypes is omitted, the active targets are read from project config.
  */
 export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
+  const config = loadProjectConfig();
   const types = targetTypes ?? activeTargetTypes();
+  const servedTypes = pluginServedSkillTargets(config);
 
   const destinations: string[] = [];
   const skipped: string[] = [];
+  const pluginServed: string[] = [];
+  const removed: string[] = [];
   let fileCount = 0;
 
   // Pack-provided skills discovered from the loaded extension packs (empty when
@@ -176,13 +200,26 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
     ensureDir(destDir);
     destinations.push(destDir);
 
+    const byPlugin = servedTypes.includes(type);
+    if (byPlugin) pluginServed.push(type);
+
     for (const name of SKILL_NAMES) {
+      const destPath = skillDestPath(type, destDir, name);
+      if (byPlugin) {
+        // The plugin provides the built-in skills: take out a copy an earlier export left (only the reserved sdd-* names).
+        if (files.exists(destPath)) {
+          removeFile(destPath);
+          removed.push(destPath);
+          // The <name>/ folder the export made for it goes too, once nothing else is in it.
+          if (path.dirname(destPath) !== destDir) removeDirIfEmpty(path.dirname(destPath));
+        }
+        continue;
+      }
       if (!files.exists(skillTemplatePath(name))) continue;
       // The builtin, plus any pack sections extending it. Otherwise copied
       // verbatim — skills are agent-facing and reference MCP tools, not the
       // `wairon` CLI, so there is no dev-path command to substitute.
       const content = composeBuiltinSkill(name, packSkills.filter((s) => s.targets.includes(type)));
-      const destPath = skillDestPath(type, destDir, name);
       ensureDir(path.dirname(destPath));
       // Through the shared helper: the installed file keeps its line endings
       // (CRLF stays CRLF) and an unchanged one is not rewritten.
@@ -208,7 +245,7 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
     }
   }
 
-  return { destinations, fileCount, skipped };
+  return { destinations, fileCount, skipped, pluginServed, removed };
 }
 
 export interface SkillFreshness {
@@ -220,6 +257,8 @@ export interface SkillFreshness {
   stale: string[];
   /** Skill files present and byte-identical to the built-in template. */
   ok: string[];
+  /** For a plugin-served target: the built-in skills still present in the project's skills directory. */
+  duplicate: string[];
 }
 
 /**
@@ -228,8 +267,17 @@ export interface SkillFreshness {
  */
 export function checkSkillFreshness(type: string): SkillFreshness {
   const dir = skillsDirForTarget(type);
-  const result: SkillFreshness = { dir, missing: [], stale: [], ok: [] };
+  const result: SkillFreshness = { dir, missing: [], stale: [], ok: [], duplicate: [] };
   if (!dir) return result;
+
+  // A target the wairon plugin serves owes no built-in skill: none is missing or stale,
+  // and each one still copied into the project is a duplicate the agent would see twice.
+  if (pluginServedSkillTargets(loadProjectConfig()).includes(type)) {
+    for (const name of SKILL_NAMES) {
+      if (files.exists(skillDestPath(type, dir, name))) result.duplicate.push(name);
+    }
+    return result;
+  }
 
   // Compare against what exportSddSkills WOULD write, not against the raw
   // template: a builtin extended by a pack legitimately differs from its
