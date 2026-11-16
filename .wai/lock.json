@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "139e4785f23021a79f89912fe5ad7c9d8d6d264193f9981041a54cec477192d7"
+    "digest": "7a70dbb5ad437d7f89bee22effbde7dbc46a348c2e6381d84e0b6fde7a504335"
   },
-  "lockedAt": "2026-11-15T02:22:09.565Z",
+  "lockedAt": "2026-11-16T07:02:42.639Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -428,7 +428,7 @@
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "4f9617c76a4449425f61e59014f5bcb071d95400260d676ad238adbda55353f0",
     ".wai/specs/implementations/code_model_cache_impl.yaml": "318dba2d81b2c4dc8d6ea7cf6ed7998a0fd6cc705446be0e3133b966267f8163",
     ".wai/specs/implementations/code_model_loader_impl.yaml": "0fd5310de08645b3918f12fe64388aa6ce1f141420f3e875821f2435932f314a",
-    ".wai/specs/implementations/conformance_rules_impl.yaml": "bf735e748b8cc1b0014b48877418fe396b4a9f6e91940fbc86ef9d0d173baea7",
+    ".wai/specs/implementations/conformance_rules_impl.yaml": "e3d464ea3d49430175a0b602906dfdfbb14113ebb9cea982b6353b1ce9eaa3e1",
     ".wai/specs/implementations/content_fingerprint_impl.yaml": "79ac129cc58d3885908274143ec5dcfdf5bd86f32b4e8c20a3653ac42af1b26d",
     ".wai/specs/implementations/context_composer_impl.yaml": "f839aa8f55e33ebe754bf4cf7c3a391cd3ca9e76c9a5867fc4c559d9278a0d59",
     ".wai/specs/implementations/context_store_impl.yaml": "b8de786be17e816b1c1e2fd070f56ca7a85df41a87d389d5efbba5b2a7f9b252",
@@ -787,7 +787,7 @@
     ".wai/specs/interfaces/icli_variants_adapter.yaml": "4645c78004d68793b5db845ac138a62ed07c790896328bfc3a41f33241531d43",
     ".wai/specs/interfaces/icode_model_cache.yaml": "4f5e7412195596d416dbec5ebb9b26116c67947ce48d727b15aed5f9f658a5b2",
     ".wai/specs/interfaces/icode_model_loader.yaml": "effbadb2af54eb8dc017d6618ede2e35773dab3f36a7bf95634fb2eaf31dc512",
-    ".wai/specs/interfaces/iconformance_rules.yaml": "38651fd7a717d4d5f3cab8f82ef9f07c8f73e75335a8a5a97aeaff7405367440",
+    ".wai/specs/interfaces/iconformance_rules.yaml": "8c031eb507035c278aaff513441009214645169e2a37bcf8f423dd363f506bb7",
     ".wai/specs/interfaces/icontent_fingerprint.yaml": "59ab844b295e91c6ccbd4bdc5edd8bd042419ffb897a2ef5e698e10f9be9452f",
     ".wai/specs/interfaces/icontext_composer.yaml": "320f063aca26c26decc7de0fa9815407ce244a70954cec47f580b047ec8a925d",
     ".wai/specs/interfaces/icontext_store.yaml": "12bc62a612fca3b89632fa23223eaf7089013d9bd41cd1645be15ab188432a3a",
@@ -1892,7 +1892,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "39e75a2e6fce4f268705b0d164976fc6a999a0594b366efe370896f5f4b73576",
+    "design": "8306dbcf57a2d220f687a031f18b007503357a828181653b7f6a5d71099105b7",
     "release": "c1f13a75fdbc1a955c9ff6fa2a6272626739d4bc0502c110f3c4ce37e2706881",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1908,7 +1908,7 @@
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 8,
-    "notices": 101
+    "warnings": 0,
+    "notices": 99
   }
 }

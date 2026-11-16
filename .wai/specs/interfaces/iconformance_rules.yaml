@@ -165,61 +165,62 @@ methods:
       unresolved (CALL_TARGET_PLANNED, a notice, as SOURCE_FILE_PLANNED is), and it is judged like
       any other claim once the target's realization begins. A claim whose target is another
       project's component (`alias::name`) is neither: this project's gate does not read that
-      project's code, so whether its code exists says nothing here, and the claim is said as the
-      notice CALL_TARGET_UNJUDGED — naming the project — rather than as planned. A finding names a
-      landing only from the PROVEN tier so that widening what a call reached can accept a claim but
-      never accuse one, and a target that names no file of its own falls back to name membership.
-      Where a type checker read the file, a claim is also realized by any call or reference in the
-      bodies the function reaches — and in the unowned code they call — that the checker lands on
-      the target: its file under a name it is realized by, a class realizing the port the call was
-      typed by or a module function an object literal typed as that port wires into it (a
-      composition root's `threshold: { isBreach }`, read in a file that imports the run's files
-      though no spec names it), or what the target forwards to by identity — whatever the receiver's
-      spelling (a type-only or `export *` barrel, a port declared in a shared module, a dependency
-      bag typed inline); a claim it does not land keeps the shape tier's answer, since the checker's
-      landing on a declaration says what a receiver is TYPED as, never where the call went instead.
-      N:1 identity — a caller that IS the target — is judged on the body, the same anchor in the
-      same file, never on a shared name: a Portal method forwarding to a same-named Orchestrator
-      method elsewhere must make that call. Converse: a call that resolves to a modelled method of
-      ANOTHER component in the SAME file crosses a component boundary while looking local, so the
-      method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the
-      proven tier alone, and a same-file private helper is no modelled method and is never reported;
-      a function forwarding by identity to a modelled method written in another file IS that method,
-      so what it calls is that method's subject. And a call — or a reference the code takes as a
-      value — that the TypeScript type checker resolves into ANOTHER file, onto a write- or
-      lifecycle-effect contract method of another component, or, from a Portal method whose body is
-      its own, onto a verb of an Orchestrator, Supervisor or Actor whose effect is a write —
-      declared (write, lifecycle or io), or, where its contract declares none, read off the verb's
-      own narrative transitively: a call step or declared call reaching a method that changes state
-      makes it a write, only reads or none a read, and a verb that settles nothing (no narrative and
-      no declared calls, a dispatch step, a target outside this tree, a non-workflow method
-      declaring no effect) is reported as an unnarrated call whose effect is undeclared, never as a
-      write (a Portal changes state only by dispatching to such a verb, so its narrative is the list
-      of those it may reach), that the method claims nowhere is a mutation the design says the
-      method never makes (UNDECLARED_WRITE_CALL): narrate it, declare it in `calls`, or remove it —
-      judged in the bodies the method's function reaches and in the UNOWNED code they call (a
-      function in a file no component realizes, or one that is none of its file's components'
-      modelled methods, read as if inlined at the call site, transitively to a bounded depth, the
-      finding naming the hops — but a member of the CLASS a workflow component (Orchestrator,
-      Supervisor, Actor) is realized by, one of the classes holding its modelled methods, is that
-      component's code even where its contract does not declare it, so the walk stops there: a claim
-      the function answers by calling such a member in place of the claimed method is
-      CALL_STEP_UNREALIZED naming the method the code calls instead, the shape a rename made in the
-      code alone leaves, and a Portal's call to one no missed claim names is an unnarrated call to a
-      method whose effect no narrative settles, never read through its body as the Portal's own
-      write), never for a Portal's call into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE's
-      subject), and only where a type checker was loaded. A call there the checker cannot follow, or
-      a member read by name off such a receiver and taken as a value (`const f = (store as
-      any).save; f(x)`) — its receiver typed any or unknown however it came to be (a cast, an
-      untyped or any-typed parameter of a closure, a function result typed any), cast to either or
-      to an index signature, typed by an index signature naming no member of that name, or its
-      member picked by a computed key — under the name of such a write the method claims nowhere
-      (where the checker recorded the receiver's original type — every cast, non-null mark and
-      parenthesis taken off, an `await (x)` written outside an async function read as the x it
-      means, nullability set aside so an optional field is the class it holds, a name bound once by
-      a const read through its initializer, and an interface or shape no class realizes landing on
-      the file declaring it — a write of the component that type lands on, any of its writes when a
-      computed key names none; else a write of that name in the method's own subsystem or one its
+      project's code, so it is judged by presence alone — a call the function makes under one of the
+      target's names (an import alias included) is said as the notice CALL_TARGET_UNJUDGED, naming
+      the project, since where it lands is not judged here; a claimed call made under none of those
+      names is CALL_STEP_UNREALIZED. A finding names a landing only from the PROVEN tier so that
+      widening what a call reached can accept a claim but never accuse one, and a target that names
+      no file of its own falls back to name membership. Where a type checker read the file, a claim
+      is also realized by any call or reference in the bodies the function reaches — and in the
+      unowned code they call — that the checker lands on the target: its file under a name it is
+      realized by, a class realizing the port the call was typed by or a module function an object
+      literal typed as that port wires into it (a composition root's `threshold: { isBreach }`, read
+      in a file that imports the run's files though no spec names it), or what the target forwards
+      to by identity — whatever the receiver's spelling (a type-only or `export *` barrel, a port
+      declared in a shared module, a dependency bag typed inline); a claim it does not land keeps
+      the shape tier's answer, since the checker's landing on a declaration says what a receiver is
+      TYPED as, never where the call went instead. N:1 identity — a caller that IS the target — is
+      judged on the body, the same anchor in the same file, never on a shared name: a Portal method
+      forwarding to a same-named Orchestrator method elsewhere must make that call. Converse: a call
+      that resolves to a modelled method of ANOTHER component in the SAME file crosses a component
+      boundary while looking local, so the method must claim it — in a step or in `calls`
+      (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file private helper
+      is no modelled method and is never reported; a function forwarding by identity to a modelled
+      method written in another file IS that method, so what it calls is that method's subject. And
+      a call — or a reference the code takes as a value — that the TypeScript type checker resolves
+      into ANOTHER file, onto a write- or lifecycle-effect contract method of another component, or,
+      from a Portal method whose body is its own, onto a verb of an Orchestrator, Supervisor or
+      Actor whose effect is a write — declared (write, lifecycle or io), or, where its contract
+      declares none, read off the verb's own narrative transitively: a call step or declared call
+      reaching a method that changes state makes it a write, only reads or none a read, and a verb
+      that settles nothing (no narrative and no declared calls, a dispatch step, a target outside
+      this tree, a non-workflow method declaring no effect) is reported as an unnarrated call whose
+      effect is undeclared, never as a write (a Portal changes state only by dispatching to such a
+      verb, so its narrative is the list of those it may reach), that the method claims nowhere is a
+      mutation the design says the method never makes (UNDECLARED_WRITE_CALL): narrate it, declare
+      it in `calls`, or remove it — judged in the bodies the method's function reaches and in the
+      UNOWNED code they call (a function in a file no component realizes, or one that is none of its
+      file's components' modelled methods, read as if inlined at the call site, transitively to a
+      bounded depth, the finding naming the hops — but a member of the CLASS a workflow component
+      (Orchestrator, Supervisor, Actor) is realized by, one of the classes holding its modelled
+      methods, is that component's code even where its contract does not declare it, so the walk
+      stops there: a claim the function answers by calling such a member in place of the claimed
+      method is CALL_STEP_UNREALIZED naming the method the code calls instead, the shape a rename
+      made in the code alone leaves, and a Portal's call to one no missed claim names is an
+      unnarrated call to a method whose effect no narrative settles, never read through its body as
+      the Portal's own write), never for a Portal's call into a data component
+      (PORTAL_WRITE_SHORTCUT_IN_CODE's subject), and only where a type checker was loaded. A call
+      there the checker cannot follow, or a member read by name off such a receiver and taken as a
+      value (`const f = (store as any).save; f(x)`) — its receiver typed any or unknown however it
+      came to be (a cast, an untyped or any-typed parameter of a closure, a function result typed
+      any), cast to either or to an index signature, typed by an index signature naming no member of
+      that name, or its member picked by a computed key — under the name of such a write the method
+      claims nowhere (where the checker recorded the receiver's original type — every cast, non-null
+      mark and parenthesis taken off, an `await (x)` written outside an async function read as the x
+      it means, nullability set aside so an optional field is the class it holds, a name bound once
+      by a const read through its initializer, and an interface or shape no class realizes landing
+      on the file declaring it — a write of the component that type lands on, any of its writes when
+      a computed key names none; else a write of that name in the method's own subsystem or one its
       component depends into — the design's write set, which a data component whose code is still
       planned has too; a receiver landing only on the caller's own file, a port it declares for
       itself, leaves it to that name as well) fails closed as CALL_ORIGIN_UNRESOLVED: neither proven
@@ -355,8 +356,9 @@ methods:
         severity: notice
         summary: >-
           A narrative call step or declared call naming another project's component (alias::name):
-          this project's gate does not read that project's code, so the call is not judged against
-          it here, whether or not that code exists
+          the function makes the call by name, but this project's gate does not read that project's
+          code, so where the call lands is not judged here. A claimed call made under none of the
+          target's names is CALL_STEP_UNREALIZED
   - name: hiddenState
     description: >-
       Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
@@ -1449,4 +1451,4 @@ methods:
           yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-11-01T17:55:00.714Z'
+updatedAt: '2026-11-16T06:55:32.707Z'
