@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "0073ab3b532c33ce501e94d7ae3c5e6d6895e749e072005936bdc49ae6ee93db"
+    "digest": "7a70dbb5ad437d7f89bee22effbde7dbc46a348c2e6381d84e0b6fde7a504335"
   },
-  "lockedAt": "2026-11-16T01:14:58.653Z",
+  "lockedAt": "2026-11-16T07:02:42.639Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -787,7 +787,7 @@
     ".wai/specs/interfaces/icli_variants_adapter.yaml": "4645c78004d68793b5db845ac138a62ed07c790896328bfc3a41f33241531d43",
     ".wai/specs/interfaces/icode_model_cache.yaml": "4f5e7412195596d416dbec5ebb9b26116c67947ce48d727b15aed5f9f658a5b2",
     ".wai/specs/interfaces/icode_model_loader.yaml": "effbadb2af54eb8dc017d6618ede2e35773dab3f36a7bf95634fb2eaf31dc512",
-    ".wai/specs/interfaces/iconformance_rules.yaml": "38651fd7a717d4d5f3cab8f82ef9f07c8f73e75335a8a5a97aeaff7405367440",
+    ".wai/specs/interfaces/iconformance_rules.yaml": "8c031eb507035c278aaff513441009214645169e2a37bcf8f423dd363f506bb7",
     ".wai/specs/interfaces/icontent_fingerprint.yaml": "59ab844b295e91c6ccbd4bdc5edd8bd042419ffb897a2ef5e698e10f9be9452f",
     ".wai/specs/interfaces/icontext_composer.yaml": "320f063aca26c26decc7de0fa9815407ce244a70954cec47f580b047ec8a925d",
     ".wai/specs/interfaces/icontext_store.yaml": "12bc62a612fca3b89632fa23223eaf7089013d9bd41cd1645be15ab188432a3a",
@@ -1892,7 +1892,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "8a4f1a5779bec1a6d2bad74c130ccc31872b8b6eb57eeca39901ff9ef2546ed9",
+    "design": "8306dbcf57a2d220f687a031f18b007503357a828181653b7f6a5d71099105b7",
     "release": "c1f13a75fdbc1a955c9ff6fa2a6272626739d4bc0502c110f3c4ce37e2706881",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
