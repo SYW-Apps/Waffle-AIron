@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { defineRuleFixture, runRuleFixture, type FixtureTree } from '../rules-matrix/harness.js';
 import { dispatchTree, py, PY_DISPATCH_BODY, PY_STORE } from '../rules-matrix/families/conformance-surface-gaps.fixtures.js';
-import { foreignCallTree } from '../rules-matrix/families/conformance-foreign-call.fixtures.js';
+import { foreignCallTree, MADE_TS, NOT_MADE_TS } from '../rules-matrix/families/conformance-foreign-call.fixtures.js';
 
 function run(tree: FixtureTree) {
   return runRuleFixture(defineRuleFixture({ code: 'UNREALIZED_DEPENDENCY', expectFire: false, reason: 'probe', scenario: 'A Python service the gate reads.', tree }));
@@ -874,13 +874,13 @@ describe('A claim aimed at another project\'s component is not judged here', () 
   }
 });
 
-describe('CALL_TARGET_UNJUDGED is said for every claim on another project\'s component, the call made or not', () => {
+describe('A claim on another project\'s component is judged by presence: made by name it is said, never made it is unrealized', () => {
   const UNJUDGED = ['CALL_TARGET_UNJUDGED', 'CALL_TARGET_PLANNED', 'CALL_STEP_UNREALIZED', 'CALL_ORIGIN_UNRESOLVED'];
-  const MADE = 'import { tileAt } from \'geokit\';\nexport function centreTile(lat: number, lon: number): string {\n  return tileAt(lat, lon);\n}\n';
+  const MADE = MADE_TS;
 
   /** The consumer as a client Adapter, the foreign Portal reached over HTTP. */
-  const overHttp = (body?: string): FixtureTree => {
-    const tree = foreignCallTree({ calls: true, ...(body ? { body } : {}) });
+  const overHttp = (body: string): FixtureTree => {
+    const tree = foreignCallTree({ calls: true, body });
     tree.components![0].componentType = 'Adapter';
     delete (tree.components![0] as { dependencyClass?: string }).dependencyClass;
     const member = 'packages/geokit/.wai/specs/components/tile-library.yaml';
@@ -891,12 +891,33 @@ describe('CALL_TARGET_UNJUDGED is said for every claim on another project\'s com
   it('says a claim whose call the code makes, naming the project and not claiming the call is missing', () => {
     const found = codes(foreignCallTree({ calls: true, body: MADE }), UNJUDGED);
     expect(found).toHaveLength(1);
-    expect(found[0]).toMatch(/^CALL_TARGET_UNJUDGED: .*geokit::tile-library\.tileAt; project "geokit".*whether the call is made in the code or not/);
+    expect(found[0]).toMatch(/^CALL_TARGET_UNJUDGED: .*geokit::tile-library\.tileAt; project "geokit".*makes the call by name, but where it lands is not judged/);
     expect(found[0]).not.toMatch(/looked for|no call/);
   });
 
+  it('says a claim made through an import alias', () => {
+    const body = 'import { tileAt as tileUnder } from \'geokit\';\nexport function centreTile(lat: number, lon: number): string {\n  return tileUnder(lat, lon);\n}\n';
+    const found = codes(foreignCallTree({ calls: true, body }), UNJUDGED);
+    expect(found.map(f => f.split(':')[0])).toEqual(['CALL_TARGET_UNJUDGED']);
+  });
+
+  it('reports a claim the function never makes as unrealized, not as unjudged', () => {
+    const found = codes(foreignCallTree({ calls: true, body: NOT_MADE_TS }), UNJUDGED);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^CALL_STEP_UNREALIZED: .*geokit::tile-library\.tileAt/);
+  });
+
+  it('reports a Python claim the function never makes when both projects are Python, and says it once made', () => {
+    const tree = foreignCallTree({ calls: true, language: 'python' });
+    const geokit = 'packages/geokit/.wai/specs/.index.yaml';
+    tree.files![geokit] = tree.files![geokit].replace('targetLanguage: typescript', 'targetLanguage: python');
+    expect(codes(tree, UNJUDGED).map(f => f.split(':')[0])).toEqual(['CALL_STEP_UNREALIZED']);
+    tree.files!['src/editor/map_renderer.py'] = 'from geokit import tileAt\n\n\ndef centre_tile(lat: float, lon: float) -> str:\n    return tileAt(lat, lon)\n';
+    expect(codes(tree, UNJUDGED).map(f => f.split(':')[0])).toEqual(['CALL_TARGET_UNJUDGED']);
+  });
+
   it('says it through a client adapter whose code makes the call, and where it does not', () => {
-    for (const body of [MADE, undefined]) {
+    for (const body of [MADE, NOT_MADE_TS]) {
       const found = codes(overHttp(body), UNJUDGED);
       expect(found.map(f => f.split(':')[0])).toEqual(['CALL_TARGET_UNJUDGED']);
     }
