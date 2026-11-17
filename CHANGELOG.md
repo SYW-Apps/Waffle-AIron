@@ -11,9 +11,10 @@ Upgrading:
 1. Install 6.7.4 the way you installed wairon (`wairon update`, or `@wairon/cli@6.7.4` from npm).
 2. Run `wairon generate` in each project. The guides and the built-in skills changed, and `wairon doctor` reports them as stale until you do.
 3. Restart your AI tool, or reconnect its MCP server, so the assistant talks to the new wairon.
-4. Run `wairon validate --ci`. Two new warnings can fail it on a design that passed 6.7.3:
+4. Run `wairon validate --ci`. Three warnings can newly fail it on a design that passed 6.7.3:
    - `INDEX_DOES_IO`: an Index that reads through an Adapter. Move the read to the Store, or add a `lint.allow` with a reason at the Adapter until 7.0.
    - `RULE_LOWERED_WITHOUT_REASON`: a rule set below its default severity with no reason. Add the reason with `sdd_update_rules`, or as a `rules.severityReasons` entry.
+   - `CALL_STEP_UNREALIZED` on a call into another project: the narrative names a call to another project's component that the code never makes. Make the call, or remove it from the narrative.
 5. Optional: remove a `lint.allow` that names `UNOWNED_STORE`. It is now reported as `RETIRED_LINT_ALLOW_CODE`, a notice that does not fail `--ci`.
 6. Hosted servers only: an identity provider is plain OIDC now. An issuer that does not publish OIDC discovery needs its endpoints set explicitly; `WAIRON_OIDC_PROVIDER_TYPE` is ignored.
 
@@ -224,6 +225,23 @@ A design approved under 6.7.3 stays approved: no re-lock is needed for the upgra
   its consumer: a concern keeps its own component even with one consumer.
 - `sdd-architect` is now described for changes to an existing design as well as new ones, and
   `sdd-implement` for approved components.
+
+### Known limitations
+
+- An extra call into another project's component that no narrative names is not reported; a
+  narrated one the code never makes is `CALL_STEP_UNREALIZED`. Where a call into another project
+  lands in that project's code is not judged (`CALL_TARGET_UNJUDGED` says so).
+- A type mirrored in a second language (a Python dataclass for a type the design declares with a
+  TypeScript `sourcePath`) is not checked unless the design declares the mirror as its own type
+  linked to its file.
+- A method whose narrative leaves its detail unstated accepts, in its code, a call to any
+  collaborator the component declares: an extra call is reported only as an `OPEN_ROUTE_CALL`
+  notice, which `validate --ci` does not fail on. State the method's calls in its narrative to have
+  them checked.
+- A router that dispatches through a private helper function is not read: its Portal gets
+  `UNREADABLE_ROUTER`.
+- A component calling a component written in another language in the same process passes at design
+  time; only the code check reports it (`CALL_ACROSS_LANGUAGE`, a notice).
 
 ## v6.7.3 (from v6.7.2)
 
