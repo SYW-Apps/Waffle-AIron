@@ -271,7 +271,7 @@ export type LoadedAssertion = PackAssertion & { pack: string; fullCode: string }
  * so it never collides with a flat `acme-sec-lint`; a flat name is unchanged.
  */
 export function assertionFullCode(packName: string, code: string): string {
-  const norm = (s: string): string => s.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const norm = (s: string): string => s.toUpperCase().split(/[^A-Z0-9]+/).filter((part) => part !== '').join('_');
   const scoped = /^@([^/]+)\/(.+)$/.exec(packName);
   const prefix = scoped ? `${norm(scoped[1])}__${norm(scoped[2])}` : norm(packName);
   return `${prefix}_${norm(code)}`;

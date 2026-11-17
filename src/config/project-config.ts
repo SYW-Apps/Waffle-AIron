@@ -974,8 +974,18 @@ function rawAt(rules: Record<string, unknown>, segments: string[]): unknown {
   return node;
 }
 
+/** A key that would reach an object's prototype instead of a rules mapping. */
+const PROTOTYPE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** Refuse segments naming a prototype key, at the write itself, whatever its caller checked. */
+function assertOwnSegments(segments: string[]): void {
+  const bad = segments.find((segment) => PROTOTYPE_KEYS.has(segment));
+  if (bad !== undefined) throw new WaironError(`Refusing the rules key "${bad}": it is not a rules name.`);
+}
+
 /** Write a raw rules value at the segments, creating the mappings above it. */
 function writeRawAt(rules: Record<string, unknown>, segments: string[], value: unknown): void {
+  assertOwnSegments(segments);
   let node = rules;
   for (const segment of segments.slice(0, -1)) {
     if (!isPlainObject(node[segment])) node[segment] = {};
@@ -986,6 +996,7 @@ function writeRawAt(rules: Record<string, unknown>, segments: string[], value: u
 
 /** Drop the raw rules value at the segments, and the mappings it leaves empty. */
 function dropRawAt(rules: Record<string, unknown>, segments: string[]): void {
+  assertOwnSegments(segments);
   const trail: Record<string, unknown>[] = [rules];
   for (const segment of segments.slice(0, -1)) {
     const next = trail[trail.length - 1][segment];
