@@ -9,7 +9,7 @@
       "name": "wairon",
       "source": "./plugins/wairon",
       "description": "Spec-driven development: design the system as a machine-checked spec tree, get it approved, then implement against it. Adds the wairon MCP server and the five SDD skills.",
-      "version": "6.7.3"
+      "version": "6.7.4"
     }
   ]
 }

@@ -2,6 +2,6 @@
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "wairon",
   "displayName": "wairon",
-  "version": "6.7.3",
+  "version": "6.7.4",
   "description": "Spec-driven development: design the system as a machine-checked spec tree, get it approved, then implement against it. Adds the wairon MCP server and the five SDD skills."
 }
