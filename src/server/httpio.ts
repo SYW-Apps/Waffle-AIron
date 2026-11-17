@@ -10,8 +10,11 @@ import { createHash } from 'crypto';
 export function bearerToken(req: IncomingMessage): string | null {
   const h = req.headers['authorization'];
   if (!h) return null;
-  const m = /^Bearer\s+(.+)$/i.exec(Array.isArray(h) ? h[0] : h);
-  return m ? m[1].trim() : null;
+  const value = Array.isArray(h) ? h[0] : h;
+  // A prefix test and a trim, no pattern: the header is the client's, so no regex runs over it.
+  if (value.length < 7 || value.slice(0, 6).toLowerCase() !== 'bearer' || !/\s/.test(value[6])) return null;
+  const token = value.slice(7).trim();
+  return token === '' ? null : token;
 }
 
 /** The text a response may carry for a caught value: an Error's own message,
