@@ -1248,6 +1248,16 @@ export function admits(requirement: Pick<PackRequirement, 'version'>, version?: 
 // `.test` agrees with it: at most 64 characters, never a Windows device name or super.
 export const PROJECT_ID_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$))(?!super$)(?=.{1,64}$)[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
+/** A text with every leading and trailing character outside [a-z0-9] cut, by index rather than a pattern. */
+function trimToAlphanumeric(text: string): string {
+  const keep = (c: string): boolean => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+  let start = 0;
+  let end = text.length;
+  while (start < end && !keep(text.charAt(start))) start += 1;
+  while (end > start && !keep(text.charAt(end - 1))) end -= 1;
+  return text.slice(start, end);
+}
+
 /**
  * A display name slugified into the project-id grammar: lower-cased, every run
  * of characters outside [a-z0-9-_.] collapsed to one '-', then trimmed until it
@@ -1256,14 +1266,10 @@ export const PROJECT_ID_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$))
  * papered over with an invented one.
  */
 function slugifyProjectName(name: string): string | null {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^[^a-z0-9]+/, '')
-    .replace(/[^a-z0-9]+$/, '');
+  const slug = trimToAlphanumeric(name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'));
   // Cut to the cap and re-trimmed; a slug the grammar still refuses (a device
   // name, super) is no id — reported as missing, never papered over.
-  const cut = slug.slice(0, MAX_IDENTIFIER_LENGTH).replace(/[^a-z0-9]+$/, '');
+  const cut = trimToAlphanumeric(slug.slice(0, MAX_IDENTIFIER_LENGTH));
   return cut === '' || identifierProblem(cut, 'project-id') !== null ? null : cut;
 }
 

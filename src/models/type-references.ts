@@ -23,13 +23,17 @@ import { writtenTypeRefs } from './type-grammar.js';
 // grammar's tables).
 // ---------------------------------------------------------------------------
 
+/** The longest type or signature text read for references; longer text is cut, as no real one comes near it. */
+const MAX_TYPE_TEXT = 4096;
+
 /**
  * The type identifiers a type string names, with comments, trailing prose and
  * string literals stripped. Duplicates are kept, in order of appearance.
  */
 export function extractTypeIdentifiers(typeStr: string): string[] {
-  // 1. Strip comments, and the grammar's `async` returns prefix (a keyword, never a type)
-  let cleaned = typeStr
+  // 1. Strip comments, and the grammar's `async` returns prefix (a keyword, never a type).
+  // Read at most MAX_TYPE_TEXT characters: no real type is longer, and the patterns below stay fast on it.
+  let cleaned = typeStr.slice(0, MAX_TYPE_TEXT)
     .replace(/^\s*async\s+(?=\S)/, '')
     .replace(/\/\/.*$/gm, '')
     .replace(/#.*$/gm, '')
@@ -89,8 +93,10 @@ function extractTypeGenerics(name: string): Set<string> {
   return vars;
 }
 
-function extractTypesFromSignature(signature: string, returns: string): string[] {
+function extractTypesFromSignature(fullSignature: string, fullReturns: string): string[] {
   const types: string[] = [];
+  const signature = fullSignature.slice(0, MAX_TYPE_TEXT);
+  const returns = fullReturns.slice(0, MAX_TYPE_TEXT);
 
   // Clean comments and trailing prose/parentheses first
   let sigCleaned = signature.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');

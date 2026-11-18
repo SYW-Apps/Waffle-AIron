@@ -90,7 +90,8 @@ function mcpServersFor(access: McpAccess): '[]' | undefined {
 
 /** Quote a scalar only when YAML would otherwise misread it. */
 function yamlScalar(value: string): string {
-  return /[:#\n]/.test(value) ? `"${value.replace(/"/g, '\\"')}"` : value;
+  // A JSON string is a valid YAML double-quoted scalar: quotes, backslashes and line breaks all escaped.
+  return /[:#\n\\"]/.test(value) ? JSON.stringify(value) : value;
 }
 
 export interface ClaudeExporterOptions {

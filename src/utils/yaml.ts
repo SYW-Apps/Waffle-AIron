@@ -23,11 +23,31 @@ export function parseYaml(content: string, sourcePath?: string): unknown {
     const reason = err.reason || err.message;
     // The key a key-level error is about: the mapping key the marked line opens.
     const text = line !== undefined ? content.split(/\r?\n/)[line - 1] : undefined;
-    const key = /mapping key/.test(reason) && text !== undefined
-      ? /^\s*(?:-\s+)?(["']?)([^"':#]+?)\1\s*:/.exec(text)?.[2]
-      : undefined;
+    const key = /mapping key/.test(reason) && text !== undefined ? mappingKeyOf(text) : undefined;
     throw new YamlSyntaxError(sourcePath === undefined ? undefined : displayPath(sourcePath), line, reason, key);
   }
+}
+
+/**
+ * The mapping key a YAML line opens (`key:`, `- key:`, `"key":`), or undefined.
+ * Read with string scans, not a pattern: the line comes from content that
+ * failed to parse, which may be an uploaded file of any shape.
+ */
+function mappingKeyOf(line: string): string | undefined {
+  let rest = line.trimStart();
+  if (rest.startsWith('-') && /^\s$/.test(rest.charAt(1))) rest = rest.slice(1).trimStart();
+  const quote = rest.charAt(0) === '"' || rest.charAt(0) === "'" ? rest.charAt(0) : '';
+  if (quote) rest = rest.slice(1);
+  let end = 0;
+  while (end < rest.length && !'"\':#'.includes(rest.charAt(end))) end += 1;
+  const key = quote ? rest.slice(0, end) : rest.slice(0, end).trimEnd();
+  if (key === '') return undefined;
+  let after = rest.slice(end);
+  if (quote) {
+    if (!after.startsWith(quote)) return undefined;
+    after = after.slice(1).trimStart();
+  }
+  return after.startsWith(':') ? key : undefined;
 }
 
 /** A file path as a reader types it: relative to the working directory when under it, else as given. */
