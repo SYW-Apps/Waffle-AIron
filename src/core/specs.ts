@@ -17,6 +17,12 @@ import {
   type ExternalDeclaration,
   type ExternalSource,
   type NetworkDeclaration,
+  type RulesChange,
+  type RulesRevision,
+  type DebtChange,
+  type DebtRevision,
+  type ProjectChange,
+  type ProjectRevision,
 } from '../models/project.js';
 import { ensureDir, listFiles, pathExists, getProjectRoot, renamePath, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, readsV5Forms, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
@@ -110,6 +116,8 @@ import {
   buildGraphModel,
   renderDiagram as renderArchitectureDiagram,
   renderTypeDiagrams as renderArchitectureTypeDiagrams,
+  familyMembers as architectureFamilyMembers,
+  type FamilyMember,
   type DiagramFormat,
   type TypeDiagram,
 } from './diagram.js';
@@ -5318,20 +5326,6 @@ export class SpecWorkspace {
         specToWrite.status = existing.status;
       }
     }
-    // Doctrine guidance at the moment it helps: fire once, at creation,
-    // BEFORE the usual member-first authoring order creates the owner — it
-    // tells the agent the two sanctioned paths and pre-empts the forbidden
-    // third one (folding the state into a consumer).
-    if (!existing && spec.componentType === 'Store'
-      && !findOwner(spec.id, this.scanAll().components.filter((c) => this.inHomeOf(c.id, spec.id)))) {
-      notices.push(
-        `Store "${spec.id}" has no owning pattern yet. Recommended: create the Repository that owns it `
-        + `(plus its Registry and Index) and point consumers at the facade. For genuinely simple held state, `
-        + `a standalone Store is the sanctioned lightweight form — keep the state visible here (workflow-layer `
-        + `consumers only) and acknowledge the UNOWNED_STORE warning with a lint.allow reason. `
-        + `Never fold the state into a consuming component instead.`,
-      );
-    }
     // The nested layout normalizes folders after the write; the flat legacy
     // layout keeps the file where it is — say so when the subsystem changed,
     // or a re-add reads as "the parameter was ignored".
@@ -9197,6 +9191,14 @@ export function renderTypeDiagrams(): TypeDiagram[] {
 }
 
 /**
+ * spec_tree_portal.familyMembers — the members the bound project declares, from the family graph
+ * alone (architecture_diagrams.familyMembers); no validation runs.
+ */
+export function familyMembers(): FamilyMember[] {
+  return architectureFamilyMembers();
+}
+
+/**
  * lock_status.upgraded — whether a stale verdict comes from the identity itself
  * changing shape rather than from anything it covers: the state is stale and
  * the record's algorithm differs from the current one. A lock taken before
@@ -9247,6 +9249,29 @@ export function describeProject(name: string, description?: string): void {
  */
 export function setNetwork(network: NetworkDeclaration | null): boolean {
   return projectConfigRepository.setNetwork(network);
+}
+
+/**
+ * core_orchestrator.reviseRules — one granular change to the bound project's
+ * rules, written through the project config Repository. `defaults` is each
+ * rule code's default severity, so a lowering is told apart.
+ */
+export function reviseRules(change: RulesChange, defaults: Record<string, string>, dryRun: boolean): RulesRevision {
+  return projectConfigRepository.reviseRules(change, defaults, dryRun);
+}
+
+/**
+ * core_orchestrator.reviseDebt — one change to the conformance debt register,
+ * written through the project config Repository. `carryable` is the codes the
+ * active rule set declares carryable.
+ */
+export function reviseDebt(change: DebtChange, carryable: string[], dryRun: boolean): DebtRevision {
+  return projectConfigRepository.reviseDebt(change, carryable, dryRun);
+}
+
+/** core_orchestrator.reviseProject — one change to the bound project's own settings, through the project config Repository. */
+export function reviseProject(change: ProjectChange, dryRun: boolean): ProjectRevision {
+  return projectConfigRepository.reviseProject(change, dryRun);
 }
 
 /** Record the profile selection hosted policy applied. */

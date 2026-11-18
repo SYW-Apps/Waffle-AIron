@@ -437,6 +437,54 @@ methods:
         targetComponent: mcp_lookup_orchestrator
         targetMethod: references
     symbol: sdd_find_references
+  - name: usePractices
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the practice workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: usePractices
+    symbol: sdd_use_practices
+  - name: requestReview
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the review request workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: requestReview
+    symbol: sdd_request_review
+  - name: awaitReview
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the review wait workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: awaitReview
+    symbol: sdd_await_review
+  - name: updateRules
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the rules workflow
+        type: call
+        targetComponent: mcp_configuration_orchestrator
+        targetMethod: reviseRules
+    symbol: sdd_update_rules
+  - name: carryFindings
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the debt register workflow
+        type: call
+        targetComponent: mcp_configuration_orchestrator
+        targetMethod: reviseDebt
+    symbol: sdd_carry_findings
+  - name: configureProject
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the project settings workflow
+        type: call
+        targetComponent: mcp_configuration_orchestrator
+        targetMethod: reviseProject
+    symbol: sdd_configure_project
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T19:16:34.590Z'
+updatedAt: '2026-11-14T16:11:12.238Z'

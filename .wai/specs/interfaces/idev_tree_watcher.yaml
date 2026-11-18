@@ -1,0 +1,40 @@
+id: idev_tree_watcher
+name: Dev Tree Watcher Interface
+description: Watch the served project's .wai/ folder, its code, and the producers it reads, and nudge the page.
+component: dev_tree_watcher
+methods:
+  - name: watch
+    description: >-
+      Start watching root's .wai/ folder, the checkout's git HEAD and the project's other files (its
+      code); on changes (coalesced over a quarter of a second) call onChange with the kind of
+      change: `reviews` for a review request, `tree` for anything else under .wai/ or a branch
+      switch (specs, lock record, configuration), `code` for a file outside .wai/, git's own folder
+      and any node_modules folder. Answers the function that stops watching.
+    signature: 'watch(root: string, onChange: ChangeListener): StopWatching'
+    returns: StopWatching
+    params:
+      - name: root
+        type: string
+        description: The served project's root
+      - name: onChange
+        type: ChangeListener
+        description: Called with `reviews`, `tree` or `code`
+    effect: io
+  - name: watchProducers
+    description: >-
+      Start watching each producer's .wai/ folder; on changes (coalesced over a quarter of a second
+      per producer, ignoring lock files) call onChange with the producer that changed. A producer
+      whose folder cannot be watched is skipped. Answers the function that stops every watch.
+    signature: 'watchProducers(producers: list<dev_producer>, onChange: dev_producer_listener): StopWatching'
+    returns: StopWatching
+    params:
+      - name: producers
+        type: list<dev_producer>
+        description: The members and path externals on disk
+      - name: onChange
+        type: dev_producer_listener
+        description: Called with the producer that changed
+    effect: io
+status: complete
+createdAt: '2026-11-07T02:40:40.169Z'
+updatedAt: '2026-11-13T16:03:25.917Z'

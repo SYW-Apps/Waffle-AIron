@@ -35,7 +35,7 @@ export function RealtimeStatus() {
         : 'Realtime updates are live.';
 
   return (
-    <span className={`rt-status rt-${status}`} title={title} role="status" aria-live="polite">
+    <span className={`rt-status rt-${status}`} data-tip={title} tabIndex={0} role="status" aria-live="polite">
       <span className="rt-dot" aria-hidden="true" />
       <span className="rt-label">{label}</span>
     </span>

@@ -1,0 +1,18 @@
+kind: value-object
+id: review_note
+name: ReviewNote
+description: A reviewer's note pinned to one spec.
+subsystem: sdd_core
+fields:
+  - name: specId
+    type: string
+    description: The spec the note is about.
+    optional: false
+  - name: note
+    type: string
+    description: What the reviewer says about it.
+    optional: false
+methods: []
+sourcePath: src/core/reviews.ts
+createdAt: '2026-11-07T02:36:33.275Z'
+updatedAt: '2026-11-07T02:36:34.107Z'

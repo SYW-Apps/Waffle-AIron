@@ -22,8 +22,8 @@ Thumbs.db
 
 # pkg compiled binaries
 bin/
-wairon
-wairon.exe
+/wairon
+/wairon.exe
 *.tar.gz
 *.zip
 *.sha256
@@ -54,3 +54,6 @@ STATE.md
 .wai/.spec-write.lock
 
 /docs/feedback
+# Static demo output
+web/dist-demo/
+site/

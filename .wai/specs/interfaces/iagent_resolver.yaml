@@ -39,12 +39,18 @@ methods:
       tree and guidance, so a re-lock or a guidance edit changes the next call's result with no
       session restart; an unknown agentId (or an alias that names no direct member) throws. A hosted
       caller must gate on reach itself before asking for a member's brief.
-    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    signature: 'composeAgentBrief(agentId: string, sessionPractices?: list<string>): AgentBrief'
     returns: AgentBrief
     params:
       - name: agentId
         type: string
         description: The resolved agent id (e.g. sdd_core-owner, system-architect).
+      - name: sessionPractices
+        type: list<string>
+        description: >-
+          Practice entries the calling session picked (an id adds, `!<id>` drops), applied after the
+          project's selection for this agent's subsystem, component and role. Absent = none.
+        optional: true
   - name: loadRegistry
     description: >-
       The derived agent topology in the Registry shape older callers expect. There is no registry
@@ -58,4 +64,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-21T21:20:15.588Z'
+updatedAt: '2026-11-06T21:45:15.613Z'

@@ -39,12 +39,21 @@ methods:
       The canvas model render('canvas') draws, for the current project, returned as data instead of
       a self-contained page — so a client that mounts the shared renderer itself receives the model.
       Pure derivation; relation health is drawn only when passed in.
-    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
+    signature: >-
+      buildCanvasDataModel(relations?: list<ProjectRelations>, issues?: list<ValidationIssue>):
+      CanvasModel
     returns: CanvasModel
     params:
       - name: relations
         type: list<ProjectRelations>
         description: The family's relation health to carry on the model; omitted, the model carries none
+        optional: true
+      - name: issues
+        type: list<ValidationIssue>
+        description: >-
+          The tree's findings to draw, when the caller already holds them (a serving process takes
+          them from the gate run off its serving thread); omitted, the owner's gate is run on the
+          caller's thread
         optional: true
   - name: renderTypeDiagrams
     description: >-
@@ -114,8 +123,17 @@ methods:
       - name: systemName
         type: string
         description: The system the index is titled after
+  - name: familyMembers
+    description: >-
+      The members the bound project declares, one per alias, as the canvas's family view reads them
+      (a part with its subsystems, a member project, each with its storage badge), from the family
+      graph alone: no validation runs.
+    signature: 'familyMembers(): list<family_member>'
+    returns: list<family_member>
+    params: []
+    effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-10-29T09:36:48.275Z'
+updatedAt: '2026-11-12T21:49:46.474Z'

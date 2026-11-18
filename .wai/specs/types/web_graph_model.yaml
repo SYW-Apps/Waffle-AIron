@@ -38,7 +38,14 @@ fields:
       What the graph was scoped to: "instance" for the landscape tier, or the hosted project id for
       the project tier.
     optional: true
+  - name: findingsState
+    type: findings_state
+    description: >-
+      Project tier only: how current the overlaid issue counts are — current, stale (the last gate's
+      findings while the gate runs again) or pending (no gate answered yet). Absent on the landscape
+      tier
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:14.595Z'
-updatedAt: '2026-10-04T10:29:25.641Z'
+updatedAt: '2026-11-13T16:01:22.239Z'

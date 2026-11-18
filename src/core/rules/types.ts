@@ -22,7 +22,7 @@ import {
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { CarriedDebtKind, DeclaredMember, NetworkDeclaration, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { CarriedDebtKind, DeclaredMember, NetworkDeclaration, PackRequirement, PackSelection, PracticeSelection, ProjectIdentity } from '../../models/project.js';
 import type { RetiredReachFact } from '../../models/specs.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
@@ -541,6 +541,14 @@ export interface RuleContext {
    */
   network?: NetworkDeclaration;
   /**
+   * The bound project's practice selection (project_config.practices): what
+   * practice-references judges. Absent when it selects none, when its
+   * configuration is unreadable, and on a candidate run.
+   */
+  practiceSelection?: PracticeSelection;
+  /** The agent roles a practice selection may name: the built-in agent templates. */
+  knownRoles: readonly string[];
+  /**
    * Each scanned project's L0 targetLanguage by project key ('' for the bound
    * root), normalized like targetLanguageFor: what library-calls judges a
    * contained member's native library against. Absent on a candidate run.
@@ -679,6 +687,8 @@ export interface RuleContext {
     profiles: Record<string, ProfileDef>;
     languages: Record<string, LanguagePackDef>;
     patterns: LoadedPattern[];
+    /** Pack-declared practices, which practice-references resolves the practice selection against. */
+    practices: import('../extensions.js').LoadedPractice[];
     /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
     guarantees: string[];
     /** Pack-contributed package names per technology name — what technology.packages adds to the built-in table. */
@@ -737,6 +747,8 @@ export interface RuleContext {
   }[];
   /** Every issue code a registered rule or loaded declarative assertion can emit, gathered by the validator (for allow validation). */
   knownIssueCodes: Set<string>;
+  /** Every code a registered rule names as retired (it reported it once and no longer does), gathered by the validator for the lint-allow audit: an allow of one is RETIRED_LINT_ALLOW_CODE, a notice. */
+  retiredIssueCodes: Set<string>;
 
   /**
    * What the run's findings of one code said about WHERE they landed on one
@@ -754,6 +766,13 @@ export interface RuleContext {
    * an allow naming an error — which no allow can cover — from a stale one.
    */
   severityOf(code: string, specId: string): IssueSeverity | 'off' | undefined;
+
+  /**
+   * The severity a code is declared at, before any project or profile
+   * override: what a lowering is measured against (lowered-severities).
+   * Undefined for a code the run does not know.
+   */
+  defaultSeverityOf(code: string): Severity | undefined;
 
   /**
    * The conformance debt register (`rules.conformance.carried`), flattened to
@@ -855,5 +874,11 @@ export interface SddRule {
    * everywhere.
    */
   needsWholeTree?: boolean;
+  /**
+   * Codes this rule reported once and no longer does, kept so an allow naming
+   * one is told it can go (RETIRED_LINT_ALLOW_CODE, a notice) instead of
+   * failing --ci as an unknown code.
+   */
+  retiredCodes?: string[];
   check(ctx: RuleContext): void;
 }

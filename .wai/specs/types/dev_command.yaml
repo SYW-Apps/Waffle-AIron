@@ -1,0 +1,15 @@
+kind: signature
+id: dev_command
+name: DevCommand
+description: One human command the CLI that started the dev server hands it to run on the page's behalf.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/dev-commands.ts
+params:
+  - name: subsystem
+    type: string?
+    description: For a lock, the one subsystem to re-approve; ignored by the other commands
+returns: async DevCommandResult
+createdAt: '2026-11-07T02:41:13.809Z'
+updatedAt: '2026-11-07T02:41:14.692Z'

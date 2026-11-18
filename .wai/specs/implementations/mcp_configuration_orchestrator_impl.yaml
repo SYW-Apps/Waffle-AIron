@@ -1,0 +1,68 @@
+id: mcp_configuration_orchestrator_impl
+name: MCP Configuration Orchestrator Implementation
+description: The project configuration tools' workflows.
+contract: imcp_configuration_orchestrator
+sourcePath: src/mcp/configuration.ts
+methods:
+  - name: reviseRules
+    narrative:
+      - stepNumber: 1
+        description: 'Read the active rule set: built-ins and loaded pack rules, each with its codes'
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 2
+        description: Map every code the rule set declares to its default severity
+        type: local
+      - stepNumber: 3
+        description: >-
+          Apply the change to the project's rules, with those defaults, so a lowering is told apart
+          and must carry its reason
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: reviseRules
+      - stepNumber: 4
+        description: >-
+          Answer the rules before and after, each rule lowered with its reason, and, when it wrote,
+          that the rules are part of the approval so the human re-locks; as text and structured
+          content
+        type: return
+        outcome: RulesRevision
+  - name: reviseDebt
+    narrative:
+      - stepNumber: 1
+        description: Read the active rule set
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 2
+        description: Collect the codes the rule set declares carryable
+        type: local
+      - stepNumber: 3
+        description: Apply the change to the debt register, refusing a finding whose code is not carryable
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: reviseDebt
+      - stepNumber: 4
+        description: >-
+          Answer the register before and after, and that sdd_validate_tree names a unit a carried
+          finding reports that its entry does not list and an entry that stopped applying; as text
+          and structured content
+        type: return
+        outcome: DebtRevision
+  - name: reviseProject
+    narrative:
+      - stepNumber: 1
+        description: Apply the change to the project's own settings
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: reviseProject
+      - stepNumber: 2
+        description: >-
+          Answer the configuration before and after and the approval parts the change moves, which
+          the human re-locks; as text and structured content
+        type: return
+        outcome: ProjectRevision
+status: complete
+createdAt: '2026-11-14T16:10:50.103Z'
+updatedAt: '2026-11-14T16:10:50.894Z'

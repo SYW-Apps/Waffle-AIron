@@ -190,7 +190,7 @@ export function Projects() {
                     // A member takes its units from its family root: it is never placed itself.
                     <span className="hint">from its family root</span>
                   ) : (
-                    <button className="btn btn-ghost btn-sm" onClick={() => setPlacing(p)} title="Place this project in an organization unit">
+                    <button className="syw-button syw-button--ghost btn-sm" onClick={() => setPlacing(p)} data-tip="Place this project in an organization unit">
                       {p.unitId ? <code className="subtle">{p.unitId}</code> : <span className="hint">— set unit</span>}
                     </button>
                   ),

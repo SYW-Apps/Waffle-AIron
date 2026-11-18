@@ -15,7 +15,8 @@ export function versionStamp(): string {
   return `<!-- wairon-version: ${WAIRON_VERSION} -->`;
 }
 
-const STAMP_RE = /<!--\s*wairon-version:\s*([^\s]+)\s*-->/;
+// A version holds no '<', so each attempt stops at the next tag instead of scanning to the end of the file.
+const STAMP_RE = /<!--\s*wairon-version:\s*([^\s<]+)\s*-->/;
 
 /** Extract the wairon version stamped in generated content, or null if absent. */
 export function readStampVersion(content: string): string | null {

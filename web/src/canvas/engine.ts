@@ -197,6 +197,8 @@ export function mountCanvas(host, model, opts = {}) {
     internals: typeof saved.internals === 'boolean' ? saved.internals : false,
     externals: typeof saved.externals === 'boolean' ? saved.externals : true,
     dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
+    busyStubs: typeof saved.busyStubs === 'boolean' ? saved.busyStubs : true,
+    busyAt: [5, 8, 12, 20].indexOf(saved.busyAt) >= 0 ? saved.busyAt : 8,
     // The overlay's first-visit default is the host's showIssues option (off for a standalone file or a
     // shared page, on for the local development server); once the reader has used the toggle, theirs wins.
     issuesChosen: saved.issuesChosen === true || saved.showIssues === true,
@@ -242,6 +244,8 @@ export function mountCanvas(host, model, opts = {}) {
         internals: state.internals,
         externals: state.externals,
         dataCoupling: state.dataCoupling,
+        busyStubs: state.busyStubs,
+        busyAt: state.busyAt,
         showIssues: state.showIssues,
         issuesChosen: state.issuesChosen,
       }));
@@ -324,7 +328,7 @@ export function mountCanvas(host, model, opts = {}) {
   // ---- themes (solid fills, WCAG AA text contrast) ------------------------------
   var THEMES = {
     light: {
-      pageEdge: '#5f6b78', edgeText: '#3d4650', cross: '#b3261e', ink: '#1a1f24',
+      pageEdge: '#5f6b78', weakEdge: '#9aa3ad', edgeText: '#3d4650', cross: '#b3261e', ink: '#1a1f24',
       subFill: '#e9eef4', subStroke: '#8195aa', subText: '#122a44',
       patFill: '#eef1f5', patStroke: '#5f6b78',
       innerFill: '#dbe3ec', innerStroke: '#8195aa', innerText: '#1a1f24',
@@ -342,10 +346,10 @@ export function mountCanvas(host, model, opts = {}) {
         patternLeaf: { fill: '#eef1f5', stroke: '#5f6b78', text: '#1a1f24' },
       },
       issue: '#b3261e', selGlow: '#3465b4', bgLabel: '#f2f5f8', png: '#f2f5f8',
-      relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78',
+      relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78', warn: '#9a6a00',
     },
     syw: {
-      pageEdge: '#7c8ca3', edgeText: '#aebdd2', cross: '#ff6b81', ink: '#eef2f8',
+      pageEdge: '#7c8ca3', weakEdge: '#5b6679', edgeText: '#aebdd2', cross: '#ff6b81', ink: '#eef2f8',
       subFill: '#101f33', subStroke: '#3ec5e8', subText: '#7fe7ff',
       patFill: '#1b2740', patStroke: '#93a1b8',
       innerFill: '#243a5c', innerStroke: '#6b7c96', innerText: '#eef2f8',
@@ -363,7 +367,7 @@ export function mountCanvas(host, model, opts = {}) {
         patternLeaf: { fill: '#1b2740', stroke: '#93a1b8', text: '#eef2f8' },
       },
       issue: '#ff6b81', selGlow: '#22ddff', bgLabel: '#0a0a0f', png: '#0a0a0f',
-      relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8',
+      relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8', warn: '#f59e0b',
     },
   };
 
@@ -410,13 +414,13 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: '.proxyOut', style: { 'background-color': t.proxyOut.fill, 'border-color': t.proxyOut.stroke, color: t.proxyOut.stroke } },
       { selector: 'edge.revealEdge', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, 'line-style': 'dashed', width: 2.4, opacity: 0.95 } },
       { selector: 'edge', style: Object.assign({}, routingStyle, {
-        width: 1.8, 'line-color': t.pageEdge,
+        width: 1.8, 'line-color': t.pageEdge, 'line-opacity': 0,
         'target-arrow-shape': 'triangle', 'target-arrow-color': t.pageEdge, 'arrow-scale': 0.9,
         label: 'data(lbl)', 'font-size': 10, color: t.edgeText,
         'text-background-color': t.bgLabel, 'text-background-opacity': 0.85, 'text-rotation': 'autorotate',
       })},
       { selector: 'edge.routed', style: routedStyle },
-      { selector: 'edge.cross', style: { 'line-color': t.cross, 'target-arrow-color': t.cross, width: 2.6 } },
+      { selector: 'edge.cross', style: { width: 2.2 } },
       { selector: 'edge.datacoupling', style: {
         'line-color': t.typeV.stroke, 'target-arrow-color': t.typeV.stroke, 'line-style': 'dashed',
         width: 1.8, 'arrow-scale': 0.85, label: 'data(lbl)', 'font-size': 9, color: t.typeV.stroke,
@@ -433,6 +437,10 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: 'edge.rel-drifted', style: { 'line-color': t.relDrift, 'target-arrow-color': t.relDrift } },
       { selector: 'edge.rel-incompatible', style: { 'line-color': t.relBad, 'target-arrow-color': t.relBad } },
       { selector: 'edge.rel-unavailable', style: { 'line-color': t.relUnknown, 'target-arrow-color': t.relUnknown, 'line-style': 'dotted' } },
+      // An edge's kind sets its weight: a type use thinner and grey, a bare
+      // declaration thin, grey and dotted (after health, so the weight wins).
+      { selector: 'edge.k-uses', style: { width: 1.1, 'arrow-scale': 0.7, 'line-color': t.weakEdge, 'target-arrow-color': t.weakEdge } },
+      { selector: 'edge.k-declared', style: { width: 1, 'arrow-scale': 0.65, 'line-color': t.weakEdge, 'target-arrow-color': t.weakEdge, 'line-style': 'dotted' } },
       { selector: '.extProject', style: { 'border-style': 'dashed' } },
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
@@ -444,6 +452,7 @@ export function mountCanvas(host, model, opts = {}) {
       // the compound parent and makes hover flicker; overlay never affects layout.
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.34, 'overlay-padding': 6 } },
       { selector: '.hoverhl', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.2, 'overlay-padding': 6 } },
+      { selector: '.edgeEnd', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.3, 'overlay-padding': 7 } },
       // Focus mode: on selection, the picked element's edges are lifted above
       // every box and recoloured, while unrelated elements recede — so a single
       // block's relations read clearly even in a dense graph.
@@ -463,6 +472,11 @@ export function mountCanvas(host, model, opts = {}) {
         'line-color': t.warn, 'target-arrow-color': t.warn, 'source-arrow-color': t.warn,
         width: 3.6, opacity: 1, 'z-compound-depth': 'top', 'z-index': 9998, 'text-background-opacity': 1,
       }},
+      // A focused line keeps the weight its kind gives it, only lifted.
+      { selector: 'edge.k-uses.edgeFocus, edge.k-uses.edgeOut, edge.k-uses.edgeIn', style: { width: 1.8 } },
+      { selector: 'edge.k-declared.edgeFocus, edge.k-declared.edgeOut, edge.k-declared.edgeIn', style: { width: 1.5 } },
+      { selector: 'edge.busy', style: { 'text-opacity': 0, events: 'no' } },
+      { selector: 'edge.busy.edgeFocus, edge.busy.edgeOut, edge.busy.edgeIn, edge.busy.stubHover', style: { 'text-opacity': 1 } },
       { selector: 'node.typeCluster', style: {
         'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText,
         'font-weight': 'bold', 'font-size': 12, 'border-width': 2, 'text-wrap': 'wrap',
@@ -480,6 +494,7 @@ export function mountCanvas(host, model, opts = {}) {
   var HEALTH_RANK = { ok: 1, drifted: 2, unavailable: 3, incompatible: 4 };
   var HEALTH_GLYPH = { ok: '\u2713', drifted: '\u0394', incompatible: '\u2715', unavailable: '?' };
   var HAS_CONSUMPTION = MODEL.edges.some(function (e) { return !!e.consumption; });
+  var HAS_WEAK = MODEL.edges.some(function (e) { return e.kind === 'uses' || e.kind === 'declared'; });
   function edgeHealth(edge) {
     var r = edge.relation ? REL_BY_ID[edge.relation] : null;
     return r ? r.health : (HAS_RELATIONS ? 'unavailable' : null);
@@ -560,6 +575,7 @@ export function mountCanvas(host, model, opts = {}) {
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
       'on select: <span style="color:' + t.selGlow + '">\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\u2190 used by</span>' +
       (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '') +
+      (HAS_WEAK ? '<br><span style="color:' + t.weakEdge + '">thin grey</span> = uses a type of that project · <span style="color:' + t.weakEdge + '">··· dotted</span> = declared, nothing used yet' : '') +
       relationLegend(t);
   }
 
@@ -1026,6 +1042,9 @@ export function mountCanvas(host, model, opts = {}) {
       var key = src + '=>' + tgt;
       if (!agg[key]) agg[key] = { src: src, tgt: tgt, n: 0, cross: false, ghost: ghost };
       agg[key].n++;
+      // Folded edges keep their strongest kind.
+      var kind = edge.kind || 'depends';
+      if (!agg[key].kind || KIND_RANK[kind] > KIND_RANK[agg[key].kind]) agg[key].kind = kind;
       if (edge.cross) agg[key].cross = true;
       if (edge.consumption) {
         agg[key].consumption = true;
@@ -1039,9 +1058,11 @@ export function mountCanvas(host, model, opts = {}) {
     return { agg: agg, ghosts: ghosts };
   }
 
+  var KIND_RANK = { depends: 3, calls: 2, uses: 1, declared: 0 };
   function externalAnchorFor(compId, scope) {
     var c = compById[compId];
-    if (!c) return null;
+    // An edge landing on a project node: outside a system view it is a ghost of that node.
+    if (!c) return subById[compId] ? { gid: 'x~subsystem~' + compId, kind: 'subsystem', id: compId, label: nameOf({ kind: 'subsystem', id: compId }) } : null;
     var contexts = [];
     if (scope.kind === 'component') {
       var oc = compById[scope.id];
@@ -1877,9 +1898,11 @@ export function mountCanvas(host, model, opts = {}) {
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       var route = routeData(e.src, e.tgt, key);
       // A consumption edge carries its relation's health: the glyph at its middle,
-      // its colour (and line, dotted when unavailable) by class.
-      var glyph = e.health ? HEALTH_GLYPH[e.health] : '';
+      // its colour (and line, dotted when unavailable) by class. A bare
+      // declaration uses nothing yet, so it carries no glyph.
+      var glyph = e.health && e.kind !== 'declared' ? HEALTH_GLYPH[e.health] : '';
       var relCls = e.consumption ? 'rel rel-' + (e.health || 'unchecked') + ' ' : '';
+      if (e.kind === 'uses' || e.kind === 'declared') relCls += 'k-' + e.kind + ' ';
       eles.push({
         data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: (bundle ? e.n + ' links' : '') + (glyph ? (bundle ? ' ' : '') + glyph : ''), rels: (e.rels || []).join('|'), cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
         classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + relCls + (dim ? 'dimmed' : ''),
@@ -1906,6 +1929,7 @@ export function mountCanvas(host, model, opts = {}) {
   }
 
   // ---- cytoscape init ----------------------------------------------------------
+  var WHEEL_SENSITIVITY = 2;
   CBODY.setAttribute('data-theme', state.theme);
   renderLegend();
 
@@ -1916,10 +1940,1035 @@ export function mountCanvas(host, model, opts = {}) {
     layout: { name: 'preset' },
     minZoom: 0.05,
     maxZoom: 4,
+    // Faster wheel zoom than cytoscape's default, which feels sluggish on a mouse wheel.
+    wheelSensitivity: WHEEL_SENSITIVITY,
     boxSelectionEnabled: false,
     autounselectify: true,
   });
   cy.autolock(true);
+  // ---- edge overlay ------------------------------------------------------------
+  // Cytoscape keeps every edge's geometry, label and hit area, but its own line is
+  // hidden (line-opacity 0): the overlay below the boxes draws each line itself, so
+  // a line is a translucent tube with chevrons inside showing its direction, a
+  // boundary hop a thin red stripe through it, and an orthogonal line hops another.
+  // ---- busy boxes ------------------------------------------------------------
+  // A box many lines go into (a shared adapter everything uses) is a web of
+  // lines however they are routed. From state.busyAt lines on (View: Busy
+  // boxes), each line into it is drawn as a short stub at its source, labelled
+  // with the box; selecting or hovering either end draws it in full again.
+  function busyTargets() {
+    var out = {};
+    if (!state.busyStubs) return out;
+    var count = {};
+    cy.edges().forEach(function (e) {
+      if (!e.visible() || e.source().id() === e.target().id()) return;
+      var t = e.target().id();
+      count[t] = (count[t] || 0) + 1;
+    });
+    Object.keys(count).forEach(function (t) { if (count[t] >= state.busyAt) out[t] = true; });
+    return out;
+  }
+  var edgeOverlay = (function () {
+    var host = ROOT.getElementById('cy');
+    var canvas = document.createElement('canvas');
+    // Without a drawing surface (a headless run) there is nothing to draw on.
+    if (!canvas || !canvas.getContext || !host || !host.insertBefore || typeof window === 'undefined') {
+      return { draw: function () {}, drawInto: function () {}, startFlow: function () {}, stopFlow: function () {} };
+    }
+    canvas.className = 'edgeOverlay';
+    canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0;';
+    host.insertBefore(canvas, host.firstChild);
+    var cache = { refs: [], paths: [] };
+    function quad(out, x0, y0, cx, cy2, x1, y1) {
+      for (var k = 1; k <= 12; k++) {
+        var t = k / 12, u = 1 - t;
+        out.push({ x: u * u * x0 + 2 * u * t * cx + t * t * x1, y: u * u * y0 + 2 * u * t * cy2 + t * t * y1 });
+      }
+    }
+    // Each corner of a polyline replaced by a curve of the given radius (clamped to half of each leg).
+    function rounded(pts, radii) {
+      var out = [pts[0]];
+      for (var k = 1; k < pts.length - 1; k++) {
+        var a = pts[k - 1], c = pts[k], b = pts[k + 1];
+        var la = Math.hypot(c.x - a.x, c.y - a.y), lb = Math.hypot(b.x - c.x, b.y - c.y);
+        var r = Math.min(radii[k - 1] || radii[radii.length - 1] || 0, la / 2, lb / 2);
+        if (r < 1) { out.push(c); continue; }
+        var p0 = { x: c.x + (a.x - c.x) * r / la, y: c.y + (a.y - c.y) * r / la };
+        var p1 = { x: c.x + (b.x - c.x) * r / lb, y: c.y + (b.y - c.y) * r / lb };
+        out.push(p0);
+        quad(out, p0.x, p0.y, c.x, c.y, p1.x, p1.y);
+      }
+      out.push(pts[pts.length - 1]);
+      return out;
+    }
+    function pathOf(edge) {
+      var rs = edge._private.rscratch;
+      var p = rs && rs.allpts;
+      if (!p || p.length < 4 || isNaN(p[0]) || rs.badLine) return null;
+      var pts = [{ x: p[0], y: p[1] }];
+      var curved = rs.edgeType === 'bezier' || rs.edgeType === 'multibezier' || rs.edgeType === 'self' || rs.edgeType === 'compound';
+      var i;
+      if (curved) { for (i = 2; i + 3 < p.length; i += 4) quad(pts, p[i - 2], p[i - 1], p[i], p[i + 1], p[i + 2], p[i + 3]); }
+      else { for (i = 2; i + 1 < p.length; i += 2) pts.push({ x: p[i], y: p[i + 1] }); }
+      if (!curved && rs.isRound && pts.length > 2) pts = rounded(pts, rs.radii || []);
+      var tip = typeof rs.arrowEndX === 'number' && !isNaN(rs.arrowEndX) ? { x: rs.arrowEndX, y: rs.arrowEndY } : null;
+      // Every orthogonal line hops, a straight run between two facing boxes too.
+      return { pts: pts, tip: tip, ortho: !curved && state.lineStyle === 'taxi' };
+    }
+    // Where a horizontal run of one orthogonal line crosses a vertical run of
+    // another, the horizontal one hops. Lines that share an end box do not hop
+    // each other: they meet there on purpose. Lines drawn on top of each other
+    // hop together, so a hop never leaves a straight line running under it.
+    function hopsFor(list) {
+      var vert = [], rows = {};
+      list.forEach(function (it, li) {
+        it.hops = {};
+        if (!it.path || !it.path.ortho || it.busy) return;
+        var q = it.path.pts;
+        for (var k = 1; k < q.length; k++) {
+          var a = q[k - 1], b = q[k];
+          if (Math.abs(b.x - a.x) < 0.5 && Math.abs(b.y - a.y) > 1) {
+            vert.push({ li: li, x: b.x, y1: Math.min(a.y, b.y), y2: Math.max(a.y, b.y) });
+          } else if (Math.abs(b.y - a.y) < 0.5 && Math.abs(b.x - a.x) > 1) {
+            var row = Math.round(b.y);
+            (rows[row] = rows[row] || []).push({ li: li, k: k, y: b.y, x1: Math.min(a.x, b.x), x2: Math.max(a.x, b.x), xs: [] });
+          }
+        }
+      });
+      var inside = function (h, x) { return x > h.x1 + 7 && x < h.x2 - 7; };
+      Object.keys(rows).forEach(function (row) {
+        rows[row].forEach(function (h) {
+          var it = list[h.li];
+          vert.forEach(function (v) {
+            if (v.li === h.li) return;
+            var o = list[v.li];
+            if (o.src === it.src || o.src === it.tgt || o.tgt === it.src || o.tgt === it.tgt) return;
+            if (inside(h, v.x) && h.y > v.y1 + 7 && h.y < v.y2 - 7) h.xs.push(v.x);
+          });
+        });
+      });
+      Object.keys(rows).forEach(function (row) {
+        var near = (rows[row - 1] || []).concat(rows[row], rows[+row + 1] || []);
+        rows[row].forEach(function (h) {
+          var xs = h.xs.slice();
+          near.forEach(function (o) {
+            if (o === h || Math.abs(o.y - h.y) >= 1) return;
+            o.xs.forEach(function (x) { if (inside(h, x)) xs.push(x); });
+          });
+          if (!xs.length) return;
+          xs.sort(function (a, b) { return a - b; });
+          list[h.li].hops[h.k] = xs.filter(function (x, n) { return n === 0 || x - xs[n - 1] > 0.5; });
+        });
+      });
+    }
+    // The bridges over a run's crossings (ascending x): crossings closer than a
+    // hop's width share one bridge, and a bridge keeps clear of the run's ends.
+    function hopSpans(xs, R, x1, x2) {
+      var lo = Math.min(x1, x2) + R, hi = Math.max(x1, x2) - R;
+      if (hi < lo) return [];
+      var spans = [];
+      xs.forEach(function (x) {
+        var c = clamp(x, lo, hi), last = spans[spans.length - 1];
+        if (last && c - last[1] < 2 * R + 4) last[1] = c;
+        else spans.push([c, c]);
+      });
+      return spans;
+    }
+    function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+    function items() {
+      var edges = cy.edges();
+      var same = cache.refs.length === edges.length;
+      var refs = [];
+      edges.forEach(function (e, idx) {
+        var r = e._private.rscratch && e._private.rscratch.allpts;
+        refs.push(r);
+        if (same && cache.refs[idx] !== r) same = false;
+      });
+      var busyKey = state.busyStubs + ':' + state.busyAt;
+      if (same && cache.list && cache.lineStyle === state.lineStyle && cache.busyKey === busyKey) return cache.list;
+      var list = [], busy = busyTargets();
+      edges.forEach(function (e) {
+        list.push({ edge: e, src: e.data('source'), tgt: e.data('target'), path: pathOf(e), busy: !!busy[e.data('target')] });
+      });
+      hopsFor(list);
+      cache = { refs: refs, list: list, lineStyle: state.lineStyle, busyKey: busyKey };
+      return list;
+    }
+    function rgba(c, a) { return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
+    // A line's path, bridging the lines it crosses: a half circle of radius R over
+    // one crossing, rising, running level and coming down over several close ones.
+    function trace(ctx, it, R) {
+      var q = it.path.pts;
+      ctx.moveTo(q[0].x, q[0].y);
+      for (var k = 1; k < q.length; k++) {
+        var xs = it.hops && it.hops[k];
+        if (xs) {
+          var dir = q[k].x > q[k - 1].x ? 1 : -1, y = q[k].y;
+          var spans = hopSpans(xs, R, q[k - 1].x, q[k].x);
+          if (dir < 0) spans.reverse();
+          spans.forEach(function (s) {
+            var a = dir > 0 ? s[0] : s[1], b = dir > 0 ? s[1] : s[0];
+            ctx.lineTo(a - dir * R, y);
+            if (dir > 0) {
+              ctx.arc(a, y, R, Math.PI, 1.5 * Math.PI, false);
+              ctx.lineTo(b, y - R);
+              ctx.arc(b, y, R, 1.5 * Math.PI, 2 * Math.PI, false);
+            } else {
+              ctx.arc(a, y, R, 0, -0.5 * Math.PI, true);
+              ctx.lineTo(b, y - R);
+              ctx.arc(b, y, R, -0.5 * Math.PI, -Math.PI, true);
+            }
+          });
+        }
+        ctx.lineTo(q[k].x, q[k].y);
+      }
+    }
+    var GAP = 22;
+    // Chevrons along the line, pointing its way. On a straight horizontal or
+    // vertical run they sit on one grid across the page, so lines sharing a run
+    // show one row of chevrons; elsewhere they follow on from the last one.
+    function chevrons(ctx, it, arm, R) {
+      var q = it.path.pts, carry = GAP * 0.5, grid = state.lineStyle !== 'bezier';
+      var mark = function (px, py, ux, uy) {
+        ctx.moveTo(px - ux * arm - uy * arm, py - uy * arm + ux * arm);
+        ctx.lineTo(px, py);
+        ctx.lineTo(px - ux * arm + uy * arm, py - uy * arm - ux * arm);
+      };
+      for (var k = 1; k < q.length; k++) {
+        var a = q[k - 1], b = q[k];
+        var dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 0.001) continue;
+        var ux = dx / len, uy = dy / len;
+        var axisX = Math.abs(dy) < 0.5, axisY = Math.abs(dx) < 0.5;
+        if (grid && (axisX || axisY) && len > arm * 2) {
+          var from = axisX ? a.x : a.y, to = axisX ? b.x : b.y, sgn = to > from ? 1 : -1;
+          var spans = it.hops && it.hops[k] ? hopSpans(it.hops[k], R, a.x, b.x) : [];
+          var c = sgn > 0 ? Math.ceil((from + arm) / GAP) * GAP : Math.floor((from - arm) / GAP) * GAP;
+          for (; sgn > 0 ? c <= to - arm * 0.5 : c >= to + arm * 0.5; c += sgn * GAP) {
+            var onHop = spans.some(function (s) { return c > s[0] - R - arm && c < s[1] + R + arm; });
+            if (onHop) continue;
+            mark(axisX ? c : a.x, axisX ? a.y : c, ux, uy);
+          }
+          carry = GAP * 0.5;
+          continue;
+        }
+        var s = carry;
+        while (s < len) { mark(a.x + ux * s, a.y + uy * s, ux, uy); s += GAP; }
+        carry = s - len;
+      }
+    }
+    // How a line looks: a translucent tube as wide as its weight, chevrons inside.
+    // The first BUSY_LEN of a line, its arrowhead just past the end.
+    var BUSY_LEN = 44;
+    function stubOf(it) {
+      var q = it.path.pts, out = [q[0]], acc = 0;
+      for (var k = 1; k < q.length; k++) {
+        var a = q[k - 1], b = q[k], d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d > 0.001 && acc + d >= BUSY_LEN) {
+          var f = (BUSY_LEN - acc) / d, g = Math.min(1, (BUSY_LEN + 9 - acc) / d);
+          out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+          return { edge: it.edge, src: it.src, tgt: it.tgt, hops: {}, path: { pts: out, tip: { x: a.x + (b.x - a.x) * g, y: a.y + (b.y - a.y) * g }, ortho: it.path.ortho } };
+        }
+        out.push(b);
+        acc += d;
+      }
+      return null;
+    }
+    // A box's name: the first line of its label.
+    function labelOf(n) { return String(n.data('label') || n.id()).split(String.fromCharCode(10))[0]; }
+    function look(it) {
+      var e = it.edge;
+      if (!it.path || !e.visible()) return null;
+      var op = e.effectiveOpacity();
+      if (op <= 0.001) return null;
+      var w = e.pstyle('width').pfValue, ls = e.pstyle('line-style').value;
+      var tube = Math.min(13, Math.max(4, w * 4));
+      var full = !it.busy || e.hasClass('stubHover') || e.hasClass('edgeFocus') || e.hasClass('edgeOut') || e.hasClass('edgeIn') || e.hasClass('revealEdge');
+      var stub = full ? null : stubOf(it);
+      return { it: stub || it, stubTo: stub ? labelOf(e.target()) : null, e: e, op: op, w: w, tube: tube, color: e.pstyle('line-color').value,
+        arrow: e.pstyle('target-arrow-color').value, dash: ls === 'dotted' ? 'dot' : ls === 'dashed' ? 'dash' : '' };
+    }
+    // The tubes of one tier: lines of one look are stroked as one shape, so an
+    // overlap shows as one tube instead of a darker one.
+    function tubes(ctx, looks, z) {
+      var groups = {};
+      looks.forEach(function (l) {
+        var key = l.color.join(',') + '|' + l.tube.toFixed(1) + '|' + l.op.toFixed(2) + '|' + l.dash;
+        (groups[key] = groups[key] || []).push(l);
+      });
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      Object.keys(groups).forEach(function (key) {
+        var g = groups[key], l0 = g[0];
+        // Far out the chevrons are gone, so the tube carries the line alone.
+        // A dotted line keeps a solid, fainter tube; its dots run down the middle.
+        ctx.strokeStyle = rgba(l0.color, l0.op * (z >= 0.3 ? (l0.dash === 'dot' ? 0.2 : 0.34) : 0.6));
+        ctx.lineWidth = l0.tube;
+        ctx.setLineDash(l0.dash === 'dash' ? [l0.tube * 1.4, l0.tube * 1.1] : []);
+        ctx.beginPath();
+        g.forEach(function (l) { trace(ctx, l.it, l.tube / 2 + 3); });
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+    }
+    function marks(ctx, l, z, theme) {
+      var e = l.e, it = l.it, R = l.tube / 2 + 3;
+      // A boundary hop: a thin red stripe through the tube. A type use or a bare
+      // declaration always joins two projects, so the stripe would say nothing there.
+      if (e.hasClass('cross') && !e.hasClass('k-uses') && !e.hasClass('k-declared')) {
+        ctx.strokeStyle = theme.cross;
+        ctx.globalAlpha = l.op * 0.9;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        trace(ctx, it, R);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      if (l.dash === 'dot') {
+        ctx.strokeStyle = rgba(l.color, l.op * 0.8);
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([1.2, 3.4]);
+        ctx.beginPath();
+        trace(ctx, it, R);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (z >= 0.3) {
+        ctx.strokeStyle = rgba(l.color, l.op * 0.95);
+        ctx.lineWidth = Math.max(1.2, l.w * 0.8);
+        ctx.beginPath();
+        chevrons(ctx, it, l.tube * 0.3, R);
+        ctx.stroke();
+      }
+      // The arrowhead, from where the line ends to the tip at the box.
+      var q = it.path.pts, end = q[q.length - 1], tip = it.path.tip;
+      if (tip && e.pstyle('target-arrow-shape').value !== 'none') {
+        var ax = tip.x - end.x, ay = tip.y - end.y, al = Math.sqrt(ax * ax + ay * ay);
+        if (al > 0.5) {
+          var hw = Math.max(al * 0.55, l.tube * 0.55), nx = -ay / al, ny = ax / al;
+          ctx.fillStyle = rgba(l.arrow, l.op * 0.9);
+          ctx.beginPath();
+          ctx.moveTo(tip.x, tip.y);
+          ctx.lineTo(end.x + nx * hw, end.y + ny * hw);
+          ctx.lineTo(end.x - nx * hw, end.y - ny * hw);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      if (l.stubTo && z >= 0.3) {
+        var p = it.path.tip || end, prev = q[q.length - 1], dx = p.x - prev.x, dy = p.y - prev.y;
+        var horizontal = Math.abs(dx) >= Math.abs(dy);
+        ctx.fillStyle = rgba(l.color, l.op * 0.95);
+        ctx.font = '600 9px system-ui, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = horizontal ? (dx >= 0 ? 'left' : 'right') : 'center';
+        var tx = p.x + (horizontal ? (dx >= 0 ? 4 : -4) : 0), ty = p.y + (horizontal ? 0 : (dy >= 0 ? 8 : -8));
+        // A label that would overlap one already drawn is left out: the stub still
+        // shows, and selecting its box draws the line in full.
+        var tw = ctx.measureText(l.stubTo).width;
+        var box = { l: horizontal ? (dx >= 0 ? tx : tx - tw) : tx - tw / 2, t: ty - 6, w: tw, h: 12 };
+        var hit = stubLabels.some(function (o) { return box.l < o.l + o.w && o.l < box.l + box.w && box.t < o.t + o.h && o.t < box.t + box.h; });
+        if (!hit) {
+          stubLabels.push(box);
+          ctx.fillText(l.stubTo, tx, ty);
+        }
+      }
+    }
+    var stubLabels = [];
+    function paint(ctx, z) {
+      stubLabels = [];
+      var theme = THEMES[state.theme];
+      var list = items();
+      // Receding lines first, lifted ones last; per tier the tubes, then what sits in them.
+      var low = [], mid = [], top = [];
+      list.forEach(function (it) {
+        var l = look(it);
+        if (!l) return;
+        var e = it.edge;
+        if (e.hasClass('defocus') || e.hasClass('dimmed')) low.push(l);
+        else if (e.hasClass('stubHover') || e.hasClass('edgeFocus') || e.hasClass('edgeOut') || e.hasClass('edgeIn') || e.hasClass('revealEdge')) top.push(l);
+        else mid.push(l);
+      });
+      ctx.lineJoin = 'round';
+      [low, mid, top].forEach(function (tier) {
+        tubes(ctx, tier, z);
+        ctx.lineCap = 'round';
+        tier.forEach(function (l) { marks(ctx, l, z, theme); });
+      });
+    }
+    function draw() {
+      var w = host.clientWidth, h = host.clientHeight, dpr = window.devicePixelRatio || 1;
+      var cw = Math.round(w * dpr), ch = Math.round(h * dpr);
+      if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+      var ctx = canvas.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, cw, ch);
+      var z = cy.zoom(), pan = cy.pan();
+      ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * pan.x, dpr * pan.y);
+      paint(ctx, z);
+    }
+    cy.on('render', draw);
+    // Draws the lines into an export: bb is the model box the image covers, scale its pixels per unit.
+    function drawInto(ctx, bb, scale) {
+      ctx.save();
+      ctx.setTransform(scale, 0, 0, scale, -bb.x1 * scale, -bb.y1 * scale);
+      paint(ctx, scale);
+      ctx.restore();
+    }
+    // ---- selection flow ----------------------------------------------------
+    // While an element is selected, a glowing dot runs along each of its lines in
+    // their direction: every incoming line first, then every outgoing one, then
+    // again. Its own canvas above the lines, redrawn per frame for those lines
+    // only; it stops when nothing is selected, waits while the page is hidden,
+    // and never starts when the reader asks for reduced motion.
+    var dots = document.createElement('canvas');
+    dots.className = 'edgeFlow';
+    dots.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:0;';
+    host.insertBefore(dots, canvas.nextSibling);
+    var reduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+    var RUN = 1500, REST = 250;
+    var flow = null, frame = 0;
+    // A path's points with their running lengths, so a fraction maps to a point.
+    function measured(pts) {
+      var acc = [0];
+      for (var k = 1; k < pts.length; k++) acc.push(acc[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+      return { pts: pts, acc: acc, len: acc[acc.length - 1] };
+    }
+    function pointAt(m, f) {
+      var s = m.len * f, k = 1;
+      while (k < m.acc.length - 1 && m.acc[k] < s) k++;
+      var seg = m.acc[k] - m.acc[k - 1] || 1, t = (s - m.acc[k - 1]) / seg;
+      var a = m.pts[k - 1], b = m.pts[k];
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    function pathsFor(eles) {
+      var byEdge = {};
+      items().forEach(function (it) { if (it.path) byEdge[it.edge.id()] = it; });
+      var out = [];
+      eles.forEach(function (e) {
+        var it = byEdge[e.id()];
+        if (!it || !e.visible()) return;
+        var pts = it.path.tip ? it.path.pts.concat([it.path.tip]) : it.path.pts;
+        var m = measured(pts);
+        if (m.len > 1) out.push(m);
+      });
+      return out;
+    }
+    function clearDots() {
+      var ctx = dots.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, dots.width, dots.height);
+    }
+    function glow(ctx, x, y, color, dpr) {
+      var r = 9 * dpr;
+      var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.25, color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function tick(now) {
+      frame = 0;
+      if (!flow) return;
+      if (document.hidden) { flow.paused = true; return; }
+      if (!flow.t0) flow.t0 = now;
+      // The lines move with every relayout or route: re-read them when the drawn geometry changes.
+      if (flow.cacheList !== cache.list) { flow.cacheList = items(); flow.inP = pathsFor(flow.inE); flow.outP = pathsFor(flow.outE); }
+      var phases = [];
+      if (flow.inP.length) phases.push({ paths: flow.inP, color: THEMES[state.theme].warn });
+      if (flow.outP.length) phases.push({ paths: flow.outP, color: THEMES[state.theme].selGlow });
+      if (!phases.length) { clearDots(); return; }
+      var cycle = RUN + REST, t = (now - flow.t0) % (cycle * phases.length);
+      var ph = phases[Math.floor(t / cycle)], f = (t % cycle) / RUN;
+      var w = host.clientWidth, h = host.clientHeight, dpr = window.devicePixelRatio || 1;
+      var cw = Math.round(w * dpr), ch = Math.round(h * dpr);
+      if (dots.width !== cw || dots.height !== ch) { dots.width = cw; dots.height = ch; }
+      clearDots();
+      if (f <= 1) {
+        var ctx = dots.getContext('2d'), z = cy.zoom(), pan = cy.pan();
+        // Ease in and out, so a dot leaves and arrives gently.
+        var e2 = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+        ph.paths.forEach(function (m) {
+          var p = pointAt(m, e2);
+          var x = (p.x * z + pan.x) * dpr, y = (p.y * z + pan.y) * dpr;
+          if (x < -20 || y < -20 || x > cw + 20 || y > ch + 20) return;
+          glow(ctx, x, y, ph.color, dpr);
+        });
+      }
+      frame = requestAnimationFrame(tick);
+    }
+    function stopFlow() {
+      flow = null;
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      clearDots();
+    }
+    function startFlow(inE, outE) {
+      stopFlow();
+      if (reduce && reduce.matches) return;
+      if (!inE.length && !outE.length) return;
+      flow = { inE: inE, outE: outE, inP: [], outP: [], cacheList: null, t0: 0 };
+      frame = requestAnimationFrame(tick);
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && flow && flow.paused && !frame) { flow.paused = false; flow.t0 = 0; frame = requestAnimationFrame(tick); }
+    });
+    if (reduce && reduce.addEventListener) reduce.addEventListener('change', function () { if (reduce.matches) stopFlow(); });
+    return { draw: draw, drawInto: drawInto, startFlow: startFlow, stopFlow: stopFlow };
+  })();
+  // ---- edge router ---------------------------------------------------------------
+  // Curved and orthogonal lines are routed around the boxes: each line leaves its
+  // source and enters its target on the side facing the other end, at its own port,
+  // and finds the cheapest orthogonal path through the gaps between boxes (length,
+  // plus a cost per bend and for running along a channel another line already uses).
+  // Lines that still share a channel are then spread apart, so no two lines with
+  // different ends run on top of each other. Orthogonal draws the path; curved draws
+  // a smooth curve through its bends. Straight lines are not routed.
+  var edgeRouter = (function () {
+    var MARGIN = 26, STUB = 30, BEND = 46, SHARE = 0.9, LANE = 16, PAD = 10, MAX_NODES = 220, NEAR_COST = 5;
+    function rectOf(n) {
+      var bb = n.boundingBox({ includeLabels: false, includeOverlays: false });
+      return { l: bb.x1, r: bb.x2, t: bb.y1, b: bb.y2, cx: (bb.x1 + bb.x2) / 2, cy: (bb.y1 + bb.y2) / 2, w: bb.w, h: bb.h };
+    }
+    // The side of a facing b: right/left when there is a horizontal gap, else bottom/top.
+    function sideToward(a, b) {
+      var gapX = Math.abs(b.cx - a.cx) - (a.w + b.w) / 2;
+      var gapY = Math.abs(b.cy - a.cy) - (a.h + b.h) / 2;
+      if (gapX >= gapY) return b.cx >= a.cx ? 'r' : 'l';
+      return b.cy >= a.cy ? 'b' : 't';
+    }
+    var NORMAL = { r: { x: 1, y: 0 }, l: { x: -1, y: 0 }, b: { x: 0, y: 1 }, t: { x: 0, y: -1 } };
+    function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+    // The coordinate along a side (y on a left or right side, x on a top or bottom one).
+    function along(r, side) { return side === 't' || side === 'b' ? r.cx : r.cy; }
+    function sideRange(r, side) { return side === 't' || side === 'b' ? [r.l, r.r] : [r.t, r.b]; }
+    // Ports. A line whose two boxes face each other with room to spare runs
+    // straight across. A leaving end sits at the point of its side nearest the
+    // box at the line's other end, where a straight line would leave; the lines
+    // arriving on a side share one trunk port at its middle. The ends on one side
+    // are then spread a lane apart without crossing: ordered by the direction
+    // their other end lies in, so the line to the steepest corner leaves nearest
+    // that corner.
+    function assignPorts(jobs, obstacles) {
+      var place = function (r, side, c) {
+        var n = NORMAL[side];
+        var p = side === 't' || side === 'b' ? { x: c, y: side === 't' ? r.t : r.b } : { x: side === 'l' ? r.l : r.r, y: c };
+        return { port: p, stub: { x: p.x + n.x * STUB, y: p.y + n.y * STUB } };
+      };
+      jobs.forEach(function (j) {
+        j.straight = null;
+        var facing = (j.sSide === 'r' && j.tSide === 'l') || (j.sSide === 'l' && j.tSide === 'r') ||
+          (j.sSide === 'b' && j.tSide === 't') || (j.sSide === 't' && j.tSide === 'b');
+        if (!facing) return;
+        var a = sideRange(j.sr, j.sSide), b = sideRange(j.tr, j.tSide);
+        var lo = Math.max(a[0], b[0]) + PAD, hi = Math.min(a[1], b[1]) - PAD;
+        if (hi < lo) return;
+        var c = clamp(along(j.tr, j.tSide), lo, hi);
+        var ps = place(j.sr, j.sSide, c).stub, pt = place(j.tr, j.tSide, c).stub;
+        // Only when nothing stands between the two.
+        if (segClear(ps, pt, obstacles)) j.straight = c;
+      });
+      var bySide = {};
+      jobs.forEach(function (j) {
+        [{ jobs: [j], end: 's', box: j.src, r: j.sr, side: j.sSide, far: [j.tr] }, { jobs: [j], end: 't', box: j.tgt, r: j.tr, side: j.tSide, far: [j.sr] }].forEach(function (e) {
+          (bySide[e.box + '|' + e.side] = bySide[e.box + '|' + e.side] || []).push(e);
+        });
+      });
+      Object.keys(bySide).forEach(function (key) {
+        var list = bySide[key], side = list[0].side, r = list[0].r, n = NORMAL[side];
+        var range = sideRange(r, side), lo = range[0] + PAD, hi = range[1] - PAD;
+        // Lines arriving on one side flow the same way, into one trunk: they share
+        // one port and run together, so a box many lines use takes them as one.
+        // A straight line keeps its own end.
+        var ends = list.filter(function (e) { return e.end === 's' || e.jobs[0].straight !== null; });
+        var arriving = list.filter(function (e) { return e.end === 't' && e.jobs[0].straight === null; });
+        if (arriving.length) {
+          ends.push({ end: 't', jobs: arriving.map(function (e) { return e.jobs[0]; }), far: arriving.map(function (e) { return e.far[0]; }), trunk: true });
+        }
+        ends.forEach(function (e) {
+          var slope = 0, want = 0;
+          e.far.forEach(function (o) {
+            var reach = Math.max(1, (o.cx - r.cx) * n.x + (o.cy - r.cy) * n.y);
+            slope += (along(o, side) - along(r, side)) / reach;
+            want += clamp(along(o, side), lo, hi);
+          });
+          e.slope = slope / e.far.length;
+          e.want = e.trunk ? clamp(along(r, side), lo, hi) : e.jobs[0].straight !== null ? e.jobs[0].straight : want / e.far.length;
+        });
+        ends.sort(function (a, b) { return a.slope - b.slope || a.want - b.want; });
+        var gap = ends.length > 1 ? Math.min(LANE, (hi - lo) / (ends.length - 1)) : 0;
+        // Forward: each end at its wish or a lane past the one before; back: within the side.
+        ends.forEach(function (e, k) { e.at = k ? Math.max(e.want, ends[k - 1].at + gap) : e.want; });
+        for (var k = ends.length - 1; k >= 0; k--) ends[k].at = Math.min(ends[k].at, k < ends.length - 1 ? ends[k + 1].at - gap : hi);
+        ends.forEach(function (e) {
+          e.at = clamp(e.at, lo, hi);
+          var p = place(r, side, e.at);
+          e.jobs.forEach(function (j) {
+            if (e.end === 's') { j.sPort = p.port; j.sStub = p.stub; } else { j.tPort = p.port; j.tStub = p.stub; }
+          });
+        });
+      });
+    }
+    function uniqSorted(a) {
+      a.sort(function (x, y) { return x - y; });
+      var out = [];
+      a.forEach(function (v) { if (!out.length || Math.abs(out[out.length - 1] - v) > 0.5) out.push(v); });
+      return out;
+    }
+    // The routing grid: every box's inflated edges, every stub, and the middle of every gap.
+    function buildGrid(obstacles, jobs) {
+      var xs = [], ys = [];
+      obstacles.forEach(function (o) { xs.push(o.l - MARGIN, o.r + MARGIN); ys.push(o.t - MARGIN, o.b + MARGIN); });
+      jobs.forEach(function (j) { xs.push(j.sStub.x, j.tStub.x); ys.push(j.sStub.y, j.tStub.y); });
+      xs = uniqSorted(xs); ys = uniqSorted(ys);
+      var mx = [], my = [], i;
+      for (i = 1; i < xs.length; i++) if (xs[i] - xs[i - 1] > 2 * LANE) mx.push((xs[i] + xs[i - 1]) / 2);
+      for (i = 1; i < ys.length; i++) if (ys[i] - ys[i - 1] > 2 * LANE) my.push((ys[i] + ys[i - 1]) / 2);
+      xs = uniqSorted(xs.concat(mx)); ys = uniqSorted(ys.concat(my));
+      var W = xs.length, H = ys.length;
+      // 2 = through a box, 1 = through the clearance around one (allowed, at a cost), 0 = free.
+      var inside = function (x, y) {
+        var level = 0;
+        for (var k = 0; k < obstacles.length; k++) {
+          var o = obstacles[k];
+          if (x > o.l - 2 && x < o.r + 2 && y > o.t - 2 && y < o.b + 2) return 2;
+          if (x > o.l - MARGIN + 0.5 && x < o.r + MARGIN - 0.5 && y > o.t - MARGIN + 0.5 && y < o.b + MARGIN - 0.5) level = 1;
+        }
+        return level;
+      };
+      var blocked = new Uint8Array(W * H);
+      var blockR = new Uint8Array(W * H), blockD = new Uint8Array(W * H);
+      for (var yi = 0; yi < H; yi++) {
+        for (var xi = 0; xi < W; xi++) {
+          var id = yi * W + xi;
+          blocked[id] = inside(xs[xi], ys[yi]);
+          if (xi + 1 < W) blockR[id] = inside((xs[xi] + xs[xi + 1]) / 2, ys[yi]);
+          if (yi + 1 < H) blockD[id] = inside(xs[xi], (ys[yi] + ys[yi + 1]) / 2);
+        }
+      }
+      var xIndex = {}, yIndex = {};
+      xs.forEach(function (v, k) { xIndex[Math.round(v * 2)] = k; });
+      ys.forEach(function (v, k) { yIndex[Math.round(v * 2)] = k; });
+      return { xs: xs, ys: ys, W: W, H: H, blocked: blocked, blockR: blockR, blockD: blockD, xIndex: xIndex, yIndex: yIndex, usage: new Map() };
+    }
+    function nearestIndex(arr, v) {
+      var best = 0;
+      for (var k = 1; k < arr.length; k++) if (Math.abs(arr[k] - v) < Math.abs(arr[best] - v)) best = k;
+      return best;
+    }
+    // A binary heap of [cost, state].
+    function Heap() { this.a = []; }
+    Heap.prototype.push = function (c, s) {
+      var a = this.a; a.push([c, s]);
+      var i = a.length - 1;
+      while (i > 0) { var p = (i - 1) >> 1; if (a[p][0] <= a[i][0]) break; var t = a[p]; a[p] = a[i]; a[i] = t; i = p; }
+    };
+    Heap.prototype.pop = function () {
+      var a = this.a, top = a[0], last = a.pop();
+      if (a.length) {
+        a[0] = last;
+        var i = 0;
+        for (;;) {
+          var l = 2 * i + 1, r = l + 1, m = i;
+          if (l < a.length && a[l][0] < a[m][0]) m = l;
+          if (r < a.length && a[r][0] < a[m][0]) m = r;
+          if (m === i) break;
+          var t = a[m]; a[m] = a[i]; a[i] = t; i = m;
+        }
+      }
+      return top;
+    };
+    var DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];
+    function dirOfSide(side) { return side === 'r' ? 0 : side === 'b' ? 1 : side === 'l' ? 2 : 3; }
+    // The cheapest orthogonal path from the source stub to the target stub.
+    function search(g, j) {
+      var sx = nearestIndex(g.xs, j.sStub.x), sy = nearestIndex(g.ys, j.sStub.y);
+      var tx = nearestIndex(g.xs, j.tStub.x), ty = nearestIndex(g.ys, j.tStub.y);
+      var W = g.W, N = W * g.H;
+      // One set of arrays per grid, reused by every line: a state counts only when
+      // stamped by this search, so nothing is cleared between searches.
+      if (!g.best) { g.best = new Float64Array(N * 4); g.from = new Int32Array(N * 4); g.seen = new Uint32Array(N * 4); g.run = 0; }
+      var run = ++g.run, seen = g.seen, best = g.best, from = g.from;
+      var costOf = function (st) { return seen[st] === run ? best[st] : Infinity; };
+      var heap = new Heap();
+      var startDir = dirOfSide(j.sSide), endDir = (dirOfSide(j.tSide) + 2) % 4;
+      var s0 = (sy * W + sx) * 4 + startDir;
+      best[s0] = 0; from[s0] = -1; seen[s0] = run;
+      var h = function (xi, yi) { return Math.abs(g.xs[xi] - g.xs[tx]) + Math.abs(g.ys[yi] - g.ys[ty]); };
+      heap.push(h(sx, sy), s0);
+      var goal = -1, guard = 0;
+      while (heap.a.length && guard++ < 400000) {
+        var top = heap.pop(), st = top[1];
+        var cell = st >> 2, dir = st & 3, xi = cell % W, yi = (cell - xi) / W;
+        var cost = costOf(st);
+        if (top[0] > cost + h(xi, yi) + 0.001) continue;
+        if (xi === tx && yi === ty) { goal = st; break; }
+        for (var d = 0; d < 4; d++) {
+          if (d === (dir + 2) % 4) continue;
+          var nx = xi + DX[d], ny = yi + DY[d];
+          if (nx < 0 || ny < 0 || nx >= W || ny >= g.H) continue;
+          var ncell = ny * W + nx;
+          var isEnd = nx === tx && ny === ty;
+          if (g.blocked[ncell] === 2 && !isEnd) continue;
+          var seg = d === 0 ? g.blockR[cell] : d === 2 ? g.blockR[ncell] : d === 1 ? g.blockD[cell] : g.blockD[ncell];
+          if (seg === 2) continue;
+          var len = Math.abs(g.xs[nx] - g.xs[xi]) + Math.abs(g.ys[ny] - g.ys[yi]);
+          if (seg === 1 || g.blocked[ncell] === 1) len *= NEAR_COST;
+          // A grid edge's number: its lower cell, twice, plus one when it runs down.
+          var used = g.usage.get(Math.min(cell, ncell) * 2 + (d & 1));
+          var share = 0;
+          if (used) used.forEach(function (u) { if (u !== j.tgt && u !== j.src) share++; });
+          var c = cost + len * (1 + SHARE * Math.min(share, 3)) + (d !== dir ? BEND : 0);
+          if (isEnd && d !== endDir) c += BEND;
+          var ns = ncell * 4 + d;
+          if (c < costOf(ns)) { best[ns] = c; from[ns] = st; seen[ns] = run; heap.push(c + h(nx, ny), ns); }
+        }
+      }
+      if (goal < 0) return null;
+      var cells = [];
+      for (var s = goal; s >= 0; s = from[s]) cells.push(s >> 2);
+      cells.reverse();
+      for (var k = 1; k < cells.length; k++) {
+        var a = cells[k - 1], b = cells[k];
+        // A stubbed line is drawn in full only on demand: it takes no channel space.
+        if (j.busy) break;
+        var ukey = Math.min(a, b) * 2 + (Math.abs(a - b) === W ? 1 : 0);
+        if (!g.usage.has(ukey)) g.usage.set(ukey, new Set());
+        g.usage.get(ukey).add(j.tgt);
+      }
+      return cells.map(function (c) { var x = c % W; return { x: g.xs[x], y: g.ys[(c - x) / W] }; });
+    }
+    function simplify(pts) {
+      var out = [];
+      pts.forEach(function (p) {
+        if (out.length && Math.abs(out[out.length - 1].x - p.x) < 0.01 && Math.abs(out[out.length - 1].y - p.y) < 0.01) return;
+        out.push({ x: p.x, y: p.y });
+        while (out.length >= 3) {
+          var a = out[out.length - 3], b = out[out.length - 2], c = out[out.length - 1];
+          var col = (Math.abs(a.x - b.x) < 0.01 && Math.abs(b.x - c.x) < 0.01) || (Math.abs(a.y - b.y) < 0.01 && Math.abs(b.y - c.y) < 0.01);
+          if (!col) break;
+          out.splice(out.length - 2, 1);
+        }
+      });
+      return out;
+    }
+    // Lines whose runs lie on the same channel line and overlap are spread across it.
+    // Runs that end at the same box from the same direction may stay together.
+    function nudge(routes, obstacles) {
+      ['v', 'h'].forEach(function (axis) {
+        var runs = [];
+        routes.forEach(function (r, ri) {
+          var p = r.pts;
+          for (var k = 2; k < p.length - 1; k++) {
+            var a = p[k - 1], b = p[k];
+            var vertical = Math.abs(a.x - b.x) < 0.01;
+            if ((axis === 'v') !== vertical) continue;
+            var c = vertical ? a.x : a.y;
+            var lo = vertical ? Math.min(a.y, b.y) : Math.min(a.x, b.x), hi = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
+            runs.push({ ri: ri, k: k, c: c, lo: lo, hi: hi, tgt: r.tgt, other: vertical ? (p[k + 1] ? p[k + 1].x : b.x) : (p[k + 1] ? p[k + 1].y : b.y) });
+          }
+        });
+        var byC = {};
+        runs.forEach(function (r) { (byC[Math.round(r.c * 2)] = byC[Math.round(r.c * 2)] || []).push(r); });
+        Object.keys(byC).forEach(function (key) {
+          var list = byC[key].sort(function (a, b) { return a.lo - b.lo; });
+          // Clusters of overlapping runs.
+          var clusters = [], cur = null, curHi = -Infinity;
+          list.forEach(function (r) {
+            if (cur && r.lo < curHi - 1) { cur.push(r); curHi = Math.max(curHi, r.hi); }
+            else { cur = [r]; clusters.push(cur); curHi = r.hi; }
+          });
+          clusters.forEach(function (cl) {
+            if (cl.length < 2) return;
+            var lanes = {};
+            cl.forEach(function (r) { (lanes[r.tgt] = lanes[r.tgt] || []).push(r); });
+            var keys = Object.keys(lanes).sort(function (a, b) { return lanes[a][0].other - lanes[b][0].other; });
+            if (keys.length < 2) return;
+            // One lane apart, or closer when the boxes beside the channel leave less room.
+            var c0 = cl[0].c, lo = Infinity, hi = -Infinity, room = Infinity;
+            cl.forEach(function (r) { lo = Math.min(lo, r.lo); hi = Math.max(hi, r.hi); });
+            obstacles.forEach(function (o) {
+              var a = axis === 'v' ? o.t : o.l, b = axis === 'v' ? o.b : o.r;
+              if (b <= lo || a >= hi) return;
+              var near = axis === 'v' ? o.l : o.t, far = axis === 'v' ? o.r : o.b;
+              if (far <= c0) room = Math.min(room, c0 - far);
+              else if (near >= c0) room = Math.min(room, near - c0);
+            });
+            var lane = Math.min(LANE, Math.max(5, 2 * (room - 7) / (keys.length - 1)));
+            keys.forEach(function (lk, idx) {
+              var off = (idx - (keys.length - 1) / 2) * lane;
+              lanes[lk].forEach(function (r) {
+                var p = routes[r.ri].pts;
+                if (axis === 'v') { p[r.k - 1].x += off; p[r.k].x += off; }
+                else { p[r.k - 1].y += off; p[r.k].y += off; }
+              });
+            });
+          });
+        });
+      });
+    }
+    // ---- curved: a smooth curve through the routed path ------------------------
+    // A box's clearance (CLEAR) is kept free where there is room; a narrow gap
+    // between two boxes may still be passed, closer (HARD), at a cost (NEAR), so
+    // a line takes the gap instead of a long way round the whole column.
+    var CLEAR = 16, HARD = 5, NEAR = 2.5;
+    function segClear(a, b, obstacles, pad) {
+      var P = pad === undefined ? CLEAR : pad;
+      for (var k = 0; k < obstacles.length; k++) {
+        var o = obstacles[k];
+        var r = { l: o.l - P, r: o.r + P, t: o.t - P, b: o.b + P };
+        // Liang-Barsky clip of the segment against the rectangle.
+        var t0 = 0, t1 = 1, dx = b.x - a.x, dy = b.y - a.y;
+        var p = [-dx, dx, -dy, dy], q = [a.x - r.l, r.r - a.x, a.y - r.t, r.b - a.y];
+        var hit = true;
+        for (var i = 0; i < 4; i++) {
+          if (Math.abs(p[i]) < 1e-9) { if (q[i] < 0) { hit = false; break; } continue; }
+          var t = q[i] / p[i];
+          if (p[i] < 0) { if (t > t1) { hit = false; break; } if (t > t0) t0 = t; }
+          else { if (t < t0) { hit = false; break; } if (t < t1) t1 = t; }
+        }
+        if (hit && t1 - t0 > 1e-6) return false;
+      }
+      return true;
+    }
+    function inAny(p, obstacles, pad) {
+      for (var k = 0; k < obstacles.length; k++) {
+        var o = obstacles[k];
+        if (p.x > o.l - pad && p.x < o.r + pad && p.y > o.t - pad && p.y < o.b + pad) return true;
+      }
+      return false;
+    }
+    // Centripetal Catmull-Rom through the waypoints, sampled.
+    function spline(w) {
+      var out = [w[0]];
+      for (var i = 0; i < w.length - 1; i++) {
+        var p0 = w[i - 1] || { x: 2 * w[0].x - w[1].x, y: 2 * w[0].y - w[1].y };
+        var p1 = w[i], p2 = w[i + 1];
+        var p3 = w[i + 2] || { x: 2 * w[w.length - 1].x - w[w.length - 2].x, y: 2 * w[w.length - 1].y - w[w.length - 2].y };
+        var d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        var n = Math.max(2, Math.ceil(d / 14));
+        var t01 = Math.pow(Math.hypot(p1.x - p0.x, p1.y - p0.y), 0.5) || 1;
+        var t12 = Math.pow(d, 0.5) || 1;
+        var t23 = Math.pow(Math.hypot(p3.x - p2.x, p3.y - p2.y), 0.5) || 1;
+        var m1x = (p2.x - p1.x + t12 * ((p1.x - p0.x) / t01 - (p2.x - p0.x) / (t01 + t12)));
+        var m1y = (p2.y - p1.y + t12 * ((p1.y - p0.y) / t01 - (p2.y - p0.y) / (t01 + t12)));
+        var m2x = (p2.x - p1.x + t12 * ((p3.x - p2.x) / t23 - (p3.x - p1.x) / (t12 + t23)));
+        var m2y = (p2.y - p1.y + t12 * ((p3.y - p2.y) / t23 - (p3.y - p1.y) / (t12 + t23)));
+        for (var s = 1; s <= n; s++) {
+          var t = s / n, t2 = t * t, t3 = t2 * t;
+          var h00 = 2 * t3 - 3 * t2 + 1, h10 = t3 - 2 * t2 + t, h01 = -2 * t3 + 3 * t2, h11 = t3 - t2;
+          out.push({ x: h00 * p1.x + h10 * m1x + h01 * p2.x + h11 * m2x, y: h00 * p1.y + h10 * m1y + h01 * p2.y + h11 * m2y, leg: i });
+        }
+      }
+      return out;
+    }
+    // Curved lines take the shortest way around the boxes: a visibility graph over
+    // the corners of every box (with clearance), searched per line, then a smooth
+    // curve through the corners it passes. A corner several lines pass is taken a
+    // little wider by each, so curves keep their distance instead of stacking.
+    var CORNER = 28, SPREAD = 7, CORNER_STEPS = [CORNER, 18, 10];
+    function cornerGraph(obstacles) {
+      var nodes = [];
+      obstacles.forEach(function (o) {
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (d) {
+          // As far out as the neighbouring boxes leave room for.
+          for (var i = 0; i < CORNER_STEPS.length; i++) {
+            var off = CORNER_STEPS[i];
+            var p = { x: (d[0] < 0 ? o.l : o.r) + d[0] * off, y: (d[1] < 0 ? o.t : o.b) + d[1] * off, dx: d[0], dy: d[1], uses: 0 };
+            if (!inAny(p, obstacles, HARD)) { nodes.push(p); break; }
+          }
+        });
+      });
+      var vis = nodes.map(function () { return []; });
+      for (var a = 0; a < nodes.length; a++) {
+        for (var b = a + 1; b < nodes.length; b++) {
+          var d = linkCost(nodes[a], nodes[b], obstacles);
+          if (d >= 0) { vis[a].push([b, d]); vis[b].push([a, d]); }
+        }
+      }
+      return { nodes: nodes, vis: vis };
+    }
+    // The cost of a straight leg: its length, more where it passes a box closer
+    // than its clearance; -1 where it would touch one.
+    function linkCost(a, b, obstacles) {
+      if (!segClear(a, b, obstacles, HARD)) return -1;
+      var d = Math.hypot(a.x - b.x, a.y - b.y);
+      return segClear(a, b, obstacles) ? d : d * NEAR;
+    }
+    function anyAngle(cg, from, to, obstacles) {
+      if (segClear(from, to, obstacles)) return [];
+      var N = cg.nodes.length, S = N, T = N + 1;
+      var dist = new Float64Array(N + 2).fill(Infinity), prev = new Int32Array(N + 2).fill(-1), done = new Uint8Array(N + 2);
+      var startLinks = [], endLinks = [];
+      cg.nodes.forEach(function (p, k) {
+        var ds = linkCost(from, p, obstacles), dt = linkCost(p, to, obstacles);
+        if (ds >= 0) startLinks.push([k, ds]);
+        if (dt >= 0) endLinks.push([k, dt]);
+      });
+      var endOf = {};
+      endLinks.forEach(function (l) { endOf[l[0]] = l[1]; });
+      var heap = new Heap();
+      dist[S] = 0; heap.push(0, S);
+      // Straight across, passing close: allowed at its cost, against the way round.
+      var direct = linkCost(from, to, obstacles);
+      if (direct >= 0) { dist[T] = direct; prev[T] = S; heap.push(direct, T); }
+      while (heap.a.length) {
+        var top = heap.pop(), u = top[1];
+        if (done[u]) continue;
+        done[u] = 1;
+        if (u === T) break;
+        var links = u === S ? startLinks : cg.vis[u];
+        for (var i = 0; i < links.length; i++) {
+          var v = links[i][0], c = dist[u] + links[i][1] + (cg.nodes[v].uses * SPREAD);
+          if (c < dist[v]) { dist[v] = c; prev[v] = u; heap.push(c, v); }
+        }
+        if (u !== S && endOf[u] !== undefined && dist[u] + endOf[u] < dist[T]) { dist[T] = dist[u] + endOf[u]; prev[T] = u; heap.push(dist[T], T); }
+      }
+      if (prev[T] < 0) return null;
+      var path = [];
+      for (var x = prev[T]; x !== S && x >= 0; x = prev[x]) path.push(x);
+      path.reverse();
+      return path.map(function (k) {
+        var p = cg.nodes[k], off = p.uses * SPREAD;
+        p.uses++;
+        return { x: p.x + p.dx * off, y: p.y + p.dy * off };
+      });
+    }
+    function curveRoute(j, cg, obstacles) {
+      var mid = anyAngle(cg, j.sStub, j.tStub, obstacles);
+      var w = [j.sPort, j.sStub].concat(mid || [], [j.tStub, j.tPort]);
+      var sm = spline(w);
+      for (var s = 1; s < sm.length - 1; s++) {
+        // A curve that swings into a box falls back to the straight legs through the same corners.
+        if (inAny(sm[s], obstacles, 1)) return w;
+      }
+      return sm;
+    }
+    // From the routed (and spread) polyline: keep only the waypoints a straight
+    // line cannot skip without touching a box, then curve through them. Where the
+    // curve cuts a box's corner, the skipped route points come back in.
+    function curvePath(pts, obstacles) {
+      if (pts.length < 3) return pts;
+      var n = pts.length, keep = [0, 1];
+      var i = 1;
+      while (i < n - 2) {
+        var j = n - 2;
+        while (j > i + 1 && !segClear(pts[i], pts[j], obstacles)) j--;
+        keep.push(j);
+        i = j;
+      }
+      if (keep[keep.length - 1] !== n - 2) keep.push(n - 2);
+      keep.push(n - 1);
+      keep = keep.filter(function (v, k) { return k === 0 || v !== keep[k - 1]; });
+      for (var round = 0; round < 4; round++) {
+        var w = keep.map(function (k) { return pts[k]; });
+        var sm = spline(w);
+        var bad = -1;
+        // The kept leg the first sample inside a box falls on.
+        for (var s = 1; s < sm.length - 1; s++) {
+          if (inAny(sm[s], obstacles, 2)) { bad = sm[s].leg; break; }
+        }
+        if (bad < 0) return sm;
+        var a = keep[bad], b = keep[Math.min(bad + 1, keep.length - 1)];
+        if (b - a < 2) return pts;
+        keep.splice(bad + 1, 0, Math.floor((a + b) / 2));
+      }
+      return pts;
+    }
+    function apply() {
+      var mode = state.lineStyle;
+      var busy = busyTargets();
+      cy.batch(function () { cy.edges().forEach(function (e) { e.toggleClass('busy', !!busy[e.target().id()]); }); });
+      var edges = cy.edges().filter(function (e) { return e.visible() && e.source().id() !== e.target().id(); });
+      var leaves = cy.nodes().filter(function (n) { return n.visible(); });
+      if (mode === 'straight' || leaves.length > MAX_NODES) {
+        cy.batch(function () { edges.forEach(function (e) { e.removeStyle(); }); });
+        return;
+      }
+      var rects = {};
+      leaves.forEach(function (n) { rects[n.id()] = rectOf(n); });
+      var jobs = [];
+      edges.forEach(function (e) {
+        var sr = rects[e.source().id()], tr = rects[e.target().id()];
+        if (!sr || !tr) return;
+        jobs.push({ edge: e, src: e.source().id(), tgt: e.target().id(), sr: sr, tr: tr, sSide: sideToward(sr, tr), tSide: sideToward(tr, sr), busy: !!busy[e.target().id()] });
+      });
+      // Obstacles: every box except compound boxes, which lines may enter.
+      var obstacles = [];
+      leaves.forEach(function (n) { if (!n.isParent()) obstacles.push(rects[n.id()]); });
+      // A side whose way out runs straight into a neighbouring box (a tight stack)
+      // gives way to the other side facing the far end.
+      var blockedOut = function (r, side) {
+        var n = NORMAL[side];
+        var p = side === 'l' || side === 'r' ? { x: side === 'l' ? r.l : r.r, y: r.cy } : { x: r.cx, y: side === 't' ? r.t : r.b };
+        var q = { x: p.x + n.x * (STUB + 2), y: p.y + n.y * (STUB + 2) };
+        return obstacles.some(function (o) { return o !== r && q.x > o.l - 3 && q.x < o.r + 3 && q.y > o.t - 3 && q.y < o.b + 3; });
+      };
+      var otherSide = function (a, b, side) {
+        if (side === 'l' || side === 'r') return b.cy >= a.cy ? 'b' : 't';
+        return b.cx >= a.cx ? 'r' : 'l';
+      };
+      jobs.forEach(function (j) {
+        if (blockedOut(j.sr, j.sSide)) j.sSide = otherSide(j.sr, j.tr, j.sSide);
+        if (blockedOut(j.tr, j.tSide)) j.tSide = otherSide(j.tr, j.sr, j.tSide);
+      });
+      assignPorts(jobs, obstacles);
+      var g = buildGrid(obstacles, jobs);
+      jobs.sort(function (a, b) {
+        return (Math.abs(a.sPort.x - a.tPort.x) + Math.abs(a.sPort.y - a.tPort.y)) - (Math.abs(b.sPort.x - b.tPort.x) + Math.abs(b.sPort.y - b.tPort.y));
+      });
+      var routes = [];
+      jobs.forEach(function (j) {
+        var mid = search(g, j);
+        var pts = mid ? [j.sPort].concat(mid, [j.tPort]) : [j.sPort, j.sStub, j.tStub, j.tPort];
+        // The search snaps to the grid: keep the stubs straight out of their ports.
+        pts = simplify(pts);
+        routes.push({ job: j, tgt: j.tgt, pts: pts });
+      });
+      nudge(routes.filter(function (r) { return !r.job.busy; }), obstacles);
+      if (mode === 'bezier') {
+        var cg = cornerGraph(obstacles);
+        routes.forEach(function (r) { r.pts = curveRoute(r.job, cg, obstacles); });
+      }
+      cy.batch(function () {
+        routes.forEach(function (r) {
+          var j = r.job, p = r.pts, e = j.edge;
+          var s = j.sPort, t = j.tPort;
+          var vx = t.x - s.x, vy = t.y - s.y, l2 = vx * vx + vy * vy;
+          if (l2 < 1) { e.removeStyle(); return; }
+          var l = Math.sqrt(l2), nx = -vy / l, ny = vx / l;
+          var ws = [], ds = [];
+          for (var k = 1; k < p.length - 1; k++) {
+            var dx = p[k].x - s.x, dy = p[k].y - s.y;
+            ws.push(((dx * vx + dy * vy) / l2).toFixed(4));
+            ds.push((dx * nx + dy * ny).toFixed(2));
+          }
+          if (!ws.length) { ws.push('0.5'); ds.push('0'); }
+          var srcC = e.source().position(), tgtC = e.target().position();
+          var st = {
+            'edge-distances': 'endpoints',
+            'source-endpoint': (s.x - srcC.x).toFixed(2) + 'px ' + (s.y - srcC.y).toFixed(2) + 'px',
+            'target-endpoint': (t.x - tgtC.x).toFixed(2) + 'px ' + (t.y - tgtC.y).toFixed(2) + 'px',
+          };
+          // Orthogonal draws the route itself; curved draws the sampled curve through it.
+          st['curve-style'] = 'segments';
+          st['segment-weights'] = ws.join(' ');
+          st['segment-distances'] = ds.join(' ');
+          e.style(st);
+        });
+      });
+    }
+    var timer = null;
+    function schedule() {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { timer = null; apply(); }, 30);
+    }
+    return { apply: apply, schedule: schedule };
+  })();
+  edgeRouter.schedule();
   var pinnedProxy = null;
   positionView(true);
   renderCrumbs();
@@ -2023,6 +3072,7 @@ export function mountCanvas(host, model, opts = {}) {
     if (state.view.kind !== 'types' && state.layout !== 'layered' && !hasSaved) runNativeLayout();
     applySavedPositions();
     if (fit) cy.fit(undefined, 60);
+    if (typeof edgeRouter !== 'undefined' && edgeRouter) edgeRouter.schedule();
   }
   function rebuild(fit) {
     pinnedProxy = null;
@@ -2398,9 +3448,11 @@ export function mountCanvas(host, model, opts = {}) {
     tip.style.display = 'block';
   });
   cy.on('mouseout', 'edge.rel', function () { ROOT.getElementById('relTip').style.display = 'none'; });
-  cy.on('tap', 'edge.rel', function (ev) {
-    var ids = ev.target.data('rels') || '';
+  cy.on('tap', 'edge', function (ev) {
+    var ids = ev.target.is('.rel') ? (ev.target.data('rels') || '') : '';
     if (ids) select('relation', ids, false);
+    else select(null, null, false);
+    focusEdge(ev.target);
   });
 
   cy.on('tap', 'node', function (ev) {
@@ -2470,7 +3522,7 @@ export function mountCanvas(host, model, opts = {}) {
       select('subsystem', t.id, false);
     }
   });
-  cy.on('dragfree', 'node', function () { harvestPositions(); });
+  cy.on('dragfree', 'node', function () { harvestPositions(); edgeRouter.schedule(); });
 
   function parentViewOf(kind, id) {
     if (kind === 'subsystem') {
@@ -2500,6 +3552,10 @@ export function mountCanvas(host, model, opts = {}) {
   ROOT.getElementById('externalsToggle').addEventListener('change', function (ev) { state.externals = ev.target.checked; persist(); rebuild(true); });
   ROOT.getElementById('dataCouplingToggle').checked = state.dataCoupling;
   ROOT.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; persist(); renderLegend(); rebuild(true); });
+  ROOT.getElementById('busyToggle').checked = state.busyStubs;
+  ROOT.getElementById('busyToggle').addEventListener('change', function (ev) { state.busyStubs = ev.target.checked; persist(); edgeRouter.schedule(); });
+  ROOT.getElementById('busyAtSelect').value = String(state.busyAt);
+  ROOT.getElementById('busyAtSelect').addEventListener('change', function (ev) { state.busyAt = Number(ev.target.value); persist(); edgeRouter.schedule(); });
   ROOT.getElementById('issuesToggle').checked = state.showIssues;
   ROOT.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; state.issuesChosen = true; persist(); rebuild(false); renderPanel(); });
   ROOT.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
@@ -2591,6 +3647,7 @@ export function mountCanvas(host, model, opts = {}) {
         state.lineStyle = ev.target.value;
         persist();
         cy.style(buildStyle(THEMES[state.theme]));
+        edgeRouter.schedule();
       });
     }
   })();
@@ -2607,6 +3664,7 @@ export function mountCanvas(host, model, opts = {}) {
     state.theme = state.theme === 'syw' ? 'light' : 'syw';
     CBODY.setAttribute('data-theme', state.theme);
     cy.style(buildStyle(THEMES[state.theme]));
+    edgeRouter.schedule();
     renderLegend();
     persist();
   });
@@ -2997,10 +4055,26 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function downloadPng(cyInst, name) {
     if (!inBrowser) return;
-    var uri = cyInst.png({ full: true, scale: 2, bg: THEMES[state.theme].png });
-    var a = document.createElement('a');
-    a.href = uri; a.download = name;
-    CBODY.appendChild(a); a.click(); a.remove();
+    var save = function (uri) {
+      var a = document.createElement('a');
+      a.href = uri; a.download = name;
+      CBODY.appendChild(a); a.click(); a.remove();
+    };
+    if (cyInst !== cy) { save(cyInst.png({ full: true, scale: 2, bg: THEMES[state.theme].png })); return; }
+    // The main canvas draws its lines in the edge overlay: compose them under the boxes.
+    var bb = cy.elements().boundingBox();
+    var img = new Image();
+    img.onload = function () {
+      var out = document.createElement('canvas');
+      out.width = img.width; out.height = img.height;
+      var ctx = out.getContext('2d');
+      ctx.fillStyle = THEMES[state.theme].png;
+      ctx.fillRect(0, 0, out.width, out.height);
+      edgeOverlay.drawInto(ctx, bb, img.width / (bb.w || 1));
+      ctx.drawImage(img, 0, 0);
+      save(out.toDataURL('image/png'));
+    };
+    img.src = cy.png({ full: true, scale: 2 });
   }
   // Types (ERD) view exports through the same builders via a synthetic model.
   function typesExportModel() {
@@ -3454,7 +4528,7 @@ export function mountCanvas(host, model, opts = {}) {
     ];
 
     if (!flowCy) {
-      flowCy = cytoscape({ container: ROOT.getElementById('flowCy'), elements: eles, style: style, layout: { name: 'preset' }, boxSelectionEnabled: false, autounselectify: true });
+      flowCy = cytoscape({ container: ROOT.getElementById('flowCy'), elements: eles, style: style, layout: { name: 'preset' }, wheelSensitivity: WHEEL_SENSITIVITY, boxSelectionEnabled: false, autounselectify: true });
       // Flowcharts are fixed documentation — never rearrangeable.
       flowCy.autolock(true);
       // Drill on DOUBLE-click only — single taps in a dense flowchart are
@@ -3671,7 +4745,20 @@ export function mountCanvas(host, model, opts = {}) {
 
   // Focus mode: lift the selected element's own edges above everything and let
   // the rest recede, so its relations read clearly in a busy graph.
-  function clearFocus() { cy.elements().removeClass('defocus edgeFocus edgeOut edgeIn'); }
+  function clearFocus() {
+    cy.elements().removeClass('defocus edgeFocus edgeOut edgeIn edgeEnd');
+    if (typeof edgeOverlay !== 'undefined' && edgeOverlay) edgeOverlay.stopFlow();
+  }
+  // A clicked line: it and the two boxes it joins stand out, everything else recedes.
+  function focusEdge(edge) {
+    clearFocus();
+    var ends = edge.connectedNodes();
+    var keep = edge.union(ends).union(ends.ancestors());
+    cy.elements().addClass('defocus');
+    keep.removeClass('defocus');
+    edge.addClass('edgeFocus');
+    ends.addClass('edgeEnd');
+  }
   function applyFocus(node) {
     clearFocus();
     if (!node || !node.length) return;
@@ -3695,6 +4782,7 @@ export function mountCanvas(host, model, opts = {}) {
     inE.addClass('edgeIn').removeClass('defocus');
     colorable.not(outE).not(inE).addClass('edgeFocus').removeClass('defocus');
     reveal.removeClass('defocus');
+    if (typeof edgeOverlay !== 'undefined' && edgeOverlay) edgeOverlay.startFlow(inE, outE);
   }
 
   // The Findings panel: EVERY finding of the model, errors first, then warnings, then notices - including one
@@ -3786,6 +4874,8 @@ export function mountCanvas(host, model, opts = {}) {
     return window.location.pathname.replace(/\/$/, '') + '/openapi';
   }
   function openApiAllowed() {
+    // A host with no OpenAPI page to open (the static demo) turns the affordance off.
+    if (typeof opts !== 'undefined' && opts && opts.hideOpenApi) return false;
     return (typeof opts !== 'undefined' && opts && opts.onOpenApi) || openApiSiblingHref() !== null;
   }
   // The OpenAPI document is a PROJECT-level artifact (the whole project's external

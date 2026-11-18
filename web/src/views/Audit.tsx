@@ -43,7 +43,7 @@ export function Audit() {
         </Button>
       </div>
 
-      <div className="panel" style={{ marginBottom: 16 }}>
+      <div className="syw-card" style={{ marginBottom: 16 }}>
         <div className="row-form">
           <Field label="Project id">
             <TextInput value={projectId} onChange={setProjectId} placeholder="(all)" />

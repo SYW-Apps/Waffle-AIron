@@ -1,0 +1,40 @@
+kind: value-object
+id: practice_report
+name: PracticeReport
+description: >-
+  What sdd_use_practices answers: the practices a session may pick, the ones the project selects for
+  itself, the session's own entries after this call, and the guidance of every practice now in force
+  for the session.
+subsystem: sdd_mcp
+fields:
+  - name: available
+    type: list<PracticeListing>
+    description: Every practice the loaded packs declare.
+    optional: false
+  - name: project
+    type: list<string>
+    description: The practices the project selects for itself (its practices.use, resolved).
+    optional: false
+  - name: session
+    type: list<string>
+    description: This session's own entries after the call (an id adds, `!<id>` drops).
+    optional: false
+  - name: inForce
+    type: list<string>
+    description: 'The practices in force for this session: the project''s, then the session''s entries applied.'
+    optional: false
+  - name: guidance
+    type: string
+    description: The guidance of each practice in force, each under its attributed heading.
+    optional: false
+  - name: remembered
+    type: bool
+    description: >-
+      Whether this server keeps the session's entries for later calls (briefs fetched afterwards
+      carry them). False on the hosted server, which is built per request: there the answer applies
+      to this call only.
+    optional: false
+methods: []
+sourcePath: src/mcp/session-practices.ts
+createdAt: '2026-11-06T21:46:25.427Z'
+updatedAt: '2026-11-06T21:46:26.678Z'

@@ -6,6 +6,7 @@ import { authenticateSession } from './auth.js';
 import { authorize, isInstanceAdmin } from './authorization.js';
 import { sessionCookieValue } from './httpio.js';
 import type { HostConfig, Principal } from './types.js';
+import { outdateViews } from './web.js';
 
 // ---------------------------------------------------------------------------
 // Realtime channel hub (sdd_host) — live invalidation over WebSocket.
@@ -25,7 +26,7 @@ export const REALTIME_PATH = '/web/ws';
 
 /** Channels every authenticated session may listen on — the payload is only a
  *  "refetch" nudge and the data is re-fetched through the caller's own scope. */
-const USER_CHANNELS = new Set(['projects', 'landscape', 'units', 'tokens']);
+const USER_CHANNELS = new Set(['projects', 'landscape', 'units', 'tokens', 'reviews', 'externals']);
 
 function canSubscribe(cfg: HostConfig, principal: Principal, channel: string): boolean {
   if (channel.startsWith('project:')) {
@@ -141,8 +142,22 @@ export function getRealtimeHub(): RealtimeHub {
   return hub;
 }
 
-/** Broadcast a channel change (no-op when nothing is listening). */
+/**
+ * Broadcast a channel change (no-op when nothing is listening). Something changed,
+ * so every kept web view is outdated first: the page's refetch builds again,
+ * drawing the last known findings as stale while the gate runs.
+ */
 export function publishChange(channel: string): void {
+  outdateViews();
+  getRealtimeHub().publish(channel);
+}
+
+/**
+ * Broadcast a refetch nudge that is no change: a gate the read left running has
+ * answered, so the open page reads again and finds the answer remembered. The
+ * kept views stay as they are.
+ */
+export function publishNudge(channel: string): void {
   getRealtimeHub().publish(channel);
 }
 
@@ -167,7 +182,14 @@ export function channelsForWebMutation(pathname: string, body: unknown, queryPro
   const channels = new Set<string>();
   const add = (...cs: string[]) => cs.forEach((c) => channels.add(c));
 
-  if (pathname.startsWith('/web/projects')) {
+  if (pathname === '/web/dev/reviews/decide') {
+    add('reviews', 'project:local');
+  } else if (pathname === '/web/dev/commands') {
+    add('project:local');
+  } else if (pathname === '/web/dev/family') {
+    // A member or network change moves the served project; a pin moves its relation health.
+    add('project:local', 'projects', 'externals');
+  } else if (pathname.startsWith('/web/projects')) {
     add('projects', 'landscape');
     if (projectId) add(`project:${projectId}`);
   } else if (pathname === '/web/admin/org/units' || pathname === '/web/admin/org/units/remove') {

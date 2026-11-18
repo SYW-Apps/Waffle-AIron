@@ -74,7 +74,13 @@ fields:
       Merged pack-contributed package names per technology name (lower-cased, deduped across packs)
       — the extension half of the table technology.packages reads
     optional: false
+  - name: practices
+    type: list<LoadedPractice>
+    description: >-
+      Every practice the loaded packs declare, each tagged with its pack, in pack load order. A
+      practice id declared again by a later pack is left out and reported among the load errors.
+    optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-10-18T19:09:43.068Z'
+updatedAt: '2026-11-06T21:43:49.206Z'

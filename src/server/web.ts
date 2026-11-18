@@ -30,13 +30,22 @@ import { existingProjectRoot, listFamilyRecords, resolveProjectRoot } from './pr
 import * as shareadmin from './shareadmin.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
+import type { FamilyMember } from '../core/index.js';
+import * as devCockpit from './dev-commands.js';
+import type { DevApproval, DevCommandResult, DevReview, DevFamilyAction, DevFamilyCommand, DevReviewDecision } from './dev-commands.js';
+import type { ReviewNote, ReviewStatus } from '../core/reviews.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import * as hostNetwork from './adapters/network.js';
-import { validateAsComplete } from './adapters/validator.js';
+import { validateAsCompleteAsync } from './adapters/validator.js';
 import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
-import { sendJson, setSessionCookie, clearSessionCookie, errorText } from './httpio.js';
+import { sendJson, sendJsonTagged, setSessionCookie, clearSessionCookie, errorText } from './httpio.js';
+import * as viewCache from './view-cache.js';
+import type { CachedView } from './view-cache.js';
+import { publishNudge } from './realtime.js';
+import type { FindingsState } from '../core/canvas.js';
+import type { ValidationResult } from '../core/validation.js';
 import type { ValidationIssue } from '../core/validation.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
@@ -512,7 +521,7 @@ export function getGraph(
   tier: string,
   projectId: string,
   level: number,
-): WebGraphModel {
+): Promise<WebGraphModel> {
   return getWebGraph(cfg, sessionId, tier, projectId, level); // step 1 (delegate)
 }
 
@@ -530,7 +539,7 @@ export function getProjectCanvas(cfg: HostConfig, sessionId: string, projectId: 
  * the web graph orchestrator, which authenticates the session and scopes the
  * result to the principal's authorized projects.
  */
-export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): Promise<unknown> {
   return getWebProjectCanvasModel(cfg, sessionId, projectId); // step 1 (delegate)
 }
 
@@ -543,6 +552,47 @@ export function getDevStatus(cfg: HostConfig, sessionId: string): DevStatus {
   return webproject.devStatus(cfg, sessionId); // step 1 (delegate)
 }
 
+/** The member project alias a dev route body names; refuses one that is not text. */
+function memberOf(body: Record<string, unknown> | undefined | null): string | undefined {
+  const member = body?.member;
+  if (member === undefined || member === null || member === '') return undefined;
+  if (typeof member !== 'string') throw new Error('member must be text');
+  return member;
+}
+
+/** Forward the session to the dev cockpit orchestrator: the pending review requests of the served project and its member projects. */
+export function getDevReviews(cfg: HostConfig, sessionId: string): DevReview[] {
+  return devCockpit.reviews(cfg, sessionId); // step 1 (call)
+}
+
+/** Forward the session and the decoded arguments to the dev cockpit orchestrator: the human's decision on a review request. */
+export function decideDevReview(
+  cfg: HostConfig,
+  sessionId: string,
+  id: string,
+  outcome: ReviewStatus,
+  comment?: string,
+  notes?: ReviewNote[],
+  member?: string,
+): Promise<DevReviewDecision> {
+  return devCockpit.decide(cfg, sessionId, id, outcome, comment, notes, member); // step 1 (call)
+}
+
+/** Forward the session to the dev cockpit orchestrator: the served project's approval state. */
+export function getDevApproval(cfg: HostConfig, sessionId: string): DevApproval {
+  return devCockpit.approval(cfg, sessionId); // step 1 (call)
+}
+
+/** Forward the session and the decoded arguments to the dev cockpit orchestrator: run one command the CLI handed the server. */
+export function runDevCommand(cfg: HostConfig, sessionId: string, command: string, subsystem?: string, member?: string): Promise<DevCommandResult> {
+  return devCockpit.run(cfg, sessionId, command, subsystem, member); // step 1 (call)
+}
+
+/** Forward the session and the decoded family command to the dev cockpit orchestrator: a preview, or the change itself. */
+export function runDevFamilyCommand(cfg: HostConfig, sessionId: string, command: DevFamilyCommand): Promise<DevCommandResult> {
+  return devCockpit.family(cfg, sessionId, command); // step 1 (call)
+}
+
 /**
  * Return one authorized project's relation health — its externals status, one
  * entry per external — by delegating to the web graph orchestrator, which
@@ -550,6 +600,14 @@ export function getDevStatus(cfg: HostConfig, sessionId: string): DevStatus {
  */
 export function getProjectExternals(cfg: HostConfig, sessionId: string, projectId: string): ExternalStatus[] {
   return getWebProjectExternals(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
+ * Return the members one authorized project declares by delegating to the web graph
+ * orchestrator, which authenticates the session and scopes the read to the caller's reach.
+ */
+export function getProjectMembers(cfg: HostConfig, sessionId: string, projectId: string): FamilyMember[] {
+  return getWebProjectMembers(cfg, sessionId, projectId); // step 1 (delegate)
 }
 
 /**
@@ -610,13 +668,13 @@ export function signOutEverywhere(cfg: HostConfig, sessionId: string): void {
  * its spec tree at the requested level, overlay validator issues as per-node issue
  * counts, and return it. An unknown tier is rejected.
  */
-export function getWebGraph(
+export async function getWebGraph(
   cfg: HostConfig,
   sessionId: string,
   tier: string,
   projectId: string,
   level: number,
-): WebGraphModel {
+): Promise<WebGraphModel> {
   const principal = authenticateSession(cfg.dataDir, sessionId); // step 1
   if (!principal.authenticated) throw new UnauthenticatedError();
 
@@ -645,15 +703,28 @@ export function getWebGraph(
       if (!root) {
         throw new ForbiddenError('project not authorized or unknown');
       }
-      // steps 7–11: bind the root for the host-core reads that follow.
-      return runWithProjectRoot(root, () => {
-        const graph = hostCore.buildProjectGraph(level); // step 8
-        const validation = validateAsComplete(); // step 9
-        return overlayProjectIssues(graph, validation.issues, projectId, level); // steps 10–11
+      // Steps 7-9: the graph kept for this project and level, if any.
+      const key = 'graph\u0000' + projectId + '\u0000' + String(level);
+      const kept = viewCache.read(key);
+      // Step 10: nothing changed since it was built with the gate's current findings.
+      if (kept?.current) return kept.model as WebGraphModel; // step 21
+      return runWithProjectRoot(root, async () => {
+        const version = viewCache.version(); // step 11
+        const graph = hostCore.buildProjectGraph(level); // step 12
+        // Step 13: the gate, waited for at most a moment; a gate that fails fails the read, as before.
+        const gate = validateAsCompleteAsync();
+        const drawn = await findingsWithin(gate, kept, 'throw'); // step 14
+        // Step 15: overlay and stamp.
+        const model: WebGraphModel = { ...overlayProjectIssues(graph, drawn.issues, projectId, level), findingsState: drawn.state };
+        // Steps 16-17: kept current only when its findings are and nothing changed while it was built.
+        viewCache.write(key, { model, issues: drawn.issues, current: drawn.state === 'current' && viewCache.version() === version });
+        // Steps 18-19: a gate still running nudges the page when it answers.
+        if (drawn.state !== 'current') nudgeWhenAnswered(gate, projectId);
+        return model; // step 20
       });
     }
     default:
-      throw new Error('unsupported graph tier'); // step 12
+      throw new Error('unsupported graph tier'); // step 22
   }
 }
 
@@ -703,7 +774,7 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
  * bound tree. Consumed by the web app's in-React canvas renderer so it mounts the
  * shared renderer directly instead of iframing the static HTML.
  */
-export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+export async function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): Promise<unknown> {
   const principal = authenticateSession(cfg.dataDir, sessionId);
   if (!principal.authenticated) throw new UnauthenticatedError();
   if (!webproject.listProjects(cfg, sessionId).some((r) => r.id === projectId)) {
@@ -717,22 +788,93 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
   // the listed projects, exactly as the Relations tab reads — so a member or
   // producer outside it is unavailable, never ok.
   const listed = webproject.listProjects(cfg, sessionId);
-  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations());
-  // Step 7: the model, each consumption edge carrying its relation's health.
-  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations));
-  // Steps 8-10: the family canvas — a member project node is linked to its
+  // Steps 6-7: the model kept for this project and this reach (the reach decides the relation
+  // health and the project links, so callers with different reach never share one).
+  const key = 'canvas\u0000' + projectId + '\u0000' + listed.map((r) => r.id).sort().join(',');
+  const kept = viewCache.read(key);
+  // Step 8: nothing changed since it was built with the gate's current findings.
+  if (kept?.current) return kept.model; // step 22
+  const version = viewCache.version(); // step 9
+  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations()); // step 10
+  // Step 11: the owner's gate, off the serving thread, waited for at most a moment, so a cold run
+  // holds up neither this read nor the server's other requests and its live connections.
+  const gate = runWithProjectRoot(root, () => hostValidator.validateProjectAsync());
+  // Step 12: a gate that cannot run draws no findings rather than fail the read, as the build itself does.
+  const drawn = await findingsWithin(gate, kept, 'none');
+  // Step 13: the model, each consumption edge carrying its relation's health, drawn
+  // with the step-12 findings so the build runs no gate of its own.
+  const built = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations, drawn.issues));
+  // Steps 14-16: the family canvas — a member project node is linked to its
   // member's record, and an external project node to the hosted record its
   // external names, only when the caller may read that record; any other node
   // stays unlinked (no id leaks).
   const readable = new Set(listed.map((r) => r.id));
   const members = new Set(listFamilyRecords(cfg.dataDir, projectId).filter((r) => r.parentProjectId !== undefined).map((r) => r.id));
   const hostedOf = externalRecords(runWithProjectRoot(root, () => hostCore.loadProjectConfig()));
-  return withProjectLinks(model, (node) => {
+  const model = withProjectLinks(built, (node) => {
     const id = node.external ? hostedOf.get(node.id) : node.id;
     if (id === undefined || !readable.has(id)) return undefined;
     return node.external || members.has(id) ? id : undefined;
   });
+  model.findingsState = drawn.state;
+  // Steps 17-18: kept current only when its findings are and nothing changed while it was built.
+  viewCache.write(key, { model, issues: drawn.issues, current: drawn.state === 'current' && viewCache.version() === version });
+  // Steps 19-20: a gate still running nudges the page when it answers.
+  if (drawn.state !== 'current') nudgeWhenAnswered(gate, projectId);
+  return model; // step 21
 }
+
+/** How long a read waits for the gate before it draws the last known findings. */
+export const GATE_WAIT_MS = 1500;
+
+/** The findings a view is drawn with, and how current they are. */
+export interface DrawnFindings {
+  issues: ValidationIssue[];
+  state: FindingsState;
+}
+
+/**
+ * The gate's findings, as current, when it answers within GATE_WAIT_MS; else the kept view's
+ * findings, as stale, or none, as pending. A gate that fails within the wait draws no findings
+ * ('none') or fails the read ('throw').
+ */
+export async function findingsWithin(gate: Promise<ValidationResult>, kept: CachedView | undefined, onFailure: 'none' | 'throw'): Promise<DrawnFindings> {
+  const late = Symbol('late');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const wait = new Promise<typeof late>((resolve) => {
+    timer = setTimeout(() => resolve(late), GATE_WAIT_MS);
+  });
+  const answer = gate.then(
+    (v) => v.issues,
+    (err: unknown) => {
+      if (onFailure === 'throw') throw err;
+      return [] as ValidationIssue[];
+    },
+  );
+  try {
+    const first = await Promise.race([answer, wait]);
+    if (first !== late) return { issues: first, state: 'current' };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+  // The late answer is awaited by nudgeWhenAnswered; its failure is no unhandled rejection.
+  answer.catch(() => undefined);
+  return kept ? { issues: kept.issues, state: 'stale' } : { issues: [], state: 'pending' };
+}
+
+/** When a gate the read left running answers (or fails), nudge the project's channel without outdating the kept views. */
+function nudgeWhenAnswered(gate: Promise<unknown>, projectId: string): void {
+  const nudge = (): void => publishNudge('project:' + projectId);
+  gate.then(nudge, nudge);
+}
+
+/**
+ * web_graph_orchestrator.outdate — every kept view stops being current, keeping each view
+ * and its findings. The realtime change publication calls it before each change nudge.
+ */
+export function outdateViews(): void {
+  viewCache.outdate(); // step 1
+} // step 2
 
 /** Each declared external's alias → the hosted record its `source.hosted` names. */
 function externalRecords(config: { externals?: Record<string, { source?: unknown } | null> } | null): Map<string, string> {
@@ -777,6 +919,26 @@ export function getWebProjectExternals(cfg: HostConfig, sessionId: string, proje
   if (!root) throw new ForbiddenError('project not authorized or unknown');
   // Steps 4-6: bound with the caller's reach — the caller must gate on reach itself.
   return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostSurfaces.getExternalsStatus());
+}
+
+/**
+ * The members ONE authorized project declares, one row per member (a part with its
+ * subsystems, a member project, each with its storage), read from the family graph
+ * under the project's root without validating: same scoped authorization as
+ * getWebProjectExternals.
+ */
+export function getWebProjectMembers(cfg: HostConfig, sessionId: string, projectId: string): FamilyMember[] {
+  // Step 1.
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  // Step 2.
+  const readable = webproject.listProjects(cfg, sessionId);
+  if (!readable.some((r) => r.id === projectId)) throw new ForbiddenError('project not authorized or unknown');
+  // Step 3.
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  // Step 4.
+  return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostCore.familyMembers());
 }
 
 /**
@@ -2045,10 +2207,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       (notes || []).forEach(function (n) { html += '<div class="hint bad">' + esc(n) + '</div>'; });
       if (!provs.length) html += '<div class="hint">No identity providers configured.</div>';
       else {
-        html += '<table class="grid"><thead><tr><th>ID</th><th>Type</th><th>Issuer</th><th>Enabled</th><th>Setup</th><th></th></tr></thead><tbody>';
+        html += '<table class="grid"><thead><tr><th>ID</th><th>Issuer</th><th>Enabled</th><th>Setup</th><th></th></tr></thead><tbody>';
         provs.forEach(function (p, i) {
           var problem = listings[i].setupProblem;
-          html += '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.providerType) + '</td><td>' + esc(p.issuerUrl || '—') + '</td>'
+          html += '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.issuerUrl || '—') + '</td>'
             + '<td><span class="pill ' + (p.enabled ? 'ok' : 'warn') + '">' + (p.enabled ? 'enabled' : 'disabled') + '</span></td>'
             + '<td>' + (problem ? '<span class="pill warn" title="' + esc(problem) + '">not set up</span> <span class="hint bad">' + esc(problem) + '</span>' : '<span class="pill ok">ready</span>') + '</td>'
             + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-del="' + esc(p.id) + '">Remove</button></td></tr>';
@@ -2071,13 +2233,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
   function providerForm(el, p) {
     var box = $('pForm'); p = p || {}; var creating = !p.id;
-    var types = ['oidc', 'keycloak', 'authentik', 'google_workspace', 'entra_id'];
-    var typeOpts = types.map(function (t) { return opt(t, t, (p.providerType || 'oidc') === t); }).join('');
     var html = '<div class="formcard"><h3>' + (creating ? 'Add identity provider' : 'Edit ' + esc(p.id)) + '</h3>';
     html += '<div class="frow">'
       + fcol('Provider ID', '<input id="pId" value="' + esc(p.id || '') + '"' + (creating ? '' : ' readonly') + ' placeholder="e.g. corp-keycloak" />')
       + fcol('Display name', '<input id="pDisplay" value="' + esc(p.displayName || '') + '" placeholder="login-button label — defaults to the ID" />')
-      + fcol('Type', '<select id="pType">' + typeOpts + '</select>')
       + fcol('Enabled', '<div class="cbrow"><input type="checkbox" id="pEnabled"' + (p.enabled === false ? '' : ' checked') + ' /> <span>sign-in allowed</span></div>')
       + '</div>';
     html += '<div class="frow">' + fcol('Issuer URL', '<input id="pIssuer" value="' + esc(p.issuerUrl || '') + '" placeholder="your provider issuer / realm base URL" />', true) + '</div>';
@@ -2109,7 +2268,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     $('pCancel').addEventListener('click', function () { box.innerHTML = ''; });
     $('pSave').addEventListener('click', function () {
       var msg = $('pMsg'); msg.className = 'msg'; msg.textContent = 'Saving…';
-      var cf = { id: $('pId').value.trim(), providerType: $('pType').value, enabled: $('pEnabled').checked, updatedAt: new Date().toISOString() };
+      var cf = { id: $('pId').value.trim(), enabled: $('pEnabled').checked, updatedAt: new Date().toISOString() };
       if (!cf.id) { msg.className = 'msg bad'; msg.textContent = 'Provider ID is required.'; return; }
       var disp = $('pDisplay').value.trim(); if (disp) cf.displayName = disp;
       var issuer = $('pIssuer').value.trim(); if (issuer) cf.issuerUrl = issuer;
@@ -3585,7 +3744,7 @@ export async function handleWebRequest(
       const tier = url.searchParams.get('tier') ?? 'landscape';
       const projectId = tier === 'project' ? projectIdParam(url) : (url.searchParams.get('projectId') ?? '');
       const level = Number(url.searchParams.get('level') ?? '0');
-      return sendJson(res, 200, getGraph(cfg, sessionId, tier, projectId, level));
+      return sendJsonTagged(req, res, await getGraph(cfg, sessionId, tier, projectId, level));
     }
 
     // GET /web/canvas?projectId= → one authorized project's interactive canvas HTML.
@@ -3604,7 +3763,7 @@ export async function handleWebRequest(
     // canvas renderer directly rather than iframing the HTML. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
       const projectId = projectIdParam(url);
-      return sendJson(res, 200, getProjectCanvasModel(cfg, sessionId, projectId));
+      return sendJsonTagged(req, res, await getProjectCanvasModel(cfg, sessionId, projectId));
     }
 
     // GET /web/dev/status → what did not load of the dev server's family (unreadable
@@ -3614,11 +3773,62 @@ export async function handleWebRequest(
       return sendJson(res, 200, getDevStatus(cfg, sessionId));
     }
 
+    // The dev cockpit's routes — DEV MODE ONLY, mounted nowhere else: the served project's pending
+    // review requests, the human's decision on one, and the commands the CLI handed the server.
+    // The session is authenticated by the orchestrator exactly as the other /web routes are.
+    // GET /web/dev/reviews → the pending review requests.
+    if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'reviews') {
+      return sendJson(res, 200, getDevReviews(cfg, sessionId));
+    }
+    // GET /web/dev/approval → the served project's approval state (the lock bar and the lock confirmation).
+    if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'approval') {
+      return sendJson(res, 200, getDevApproval(cfg, sessionId));
+    }
+    // POST /web/dev/reviews/decide { id, outcome, comment?, notes?, member? } → { request, lock? }.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 4 && parts[1] === 'dev' && parts[2] === 'reviews' && parts[3] === 'decide') {
+      return sendJson(res, 200, await decideDevReview(
+        cfg,
+        sessionId,
+        String(body?.id ?? ''),
+        String(body?.outcome ?? '') as ReviewStatus,
+        typeof body?.comment === 'string' ? body.comment : undefined,
+        Array.isArray(body?.notes) ? (body.notes as ReviewNote[]) : undefined,
+        memberOf(body),
+      ));
+    }
+    // POST /web/dev/commands { command, subsystem?, member? } → { command, ok, output }.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'commands') {
+      return sendJson(res, 200, await runDevCommand(
+        cfg,
+        sessionId,
+        String(body?.command ?? ''),
+        typeof body?.subsystem === 'string' && body.subsystem !== '' ? body.subsystem : undefined,
+        memberOf(body),
+      ));
+    }
+    // POST /web/dev/family { action, args, options, report } → { command, ok, output }. The orchestrator
+    // checks the command against its action's shape; the body is passed on as decoded.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'family') {
+      return sendJson(res, 200, await runDevFamilyCommand(cfg, sessionId, {
+        action: String(body?.action ?? '') as DevFamilyAction,
+        args: Array.isArray(body?.args) ? (body.args as string[]) : [],
+        options: body?.options && typeof body.options === 'object' && !Array.isArray(body.options) ? (body.options as Record<string, string>) : {},
+        report: body?.report === true,
+      }));
+    }
+
     // GET /web/projects/externals?projectId= → one authorized project's relation
     // health: its externals status, one entry per external. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'externals') {
       const projectId = projectIdParam(url);
       return sendJson(res, 200, { externals: getProjectExternals(cfg, sessionId, projectId) });
+    }
+
+    // GET /web/projects/members?projectId= → the members one authorized project declares,
+    // one row per member, read without validating. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'members') {
+      const projectId = projectIdParam(url);
+      return sendJson(res, 200, getProjectMembers(cfg, sessionId, projectId));
     }
 
     // GET /web/projects/network?projectId= → one authorized project's network

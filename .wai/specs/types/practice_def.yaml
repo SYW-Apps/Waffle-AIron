@@ -1,0 +1,33 @@
+kind: value-object
+id: practice_def
+name: PracticeDef
+description: >-
+  One practice an extension pack declares: a way of working or a priority (build only what is used,
+  tests first, security review before approval, accuracy above all) that a project selects per scope
+  in its project.yaml `practices` section. A practice is process, never architecture doctrine: it
+  carries no stereotypes or rules of its own, only guidance delivered to the agents working where it
+  is selected — the generated guide for the project scope, the live briefs for each component and
+  role, and a session that asks for it. Kept apart from profiles on purpose, so architecture and
+  process stay legible on their own.
+subsystem: sdd_core
+fields:
+  - name: id
+    type: string
+    description: >-
+      The practice's id, as a project selects it (lower-kebab-case, e.g. test-first). Unique within
+      the pack.
+    optional: false
+  - name: description
+    type: string
+    description: One line saying what the practice asks for, shown where practices are listed.
+    optional: false
+  - name: guidance
+    type: string
+    description: >-
+      The guidance delivered to an agent working under this practice — what to do differently,
+      stated as instructions.
+    optional: false
+methods: []
+sourcePath: src/core/extensions.ts
+createdAt: '2026-11-06T21:43:33.202Z'
+updatedAt: '2026-11-06T21:43:34.627Z'

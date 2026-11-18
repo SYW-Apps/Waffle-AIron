@@ -42,8 +42,10 @@ import {
 import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot, runWithProjectRoot, renamePath, ensureDir, ignoreWriteLock } from '../utils/fs.js';
 import { misplacedGroupFiles } from '../models/specs.js';
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
+import { reportPluginSkills } from './skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
-import { activeTargetTypes, isPart } from '../models/project.js';
+import { activeTargetTypes, pluginTargetTypes, isPart } from '../models/project.js';
+import { detectPlugin } from './agent-plugins.js';
 import { isNewerVersion } from '../utils/version.js';
 import { computeGateStateId, validateFamily } from './validate.js';
 // The approver's own projection, taken from the models rather than from
@@ -68,6 +70,29 @@ import { standing } from '../cli/adapters/upgrade.js';
 function enabledTargets(): string[] {
   const config = loadProjectConfig();
   return config ? activeTargetTypes(config) : [];
+}
+
+/** The enabled target types the wairon plugin serves (via: plugin); none for a project without a configuration. */
+function pluginTargets(): string[] {
+  const config = loadProjectConfig();
+  return config ? pluginTargetTypes(config) : [];
+}
+
+/** Whether the plugin serves every enabled gemini-backend target (gemini, agy), and there is one. */
+function geminiPluginServed(targets: string[], served: string[]): boolean {
+  const gemini = targets.filter((t) => t === 'gemini' || t === 'agy');
+  return gemini.length > 0 && gemini.every((t) => served.includes(t));
+}
+
+/** Whether a project file holds a wairon MCP entry. */
+function holdsWaironEntry(file: string): boolean {
+  try {
+    if (!files.exists(file)) return false;
+    const parsed = JSON.parse(files.readText(file)) as { mcpServers?: Record<string, unknown> };
+    return !!parsed.mcpServers && 'wairon' in parsed.mcpServers;
+  } catch {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -441,6 +466,14 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     for (const t of targets) {
       const f = checkSkillFreshness(t);
       if (!f.dir) continue; // target has no skills dir
+      if (pluginTargets().includes(t)) {
+        if (f.duplicate.length > 0) {
+          line(tally, 'warn', t + ': the wairon plugin provides the built-in skills, and ' + f.duplicate.length + ' still copied into the project (' + f.duplicate.join(', ') + ') - the agent sees them twice; run `wairon doctor --fix` to remove them');
+        } else {
+          line(tally, 'ok', t + ': built-in skills provided by the wairon plugin');
+        }
+        continue;
+      }
       const total = f.ok.length + f.stale.length + f.missing.length;
       if (f.missing.length === 0 && f.stale.length === 0) {
         line(tally, 'ok', `${t}: ${f.ok.length}/${total} up to date`);
@@ -550,8 +583,30 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
   // ── MCP server ──────────────────────────────────────────────────────────────
   console.log(chalk.bold('MCP server'));
-  const wantClaude = targets.includes('claude') || targets.length === 0;
-  const wantGemini = targets.includes('gemini') || targets.includes('agy');
+  const served = pluginTargets();
+  const wantClaude = (targets.includes('claude') || targets.length === 0) && !served.includes('claude');
+  const geminiByPlugin = geminiPluginServed(targets, served);
+  const wantGemini = (targets.includes('gemini') || targets.includes('agy')) && !geminiByPlugin;
+
+  // A target the wairon plugin serves expects no project entry: one there gives the agent every tool twice.
+  if (served.includes('claude') && holdsWaironEntry(claudeMcpConfigPath(false))) {
+    line(tally, 'warn', 'Claude (project .mcp.json): the wairon plugin provides the server, and the project entry gives the agent every tool twice - run `wairon doctor --fix` to remove it');
+  } else if (served.includes('claude')) {
+    line(tally, 'ok', 'Claude: wairon MCP server provided by the wairon plugin');
+  }
+  if (geminiByPlugin && holdsWaironEntry(fromProjectRoot('.gemini', 'settings.json'))) {
+    line(tally, 'warn', 'Gemini CLI (project .gemini/settings.json): the wairon plugin provides the server, and the project entry gives the agent every tool twice - run `wairon doctor --fix` to remove it');
+  }
+
+  // What each tool's own plugin listing says, against the configuration. An unknown listing reports nothing.
+  for (const t of targets) {
+    const presence = detectPlugin(t);
+    if (presence === 'enabled' && !served.includes(t)) {
+      console.log('  ' + chalk.cyan('i') + ' ' + t + ': the wairon plugin is installed and enabled in the tool; mark the target `via: plugin` in .wai/project.yaml so wairon stops writing the skills and the MCP entry into the project');
+    } else if (presence === 'absent' && served.includes(t)) {
+      line(tally, 'warn', t + ': marked `via: plugin`, but the tool does not list the wairon plugin as installed and enabled - the tool gets no wairon server at all; install the plugin or remove `via: plugin`');
+    }
+  }
 
   if (wantClaude) {
     // Claude loads server definitions from .mcp.json (project scope) — NOT
@@ -634,7 +689,7 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
 
   try {
     syncContextFiles();
-    exportSddSkills(targets);
+    reportPluginSkills(exportSddSkills(targets));
     const guides = reinjectLocalGuides(process.cwd(), targets);
     console.log(`  ${icon('ok')} Regenerated context files, skills, and ${guides.length} local guide(s).`);
   } catch (e) {
@@ -919,7 +974,8 @@ function repairMemberSurfaces(alias: string): void {
     exportSddSkills(targets);
     const guides = reinjectLocalGuides(getProjectRoot(), targets);
     console.log(`  ${icon('ok')} ${who}Regenerated context files, skills, and ${guides.length} local guide(s).`);
-    if (targets.includes('claude')) {
+    removePluginServedEntries(config);
+    if (targets.includes('claude') && !pluginTargetTypes(config).includes('claude')) {
       const install: McpInstallOptions = { backend: 'claude', global: false };
       const writes = planMcpInstall(install);
       if (writes.some((w) => w.outsideProject)) return;
@@ -943,12 +999,14 @@ function memberSurfaceProblems(): string[] {
   if (!config || isPart(config)) return [];
   const targets = activeTargetTypes(config);
   const problems: string[] = [];
-  if (targets.includes('claude') && mcpEntryHealth(claudeMcpConfigPath(false), false).mark !== 'ok') problems.push('no working .mcp.json entry');
+  const served = pluginTargetTypes(config);
+  if (targets.includes('claude') && !served.includes('claude') && mcpEntryHealth(claudeMcpConfigPath(false), false).mark !== 'ok') problems.push('no working .mcp.json entry');
+  if (served.includes('claude') && holdsWaironEntry(claudeMcpConfigPath(false))) problems.push('a .mcp.json entry the plugin already provides');
   const stale = new Set(staleDerivedDocs().map((f) => path.resolve(f)));
   if (derivedDocPaths().some((p) => !pathExists(p) || stampVerdict(readFileOrNull(p)).mark !== 'ok' || stale.has(path.resolve(p)))) problems.push('stale or missing context');
   const guides = targets.map((t) => localGuideFilePath(getProjectRoot(), t)).filter((g): g is string => g !== null);
   if (guides.some((g) => !pathExists(g) || stampVerdict(readFileOrNull(g)).mark !== 'ok')) problems.push('stale or missing guide');
-  if (targets.some((t) => { const f = checkSkillFreshness(t); return f.dir && (f.stale.length > 0 || f.missing.length > 0); })) problems.push('stale or missing skills');
+  if (targets.some((t) => { const f = checkSkillFreshness(t); return f.dir && (f.stale.length > 0 || f.missing.length > 0 || f.duplicate.length > 0); })) problems.push('stale or missing skills');
   return problems;
 }
 
@@ -1008,8 +1066,12 @@ interface PlannedInstall {
  */
 async function repairMcpRegistration(options: DoctorOptions, targets: string[]): Promise<void> {
   const installs: McpInstallOptions[] = [];
-  if (targets.includes('claude')) installs.push({ backend: 'claude', global: false });
-  const gemini = targets.includes('gemini') || targets.includes('agy');
+  const config = loadProjectConfig();
+  const served = config ? pluginTargetTypes(config) : [];
+  // A target the wairon plugin serves gets no entry: the one a project file holds is taken out instead.
+  if (config) removePluginServedEntries(config);
+  if (targets.includes('claude') && !served.includes('claude')) installs.push({ backend: 'claude', global: false });
+  const gemini = (targets.includes('gemini') || targets.includes('agy')) && !geminiPluginServed(targets, served);
   // Global for Antigravity (the file it reads); also fine for the Gemini CLI.
   if (gemini) installs.push({ backend: 'gemini', global: targets.includes('agy') });
   // An Antigravity install writes only the machine-wide file; a project
@@ -1041,6 +1103,20 @@ async function repairMcpRegistration(options: DoctorOptions, targets: string[]):
   if (!(await confirmOutsideWrites(options))) return;
   for (const planned of outside) installMcp(planned.install);
   if (plugin) retireLegacyPlugin();
+}
+
+/**
+ * Take the wairon entry out of the project files of the backends the wairon plugin serves: the plan
+ * (no --backend named) marks each such write as a removal, and the install makes it. Nothing is
+ * written for a project the plugin serves nowhere.
+ */
+function removePluginServedEntries(config: NonNullable<ReturnType<typeof loadProjectConfig>>): void {
+  if (pluginTargetTypes(config).length === 0) return;
+  try {
+    if (planMcpInstall({}).some((w) => w.removes && !w.upToDate)) runMcpInstall({});
+  } catch (e) {
+    console.log('  ' + icon('warn') + ' Removing the project wairon MCP entry the plugin provides failed: ' + (e instanceof Error ? e.message : String(e)));
+  }
 }
 
 /** One install, its failure reported as a warning rather than ending --fix. */

@@ -1408,6 +1408,155 @@ methods:
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_find_references
+  - name: usePractices
+    description: >-
+      Tool: list the practices the loaded packs declare and pick the ones in force for this session
+      — add a practice on top of the project's selection, or drop one, the project's own included.
+      Answers the practices available, the project's, the session's entries, those in force and
+      their guidance. A stdio session keeps its picks, and the briefs it fetches afterwards carry
+      them; the hosted server is built per request, so there the answer applies to that call only.
+      Session picks never change project.yaml.
+    signature: 'usePractices(add?: list<string>, drop?: list<string>): PracticeReport'
+    returns: PracticeReport
+    params:
+      - name: add
+        type: list<string>
+        description: Practice ids to put in force for this session
+        optional: true
+      - name: drop
+        type: list<string>
+        description: Practice ids to take out of force for this session
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_use_practices
+  - name: requestReview
+    description: >-
+      Tool: ask the human to review the design (`kind: review`) or to approve it with a lock (`kind:
+      lock`, optionally of one subsystem), with a note saying what changed and what to look at. It
+      validates first: a design with errors is refused with every error and nothing is shown to the
+      human (a lock request is validated as the lock will validate it), so the human only ever
+      reviews a design that validates; warnings are answered but do not block. It never locks: the
+      human decides, in the `wairon dev` page (which shows the request at once when it runs) or by
+      running `wairon lock`. Answers the request id, and the dev page's URL when one runs, else that
+      the human should open `wairon dev` or lock in the terminal. Wait for the answer with
+      sdd_await_review. On a hosted server a lock request is the hosted approval request.
+    signature: 'requestReview(kind: string, note: string, subsystem?: string): ReviewReceipt'
+    returns: ReviewReceipt
+    params:
+      - name: kind
+        type: string
+        description: '`review` or `lock`'
+      - name: note
+        type: string
+        description: What changed and what the human should look at
+      - name: subsystem
+        type: string
+        description: For a lock request, the one subsystem to re-approve
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_request_review
+  - name: awaitReview
+    description: >-
+      Tool: wait for the human's answer to a review request — locked, approved, changes requested
+      (with the comment and every note pinned to a spec), superseded (the design changed after the
+      request) or withdrawn. It blocks until decided or until timeoutSeconds pass (default one
+      hour), sending a progress notification every few minutes so a long wait stays alive; a timeout
+      answers `pending` and the agent may wait again. A lock made in the terminal answers it too.
+      Claude Code moves a long call to the background, so the agent can keep working and is told
+      when the answer arrives.
+    signature: 'awaitReview(id: string, timeoutSeconds?: int): ReviewRequest'
+    returns: ReviewRequest
+    params:
+      - name: id
+        type: string
+        description: The request id sdd_request_review answered
+      - name: timeoutSeconds
+        type: int
+        description: How long to wait at most (default 3600); 0 reads the status once
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_await_review
+  - name: updateRules
+    description: >-
+      Tool (scope: tree, a write): change the bound project's `rules` in .wai/project.yaml
+      granularly — `set` (path: value, e.g. {"conformance.requireCode": true,
+      "sddRuleSeverity.UNUSED_COMPONENT": "notice"}), `unset`, and `add`/`remove` on list fields
+      (conformance.unclaimed, sourceRoots, exclude, testRoots, metaAgentTags); paths are relative to
+      `rules`. Each value is checked against the rules schema. Setting a rule below its default
+      severity is a LOWERING: it needs `why`, which is written beside it, and every run keeps
+      reporting it (RULE_LOWERED) — quieting a rule is never a fix for its finding, only a decision
+      the human approves. The debt register is not changed here (sdd_carry_findings). The rules are
+      part of the approval, so the human re-locks after a written change. Use it instead of editing
+      .wai/project.yaml by hand. Answers the rules before and after and every rule lowered; dryRun
+      writes nothing.
+    signature: 'updateRules(change: RulesChange, dryRun?: bool): RulesRevision'
+    returns: RulesRevision
+    params:
+      - name: change
+        type: RulesChange
+        description: 'The change: set, unset, add, remove, and why when it lowers a rule'
+      - name: dryRun
+        type: bool
+        description: Answer what the change would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_update_rules
+    guarantees:
+      - idempotent
+  - name: carryFindings
+    description: >-
+      Tool (scope: tree, a write): change the conformance debt register
+      (`rules.conformance.carried`) in .wai/project.yaml — `add` a reason group (kind: drift |
+      undecided | unreadable, why, optional revisit) with its findings ({code, spec, at, covers?}),
+      `extend` a group with findings, `revise` a group's kind, why or revisit, or `remove` findings
+      from a group (the whole group when none are named). Groups are addressed by position; dryRun
+      shows which group that is. Only a code a rule declares carryable may be carried. An entry is
+      the claim that a finding is right and unpaid, never that it is wrong — for that, fix the spec
+      or the code. Run sdd_validate_tree after it: it names a unit a carried finding reports that
+      the entry does not list, and an entry that stopped applying. Use it instead of editing
+      .wai/project.yaml by hand. Answers the register before and after.
+    signature: 'carryFindings(change: DebtChange, dryRun?: bool): DebtRevision'
+    returns: DebtRevision
+    params:
+      - name: change
+        type: DebtChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer what the change would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_carry_findings
+    guarantees:
+      - idempotent
+  - name: configureProject
+    description: >-
+      Tool (scope: tree, a write): change the bound project's own settings in .wai/project.yaml —
+      name, description, projectType, execution tier, packs to select and deselect, useGlobalPacks,
+      targets and composition; each only when stated. Members, externals, network, practices and
+      rules have their own tools. Answers the configuration before and after and the parts of the
+      approval the change moves (packs, composition, projectType), which the human re-locks. Use it
+      instead of editing .wai/project.yaml by hand. dryRun writes nothing.
+    signature: 'configureProject(change: ProjectChange, dryRun?: bool): ProjectRevision'
+    returns: ProjectRevision
+    params:
+      - name: change
+        type: ProjectChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer what the change would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_configure_project
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-31T21:52:08.622Z'
+updatedAt: '2026-11-14T16:11:10.961Z'

@@ -1,3 +1,4 @@
+import { applySywBridge } from './sywBridge';
 import { adjustLightness, colorToHex, findClosestAccessibleColor, mixHex, rgbaFromHex, rgbTriplet, rotateHex } from './colorUtils';
 
 /**
@@ -217,7 +218,8 @@ export function resolveThemeVariables(theme: ThemeOption, mode: ResolvedMode): R
   return vars;
 }
 
-/** Compute + apply a theme's variables to the document root and stamp data-mode. */
+/** Compute + apply a theme's variables to the document root, stamp data-mode, and
+ *  bridge the result onto the SYW design-system tokens (sywBridge.ts). */
 export function applyTheme(themeId: string, appearance: AppearanceMode, customThemes: CustomTheme[] = []): void {
   const theme = getThemeOption(themeId, customThemes);
   const mode = resolveMode(appearance);
@@ -226,6 +228,8 @@ export function applyTheme(themeId: string, appearance: AppearanceMode, customTh
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
   root.dataset.mode = mode;
   root.dataset.theme = theme.id;
+  // Mirror the derived palette onto the design system's --syw-* semantic tokens.
+  applySywBridge(vars, mode);
 }
 
 /* ── Custom-theme lifecycle (theme builder) ─────────────────────────────── */

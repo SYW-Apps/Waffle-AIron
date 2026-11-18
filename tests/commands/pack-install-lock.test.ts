@@ -161,12 +161,12 @@ describe('pack add --global', () => {
     expect(fs.readFileSync(path.join(packsDir, 'a.yaml'), 'utf8')).toMatch(/version: 2\.0\.0/);
   });
 
-  it('judges an archive by the name its pack declares', async () => {
+  it('refuses an archive whose envelope and pack name disagree, leaving the existing pack', async () => {
     fs.mkdirSync(packsDir, { recursive: true });
     fs.writeFileSync(path.join(packsDir, 'alpha.yaml'), packYaml('alpha'));
     await addPack(wpack(sources, 'beta', 'alpha'), true, true);
     expect(process.exitCode).toBe(1);
-    expect(errors.join('\n')).toMatch(/declaring the name "alpha" is already installed as "alpha\.yaml"/);
+    expect(errors.join('\n')).toMatch(/identity mismatch/);
     expect(packEntries(packsDir)).toEqual(['alpha.yaml']);
   });
 

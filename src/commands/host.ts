@@ -2,6 +2,8 @@ import { files } from '../io/index.js';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import * as net from 'net';
+import * as util from 'util';
 import { processes } from '../io/index.js';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -14,10 +16,15 @@ import { adminTokenProblem } from '../utils/admin-token.js';
 import * as localAdmin from './adapters/host.js';
 import { runWithProjectRoot, resolveProjectBinding } from '../utils/fs.js';
 import { loadProjectConfig, seedDemoTree, buildCanvasDataModel } from './adapters/core.js';
+import { announceDevServer, withdrawDevServer } from './adapters/core.js';
+import { runGenerate } from './generate.js';
+import { runDoctor } from './doctor.js';
 import { effectiveProjectId } from '../models/project.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
+import type { DevCommand, DevCommands, DevCommandResult, DevFamilyCommand, DevFamilyRunner } from '../server/dev-commands.js';
+import type { Command } from 'commander';
 import type {
   AuditRetentionPolicy,
   Capability,
@@ -41,6 +48,8 @@ import type { PackImpact } from '../models/pack-impact.js';
 // ---------------------------------------------------------------------------
 
 export interface HostOptions {
+  /** wairon dev: builds a fresh copy of the CLI's command tree, which parses the dev page's family commands. */
+  commandTree?: () => Command;
   host?: string;
   port?: string | number;
   adminHost?: string;
@@ -342,6 +351,152 @@ function openBrowser(url: string): void {
   }
 }
 
+/** The first port `wairon dev` tries when no --port is given, and the last. */
+export const DEV_PORT_FIRST = 8080;
+export const DEV_PORT_LAST = 8099;
+
+/** Whether a TCP port is free on 127.0.0.1: a listener can bind it, and is closed again at once. */
+function portIsFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
+/**
+ * The port `wairon dev` serves on; the dev admin listener takes the next one.
+ * Without --port, the first port from 8080 upward (at most 8099) that is free
+ * together with the next, so another project's dev server, or anything else on
+ * 8080, never stops this one. With --port, exactly that port, refused plainly
+ * when it or the next one is taken.
+ */
+export async function chooseDevPort(requested?: string): Promise<number> {
+  const free = async (port: number): Promise<boolean> => (await portIsFree(port)) && (await portIsFree(port + 1));
+  if (requested !== undefined) {
+    const port = Number(requested);
+    if (!Number.isInteger(port) || port < 1 || port > 65534) {
+      throw new WaironError(`--port ${requested} is not a port number (1-65534).`);
+    }
+    if (!(await free(port))) {
+      throw new WaironError(`Port ${port} or ${port + 1} (the dev admin port beside it) is already in use. Choose another --port, or leave it out and wairon dev picks a free one.`);
+    }
+    return port;
+  }
+  for (let port = DEV_PORT_FIRST; port <= DEV_PORT_LAST; port++) {
+    if (await free(port)) return port;
+  }
+  throw new WaironError(`No free port between ${DEV_PORT_FIRST} and ${DEV_PORT_LAST + 1} for the dev server and its admin listener. Stop another wairon dev, or pass --port.`);
+}
+
+// eslint-disable-next-line no-control-regex
+const ANSI_CODES = /\u001b\[[0-9;]*[A-Za-z]/g;
+
+/** Thrown in place of process.exit while a dev-page command runs, so a failing command never ends the dev server. */
+class CommandExit extends Error {
+  constructor(readonly code: number) { super(`exited with code ${code}`); }
+}
+
+/** Whether a dev-page command is capturing the console (the page runs one at a time). */
+let capturing = false;
+
+/**
+ * Run one of the CLI's own commands for the dev page: everything it prints is captured, colour codes
+ * removed, one line per entry; a thrown error or an exit with a non-zero code is a failed result with
+ * the reason as its last line, never an ended process. One at a time.
+ */
+async function captureCommand(name: string, root: string, body: () => Promise<void>): Promise<DevCommandResult> {
+  if (capturing) throw new Error('another command is running');
+  capturing = true;
+  const lines: string[] = [];
+  const take = (...args: unknown[]): void => {
+    const text = args.map((a) => (typeof a === 'string' ? a : util.inspect(a))).join(' ').replace(ANSI_CODES, '');
+    for (const line of text.split(/\r?\n/)) lines.push(line);
+  };
+  const saved = { log: console.log, info: console.info, warn: console.warn, error: console.error, exit: process.exit };
+  console.log = take;
+  console.info = take;
+  console.warn = take;
+  console.error = take;
+  process.exit = ((code?: number | string | null) => { throw new CommandExit(Number(code ?? 0)); }) as typeof process.exit;
+  let ok = true;
+  try {
+    await runWithProjectRoot(root, body);
+  } catch (e) {
+    if (e instanceof CommandExit) {
+      ok = e.code === 0;
+    } else {
+      ok = false;
+      take(e instanceof Error ? e.message : String(e));
+    }
+  } finally {
+    console.log = saved.log;
+    console.info = saved.info;
+    console.warn = saved.warn;
+    console.error = saved.error;
+    process.exit = saved.exit;
+    capturing = false;
+  }
+  return { command: name, ok, output: lines };
+}
+
+/** Every command under `root`, itself included. */
+function commandsUnder(root: Command): Command[] {
+  return [root, ...root.commands.flatMap((c) => commandsUnder(c))];
+}
+
+/**
+ * The argv one checked family command runs as, read from the command tree itself: the command's words
+ * (`member rename-alias`), its arguments, each option as the command defines it (a boolean option bare,
+ * any other with its value), then --report for a preview, or --yes when the command asks for confirmation.
+ */
+function familyArgv(program: Command, command: DevFamilyCommand): string[] {
+  const dash = command.action.indexOf('-');
+  const words = [command.action.slice(0, dash), command.action.slice(dash + 1)];
+  const group = program.commands.find((c) => c.name() === words[0]);
+  // `externals <action>` takes its action as an argument; `member` and `network` have subcommands.
+  const leaf = group?.commands.find((c) => c.name() === words[1]) ?? group;
+  if (!leaf) throw new Error(`no "${words.join(' ')}" command`);
+  const argv = [...words, ...command.args];
+  for (const [name, value] of Object.entries(command.options)) {
+    const option = leaf.options.find((o) => o.long === `--${name}`);
+    if (!option) throw new Error(`"${words.join(' ')}" takes no --${name}`);
+    if (option.isBoolean()) argv.push(`--${name}`);
+    else argv.push(`--${name}`, value);
+  }
+  if (command.report) argv.push('--report');
+  else if (leaf.options.some((o) => o.long === '--yes')) argv.push('--yes');
+  return argv;
+}
+
+/**
+ * The human commands `wairon dev` hands its server so the page runs exactly what the terminal runs:
+ * the CLI's lock (unattended, of one subsystem when named, this machine's git identity as approver
+ * exactly as `wairon lock` records it), generate, doctor --fix, and the family panel's commands,
+ * each parsed by a fresh copy of the CLI's own command tree, which the CLI hands in.
+ */
+export function devCommandsFor(root: string, commandTree?: () => Command): DevCommands {
+  const lock: DevCommand = (subsystem, at) => captureCommand('lock', at ?? root, async () => {
+    // Imported on use: the runner imports this module's siblings.
+    const { lockCommand } = await import('../cli/runner.js');
+    await lockCommand({ yes: true, subsystem: subsystem ?? undefined });
+  });
+  const generate: DevCommand = () => captureCommand('generate', root, async () => { await runGenerate({}); });
+  const doctor: DevCommand = () => captureCommand('doctor', root, async () => { await runDoctor({ fix: true }); });
+  const family: DevFamilyRunner = (command) => captureCommand(command.action, root, async () => {
+    if (!commandTree) throw new Error('this server was started without the command tree, so it runs no family command');
+    const program = commandTree();
+    // A usage error is printed into the captured output and fails the command, never the dev server.
+    for (const c of commandsUnder(program)) {
+      c.exitOverride();
+      c.configureOutput({ writeOut: (s) => console.log(s.trimEnd()), writeErr: (s) => console.error(s.trimEnd()) });
+    }
+    await program.parseAsync(familyArgv(program, command), { from: 'user' });
+  });
+  return { lock, generate, doctor, family };
+}
+
 export async function runDev(options: HostOptions = {}): Promise<void> {
   // The dev server serves the project the binding rule binds from here — the
   // same root `wairon status` reports and the MCP server attaches to: the
@@ -367,7 +522,8 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   // The directory is not created here: registering the project resets a stale one first (a dev data dir is
   // disposable, never backed up or migrated), and nothing may be written into it before that.
 
-  const port = options.port ? Number(options.port) : 8080;
+  const port = await chooseDevPort(options.port === undefined || options.port === null ? undefined : String(options.port));
+  if (options.port === undefined && port !== DEV_PORT_FIRST) logger.info(chalk.gray(`  (port ${DEV_PORT_FIRST} is taken; serving on ${port})`));
   // A permissive-but-loopback exposure: the web UI on, TLS not required (plain http
   // on 127.0.0.1). devMode independently forces the web UI on in http.ts, so this is
   // belt-and-suspenders; requireTls:false keeps the dev cookie non-Secure over http.
@@ -391,6 +547,8 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
     authEnabled: false,
     devMode: true,
     exposurePolicy,
+    // This CLI's own human commands, so the page runs exactly what the terminal runs.
+    devCommands: devCommandsFor(cwd, options.commandTree),
   };
 
   // Register the cwd as the single local project 'local' (idempotent upsert). Its
@@ -421,8 +579,11 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
       logger.warn(`  ${m.qualifier}${m.record.memberPath ? chalk.gray(` (${m.record.memberPath})`) : ''}: ${m.reason ?? 'it cannot be read'}`);
     }
   }
+  // Say where the page is shown, so an agent's review request can name it.
+  try { runWithProjectRoot(cwd, () => announceDevServer(url, process.pid)); } catch { /* an unwritable announcement never stops the server */ }
+
   logger.blank();
-  logger.info('An agent edits specs; refresh the page to see the live graph. Press Ctrl+C to stop.');
+  logger.info("The page follows the specs live and shows an agent's review and lock requests. Press Ctrl+C to stop.");
 
   if (options.open) openBrowser(url);
 
@@ -435,6 +596,8 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
   });
+  // On shutdown, the announcement is withdrawn (the page is gone with the server).
+  try { runWithProjectRoot(cwd, () => withdrawDevServer(process.pid)); } catch { /* nothing left to withdraw */ }
 }
 
 // ── wairon host project <action> ──────────────────────────────────────────────

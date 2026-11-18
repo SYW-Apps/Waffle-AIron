@@ -48,7 +48,7 @@ describe('host_server.start: the web UI startup line', () => {
 
   it('on: names the built-in admin account and each enabled identity provider', () => {
     enableWebUi();
-    upsertIdentityProviderRecord(dataDir, { id: 'corp', providerType: 'oidc', issuerUrl: 'https://idp.example', enabled: true, updatedAt: '' });
+    upsertIdentityProviderRecord(dataDir, { id: 'corp', issuerUrl: 'https://idp.example', enabled: true, updatedAt: '' });
     noteWebUiPosture({ ...cfg, builtinAdminUser: 'admin', builtinAdminPassword: 'a-long-password' });
     expect(lines[0]).toContain('the built-in admin account');
     expect(lines[0]).toContain('single sign-on (corp)');
@@ -59,9 +59,9 @@ describe('host_server.start: the web UI startup line', () => {
     const warnings: string[] = [];
     vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => { warnings.push(args.join(' ')); });
     enableWebUi();
-    upsertIdentityProviderRecord(dataDir, { id: 'corp', providerType: 'oidc', issuerUrl: 'https://idp.example', enabled: true, updatedAt: '' });
-    upsertIdentityProviderRecord(dataDir, { id: 'ready', providerType: 'oidc', issuerUrl: 'https://idp.example', enabled: true, allowedRedirectUris: ['https://app.example/web/sso/callback'], updatedAt: '' });
-    upsertIdentityProviderRecord(dataDir, { id: 'off', providerType: 'oidc', issuerUrl: 'https://idp.example', enabled: false, updatedAt: '' });
+    upsertIdentityProviderRecord(dataDir, { id: 'corp', issuerUrl: 'https://idp.example', enabled: true, updatedAt: '' });
+    upsertIdentityProviderRecord(dataDir, { id: 'ready', issuerUrl: 'https://idp.example', enabled: true, allowedRedirectUris: ['https://app.example/web/sso/callback'], updatedAt: '' });
+    upsertIdentityProviderRecord(dataDir, { id: 'off', issuerUrl: 'https://idp.example', enabled: false, updatedAt: '' });
     noteWebUiPosture(cfg);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('SSO through corp will not work until its allowed redirect addresses are set');

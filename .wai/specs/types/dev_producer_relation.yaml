@@ -1,0 +1,15 @@
+kind: enum
+id: dev_producer_relation
+name: DevProducerRelation
+description: How a watched producer relates to the served project.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/dev-watcher.ts
+values:
+  - name: member
+    description: 'A member on disk (contained or a sibling checkout): a change is a change of the served family.'
+  - name: external
+    description: 'An external declared by path: a change may drift it from its pin.'
+createdAt: '2026-11-10T00:32:40.134Z'
+updatedAt: '2026-11-10T00:32:41.428Z'

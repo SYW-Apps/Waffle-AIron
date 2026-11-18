@@ -713,6 +713,29 @@ methods:
     signature: 'loadSubsystemSpecs(): list<SubsystemSpec>'
     returns: list<SubsystemSpec>
     params: []
+  - name: announceDevServer
+    description: >-
+      Forward to the core approval portal: record where this dev server serves the project, so an
+      agent's review request can say where it is shown.
+    signature: 'announceDevServer(url: string, pid: int): void'
+    returns: void
+    params:
+      - name: url
+        type: string
+        description: The dev page's URL
+      - name: pid
+        type: int
+        description: This process's id
+    effect: write
+  - name: withdrawDevServer
+    description: 'Forward to the core approval portal: remove this dev server''s announcement.'
+    signature: 'withdrawDevServer(pid: int): void'
+    returns: void
+    params:
+      - name: pid
+        type: int
+        description: This process's id
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-29T09:36:57.389Z'
+updatedAt: '2026-11-07T02:43:10.304Z'

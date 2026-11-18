@@ -135,7 +135,7 @@ describe('every store keeps all of N parallel writers (separate processes)', () 
   it('policy_store: the identity-provider collection', async () => {
     const dir = scratch();
     await runWriters(dir, 'src/server/policy.ts',
-      "m.upsertIdentityProviderRecord(dataDir, { id: who + i, providerType: 'oidc', enabled: true, updatedAt: '' })");
+      "m.upsertIdentityProviderRecord(dataDir, { id: who + i, enabled: true, updatedAt: '' })");
     expect(listIdentityProviderRecords(dir)).toHaveLength(TOTAL);
   }, 120_000);
 

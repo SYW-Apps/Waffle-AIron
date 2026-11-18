@@ -44,6 +44,8 @@ import { listSnapshots, listPinnedExternals, memberApprovedSurfaces, pinnedParen
 import { readBindingModules } from './binding-modules.js';
 // family_validator: the family run the portal forwards validateFamily to.
 import * as familyValidator from './family-validation.js';
+import * as validationMemo from './validation-memo.js';
+import * as validationRunner from './validation-runner.js';
 import { buildRuleContext, makeScopeFilter, SddRule } from './rules/index.js';
 import { project as projectReach } from './rules/reach-model-projector.js';
 import type { ReachModel } from '../models/reach.js';
@@ -60,6 +62,7 @@ import { projectIdentity, requiredPolicies, type PackRequirement, type PackSelec
 import * as packImpact from './pack-impact.js';
 // spec_search and reference_finder: the lookups the portal forwards searchSpecs and findReferences to.
 import * as specSearch from './lookup/spec-search.js';
+import * as codeModelLoader from './lookup/code-model-loader.js';
 import * as referenceFinder from './lookup/reference-finder.js';
 import type { LookupSearchResult, LookupReferencesResult } from '../models/lookup.js';
 import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
@@ -584,7 +587,21 @@ export function validateProject(
   options?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
 ): ValidationResult {
-  const run = runOwnersGate(options, projectType);
+  // validator_portal Step 1: the validation memo answers the last identical run
+  // while nothing the gate reads has changed, and otherwise runs the gate.
+  return validationMemo.validateProject(options, projectType);
+}
+
+/**
+ * spec_validator.validateProject: the owner's gate, run now. Callers outside
+ * the validator reach it through validateProject, which remembers its runs.
+ */
+export function validateProjectFresh(
+  options?: RulesConfig | ValidationOptions,
+  projectType: string = 'backend'
+): ValidationResult {
+  // Step 25: the code model, shared with lookups through the code model loader.
+  const run = runOwnersGate(options, projectType, false, (impls, types, root, roots, exclude) => codeModelLoader.modelFor(impls, types, root, [...roots], [...exclude]).model);
   // Step 53: how the code was read, one line beside the hint.
   const unrouted = run.unroutedPortals ?? [];
   return { ...run.result, validatorVersion: WAIRON_VERSION, codeReading: codeReadingOf(run.codeModel, unrouted), ...codeCompactOf(run.codeModel, unrouted) };
@@ -742,10 +759,24 @@ interface OwnersGateRun {
  * the as-complete run also needs the code model the rules read, to say how
  * exactly the code half was analyzed.
  */
+/**
+ * Where the gate takes its code model from. The gate's own callers name it:
+ * the project and as-complete gates share the code model loader's cached
+ * model; every other caller builds the model fresh.
+ */
+type CodeModelSource = (
+  implementations: ImplementationSpec[],
+  types: TypeSpec[],
+  projectRoot: string,
+  sourceRoots: readonly string[],
+  exclude: readonly string[],
+) => CodeModel;
+
 function runOwnersGate(
   rulesOrOptions?: RulesConfig | ValidationOptions,
   projectType: string = 'backend',
   reachOnly = false,
+  modelSource: CodeModelSource = buildCodeModel,
 ): OwnersGateRun {
   let rules = rulesOrOptions as RulesConfig | undefined;
   let scopeSubsystem: string | undefined;
@@ -817,7 +848,7 @@ function runOwnersGate(
   // A reach-only run judges no code: it reads no source file.
   const codeModel = reachOnly
     ? buildCodeModel([], [], getProjectRoot(), [], [])
-    : buildCodeModel(implementations, types, getProjectRoot(), conformance?.sourceRoots ?? [], conformance?.exclude ?? []);
+    : modelSource(implementations, types, getProjectRoot(), conformance?.sourceRoots ?? [], conformance?.exclude ?? []);
 
   // As-complete mode: flip statuses on the freshly loaded instances — these
   // are the workspace cache's own objects, loaded after the cache clear above,
@@ -1002,6 +1033,8 @@ function runOwnersGate(
       ...(boundConfig ? { declaredMembers: declaredMembers(boundConfig) } : {}),
       // The bound project's own network, for network-boundaries.
       ...(boundConfig?.network ? { network: boundConfig.network } : {}),
+      // The bound project's practice selection, for practice-references.
+      ...(boundConfig?.practices ? { practiceSelection: boundConfig.practices } : {}),
       // The retired reachability forms the scan met in the v5 reading, for entry-declarations.
       retiredReachFacts: retiredReachFacts(),
       surfaceSnapshots,
@@ -1344,8 +1377,46 @@ export function validateDesign(options?: ValidationOptions): ValidationResult {
   return { ...result, validatorVersion: WAIRON_VERSION, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
 }
 
+/**
+ * validator_portal.validateAsComplete — the as-complete gate, answered by the
+ * validation memo from the last identical as-complete run while nothing it
+ * reads has changed, otherwise run fresh.
+ */
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
-  const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: true });
+  return validationMemo.validateAsComplete(options);
+}
+
+/**
+ * validator_portal.validateProjectAsync — the owner's gate for the bound
+ * project, run on the validation thread so a serving process keeps answering.
+ */
+export function validateProjectAsync(options?: ValidationOptions): Promise<ValidationResult> {
+  return validationRunner.run('owner', options);
+}
+
+/** validator_portal.validateAsCompleteAsync — the as-complete gate, run on the validation thread. */
+export function validateAsCompleteAsync(options?: ValidationOptions): Promise<ValidationResult> {
+  return validationRunner.run('as_complete', options);
+}
+
+/**
+ * validator_portal.warm — start both gates for the bound project on the
+ * validation thread without waiting; a failure is ignored (the page asks again).
+ */
+export function warm(options?: ValidationOptions): void {
+  validationRunner.run('as_complete', options).catch(() => undefined);
+  validationRunner.run('owner', options).catch(() => undefined);
+}
+
+/** validator_portal.stopBackground — stop the validation thread when it runs. */
+export function stopBackground(): Promise<void> {
+  return validationRunner.stop();
+}
+
+/** spec_validator.validateAsComplete — the as-complete gate, always run. */
+export function validateAsCompleteFresh(options?: ValidationOptions): ValidationResult {
+  // Step 12: the code model, shared with lookups through the code model loader.
+  const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: true }, 'backend', false, (impls, types, root, roots, exclude) => codeModelLoader.modelFor(impls, types, root, [...roots], [...exclude]).model);
   // Steps 15-16: the code half summarized apart, with the analyzer that took
   // it — never removed from the issues; the lock partitions with designOnly.
   const sequence = ruleSequence();

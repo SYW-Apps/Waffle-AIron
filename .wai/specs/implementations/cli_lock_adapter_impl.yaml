@@ -144,9 +144,10 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
-          Refuse, writing nothing, what no lock may approve (cli_lock_adapter.assertApprovable): a
-          project that requires approved members with a member project not approved, an external
-          never pinned, or a use its pin does not record
+          Refuse, writing nothing, what no lock may approve (cli_lock_adapter.assertApprovable,
+          given --force): a project that requires approved members with a member project not
+          approved, an external never pinned, a use its pin does not record, or — without --force —
+          a pending lock request made on another branch than the checkout has now
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: assertApprovable
@@ -774,6 +775,25 @@ methods:
         type: throw
         error: external not pinned
       - stepNumber: 8
+        description: Read the newest pending lock request made on another branch than the checkout has now
+        type: call
+        targetComponent: approval_portal
+        targetMethod: reviewBranchConflict
+      - stepNumber: 9
+        description: >-
+          Would this lock approve another branch's design than the one an agent asked to have
+          approved, and was --force not given?
+        type: branch
+        condition: a conflict was answered and force is not set
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Refuse, writing nothing, naming the request, the branch it was made on and the branch
+          checked out: switch back to that branch to approve what was asked, or pass --force to
+          approve this checkout's design anyway
+        type: throw
+        error: the pending lock request was made on another branch
+      - stepNumber: 11
         description: Approvable
         type: return
         outcome: ok
@@ -790,4 +810,4 @@ lint:
         surfaces word-identical, which a second copy in the runner would not.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-24T11:33:09.579Z'
+updatedAt: '2026-11-10T19:07:46.174Z'

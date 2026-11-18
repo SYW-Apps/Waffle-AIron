@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 // familyApprovals: the bound project's pin tree, each project's approval state
 // computed at its own root — what sdd_get_status prints beside the report.
-export { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals } from '../../core/validation.js';
+export { validateProjectAsync as validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals } from '../../core/validation.js';
 // adviseExternals: the advisory live comparison of the bound project's
 // externals the run did not compose — what sdd_validate_tree and
 // sdd_get_status append beside the gate's own findings.
@@ -14,3 +14,6 @@ export { searchSpecs, findReferences } from '../../core/validation.js';
 // adviseNetwork: the family root's network findings on a member validated on
 // its own, each marked advisory — what sdd_validate_tree appends beside them.
 export { adviseNetwork } from '../../core/validation.js';
+// listRules: the active rule set, each rule saying whether it judges the design or
+// the code — sdd_request_review keeps the design half, as the lock does.
+export { listRules } from '../../core/validation.js';

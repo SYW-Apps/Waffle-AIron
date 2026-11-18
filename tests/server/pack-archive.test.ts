@@ -217,9 +217,9 @@ describe('hosted pack archive install (sdd_host)', () => {
     it('judges an archive by the name its pack declares, and a refused install leaves the existing one as it was', () => {
       packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('alpha'));
       packs.installGlobalPackArchive(cfg, ADMIN, declarativeWpack('beta'));
-      // The envelope says beta (the folder it would replace), the pack inside declares alpha.
+      // The envelope says beta, the pack inside declares alpha: the SDK refuses it (IDENTITY_MISMATCH) before anything is written.
       expect(() => packs.installGlobalPackArchive(cfg, ADMIN, mislabelledWpack('beta', 'alpha'))).toThrow(
-        /declaring the name "alpha" is already installed as "alpha"/,
+        /identity mismatch/,
       );
       expect(fs.readFileSync(path.join(packsDir, 'beta', 'pack.yaml'), 'utf8')).toMatch(/^name: beta/);
       expect(packs.listGlobalPacks(cfg, ADMIN).filter((p) => p.name === 'alpha')).toHaveLength(1);
@@ -272,7 +272,7 @@ describe('hosted pack archive install (sdd_host)', () => {
       const root = path.join(dataDir, 'projects', 'demo');
       packs.installProjectPackArchive(cfg, ADMIN, 'demo', declarativeWpack('alpha'));
       expect(() => packs.installProjectPackArchive(cfg, ADMIN, 'demo', mislabelledWpack('beta', 'alpha'))).toThrow(
-        /declaring the name "alpha" is already installed as "alpha"/,
+        /identity mismatch/,
       );
       // Only the pack: the lock lives in the project's ignored lock folder, not beside the packs.
       expect(fs.readdirSync(path.join(root, '.wai', 'packs'))).toEqual(['alpha']);

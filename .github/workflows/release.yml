@@ -63,6 +63,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The agent-tool plugins (plugins/wairon) pin the MCP server to one published
+      # CLI. A stable tag must ship manifests stamped with its own version
+      # (`node scripts/plugin/stamp-version.mjs <version>` in the release PR);
+      # pre-release tags keep the last stable pin.
+      - name: Plugin manifests carry the tag version (stable tags)
+        if: matrix.target == 'linux-x64' && !contains(github.ref_name, '-')
+        run: node scripts/plugin/stamp-version.mjs --check "${GITHUB_REF_NAME#v}"
+
       # The React web app (web/) builds first so the embed step ships it as
       # dist/webapp.html (a pkg asset). WAIRON_REQUIRE_WEBAPP fails the build if
       # the bundle is missing, instead of silently falling back to the legacy UI.

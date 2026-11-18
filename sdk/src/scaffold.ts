@@ -69,6 +69,11 @@ function declarativeEnvelope(name: string, version: string): string {
   ].join('\n');
 }
 
+/** A version's release core (major.minor.patch): a pre-release never becomes a minimum. */
+function releaseCore(version: string): string {
+  return version.split(/[-+]/)[0];
+}
+
 function codeEnvelope(name: string, version: string): string {
   return [
     'formatVersion: 1',
@@ -76,7 +81,7 @@ function codeEnvelope(name: string, version: string): string {
     `version: ${version}`,
     'kind: code',
     'entry: pack.cjs',
-    `minWaironVersion: ${SDK_VERSION}`,
+    `minWaironVersion: ${releaseCore(SDK_VERSION)}`,
     '',
   ].join('\n');
 }

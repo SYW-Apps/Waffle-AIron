@@ -1,0 +1,23 @@
+id: isession_practice_store
+name: Session Practice Store Interface
+description: Read and replace the current session's practice entries.
+component: session_practice_store
+methods:
+  - name: entries
+    description: The session's practice entries, in the order they were picked; empty when none were.
+    signature: 'entries(): list<string>'
+    returns: list<string>
+    params: []
+    effect: read
+  - name: replace
+    description: Replace the session's practice entries with these.
+    signature: 'replace(entries: list<string>): void'
+    returns: void
+    params:
+      - name: entries
+        type: list<string>
+        description: The entries to keep for the session
+    effect: write
+status: complete
+createdAt: '2026-11-06T21:46:38.349Z'
+updatedAt: '2026-11-06T21:46:41.662Z'

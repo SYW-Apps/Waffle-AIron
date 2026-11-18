@@ -1,0 +1,17 @@
+id: session_practice_store
+name: Session Practice Store
+description: >-
+  The practice entries the current session picked through sdd_use_practices, held by one MCP server
+  instance. A stdio server is one session, so its entries last as long as the session and are gone
+  at the next start, which is intended: a session's picks are not project configuration. The hosted
+  server is built per request and holds none past it.
+subsystem: sdd_mcp
+componentType: Store
+owns: []
+dependsOn: []
+durability: ram-projection
+lint:
+  allow: []
+status: complete
+createdAt: '2026-11-06T21:46:29.048Z'
+updatedAt: '2026-11-14T19:08:25.478Z'

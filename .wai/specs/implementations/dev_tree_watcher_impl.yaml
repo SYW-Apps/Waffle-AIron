@@ -1,0 +1,73 @@
+id: dev_tree_watcher_impl
+name: Dev Tree Watcher Implementation
+description: >-
+  src/server/dev-watcher.ts: one recursive watch on the served project's .wai/ folder, one on the
+  project's root for its code, and one on each producer's .wai/ folder, debounced.
+contract: idev_tree_watcher
+sourcePath: src/server/dev-watcher.ts
+methods:
+  - name: watch
+    narrative:
+      - stepNumber: 1
+        description: Watch <root>/.wai recursively
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchTree
+      - stepNumber: 2
+        description: Find the checkout's HEAD file (none outside a git checkout)
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: headFile
+      - stepNumber: 3
+        description: >-
+          When there is one, watch the folder holding it, not below it: a change of the entry named
+          HEAD is a branch switch, counted as a `tree` change (every other entry there is git's own
+          bookkeeping and is ignored)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchFolder
+      - stepNumber: 4
+        description: >-
+          Watch <root> recursively for the project's code: a change outside .wai/ (watched in step
+          1), git's own folder and any node_modules folder is a `code` change. It errs toward more:
+          a build output or a file no gate reads nudges too, and the gate then finds its remembered
+          answer
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchTree
+      - stepNumber: 5
+        description: >-
+          On each change, ignore the spec tree's own write lock and other lock files, note whether
+          the path is under .local/reviews/ or is code, and (re)start a 250 ms timer; when it fires,
+          call onChange once with `tree` when any noted change was in the tree or HEAD, once with
+          `code` when any was code, and once with `reviews` when any was a review request
+        type: local
+      - stepNumber: 6
+        description: Return the function that clears the timer and stops every watch
+        type: return
+        outcome: the stop function
+  - name: watchProducers
+    narrative:
+      - stepNumber: 1
+        description: For each producer
+        type: loop
+        loopKind: forEach
+        over: the producers
+        endStep: 3
+      - stepNumber: 2
+        description: Watch the producer's .wai/ folder recursively; a folder that cannot be watched is skipped
+        type: call
+        targetComponent: files_adapter
+        targetMethod: watchTree
+      - stepNumber: 3
+        description: >-
+          On each change outside the lock files, (re)start that producer's 250 ms timer; when it
+          fires, call onChange once with the producer
+        type: local
+      - stepNumber: 4
+        description: Return the function that clears every timer and stops every watch
+        type: return
+        outcome: the stop function
+status: complete
+createdAt: '2026-11-07T02:40:44.472Z'
+updatedAt: '2026-11-13T16:03:28.260Z'

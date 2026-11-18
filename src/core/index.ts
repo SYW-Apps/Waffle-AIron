@@ -259,6 +259,10 @@ export type { TypeDiagram, TypeDiagramScope } from './diagram.js';
 // snapshots.
 export { buildCanvasDataModel } from './diagram.js';
 
+// The members the project declares, for the family panel (spec_tree_portal familyMembers).
+export { familyMembers } from './specs.js';
+export type { FamilyMember } from './diagram.js';
+
 // The scoped diagrams and the whole set (spec_tree_portal generateComponentDiagram,
 // generateSequenceDiagram, generateDiagramSet, diagramSetIndex), forwarded by
 // identity to the architecture diagrams' renderComponents, renderSequence,
@@ -517,6 +521,9 @@ export {
   setProjectType,
   describeProject,
   setNetwork,
+  reviseRules,
+  reviseDebt,
+  reviseProject,
   recordProfileSelection,
   setExecutionTier,
   // project_config_portal setId / declareExternal: the deliberate identity and
@@ -638,3 +645,16 @@ export type { SyncResult } from './context.js';
 // did not, so it exited 0 over a tree that would not parse.
 export { getStatusReport } from './status.js';
 export type { StatusDecor, StatusOptions, StatusReport } from './status.js';
+
+// approval_portal requestReview … withdrawDevServer — the review handshake between an agent and the human.
+export {
+  requestReview,
+  reviewStatus,
+  pendingReviews,
+  decideReview,
+  withdrawReview,
+  announceDevServer,
+  withdrawDevServer,
+  reviewBranchConflict,
+} from './reviews.js';
+export type { ReviewStatus, ReviewNote, ReviewDecision, ReviewRequest, ReviewReceipt, ReviewBranchConflict } from './reviews.js';

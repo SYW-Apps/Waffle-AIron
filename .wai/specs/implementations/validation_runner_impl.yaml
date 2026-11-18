@@ -1,0 +1,62 @@
+id: validation_runner_impl
+name: Validation Runner Implementation
+description: >-
+  Keys each run by root, gate and options; an identical request while one is in flight shares it. A
+  thread that exits is replaced on the next job.
+contract: ivalidation_runner
+sourcePath: src/core/validation-runner.ts
+simPath: tests/core/validation-runner.test.ts
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: Do the options carry loaded extensions?
+        type: branch
+        condition: the options carry loaded extensions (code, which cannot cross to the thread)
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse them
+        type: throw
+        error: options with loaded extensions cannot run off the thread
+      - stepNumber: 3
+        label: key
+        description: Key the run by the bound project's root, the gate and the options
+        type: local
+      - stepNumber: 4
+        description: Is a run with this key in flight?
+        type: branch
+        condition: a run with this key is in flight
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Share its result
+        type: return
+        outcome: the in-flight run's result
+      - stepNumber: 6
+        label: start
+        description: Hand the thread the job, holding the run in flight under the key
+        type: call
+        targetComponent: validation_thread
+        targetMethod: run
+      - stepNumber: 7
+        description: Release the key once the run settles, answered or failed
+        type: local
+      - stepNumber: 8
+        description: Answer the result
+        type: return
+        outcome: the gate's result
+    symbol: run
+  - name: stop
+    narrative:
+      - stepNumber: 1
+        description: Stop the validation thread
+        type: call
+        targetComponent: validation_thread
+        targetMethod: stop
+      - stepNumber: 2
+        description: Answer
+        type: return
+        outcome: stopped
+    symbol: stop
+status: complete
+createdAt: '2026-11-11T23:26:23.500Z'
+updatedAt: '2026-11-12T00:30:50.668Z'

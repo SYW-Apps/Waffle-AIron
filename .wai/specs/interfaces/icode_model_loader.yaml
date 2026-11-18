@@ -1,17 +1,63 @@
 id: icode_model_loader
 name: Code Model Loader Interface
-description: The code model a lookup reads, never older than the files on disk as their fingerprint sees them.
+description: >-
+  The code model for a set of specs, never older than the files on disk as their content fingerprint
+  sees them.
 component: code_model_loader
 methods:
   - name: current
     description: >-
-      Load the bound project's implementations, types and conformance roots, fingerprint the source
-      files they name, and answer the cached entry when its fingerprint matches; otherwise build the
-      model, hold it in the cache and answer it. The validator's gate never calls this: a gate run
-      builds its own model, so the cache cannot change a verdict.
+      Load the bound project's implementations, types and conformance roots and answer modelFor
+      them.
     signature: 'current(): CachedCodeModel'
     returns: CachedCodeModel
     params: []
+  - name: fingerprint
+    description: >-
+      The fingerprint a code model built for these specs is held under: the content of every file
+      the model reads, with the list of files the implementations claim folded in. Equal
+      fingerprints build equal models.
+    signature: >-
+      fingerprint(implementations: list<ImplementationSpec>, types: list<TypeSpec>, projectRoot:
+      string, sourceRoots?: list<string>, exclude?: list<string>): string
+    returns: string
+    params:
+      - name: implementations
+        type: list<ImplementationSpec>
+      - name: types
+        type: list<TypeSpec>
+      - name: projectRoot
+        type: string
+      - name: sourceRoots
+        type: list<string>
+        optional: true
+      - name: exclude
+        type: list<string>
+        optional: true
+    effect: write
+  - name: modelFor
+    description: >-
+      The code model for these specs: the cached entry when its fingerprint matches theirs, else a
+      fresh build, held in the cache and answered. The model answered is shared: a caller never
+      changes it.
+    signature: >-
+      modelFor(implementations: list<ImplementationSpec>, types: list<TypeSpec>, projectRoot:
+      string, sourceRoots?: list<string>, exclude?: list<string>): CachedCodeModel
+    returns: CachedCodeModel
+    params:
+      - name: implementations
+        type: list<ImplementationSpec>
+      - name: types
+        type: list<TypeSpec>
+      - name: projectRoot
+        type: string
+      - name: sourceRoots
+        type: list<string>
+        optional: true
+      - name: exclude
+        type: list<string>
+        optional: true
+    effect: write
 status: complete
 createdAt: '2026-10-25T19:08:15.196Z'
-updatedAt: '2026-10-25T19:17:36.535Z'
+updatedAt: '2026-11-10T19:02:52.413Z'

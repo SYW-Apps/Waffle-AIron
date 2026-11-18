@@ -1,0 +1,29 @@
+kind: value-object
+id: cached_view
+name: CachedView
+description: >-
+  One built view the server keeps between reads: the model as last built, the gate findings it was
+  drawn with, and whether nothing has changed since.
+subsystem: sdd_host
+fields:
+  - name: model
+    type: canvas_model | web_graph_model
+    description: The view as last built and answered
+    optional: false
+  - name: issues
+    type: list<validation_issue>
+    description: >-
+      The gate findings the view was drawn with: after a change, the last known findings a rebuild
+      draws until the gate answers again
+    optional: false
+  - name: current
+    type: bool
+    description: >-
+      True while nothing has changed since the view was built with the gate's current findings; a
+      change of the tree, the code or a producer makes it false, keeping the view and its findings
+    optional: false
+methods: []
+sourcePath: src/server/view-cache.ts
+symbol: CachedView
+createdAt: '2026-11-13T16:01:28.854Z'
+updatedAt: '2026-11-13T16:01:29.498Z'

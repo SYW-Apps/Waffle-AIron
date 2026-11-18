@@ -37,7 +37,7 @@ profiles:
         maxComponentDependencies: 3
       sddRuleSeverity:
         # A warning this profile treats as a hard error.
-        UNOWNED_STORE: error
+        PROFILE_DISCOURAGED_STEREOTYPE: error
 
 languages:
   # Registered via targetLanguage (L0 or per-subsystem); surfaced in the pack's

@@ -176,7 +176,9 @@ methods:
       nothing, and the finding says plainly that an error cannot be allowed rather than that the
       code never fired. A code the family run judges over every member (network_arbiter.familyCodes,
       ENTRY_UNPROVEN among them) is a known code on any spec, and an allow of one this gate saw no
-      finding of is the family run's to judge stale, not this gate's.
+      finding of is the family run's to judge stale, not this gate's. A code a rule has retired is
+      not unknown: an allow of one is RETIRED_LINT_ALLOW_CODE, a notice, so a project upgraded
+      across the retirement keeps passing --ci while it is told to remove the allow.
     signature: 'lintAllows(ctx: RuleContext): void'
     returns: void
     params:
@@ -192,6 +194,11 @@ methods:
         summary: >-
           lint.allow entry covers nothing this run — the code never fired, it fired at sites this
           allow does not name, or it is an error, which no allow can cover
+      - code: RETIRED_LINT_ALLOW_CODE
+        severity: notice
+        summary: >-
+          lint.allow names a code a rule has retired: the finding is no longer reported, so the
+          allow can be removed
   - name: publicSurfaceConsumers
     description: >-
       Rule public-surface-consumers. Every subsystem a published surface names as its consumer must
@@ -757,6 +764,37 @@ methods:
         summary: >-
           An Adapter published as shared depends on something other than a pure Orchestrator or
           another shared Adapter
+  - name: loweredSeverities
+    description: >-
+      Rule lowered-severities. A rule code the project sets below its default severity
+      (rules.sddRuleSeverity) is never silent: every run reports it with the project's reason from
+      rules.severityReasons, so the lowering stays as visible as the debt register's total. A
+      lowering without a reason is RULE_LOWERED_WITHOUT_REASON; a reason for a code the project does
+      not lower is STALE_SEVERITY_REASON.
+    signature: 'loweredSeverities(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: RULE_LOWERED
+        severity: notice
+        summary: >-
+          A rule code is set below its default severity; the finding names both severities and the
+          project's reason
+      - code: RULE_LOWERED_WITHOUT_REASON
+        severity: warning
+        summary: >-
+          A rule code is set below its default severity and rules.severityReasons gives no reason
+          for it
+      - code: STALE_SEVERITY_REASON
+        severity: warning
+        summary: >-
+          rules.severityReasons gives a reason for a code the project does not set below its default
+          severity
+    previousNames:
+      - iintegrity_rules.loweredRules
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-31T21:55:08.943Z'
+updatedAt: '2026-11-14T19:07:03.807Z'

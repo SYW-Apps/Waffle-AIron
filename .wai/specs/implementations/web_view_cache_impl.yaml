@@ -1,0 +1,30 @@
+id: web_view_cache_impl
+name: Web View Cache Implementation
+description: >-
+  src/server/view-cache.ts: one in-process map from key to view. No bound on its size: a server
+  keeps a handful of views per project (one canvas, a graph per level), each replaced in place.
+contract: iweb_view_cache
+sourcePath: src/server/view-cache.ts
+methods:
+  - name: read
+    narrative: []
+    intent: >-
+      Answer the entry kept under the key, current or not, or none when the key holds nothing. It
+      never fails.
+  - name: write
+    narrative: []
+    intent: Set the entry under the key, replacing whatever was kept there. It never fails.
+  - name: outdate
+    narrative: []
+    intent: >-
+      Set every entry's current flag to false and raise the version by one; the entries, their
+      models and their findings stay. It never fails.
+  - name: version
+    narrative: []
+    intent: >-
+      Answer the count of outdates so far, which outdate raises by one each time it runs. It never
+      fails.
+detail: intent
+status: complete
+createdAt: '2026-11-13T16:01:49.179Z'
+updatedAt: '2026-11-13T20:06:48.707Z'

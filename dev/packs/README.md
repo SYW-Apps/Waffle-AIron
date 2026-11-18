@@ -11,7 +11,7 @@ removing packs over the API still works normally.
 
 | Pack | Profile | Doctrine |
 |---|---|---|
-| `demo-doctrine` | `demo-strict` | `family: backend-like`; **forbids** Actor/Supervisor; **discourages** Store; profile `rules`: description floor **120**, max 3 component deps, and `UNOWNED_STORE` raised **warning → error** |
+| `demo-doctrine` | `demo-strict` | `family: backend-like`; **forbids** Actor/Supervisor; **discourages** Store; profile `rules`: description floor **120**, max 3 component deps, and `PROFILE_DISCOURAGED_STEREOTYPE` raised **warning → error** |
 | `demo-frontend-doctrine` | `demo-frontend` | `family: frontend-like` (backend stereotypes become warnings, frontend ones legal); description floor **40** |
 
 Two packs, because adopting each one vendors *its own* pack into the project — so
@@ -81,14 +81,13 @@ banner appears.
 
 ```
 ✖ [flow_runner] PROFILE_FORBIDDEN_STEREOTYPE   Actor, forbidden by profile "demo-strict"
-✖ [flow_store]  UNOWNED_STORE                  (raised warning → error by the profile's rules)
-⚠ [flow_store]  PROFILE_DISCOURAGED_STEREOTYPE Store, discouraged by profile "demo-strict"
+✖ [flow_store]  PROFILE_DISCOURAGED_STEREOTYPE Store, discouraged by profile "demo-strict" (raised warning → error by the profile's rules)
 ⚠ [demo_flows]  DESCRIPTION_TOO_SHORT          49 chars, min 120
 ⚠ [flow_runner] DESCRIPTION_TOO_SHORT          45 chars, min 120
 ⚠ [flow_store]  DESCRIPTION_TOO_SHORT          45 chars, min 120
 ```
 
-That is the whole point of the feature: **six findings that only exist because a
+That is the whole point of the feature: **five findings that only exist because a
 pack-provided profile is resolving.** Before this change, picking `demo-strict`
 wrote the name, the pack was never installed in the project, and validation
 reported *none* of the above (just a single `UNKNOWN_PROFILE` warning).
@@ -98,12 +97,11 @@ reported *none* of the above (just a single `UNKNOWN_PROFILE` warning).
 
 ```
 ⚠ [flow_runner] BACKEND_STEREOTYPE_IN_FRONTEND  Actor in a frontend subsystem
-⚠ [flow_store]  UNOWNED_STORE                   (plain warning again)
 ```
 
-No forbidden-stereotype error and no description findings (floor 40 vs 120), and
-the second pack is adopted on save. Set it back to `backend` and only the single
-`UNOWNED_STORE` warning remains. Three project types, three verdicts, one
+No forbidden-stereotype error, no discouraged-Store finding and no description
+findings (floor 40 vs 120), and the second pack is adopted on save. Set it back to
+`backend` and the tree validates clean. Three project types, three verdicts, one
 unchanged spec tree.
 
 **5. An unresolvable project type is reported, not hidden.** With the project on

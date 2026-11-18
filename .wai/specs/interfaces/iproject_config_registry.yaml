@@ -372,6 +372,73 @@ methods:
         description: The declaration, or null to remove it
     guarantees:
       - idempotent
+  - name: reviseRules
+    description: >-
+      Apply one granular change to the bound project's `rules`: set, unset, add to and remove from
+      the paths it names, check the result against the rules schema, and answer the rules before and
+      after. A severity set below the code's default (from defaults) is a lowering: refused without
+      change.why, and written with that why as the code's severityReasons entry; a severity unset or
+      set back to its default drops its reason. `conformance.carried` is refused here (reviseDebt
+      edits it). Refused for a project without a configuration and for a path or value the schema
+      rejects, naming it. With dryRun, or when nothing changes, writes nothing.
+    signature: 'reviseRules(change: RulesChange, defaults: map<string, string>, dryRun: bool): RulesRevision'
+    returns: RulesRevision
+    params:
+      - name: change
+        type: RulesChange
+        description: The change
+      - name: defaults
+        type: map<string, string>
+        description: Each rule code's default severity, from the active rule set
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
+    effect: write
+  - name: reviseDebt
+    description: >-
+      Apply one change to the conformance debt register (`rules.conformance.carried`): add a reason
+      group, extend or revise one by its position, or remove findings from it (the whole group when
+      none are named), and answer the register before and after. Refused for a project without a
+      configuration, for a position the register does not hold, for an add without kind and why, and
+      for a finding whose code is not among the carryable codes, naming it. With dryRun, or when
+      nothing changes, writes nothing.
+    signature: 'reviseDebt(change: DebtChange, carryable: list<string>, dryRun: bool): DebtRevision'
+    returns: DebtRevision
+    params:
+      - name: change
+        type: DebtChange
+        description: The change
+      - name: carryable
+        type: list<string>
+        description: The codes the active rule set declares carryable
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
+    effect: write
+  - name: reviseProject
+    description: >-
+      Apply one change to the bound project's own settings: name, description, projectType,
+      execution tier, pack selections, useGlobalPacks, targets and composition, each only when the
+      change states it, and answer the configuration before and after with the parts of the approval
+      it moves (packs, composition, and rules for a projectType). Refused for a project without a
+      configuration and for a value the schema rejects, naming it. With dryRun, or when nothing
+      changes, writes nothing.
+    signature: 'reviseProject(change: ProjectChange, dryRun: bool): ProjectRevision'
+    returns: ProjectRevision
+    params:
+      - name: change
+        type: ProjectChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+    guarantees:
+      - idempotent
+    effect: write
 status: complete
 createdAt: '2026-09-13T11:09:34.948Z'
-updatedAt: '2026-10-07T21:50:14.939Z'
+updatedAt: '2026-11-14T16:09:34.426Z'

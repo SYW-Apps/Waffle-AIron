@@ -5,6 +5,7 @@ import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
 import { memberNamesRule } from './integrity/member-names.js';
 import { localIdsRule } from './integrity/local-ids.js';
 import { projectIdentityRule } from './integrity/project-identity.js';
+import { loweredSeveritiesRule } from './integrity/lowered-severities.js';
 import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
@@ -65,6 +66,7 @@ import { profileRegistrationRule } from './extension/profile-registration.js';
 import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
 import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
 import { patternReferencesRule } from './extension/pattern-references.js';
+import { practiceReferencesRule } from './extension/practice-references.js';
 import { variantReferencesRule } from './extension/component-variants.js';
 import { assertionForbiddenEdgesRule } from './extension/assertion-forbidden-edges.js';
 import { assertionRequiredFieldsRule } from './extension/assertion-required-fields.js';
@@ -148,6 +150,8 @@ export const SDD_RULES: SddRule[] = [
   // The project's own id, beside the spec ids: declared, well-formed, and the
   // one its lock approved.
   projectIdentityRule,
+  // A rule the project sets below its default is reported on every run, with its reason.
+  loweredSeveritiesRule,
   roundtripRule,
   // The type vocabulary in three questions: what a type declares about
   // itself, then the identifiers its fields name, then the ones its
@@ -245,6 +249,7 @@ export const SDD_RULES: SddRule[] = [
   profileStereotypeFencingRule,
   packProfileStereotypesRule,
   patternReferencesRule,
+  practiceReferencesRule,
   variantReferencesRule,
   // Pack-instantiated declarative doctrine rides with the pack-reference
   // family: same data source, same provenance-bearing findings. One rule per
@@ -447,6 +452,11 @@ function indexKnownIssueCodes(): RuleCode[] {
   return listRules().flatMap(r => r.codes);
 }
 
+/** rule_index: every code a registered rule names as retired — the lint.allow audit's "it used to exist" set. */
+function indexRetiredIssueCodes(): Set<string> {
+  return new Set(listRules().flatMap(r => r.retiredCodes ?? []));
+}
+
 // ── rule_repository: the facade (1:1 forwarding) ───────────────────────────
 // The only names this module exports for the rule set. Each forwards to its
 // member, so the repository -> registry/index hop is a call the facade's
@@ -470,6 +480,11 @@ export function ruleSequence(): SddRule[] {
 /** The spec-intrinsic rules, through the repository facade. */
 export function specScopedRules(): SddRule[] {
   return indexSpecScopedRules();
+}
+
+/** Every code a registered rule has retired, through the repository facade. */
+export function retiredIssueCodes(): Set<string> {
+  return indexRetiredIssueCodes();
 }
 
 /** Every issue code a registered rule can emit, through the repository facade. */

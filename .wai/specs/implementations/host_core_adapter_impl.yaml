@@ -243,6 +243,48 @@ methods:
         targetComponent: extension_portal
         targetMethod: findPackDeclaring
     detail: calls-only
+  - name: pendingReviews
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: pendingReviews
+  - name: decideReview
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: decideReview
+  - name: reviewStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: reviewStatus
+  - name: approvalVerdict
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalVerdict
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalRecord
+  - name: familyMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: familyMembers
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-11-03T14:59:28.666Z'
+updatedAt: '2026-11-10T19:05:42.279Z'

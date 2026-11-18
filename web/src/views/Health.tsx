@@ -48,7 +48,7 @@ export function Health() {
       <AsyncView state={state}>
         {(h) => (
           <div className="stack-lg">
-            <div className="panel">
+            <div className="syw-card">
               <h4>
                 Instance status <Badge tone={tone(h.status)}>{h.status}</Badge>
               </h4>

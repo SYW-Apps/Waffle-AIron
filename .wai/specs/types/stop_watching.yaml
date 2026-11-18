@@ -1,0 +1,12 @@
+kind: signature
+id: stop_watching
+name: StopWatching
+description: Ends a watch; calling it again does nothing.
+subsystem: sdd_io
+fields: []
+methods: []
+sourcePath: src/io/files.ts
+params: []
+returns: void
+createdAt: '2026-11-07T02:40:25.652Z'
+updatedAt: '2026-11-07T02:40:26.523Z'

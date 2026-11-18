@@ -3,6 +3,9 @@
 // gate requires on cookie-authenticated mutations — identical to the contract
 // the previous embedded client used, so no server change is needed.
 
+import { DEMO } from './demo/flag';
+import { demoGet, demoMcp, demoRefuse } from './demo/snapshot';
+
 const WEB_HEADER = { 'X-Wairon-Web': '1' };
 
 export class ApiError extends Error {
@@ -12,7 +15,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
+function send(path: string, init: RequestInit): Promise<Response> {
   return fetch(path, {
     ...init,
     credentials: 'same-origin',
@@ -20,15 +23,40 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   });
 }
 
+/**
+ * On a `wairon dev` server only a GET re-establishes the local session (the server
+ * mints it on any bearerless GET). Session cookies are not port-scoped, so another
+ * dev server on the same host, or a restart of this one, can leave the page holding
+ * a session this server does not know; the next mutation then answers 401 although
+ * every read still works. So a non-GET that answers 401 asks the dev-only
+ * /web/dev-login route (404 on a hosted instance) to re-establish the session, and
+ * is sent once more when it did. A hosted 401 is returned unchanged.
+ */
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  const res = await send(path, init);
+  const method = (init.method ?? 'GET').toUpperCase();
+  if (res.status !== 401 || method === 'GET' || method === 'HEAD') return res;
+  let renewed: Response;
+  try {
+    renewed = await send('/web/dev-login', { redirect: 'manual' });
+  } catch {
+    return res;
+  }
+  if (renewed.status === 404) return res;
+  return send(path, init);
+}
+
 /** GET → parsed JSON. Throws ApiError(status) on a non-2xx, preferring the
  *  server's { error } message. */
 export async function get<T = unknown>(path: string): Promise<T> {
+  if (DEMO) return demoGet<T>(path);
   const res = await request(path);
   return parse<T>(res, path);
 }
 
 /** POST JSON → parsed JSON, same error handling. */
 export async function post<T = unknown>(path: string, body?: unknown): Promise<T> {
+  if (DEMO) return demoRefuse();
   const res = await request(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -45,6 +73,7 @@ export async function postBinary<T = unknown>(
   body: Blob | ArrayBuffer | Uint8Array,
   headers: Record<string, string> = {},
 ): Promise<T> {
+  if (DEMO) return demoRefuse();
   const res = await request(path, {
     method: 'POST',
     headers: { 'content-type': 'application/zip', ...headers },
@@ -61,6 +90,7 @@ export async function postBinary<T = unknown>(
  * the same `{ error }` handling as every other call.
  */
 export async function download(path: string, fallbackName: string): Promise<void> {
+  if (DEMO) return demoRefuse();
   const res = await request(path);
   if (!res.ok) {
     let message = `${path} failed (${res.status})`;
@@ -93,6 +123,8 @@ export async function download(path: string, fallbackName: string): Promise<void
  *  itself (status, or `type === 'opaqueredirect'` when called with
  *  `{ redirect: 'manual' }` to detect a redirect without following it). */
 export function raw(path: string, init: RequestInit = {}): Promise<Response> {
+  // The demo has no server to probe: every probe answers "not found".
+  if (DEMO) return Promise.resolve(new Response('{}', { status: 404 }));
   return request(path, init);
 }
 
@@ -115,6 +147,7 @@ export function raw(path: string, init: RequestInit = {}): Promise<Response> {
  *   - tool-level failures (`result.isError`, message in content[0].text).
  */
 export async function mcpCall<T = unknown>(projectId: string, name: string, args: object): Promise<T> {
+  if (DEMO) return demoMcp<T>(name, args);
   const res = await request('/mcp', {
     method: 'POST',
     headers: {

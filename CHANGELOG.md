@@ -4,6 +4,245 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.7.4 (from v6.7.3)
+
+Upgrading:
+
+1. Install 6.7.4 the way you installed wairon (`wairon update`, or `@wairon/cli@6.7.4` from npm).
+2. Run `wairon generate` in each project. The guides and the built-in skills changed, and `wairon doctor` reports them as stale until you do.
+3. Restart your AI tool, or reconnect its MCP server, so the assistant talks to the new wairon.
+4. Run `wairon validate --ci`. Three warnings can newly fail it on a design that passed 6.7.3:
+   - `INDEX_DOES_IO`: an Index that reads through an Adapter. Move the read to the Store, or add a `lint.allow` with a reason at the Adapter until 7.0.
+   - `RULE_LOWERED_WITHOUT_REASON`: a rule set below its default severity with no reason. Add the reason with `sdd_update_rules`, or as a `rules.severityReasons` entry.
+   - `CALL_STEP_UNREALIZED` on a call into another project: the narrative names a call to another project's component that the code never makes. Make the call, or remove it from the narrative.
+5. Optional: remove a `lint.allow` that names `UNOWNED_STORE`. It is now reported as `RETIRED_LINT_ALLOW_CODE`, a notice that does not fail `--ci`.
+6. Hosted servers only: an identity provider is plain OIDC now. An issuer that does not publish OIDC discovery needs its endpoints set explicitly; `WAIRON_OIDC_PROVIDER_TYPE` is ignored.
+
+A design approved under 6.7.3 stays approved: no re-lock is needed for the upgrade itself.
+
+- **wairon is packaged as a plugin for Claude Code, Codex, Cursor, Antigravity and the Gemini CLI.** One folder, `plugins/wairon/`, adds the wairon MCP server and the five SDD skills to each of them. Its listings in each tool's public catalogue come later, one at a time.
+  - **Server:** the plugin runs `npx -y @wairon/cli@<version> mcp serve`, pinned to the release the plugin ships with, so Node.js must be on your PATH.
+  - **Installing:** in Claude Code, `/plugin install wairon --marketplace SYW-Apps/Waffle-AIron`. In Codex, `codex plugin marketplace add SYW-Apps/Waffle-AIron`, then `codex plugin add wairon@wairon`. The plugin's README covers the other tools.
+  - **With `wairon init`:** a target can say `via: plugin` in `.wai/project.yaml`, meaning its tool gets the server and the built-in skills from the plugin. wairon then writes neither into the project for that tool, and removes a copy left there, so the agent does not see every tool twice. `wairon init --plugin <tools...>` records the tools that already have the plugin. For Claude Code and Codex, init also asks the tool's own plugin list and records an enabled wairon plugin on its own; a tool that cannot be asked, or does not list it, keeps being served by the project. Pack skills are still written for a plugin target. `via: plugin` is available for Claude Code, Codex, Cursor, Antigravity and the Gemini CLI, and it is a configuration error on any other target.
+  - **Checking it:** `wairon doctor` warns about built-in skills or a server entry still in the project for a plugin target, notices an enabled plugin for a target that is not marked `via: plugin`, and warns when a target is marked `via: plugin` but its tool does not list the plugin. `wairon doctor --fix` removes the duplicates. Naming `--backend` to `wairon mcp install` still writes the entry for that tool, with a warning. The old global Antigravity plugin is recognised by its old layout only, so the current plugin is never moved aside.
+  - **Skills:** the built-in skills now live in `plugins/wairon/skills/<name>/SKILL.md`. `wairon generate` copies them from there, and the MCP server publishes them from there; neither changes what a project receives.
+
+- **A read-only demo of wairon's own design is published with each stable release.** It shows the `wairon dev` canvas and specs views as a static snapshot at https://syw-apps.github.io/Waffle-AIron/demos/wairon/, and the address stays the same across releases.
+  - **No server:** the page and its data files are all it loads, about 0.5 MB compressed at first load. Nothing can be changed, and there is no live connection.
+  - **What it holds:** two subsystems of wairon's own design. File paths and other code locations are removed. Names, email addresses and branch names are replaced, and the build fails if any remain.
+  - **Embedding:** a page on an allowed origin can frame the demo, choose its view and pass its theme to it through `postMessage`. Opened on its own, the page uses its own theme.
+  - **Building it locally:** `npm run build:demo` builds the demo into `site/`, and `scripts/demo/README.md` describes how. A new workflow publishes it to GitHub Pages after each stable release, and it can also be run by hand.
+
+- **A narrated call into another project that the code never makes is reported.** A narrative call step or declared call naming another project's component (`alias::name`) used to be the notice `CALL_TARGET_UNJUDGED`, whether or not the function made the call. Now the function must make the call under one of the target's names; an import alias counts. A call never made is `CALL_STEP_UNREALIZED`, a warning, so `wairon validate --ci` fails on it. A call made by name keeps the notice, because where it lands in the other project's code is still not read here. A call over a network link, or into code in another language, is unchanged.
+
+- **The `wairon dev` page shows the Network view.** The canvas's Network tab did not open the network view on the local page; it now draws the same network view as the hosted canvas: networks, workloads, gateways and the allowed flows, with a way back to the components.
+
+- **The `wairon dev` page no longer answers "unauthorized" to a lock or another action after another dev server ran on the same host, or after this one restarted.** Session cookies are shared by every port of a host, so the page could hold a session its own server did not know. Reads kept working, because a read re-establishes the local session, but the next action was refused until the page was reloaded or the action retried. An action refused this way now re-establishes the session and is sent once more. A hosted instance is unchanged: a refused action still asks the user to sign in.
+
+- **A Store is the default data component; an Index does no IO.** Simple state no longer needs a Repository, a Registry or an Index around it.
+  - **Standalone Store:** a Store with no owning Repository raises nothing. `UNOWNED_STORE` is retired. A `lint.allow` that still names it is reported as `RETIRED_LINT_ALLOW_CODE`, a notice, so `wairon validate --ci` keeps passing; remove the allow when convenient.
+  - **Read logic:** an Orchestrator with `dependencyClass: read` may depend on a Store directly, as workflows and Actors already may. A Portal still reaches a Store through an Orchestrator.
+  - **Index:** an Index is an in-memory lookup over its Store's entries. An Index that depends on an Adapter is now `INDEX_DOES_IO`, a warning, reported once per Adapter with the Adapter as its site, so a `lint.allow` can name it while the read moves to the Store. It becomes an error in 7.0.
+  - **Repository and Registry:** a Repository is for state whose Indexes, Queries or backend Adapter are worth keeping private behind one facade. Its Registry is optional.
+  - **Retired codes:** a rule can now declare the codes it retired, and an allow naming one of them is a notice instead of `UNKNOWN_LINT_ALLOW_CODE`.
+  - The architecture standard, the skills, the guide, the `sdd_add_component` description and the store hint in the dependency messages now describe this. Creating a standalone Store no longer prints a notice.
+  - **Upgrade note:** a project whose Index reads through an Adapter now gets a warning, which fails `wairon validate --ci`. Move the read to the Store, or add a `lint.allow` with a reason at the Adapter until 7.0.
+
+- **The assistant can change a project's rules, its debt register and its settings, and a rule set below its default is reported on every run.** Three new MCP tools write `.wai/project.yaml`, so an agent no longer has to edit the file by hand. Each answers what it changed (before and after), takes `dryRun`, and says which parts of the approval it moves, so the human re-locks.
+  - **Rules:** `sdd_update_rules` sets, unsets, adds to and removes from the rules, checking each value against the rules schema. A rule set below its default severity needs a reason (`why`), which is written beside it.
+  - **Debt register:** `sdd_carry_findings` adds a reason group, extends or revises it, or removes findings from it. Only a finding a rule declares carryable can be carried.
+  - **Project settings:** `sdd_configure_project` changes the name, description, project type, execution tier, selected packs, targets and composition.
+  - **Lowered rules stay visible:** a rule set below its default severity is reported on every run as `RULE_LOWERED` (a notice) with its reason. A lowering with no reason is `RULE_LOWERED_WITHOUT_REASON`, and a reason kept for a rule that is no longer lowered is `STALE_SEVERITY_REASON`; both are warnings. A project that already lowers a rule without a reason therefore fails `wairon validate --ci` until the reason is added: one `sdd_update_rules` call per rule, or a `rules.severityReasons` entry.
+
+- **Canvas lines attach where they point, keep their distance and hop cleanly.**
+  - **Ends:** each line leaves its box at the point of the side nearest the box at its other end. The ends on one side are spread a lane apart without crossing, ordered by direction: the line to the steepest corner sits nearest that corner. Lines arriving on one side share one trunk port.
+  - **Clearance:** lines keep more room around boxes they do not start or end at. Both line styles route farther around a box, and an orthogonal line pays more to pass close to one. Where boxes stand close together, a curved line may still pass the gap between them, at a cost, instead of looping round the whole column.
+  - **Busy boxes:** a box that many lines go into, such as a shared adapter nearly everything uses, no longer pulls a web of lines across the view. From 8 incoming lines on, each line into it is drawn as a short stub at its source, labelled with the box. Selecting either end draws the line in full. View → Busy boxes switches this off, and Busy from sets the threshold (5, 8, 12 or 20 lines).
+  - **Faster:** routing the lines of a large view takes about a quarter of the time. A view with 84 boxes and 40 externals went from about 2.9 s to about 0.8 s.
+  - **Hops:** on orthogonal lines, lines drawn on top of each other now hop together, so a hop no longer shows a straight line still running underneath. A straight line between two facing boxes hops too. Crossings closer together than a hop's width share one bridge (up, level, down) instead of looping back between half circles, and a hop keeps clear of a corner.
+
+- **`wairon dev` switches pages faster and draws the canvas before validation finishes.** The server keeps the canvas model and the graph it last built. An unchanged read is answered from them at once, where each read used to build the model again. After a change, a read waits at most a second and a half for the validator. If the validator is still running, the canvas is drawn at once with the last known findings, and the page shows "Checking…" until they are current. When validation finishes, the page reads the model again by itself. Also:
+  - `wairon dev` now watches the project's code as well as `.wai/`, so a code edit refreshes the open page and its findings. Changes inside `.git` and `node_modules` folders are ignored.
+  - The canvas model is built faster on large projects, and is serialized once per answer instead of twice.
+  - The page does not start a second load of the same data while one is in flight, and a page switch sends one subscription update instead of two.
+- **`wairon dev` no longer drops its live connection while the canvas loads.** The canvas read ran the full validation on the server's main thread whenever the remembered result no longer held (after a rebuild of wairon or a code edit), which held up every other request, the page's pings included, for up to half a minute, so the page reconnected and could show "Offline". The canvas now takes its findings from the background validation thread; a cold load keeps the pings answered within a second. Also:
+  - The page tolerates one late ping before it reconnects.
+  - The canvas model and the graph carry an `ETag`: a re-read of an unchanged model is answered `304` with no body.
+  - A long-lived process lets go of the source parses once the code model is read, so the memory it holds between runs is about 0.5 GB lower on a large project.
+- **Canvas lines show every dependency and their direction.** The canvas now draws its lines itself, each as a translucent tube with chevrons inside that point its direction; a boundary hop carries a thin red stripe. Overlapping tubes do not darken each other, and lines sharing a run show one row of chevrons. Every dependency between drawn nodes shows, tagged with the strongest way it is stated:
+  - `depends`: a `dependsOn` entry, drawn full weight.
+  - `calls`: a narrative call or register step with no `dependsOn` beside it, drawn full weight.
+  - `uses`: a contract that names a type another project owns. It lands on that project's node and is drawn thinner and grey.
+  - `declared`: a member or external a project declares but nothing else shows yet. It is drawn thin, grey and dotted.
+
+  Folded edges keep their strongest kind. Line styles:
+  - Orthogonal lines leave and enter on the facing side and route around boxes. Two boxes facing each other across a clear gap are joined by a straight line. Lines into one box merge into one trunk, lines with different ends spread across a shared channel, and a horizontal run hops a vertical one it crosses.
+  - Curved lines take the shortest way around boxes as smooth curves.
+  - A PNG export carries the lines as drawn.
+
+  Clicking a line focuses it and the two boxes it joins. While an element is selected, a glowing dot runs along its lines in their direction: every incoming line first, then every outgoing one, repeating. It runs only while the page is visible and is off when the reader asks for reduced motion. Incoming lines of a selection now take their "used by" colour again.
+- **`wairon dev` locks and reviews member projects from the parent.** The approval state the page reads now carries each direct member project's approval, judged at the member's own root. The Lock confirmation offers "member project <alias>" for each one that is not approved, and runs the CLI's lock in that member's folder, exactly as `wairon lock` there would; afterwards the parent shows its pin of the member as changed, so the parent's own lock is next. A review request made inside a member project shows on the parent's page, labelled with the member, and is decided (and, for a lock, locked) at that member's root. Parts are still approved with their parent and are not listed.
+- **The Specs page shows what changed since the lock.** No approval banner is shown while the design is approved and unchanged. Once something moved, one row says how many specs changed (and which member projects), with a "Show changes" toggle and Lock. The spec tree marks changed and added specs and offers a "Changed only" filter, and the floating bar has an "N changes" button that lists the changed specs by subsystem, plus member projects owed a lock; a click opens the spec.
+- **The dev server stays responsive while the validator works.** Validation of a served project (the as-complete gate behind the canvas, and the owner's gate behind `sdd_validate_tree`) now runs on a background validation thread, so other requests are answered during a cold run. `wairon dev` starts both gates in the background at start, so the first page finds them remembered. The page header shows the served project's name, and the browser tab title carries it. Lock and approval paths stay synchronous.
+- **Every identity provider is configured as plain OIDC.** The provider type is gone; the admin UI offers an optional preset that only fills hints (issuer URL shape, groups-claim tip) and stores nothing. Endpoint templates are removed: an issuer must publish OIDC discovery, otherwise set the endpoints explicitly (a provider with neither is rejected, naming what to set). `WAIRON_OIDC_PROVIDER_TYPE` is ignored, and stored provider records that still carry a type keep working.
+- **`@wairon/sdk` reads a pack in memory and fails with stable codes.** New `readPack(archive, limits?)`
+  returns the envelope, the inner pack manifest (`pack.yaml`, or `package.json` of a code pack) and the
+  files without writing anything. Every .wpack reader (`readPack`, `inspectArchive`, `extractPack`) throws
+  a `PackArchiveError` whose `code` is one of `NOT_A_PACK`, `UNSAFE_PATH`, `LIMIT_EXCEEDED`,
+  `ENVELOPE_INVALID`, `FORMAT_VERSION_UNSUPPORTED`, `PACK_MANIFEST_INVALID`, `IDENTITY_MISMATCH` and
+  `DIGEST_MISMATCH`. `inspectArchive` now takes optional limits and vets every entry, the envelope
+  included, before inflating anything; `extractPack` now also checks that the envelope's name and
+  version match the inner pack manifest before it writes.
+- **`@wairon/sdk` checks the whole envelope and builds reproducibly.** `readPack` and `extractPack`, and so every
+  pack wairon installs, now also fail with `DIGEST_MISMATCH` when the envelope lists a file the archive
+  does not hold, or when its overall digest does not match its file digests. `buildPack` no longer
+  stamps a build time, so the same pack content always builds the same archive. `scaffoldPack` writes
+  a release version as a code pack's `minWaironVersion` (6.7.4, never 6.7.4-dev.5), and a pre-release
+  of a version now meets that version as a minimum. An envelope whose `digest` or `entryDigests` values are not strings
+  (an unquoted all-digit digest reads as a YAML number) is refused with `ENVELOPE_INVALID` instead of
+  being read as carrying no digest.
+- **`wairon dev` is the place to approve.** The page follows the design live: a spec an agent writes
+  through `wairon mcp serve`, or a lock from the terminal, shows on the open page without a refresh
+  (unsaved edits in an open spec form are kept). The whole page is the cockpit: while there is
+  something to approve (a pending request, or a design that moved since the last lock) a floating bar
+  offers Lock, or Review for a request, and the specs view and the diagrams offer Lock in place. Every
+  lock opens a confirmation that shows what moved, the current warnings and the choice of the whole
+  design or one subsystem, then runs the CLI's own `lock` (with this machine's git identity as
+  approver) and shows what it printed. The header cog opens the settings: appearance, plus
+  `generate` and `doctor --fix` with their output.
+- **Validation is remembered, and the dev page is much faster.** A validation run with the same
+  options is answered from the last one while nothing it reads has changed (the `.wai/` files, each
+  member's `.wai/` files, and the source files the code checks read, compared by size and
+  modification time), so the dev page, the hosted server and an agent's repeated
+  `sdd_validate_tree` no longer run a full validation each time. On a large tree a repeat went from
+  about 40 seconds to under half a second. Building the diagram data no longer re-reads every method
+  signature once per type, which took a repeat canvas load from about 11 seconds to under 2. The
+  stricter as-complete run that the specs page and the lock read is remembered the same way (apart
+  from the normal one), so reopening the specs page went from about 30 seconds to under 2.
+- **Validation results survive a restart and a branch switch.** Files are now compared by content
+  (re-read only when their size or modification time changed), so switching to another branch and
+  back, or rewriting a file with the same bytes, counts as no change. The last 8 results per project
+  are kept, both in memory and in one file per project in the user cache folder (`WAIRON_CACHE_DIR`,
+  otherwise the platform's cache folder; never inside the project), so a fresh `wairon validate` or a
+  restarted `wairon dev` on an unchanged tree answers in a few seconds instead of a full run (about 3
+  seconds instead of about 40 on a large tree). Validation shares its source-code model with the
+  lookup tools, so a spec edit that moves no source file no longer re-reads the code. A new review
+  request no longer invalidates the remembered result. The Family tab reads its member list from a
+  new `GET /web/projects/members` route instead of the full diagram data.
+- **wairon follows the git branch.** A review request records the branch and commit it was made on.
+  A pending lock request made on another branch, for a design this checkout does not hold, now stays
+  pending instead of being superseded, and deciding it from another branch is refused, naming both
+  branches. `wairon lock` (and the dev page's Lock) refuses while such a request is pending and names
+  both branches; `wairon lock --force` approves this checkout anyway. A request whose branch was
+  deleted, or whose design the checkout already holds, never blocks a lock. The dev page shows the
+  current branch in the lock bar, notes "requested on X; checkout is on Y" on such a request, tells
+  you when the branch changed, and refreshes on a branch switch even when no `.wai/` file changed.
+  The header always shows the current branch.
+- **Web UI layout fixes.** The settings panel closes on a click outside it or on Escape, shows above
+  the canvas instead of behind it, and its theme list opens over the panel instead of making it
+  scroll; Generate and doctor --fix are compact rows. Form actions line up with the field they act
+  on, select arrows have room on their right, and validation findings show the severity and code as
+  equal chips on one line with the message and the spec link below.
+- **SSO users keep their names.** Signing in again now also refreshes the identity that login tokens
+  carry, so the header, the audit log and approvals show the user's name instead of an `sso:` id for
+  a user first seen without one.
+- **The web UI uses the SYW Design System.** `wairon dev` and the hosted web UI now draw their
+  buttons, fields, cards, tabs, dialogs, menus, tooltips and notifications from SYW Design System
+  0.1.31, bundled into the page (it makes no request to a CDN). The built-in and custom themes, the
+  theme builder and saved appearance choices work as before; the design system follows the chosen
+  theme and mode. Dialogs are native modal dialogs, tooltips also show on keyboard focus, and error
+  notifications stay until dismissed.
+- **`wairon dev` has a Family tab.** It lists the project's members (parts and projects), its
+  externals with their relation health, and its network. From there you can pin externals, check them
+  live, declare or remove the network, and run the member commands (add, update, move, attach,
+  detach, adopt, rename, fold in, promote, demote). Each action explains what it does in plain words.
+  A command with a preview shows its plan (the CLI's `--report`) before you apply it; one without a
+  preview asks you to confirm. The page runs the same command the terminal would. The dev server
+  also watches the members and externals on disk: a change in a member refreshes the page, and when
+  an external moves under its pin the tab names it and offers to re-pin. The hosted project page's
+  Relations tab shows the same panel, read-only.
+- **An agent asks for a review or a lock instead of the human saying "specs are locked".**
+  `sdd_request_review` (`kind: review` for feedback, `kind: lock` for approval, optionally of one
+  subsystem) validates first: a design with errors is refused with every finding and nobody is
+  asked, so the human only reviews a design that validates (code-conformance findings never refuse
+  it, as they never refuse `wairon lock`). Otherwise the request pops up on the running `wairon dev`
+  page, whose review screen shows the agent's note, the specs changed since the last approval and
+  the current warnings. The human locks or approves, or requests changes with a comment and notes
+  pinned to individual specs. `sdd_await_review` waits for the answer (keeping a long wait alive with
+  progress notifications) and returns the decision in full. A lock from the terminal answers a lock
+  request too, and a design that changed after the request supersedes it. With no dev server
+  running, the tool tells the agent to ask the human to open `wairon dev` or run `wairon lock`. On a
+  hosted server a lock request is the hosted approval request. Requests live in `.wai/.local/`,
+  which git ignores.
+- The OpenAPI viewer's fallback page says why it shows the plain document (the viewer's files are
+  missing from the installation) and that `wairon update` restores them.
+- **`wairon dev` no longer fails when port 8080 is taken.** Without `--port` it takes the first free
+  port from 8080 upward (to 8099, the admin listener using the next one), so two projects can run
+  `wairon dev` at the same time; it says which port it chose. With `--port` it uses exactly that
+  port and, when it is taken, says so plainly instead of printing a Node `EADDRINUSE` error.
+- **Install packs by name from the wairon pack registry.** `wairon pack install @scope/pack` (also
+  `wairon install` and `wairon i`, with an optional `@range`) resolves the name to one exact version
+  in the registry, checks the installed content against the integrity the registry reports, and
+  records the registry as the pack's source, so `pack use --pin` and `pack sync` work on any machine.
+  A code pack from a publisher who is not verified is installed only after
+  `--allow-unverified-code` or a yes to the question (`-y` is not that consent); `pack sync` asks the
+  same for a selection without an integrity pin. `wairon pack publish` uploads a pack with the token
+  in `WAIRON_REGISTRY_TOKEN`. `WAIRON_REGISTRY` points at another registry. A name that is also a
+  folder in the current directory still installs the folder; `--registry` picks the registry pack.
+- **Scoped pack names.** A pack named `@scope/pack` installs under `@scope/pack/<version>/` in the
+  store; its finding codes read `SCOPE__PACK_<CODE>` and its skill ids `scope__pack-<skill>`, so a
+  scoped pack never collides with a flat one. Flat names keep their codes and ids.
+- Pack manifests may carry `description`, `homepage`, `repository` and `license`.
+- `@wairon/sdk` exports `packContentDigest(files)`: the content integrity wairon pins, computed by the
+  one implementation the registry uses too.
+- **Practices.** A pack can declare practices: ways of working or priorities (tests first, build
+  only what has a caller, a security review before approval). A project selects them in
+  `.wai/project.yaml` under `practices`, for the whole project (`use`), per subsystem, per component
+  and per agent role. Each scope adds to the one around it, and `!<id>` drops an inherited practice.
+  The selection is outside the approval, so changing it needs no re-lock. The generated guide
+  carries the project's own practices; each live brief carries the practices in force for its
+  subsystem, component and role, before the project's own guidance. A new MCP tool,
+  `sdd_use_practices`, lists the declared practices and adds or drops practices for the current
+  session; a local session keeps its picks, and the briefs it fetches afterwards carry them.
+  Validation reports `UNKNOWN_PRACTICE` (a selected practice no loaded pack declares) and
+  `UNKNOWN_PRACTICE_SCOPE` (a key that names no subsystem, component or built-in role). See
+  "Practices" in docs/extending-wairon.md.
+- **A pack's guidance reaches the guide and the briefs.** An instruction block in a pack may name
+  the channels it reaches: `server` (the MCP instructions a connecting agent receives, the default
+  and the only channel before), `guide` (the generated in-project guide, such as
+  `.claude/CLAUDE.md`, refreshed by `wairon generate`) and `brief` (the live brief of each agent).
+  A block's `profile` scope applies in each: the project's governing profile for the server and the
+  guide, and for a brief the profile of the agent's subsystem, else the project's. A pack that names
+  no channels behaves exactly as before. Pack guidance in a brief comes before the project's own
+  guidance (`.wai/agents/<id>.md`), which keeps the last word. The machine-wide guide never carries
+  pack guidance.
+- **wairon states its own rules where agents read them.** The guides and the MCP instructions now
+  say that the spec tree is the design of record (a plan made elsewhere is not the design until it
+  is in the specs), that the lock is the approval, and that a design gap found while implementing
+  goes back to the specs. These hold whatever other workflow runs beside wairon.
+- **"Smallest" means capability, not structure.** Rule 4 and the `sdd-architect` skill now say that
+  the smallest sound shape builds nothing without a caller, and never folds a separate concern into
+  its consumer: a concern keeps its own component even with one consumer.
+- `sdd-architect` is now described for changes to an existing design as well as new ones, and
+  `sdd-implement` for approved components.
+
+### Known limitations
+
+- An extra call into another project's component that no narrative names is not reported; a
+  narrated one the code never makes is `CALL_STEP_UNREALIZED`. Where a call into another project
+  lands in that project's code is not judged (`CALL_TARGET_UNJUDGED` says so).
+- A type mirrored in a second language (a Python dataclass for a type the design declares with a
+  TypeScript `sourcePath`) is not checked unless the design declares the mirror as its own type
+  linked to its file.
+- A method whose narrative leaves its detail unstated accepts, in its code, a call to any
+  collaborator the component declares: an extra call is reported only as an `OPEN_ROUTE_CALL`
+  notice, which `validate --ci` does not fail on. State the method's calls in its narrative to have
+  them checked.
+- A router that dispatches through a private helper function is not read: its Portal gets
+  `UNREADABLE_ROUTER`.
+- A component calling a component written in another language in the same process passes at design
+  time; only the code check reports it (`CALL_ACROSS_LANGUAGE`, a notice).
+
 ## v6.7.3 (from v6.7.2)
 
 A fix release. Upgrading:

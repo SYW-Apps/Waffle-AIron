@@ -1,0 +1,23 @@
+kind: value-object
+id: source_file_set
+name: SourceFileSet
+description: >-
+  The source files the gate's code model reads, as the specs name them: everything the model depends
+  on that the specs decide. Two runs with the same set over files with the same content build the
+  same model.
+fields:
+  - name: files
+    type: list<string>
+    description: >-
+      Every file the model reads, project-relative, deduplicated in the order the source analysis
+      walks them (the implementations' paths, their simPaths and router modules, the types' paths,
+      then the walked source roots)
+    optional: false
+  - name: claimed
+    type: list<string>
+    description: 'The files the implementations name: what the model treats as another component''s code'
+    optional: false
+methods: []
+sourcePath: src/core/source-analysis.ts
+createdAt: '2026-11-10T19:01:37.874Z'
+updatedAt: '2026-11-10T19:01:39.379Z'

@@ -6,8 +6,9 @@
 // The hosting control and data planes reuse sdd_core through this module and
 // nothing else: none of them imports a core module.
 // ---------------------------------------------------------------------------
-import { buildCanvasDataModel as buildCoreCanvasDataModel, loadSystemSpec } from '../../core/index.js';
+import { buildCanvasDataModel as buildCoreCanvasDataModel, loadSystemSpec, familyMembers as coreFamilyMembers, type FamilyMember } from '../../core/index.js';
 import type { CanvasModel } from '../../core/canvas.js';
+import type { ValidationIssue } from '../../core/validation.js';
 import type { ProjectRelations } from '../../models/index.js';
 
 export {
@@ -56,7 +57,21 @@ export {
   // A member's path resolved within the root that declares it — the hosted
   // member-resolution seam. The adapter names it for what it answers.
   assertContainedProjectPath as resolveContainedProjectPath,
+  // The dev cockpit's review requests: the served project's pending requests, one request
+  // brought up to date, and the human's decision.
+  pendingReviews,
+  reviewStatus,
+  decideReview,
+  // The dev page's approval state: the bound project's lock record, and what that lock says
+  // about the tree as it stands.
+  approvalRecord,
+  approvalVerdict,
 } from '../../core/index.js';
+
+/** ihost_core_adapter.familyMembers — the bound project's declared members; no validation runs. */
+export function familyMembers(): FamilyMember[] {
+  return coreFamilyMembers();
+}
 
 /**
  * ihost_core_adapter.buildCanvasDataModel — the bound project's canvas model, PARTIAL-TOLERANT: the core
@@ -64,10 +79,10 @@ export {
  * outright answers an EMPTY model holding that one error finding with the cause, never a thrown error —
  * a failed build is not an HTTP error in place of a graph. Used by the web app's canvas and share snapshots.
  */
-export function buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel {
+export function buildCanvasDataModel(relations?: ProjectRelations[], issues?: ValidationIssue[]): CanvasModel {
   let cause: string;
   try {
-    const model = buildCoreCanvasDataModel(relations);
+    const model = buildCoreCanvasDataModel(relations, issues);
     // A tree that yields nothing at all (no system spec, nothing drawn, nothing found) says so rather than draw an empty page.
     if (model.subsystems.length > 0 || model.components.length > 0 || model.issues.length > 0 || loadSystemSpec() !== null) return model;
     cause = 'the project holds no system spec (.wai/specs/system.yaml)';

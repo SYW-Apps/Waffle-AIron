@@ -32,7 +32,7 @@ loaded packs, and the directive to read `wairon-skill://sdd-architect` **before*
 authoring — with a pointer per published skill resource.
 
 Deliberately short and pointer-heavy (~2.9 KB for this repo; a test pins a 6 KB
-ceiling): the depth lives in `templates/skills/*.md`, and this is the map that
+ceiling): the depth lives in `plugins/wairon/skills/*/SKILL.md`, and this is the map that
 sends an agent to read them.
 
 Composed **per `createMcpServer` call**, so the hosted per-request scoped server

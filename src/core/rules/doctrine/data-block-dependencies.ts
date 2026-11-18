@@ -48,18 +48,22 @@ export const dataBlockDepsRule: SddRule = {
   name: 'data-block-dependencies',
   judges: 'design',
   description:
-    'Keeps the data layer facing down. A Store may depend only on another Store, a backend Adapter or pure logic — Registries and Indexes depend on the Store, never the reverse. A Registry is the write path to its Store and may depend on that Store, a backend Adapter, or the pure logic that validates the write. An Index is a read projection and a Query a computed read, each over its Store through a backend Adapter where one serves it; as an exceptional case an Index may project another Index of the same Repository, never in a cycle. An Adapter is a sink toward the system: it may use pure logic, but never a Store or any other Orchestrator.',
+    'Keeps the data layer facing down. A Store holds the data and is its one interface: it may depend only on another Store, a backend Adapter or pure logic — Registries and Indexes depend on the Store, never the reverse. A Registry is an optional write path to its Store and may depend on that Store, a backend Adapter, or the pure logic that validates the write. An Index is an optional lookup projection kept in memory over its Store\'s entries: it may depend on its Store and pure logic, and, as an exceptional case, project another Index of the same Repository, never in a cycle. It does no IO: reading data is the Store\'s work, so an Index depending on an Adapter is INDEX_DOES_IO (a warning while the standard moves; the read belongs on the Store). A Query is a computed read over its Store through a backend Adapter where one serves it. An Adapter is a sink toward the system: it may use pure logic, but never a Store or any other Orchestrator.',
   codes: [
     { code: 'ARCHITECTURE_VIOLATION_STORE_DEP', defaultSeverity: 'error', summary: 'Store depending on anything but another Store, a backend Adapter or pure logic' },
     { code: 'ARCHITECTURE_VIOLATION_REGISTRY_DEP', defaultSeverity: 'warning', summary: 'Registry depending on anything but its Store, a backend Adapter or pure logic (warning while new; aligned to the standard §7 validate→write path)' },
     { code: 'ARCHITECTURE_VIOLATION_ADAPTER_DEP', defaultSeverity: 'error', summary: 'Adapter depending on a Store or on an Orchestrator that is not pure' },
-    { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store, an Adapter, pure logic or another Index of its own Repository (never in a cycle)' },
+    { code: 'ARCHITECTURE_VIOLATION_INDEX_DEP', defaultSeverity: 'error', summary: 'Index depending on anything but its Store, pure logic, an Adapter (reported apart as INDEX_DOES_IO) or another Index of its own Repository (never in a cycle)' },
     { code: 'ARCHITECTURE_VIOLATION_QUERY_DEP', defaultSeverity: 'error', summary: 'Query depending on anything but its Store, a backend Adapter or pure logic' },
+    { code: 'INDEX_DOES_IO', defaultSeverity: 'warning', summary: 'Index depending on an Adapter: an Index is an in-memory lookup over its Store\'s entries and does no IO — the read belongs on the Store' },
   ],
   check(ctx) {
     for (const edge of ctx.dependencyEdges().matrix) {
       for (const finding of dataBlockEdgeFindings(ctx, edge.from, edge.to)) {
-        ctx.addIssue(finding.severity, finding.code, finding.message, edge.from.id, edge.draftContext);
+        ctx.addIssue(
+          finding.severity, finding.code, finding.message, edge.from.id, edge.draftContext,
+          undefined, finding.at === undefined ? undefined : { at: finding.at },
+        );
       }
     }
   },
@@ -119,18 +123,28 @@ export function dataBlockEdgeFindings(ctx: RuleContext, comp: ComponentSpec, dep
     });
   }
 
-  // Index rule: a read projection — may depend only on its Store, a
-  // backend Adapter, or pure logic; as the exceptional derived-Index case,
-  // on another Index of its own Repository, never in a cycle.
+  // Index rule: a lookup projection kept in memory over its Store's entries.
+  // It does no IO, so an Adapter is judged apart (INDEX_DOES_IO, sited at the
+  // Adapter so a lint.allow can name it); otherwise it may depend only on its
+  // Store or pure logic, and, as the exceptional derived-Index case, on
+  // another Index of its own Repository, never in a cycle.
+  if (comp.componentType === 'Index' && depComp.componentType === 'Adapter') {
+    findings.push({
+      severity: 'warning',
+      code: 'INDEX_DOES_IO',
+      at: depComp.id,
+      message: `Index component "${comp.id}" depends on Adapter "${depComp.id}". An Index keeps a lookup over its Store's entries in memory and does no IO — move the read to the Store (the Store may depend on the Adapter) and have the Index project what the Store holds.`,
+    });
+  }
   const indexBreach = comp.componentType === 'Index' && depComp.componentType === 'Index'
     ? derivedIndexBreach(ctx, comp, depComp)
     : undefined;
   const derivedIndexOk = comp.componentType === 'Index' && depComp.componentType === 'Index' && !indexBreach;
-  if (comp.componentType === 'Index' && ownStoreOnly && !derivedIndexOk) {
+  if (comp.componentType === 'Index' && depComp.componentType !== 'Adapter' && ownStoreOnly && !derivedIndexOk) {
     findings.push({
       severity: 'error',
       code: 'ARCHITECTURE_VIOLATION_INDEX_DEP',
-      message: `Architectural violation: Index component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". An Index is a read projection and may depend only on its Store, a backend Adapter or pure logic — or, as an exceptional case, on another Index of the same Repository, never in a cycle.${indexBreach ? ` ${indexBreach}.` : ''}`,
+      message: `Architectural violation: Index component "${comp.id}" cannot depend on "${depComp.componentType}" component "${depComp.id}". An Index is a lookup projection and may depend only on its Store or pure logic — or, as an exceptional case, on another Index of the same Repository, never in a cycle.${indexBreach ? ` ${indexBreach}.` : ''}`,
     });
   }
 

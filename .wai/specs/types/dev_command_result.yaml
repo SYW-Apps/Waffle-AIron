@@ -1,0 +1,24 @@
+kind: value-object
+id: dev_command_result
+name: DevCommandResult
+description: >-
+  What a human command run from the dev page did: whether it succeeded and the lines it printed, as
+  the terminal would have shown them.
+subsystem: sdd_host
+fields:
+  - name: command
+    type: string
+    description: '`lock`, `generate` or `doctor`.'
+    optional: false
+  - name: ok
+    type: bool
+    description: Whether it succeeded.
+    optional: false
+  - name: output
+    type: list<string>
+    description: The lines it printed, colour codes removed.
+    optional: false
+methods: []
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-07T02:41:11.295Z'
+updatedAt: '2026-11-07T02:41:12.142Z'

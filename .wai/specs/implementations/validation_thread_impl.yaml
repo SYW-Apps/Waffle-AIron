@@ -1,0 +1,66 @@
+id: validation_thread_impl
+name: Validation Thread Implementation
+description: >-
+  One Node worker thread, started on the first job, loading the validator once and keeping its memo
+  warm between jobs. Jobs run in arrival order; each binds its root only for its own run.
+contract: ivalidation_thread
+sourcePath: src/core/validation-runner.ts
+simPath: tests/core/validation-runner.test.ts
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: Start the worker thread when none runs
+        type: local
+      - stepNumber: 2
+        description: Post the job to the thread, after the jobs before it
+        type: local
+      - stepNumber: 3
+        description: Does the job ask for the owner's gate?
+        type: branch
+        condition: the job's gate is owner
+        onFalseStep: 6
+      - stepNumber: 4
+        description: 'On the thread, bound to the job''s root: the owner''s gate through the memo'
+        type: call
+        targetComponent: validation_memo
+        targetMethod: validateProject
+      - stepNumber: 5
+        description: Go on to the answer
+        type: jump
+        toStep: 7
+      - stepNumber: 6
+        label: asComplete
+        description: 'On the thread, bound to the job''s root: the as-complete gate through the memo'
+        type: call
+        targetComponent: validation_memo
+        targetMethod: validateAsComplete
+      - stepNumber: 7
+        label: answer
+        description: Did the thread fail the job?
+        type: branch
+        condition: the thread answered an error, or exited before answering
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Fail the caller with the thread's error
+        type: throw
+        error: the validation thread failed the job
+      - stepNumber: 9
+        label: done
+        description: Answer the result the thread handed back
+        type: return
+        outcome: the gate's result
+    symbol: runOnThread
+  - name: stop
+    narrative:
+      - stepNumber: 1
+        description: Terminate the thread, failing every job still waiting
+        type: local
+      - stepNumber: 2
+        description: Answer once it has exited
+        type: return
+        outcome: stopped
+    symbol: stopThread
+status: complete
+createdAt: '2026-11-11T23:26:18.619Z'
+updatedAt: '2026-11-12T00:30:48.614Z'

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "wairon": {
+      "command": "npx",
+      "args": ["-y", "@wairon/cli@6.7.4", "mcp", "serve"]
+    }
+  }
+}

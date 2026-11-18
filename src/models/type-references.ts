@@ -23,13 +23,17 @@ import { writtenTypeRefs } from './type-grammar.js';
 // grammar's tables).
 // ---------------------------------------------------------------------------
 
+/** The longest type or signature text read for references; longer text is cut, as no real one comes near it. */
+const MAX_TYPE_TEXT = 4096;
+
 /**
  * The type identifiers a type string names, with comments, trailing prose and
  * string literals stripped. Duplicates are kept, in order of appearance.
  */
 export function extractTypeIdentifiers(typeStr: string): string[] {
-  // 1. Strip comments, and the grammar's `async` returns prefix (a keyword, never a type)
-  let cleaned = typeStr
+  // 1. Strip comments, and the grammar's `async` returns prefix (a keyword, never a type).
+  // Read at most MAX_TYPE_TEXT characters: no real type is longer, and the patterns below stay fast on it.
+  let cleaned = typeStr.slice(0, MAX_TYPE_TEXT)
     .replace(/^\s*async\s+(?=\S)/, '')
     .replace(/\/\/.*$/gm, '')
     .replace(/#.*$/gm, '')
@@ -89,8 +93,10 @@ function extractTypeGenerics(name: string): Set<string> {
   return vars;
 }
 
-function extractTypesFromSignature(signature: string, returns: string): string[] {
+function extractTypesFromSignature(fullSignature: string, fullReturns: string): string[] {
   const types: string[] = [];
+  const signature = fullSignature.slice(0, MAX_TYPE_TEXT);
+  const returns = fullReturns.slice(0, MAX_TYPE_TEXT);
 
   // Clean comments and trailing prose/parentheses first
   let sigCleaned = signature.replace(/\/\/.*$/gm, '').replace(/#.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -204,6 +210,35 @@ function normalizePart(part: string): string {
 }
 
 /**
+ * A reference's or id's `::`/`.` segments, each normalized, empty ones left
+ * out. Validation compares every written reference with every type, so the
+ * same strings are split again and again; the parts are remembered per string
+ * (a bounded cache, cleared when full). The returned array is shared: never
+ * change it.
+ */
+const refParts = new Map<string, readonly string[]>();
+const REF_PARTS_MAX = 100_000;
+function refPartsOf(text: string): readonly string[] {
+  let parts = refParts.get(text);
+  if (parts === undefined) {
+    parts = text.split(/::|\./).map(normalizePart).filter(Boolean);
+    if (refParts.size >= REF_PARTS_MAX) refParts.clear();
+    refParts.set(text, parts);
+  }
+  return parts;
+}
+
+/**
+ * The last normalized segment of a reference or id, or undefined when it has
+ * none. A reference matches a type id only when their last segments are equal,
+ * so a caller comparing many references with many types indexes the types by it.
+ */
+export function refTail(text: string): string | undefined {
+  const parts = refPartsOf(text);
+  return parts.length === 0 ? undefined : parts[parts.length - 1];
+}
+
+/**
  * reference_resolution.nameKey — the one key a bare name is compared by,
  * locally and through imports alike: lower-cased, every character outside
  * [a-z0-9] removed, so `SharedError`, `shared-error` and `shared_error` are
@@ -220,8 +255,8 @@ export function nameKey(name: string): string {
  * punctuation.
  */
 export function matchTypeRef(ref: string, typeId: string): boolean {
-  const refParts = ref.split(/::|\./).map(normalizePart).filter(Boolean);
-  const typeParts = typeId.split(/::|\./).map(normalizePart).filter(Boolean);
+  const refParts = refPartsOf(ref);
+  const typeParts = refPartsOf(typeId);
 
   if (refParts.length === 0 || typeParts.length === 0) return false;
   if (refParts.length > typeParts.length) return false;

@@ -1,0 +1,11 @@
+{
+  "id": "wairon",
+  "title": "wairon's own design",
+  "subsystems": ["sdd_network", "sdd_validator"],
+  "start": {
+    "canvasSubsystem": "sdd_network",
+    "specsComponent": "conformance_rules",
+    "specsTab": "implementation"
+  },
+  "redactRoots": ["src", "tests", "web", "scripts", "sdk", "dist", "coverage"]
+}

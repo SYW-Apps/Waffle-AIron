@@ -74,8 +74,8 @@ function createTempProject() {
 describe('profile edge-deltas — allowedEdges license matrix exceptions', () => {
   it('licenses the declared edge under the governing profile, the dependency-class rule included', () => {
     const proj = createTempProject();
-    proj.component('physics-system', 'Orchestrator', 'sim', 'dependencyClass: read\ndependsOn: [position-store]');
-    proj.component('position-store', 'Store', 'sim', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: deliberate standalone ECS component array');
+    proj.component('physics-system', 'Orchestrator', 'sim', 'dependencyClass: pure\ndependsOn: [position-store]');
+    proj.component('position-store', 'Store', 'sim', 'durability: ram-projection');
     proj.activate();
     try {
       const res = validateProject();
@@ -85,8 +85,8 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
 
   it('the same edge in an un-governed subsystem still violates the matrix', () => {
     const proj = createTempProject();
-    proj.component('tax-calc', 'Orchestrator', 'billing', 'dependencyClass: read\ndependsOn: [rate-store]');
-    proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: test fixture');
+    proj.component('tax-calc', 'Orchestrator', 'billing', 'dependencyClass: pure\ndependsOn: [rate-store]');
+    proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection');
     proj.activate();
     try {
       const res = validateProject();
@@ -98,7 +98,7 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
     const proj = createTempProject();
     // View -> Store is not in the delta; still refused under the profile.
     proj.component('hud-view', 'View', 'sim', 'dependsOn: [position-store]');
-    proj.component('position-store', 'Store', 'sim', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: deliberate standalone ECS component array');
+    proj.component('position-store', 'Store', 'sim', 'durability: ram-projection');
     proj.activate();
     try {
       const res = validateProject();
@@ -111,7 +111,7 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
     // Read logic crossing into another subsystem's Store: boundary rules fire
     // regardless of the profile's allowedEdges.
     proj.component('physics-system', 'Orchestrator', 'sim', 'dependencyClass: read\ndependsOn: [rate-store]');
-    proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: test fixture');
+    proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection');
     proj.activate();
     try {
       const res = validateProject();

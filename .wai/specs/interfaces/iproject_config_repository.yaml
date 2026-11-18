@@ -193,6 +193,24 @@ methods:
     signatureFrom: project_config_registry.setNetwork
     guarantees:
       - idempotent
+  - name: reviseRules
+    description: Apply one granular change to the bound project's rules (forwarded to the registry).
+    signatureFrom: project_config_registry.reviseRules
+    guarantees:
+      - idempotent
+    effect: write
+  - name: reviseDebt
+    description: Apply one change to the conformance debt register (forwarded to the registry).
+    signatureFrom: project_config_registry.reviseDebt
+    guarantees:
+      - idempotent
+    effect: write
+  - name: reviseProject
+    description: Apply one change to the bound project's own settings (forwarded to the registry).
+    signatureFrom: project_config_registry.reviseProject
+    guarantees:
+      - idempotent
+    effect: write
 status: complete
 createdAt: '2026-09-13T11:09:45.386Z'
-updatedAt: '2026-10-07T21:50:06.869Z'
+updatedAt: '2026-11-14T16:09:54.351Z'

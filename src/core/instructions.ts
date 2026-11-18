@@ -1,4 +1,6 @@
 import type { LoadedInstructionBlock } from './extensions.js';
+import { blockReaches } from '../models/pack-instructions.js';
+import { resolvePractices } from '../models/practices.js';
 import { listSkillResources, type SkillResourceDescriptor } from './skills.js';
 import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core.js';
 
@@ -14,7 +16,7 @@ import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core
 //
 // wairon owns the SDD model, so wairon must teach it — this text is the default,
 // not something each wrapper reimplements and drifts on. It stays deliberately
-// SHORT and POINTER-HEAVY: the depth already exists in templates/skills/*.md,
+// SHORT and POINTER-HEAVY: the depth already exists in plugins/wairon/skills/*/SKILL.md,
 // and this is the map that makes an agent go read them. A pack appends its
 // platform delta through `instructions` in pack.yaml (see extensions.ts); it
 // never restates what is below.
@@ -30,6 +32,23 @@ import { loadProjectConfig, loadProjectExtensions } from './adapters/skills-core
 // CJS output because every access happens inside a function body at call time —
 // nothing here runs during module initialization.
 
+/** The practices the bound project selects for itself, or none when its configuration cannot be read. */
+function projectPractices(): string[] {
+  try {
+    return resolvePractices(loadProjectConfig()?.practices);
+  } catch {
+    return [];
+  }
+}
+
+/** The short practices section: the project's own, and the session tool. */
+function practicesSection(project: string[]): string {
+  const own = project.length > 0
+    ? `This project works under the practices ${project.map((id) => `\`${id}\``).join(', ')}; their guidance is in the project guide and in every brief.`
+    : 'This project selects no practice for itself.';
+  return `## Practices\n\n${own} \`sdd_use_practices\` lists every practice the loaded packs declare and picks this session's own; the briefs this session fetches afterwards carry them.`;
+}
+
 /** The governing projectType/profile of the bound project, or null when it cannot be read. */
 function governingProfile(): string | null {
   try {
@@ -40,16 +59,6 @@ function governingProfile(): string | null {
   }
 }
 
-/**
- * Does this block apply to the bound project? An unscoped block always applies;
- * a scoped one only when it names the governing profile. A block scoped to a
- * profile we cannot resolve is withheld — a pack that says "only under my
- * profile" must not leak its platform doctrine into an unrelated project.
- */
-export function blockApplies(block: LoadedInstructionBlock, profile: string | null): boolean {
-  if (!block.profile || block.profile.length === 0) return true;
-  return profile !== null && block.profile.includes(profile);
-}
 
 /** Render the skill pointers an agent should read before authoring. */
 function skillPointers(skills: SkillResourceDescriptor[]): string {
@@ -71,9 +80,10 @@ function waironInstructions(
   return `# wairon — Spec-Driven Development (SDD)
 
 This server owns one system's **spec tree**: its architecture, specified top-down
-and machine-checked. Author it ONLY through this server's \`sdd_*\` tools — never by
-writing spec files directly, and never via the \`wairon\` CLI (that is the human
-developer's tool).
+and machine-checked — the design of record, approved by the human's lock. Plans
+made elsewhere and design gaps found while implementing go into the specs.
+Author it ONLY through this server's \`sdd_*\` tools — never by writing spec files
+directly, and never via the \`wairon\` CLI (the human developer's tool).
 
 ## The tree: L0 → L5
 
@@ -95,34 +105,31 @@ developer's tool).
 
 These stereotypes are not labels — they carry enforced dependency rules (e.g. a
 Portal may not depend on a Store; state lives in a Store, never as fields inside
-an Orchestrator). \`sdd_validate_tree\` is the gate, and it is the authority on
-whether a design is legal.
+an Orchestrator). \`sdd_validate_tree\` is the gate and the authority on whether a
+design is legal.
 
 ## Authoring order
 
 1. \`sdd_initialize_system\` (L0), then \`sdd_add_subsystem\` (L1).
 2. Then, **one subsystem at a time**: \`sdd_add_component\` (L2) → \`sdd_define_interface\`
    (L3) → \`sdd_set_endpoints\` for Portals → \`sdd_write_narrative\` (L4+L5).
-3. Run \`sdd_validate_tree\` as you go — early and per subsystem, not once at the end.
+3. Run \`sdd_validate_tree\` early and per subsystem, not once at the end.
    \`sdd_get_status\` reports completeness; \`sdd_get_spec\` reads any spec back as JSON.
-4. Edit granularly with \`sdd_update_spec\` (it renumbers narrative steps and
-   relocates jump targets for you).
+4. Edit granularly with \`sdd_update_spec\` (it renumbers steps and jump targets).
 
 ## Growing a system: subsystems → parts → projects
 
-Boundaries are earned. Start with subsystems in one folder. When a piece needs its
-own folder or repository but stays the same system, make it a **part**
-(\`sdd_add_member\` creates one by default; \`sdd_externalize_subsystem\` moves a
-subsystem into one): its subsystems stay this project's own — local ids, this
-project's lock. Make it a **project** only when it needs its own team, release,
-approval or public surface: \`sdd_promote_member\` (\`sdd_demote_member\` is the
-inverse) — run it with \`dryRun\` first. A member's location is one key:
+Boundaries are earned. Start with subsystems in one folder. A piece that needs its
+own folder or repository but stays the same system is a **part** (\`sdd_add_member\`;
+\`sdd_externalize_subsystem\` moves a subsystem into one): local ids, this project's
+lock. Make it a **project** only when it needs its own team, release, approval or
+public surface: \`sdd_promote_member\` (\`sdd_demote_member\` back), \`dryRun\` first. A member's location is one key:
 \`services/x\`, \`../x\` or \`git-url#<commit>\`.
 
 ## The tool schemas are the field reference
 
-Every \`sdd_*\` tool's input schema is self-describing and authoritative — read the
-schema rather than guessing field names, and prefer structured \`params\` over prose
+Every \`sdd_*\` tool's input schema is self-describing and authoritative — read it
+rather than guessing field names, and prefer structured \`params\` over prose
 signatures. Specs are ${profile === null ? 'validated against the project\'s configured profile' : `governed by the **\`${profile}\`** profile`}, which decides which stereotypes are legal
 here, which narrative flow constructs the target language supports, and which
 extra rules apply. A subsystem may override the profile for itself.
@@ -180,6 +187,7 @@ export function buildServerInstructions(): string {
   let skills: SkillResourceDescriptor[] = [];
   let blocks: LoadedInstructionBlock[] = [];
   let packNames: string[] = [];
+  let declaredPractices: string[] = [];
   // The variant vocabulary is deliberately NOT listed here. Reading the variant
   // registry from this module would be an sdd_skills → sdd_core hop onto an
   // internal Adapter, which the boundary rules refuse; routing it through the
@@ -192,13 +200,18 @@ export function buildServerInstructions(): string {
     const extensions = loadProjectExtensions();
     blocks = extensions.instructions;
     packNames = extensions.packNames;
+    declaredPractices = (extensions.practices ?? []).map((p) => p.id);
   } catch {
     // Degrade to wairon's own briefing — see the contract above.
   }
 
   const sections = [waironInstructions(profile, packNames, skills, variants)];
+  // Step 4 (part): when the packs declare practices, name the project's own and
+  // point at the tool that lists them and picks this session's.
+  if (declaredPractices.length > 0) sections.push(practicesSection(projectPractices()));
   for (const block of blocks) {
-    if (!blockApplies(block, profile)) continue;
+    // Step 5: only blocks that reach the server under the governing profile.
+    if (!blockReaches(block, 'server', profile)) continue;
     // Attribution is what keeps a pack's delta legible AS a delta instead of
     // blending into wairon's own doctrine.
     sections.push(`## From pack "${block.pack}"\n\n${block.text.trim()}`);

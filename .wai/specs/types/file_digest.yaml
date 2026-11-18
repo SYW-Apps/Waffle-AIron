@@ -1,0 +1,23 @@
+kind: value-object
+id: file_digest
+name: FileDigest
+description: >-
+  One file's content digest, with the size and modification time it was taken at: while both still
+  match, the digest is the file's without reading it again.
+fields:
+  - name: size
+    type: int
+    description: The file's size in bytes when it was digested
+    optional: false
+  - name: modifiedAt
+    type: float
+    description: The file's modification time (milliseconds) when it was digested
+    optional: false
+  - name: digest
+    type: string
+    description: The sha256 of the file's content, hex
+    optional: false
+methods: []
+sourcePath: src/core/content-fingerprint.ts
+createdAt: '2026-11-10T19:01:33.364Z'
+updatedAt: '2026-11-10T19:01:34.895Z'

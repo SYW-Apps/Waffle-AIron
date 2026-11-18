@@ -246,7 +246,7 @@ function RemoveUnitModal(props: {
           </Field>
         )}
         {kind === 'cascade' && (
-          <p className="error-note">
+          <p className="syw-alert syw-alert--danger error-note">
             This permanently deletes the subtree, its placements, and permission assignments scoped into it.
           </p>
         )}
@@ -331,7 +331,7 @@ export function Units() {
       <AsyncView state={units}>
         {() =>
           tree.length === 0 ? (
-            <div className="empty-state">No organization units yet. Create one to start grouping projects.</div>
+            <div className="syw-empty">No organization units yet. Create one to start grouping projects.</div>
           ) : (
             <div className="tree">
               {tree.map((n) => (

@@ -34,8 +34,16 @@ fields:
     type: bool
     description: Whether the file already holds exactly that entry, so the install writes nothing
     optional: false
+  - name: removes
+    type: bool
+    description: >-
+      True when the write takes the wairon entry OUT of the file: the tool's target is served by the
+      wairon plugin, which provides the server itself, and a project entry beside it gives the agent
+      every tool twice. `after` is then the file's entry set without it. Only ever planned for a
+      file inside the project root.
+    optional: true
 methods: []
 componentClass: cli_mcp_adapter
 sourcePath: src/commands/mcp.ts
 createdAt: '2026-10-01T23:45:59.829Z'
-updatedAt: '2026-10-04T23:39:53.401Z'
+updatedAt: '2026-11-15T02:12:53.521Z'

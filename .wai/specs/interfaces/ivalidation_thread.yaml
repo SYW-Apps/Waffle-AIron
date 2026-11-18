@@ -1,0 +1,24 @@
+id: ivalidation_thread
+name: Validation Thread Interface
+description: Runs one remembered gate on the worker thread and answers its result; stops the thread.
+component: validation_thread
+methods:
+  - name: run
+    description: >-
+      Run one job on the thread: bind its root, answer the gate through the validation memo, hand
+      the result back. A job that fails on the thread fails the caller with the thread's error.
+    signature: 'run(job: ValidationJob): async ValidationResult'
+    returns: async ValidationResult
+    params:
+      - name: job
+        type: ValidationJob
+    effect: io
+  - name: stop
+    description: Stop the thread; jobs still waiting fail.
+    signature: 'stop(): async void'
+    returns: async void
+    params: []
+    effect: lifecycle
+status: complete
+createdAt: '2026-11-11T23:25:47.381Z'
+updatedAt: '2026-11-11T23:25:51.658Z'

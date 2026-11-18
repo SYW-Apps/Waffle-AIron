@@ -1,0 +1,24 @@
+kind: value-object
+id: dev_producer
+name: DevProducer
+description: >-
+  A project on disk that the served project reads, whose .wai/ folder the dev server watches: a
+  member or an external declared by path.
+subsystem: sdd_host
+fields:
+  - name: alias
+    type: string
+    description: The served project's alias for it.
+    optional: false
+  - name: root
+    type: string
+    description: Its project root, absolute.
+    optional: false
+  - name: relation
+    type: dev_producer_relation
+    description: Member or external.
+    optional: false
+methods: []
+sourcePath: src/server/dev-watcher.ts
+createdAt: '2026-11-10T00:32:44.114Z'
+updatedAt: '2026-11-10T00:32:45.426Z'

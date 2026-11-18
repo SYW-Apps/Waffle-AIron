@@ -26,7 +26,11 @@ export {
   renameField,
   renameParam,
   loadProjectConfig,
+  loadProjectExtensions,
   setNetwork,
+  reviseRules,
+  reviseDebt,
+  reviseProject,
   getStatusReport,
   approvalVerdict,
   composeAgentBrief,
@@ -45,4 +49,7 @@ export {
   readProjectSystem,
   // What a removal, or a route move, takes away from consumers: the public names publishing the methods.
   publishedUsesOf,
+  // The review handshake (approval_portal requestReview / reviewStatus).
+  requestReview,
+  reviewStatus,
 } from '../../core/index.js';

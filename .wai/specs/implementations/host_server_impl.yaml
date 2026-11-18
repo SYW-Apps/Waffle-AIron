@@ -67,12 +67,55 @@ methods:
         type: local
       - stepNumber: 9
         description: >-
+          On the local development server only (devMode), resolve the served project's root, whose
+          .wai/ folder the next step watches
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 10
+        description: >-
+          On the local development server only (devMode), start both gates for the served project in
+          the background, so the first page finds them remembered instead of waiting for a cold run
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: warm
+      - stepNumber: 11
+        description: >-
+          On the local development server only (devMode), watch the served project's .wai/ folder
+          and its code: a `tree` change nudges the served project's realtime channel, so a spec
+          written by another process (an agent's `wairon mcp serve`) or a terminal lock refreshes
+          the open page, and re-runs the next two steps, since the configuration may have declared,
+          moved or removed a producer; a `code` change nudges the same channel, so the page's
+          findings follow an edit of the code; a `reviews` change nudges the reviews channel, so a
+          new review request pops up. Every change nudge first outdates the kept graph and canvas
+          views
+        type: call
+        targetComponent: dev_tree_watcher
+        targetMethod: watch
+      - stepNumber: 12
+        description: >-
+          On the local development server only (devMode), name the producers on disk the served
+          project reads: its members and the externals it declares by path
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: producers
+      - stepNumber: 13
+        description: >-
+          On the local development server only (devMode), stop any earlier producer watch and watch
+          the producers' .wai/ folders: a member's change nudges the served project's realtime
+          channel, an external producer's change nudges the externals channel, so the page re-checks
+          that external against its pin
+        type: call
+        targetComponent: dev_tree_watcher
+        targetMethod: watchProducers
+      - stepNumber: 14
+        description: >-
           Start the periodic backup schedule (git-bound project sweep + container-level backing
           sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
         targetComponent: backup_schedule
         targetMethod: start
-      - stepNumber: 10
+      - stepNumber: 15
         description: Return the running server handle
         type: return
         outcome: running
@@ -85,12 +128,20 @@ methods:
         targetComponent: backup_schedule
         targetMethod: stop
       - stepNumber: 2
-        description: Stop accepting new connections and drain in-flight requests
+        description: Stop watching the served project's tree, when watching
         type: local
       - stepNumber: 3
-        description: Close the data-plane and admin-plane listeners
+        description: Stop accepting new connections and drain in-flight requests
         type: local
       - stepNumber: 4
+        description: Close the data-plane and admin-plane listeners
+        type: local
+      - stepNumber: 5
+        description: Stop the background validation thread
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: stopBackground
+      - stepNumber: 6
         description: Return once stopped
         type: return
         outcome: stopped
@@ -124,4 +175,4 @@ methods:
         outcome: ready or not
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-10-31T23:46:11.135Z'
+updatedAt: '2026-11-13T16:03:40.930Z'

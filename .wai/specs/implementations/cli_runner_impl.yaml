@@ -1,7 +1,7 @@
 id: cli_runner_impl
 name: CLI Runner Implementation
 description: >-
-  Concrete implementation of the CLI Runner Interface: the workflows cli_portal (src/cli/index.ts)
+  Concrete implementation of the CLI Runner Interface: the workflows cli_portal (src/cli/program.ts)
   dispatches each command to — those with no command module of their own in src/cli/runner.ts, the
   rest in the src/commands/ module named per method — mapping each parsed command onto the core
   engine.
@@ -605,35 +605,48 @@ methods:
         type: branch
         condition: the folder has no project configuration yet
         onTrueStep: 18
-        onFalseStep: 21
+        onFalseStep: 22
       - stepNumber: 18
+        description: >-
+          Ask each chosen target's tool whether the wairon plugin is installed and enabled in it,
+          through the agent plugin adapter, for every chosen target that --plugin did not already
+          name: a tool that answers enabled is recorded as plugin-served, and the report says which
+          tool's listing said so; absent and unknown leave the target served by the project (unknown
+          is never guessed)
+        type: call
+        targetComponent: agent_plugin_adapter
+        targetMethod: detectPlugin
+      - stepNumber: 19
         description: >-
           Read the store packs that apply by default, to seed as the new configuration's pack
           selections
         type: call
         targetComponent: cli_core_adapter
         targetMethod: defaultPackSelections
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Compose the new project's configuration — its id (the project name slugified; when the
           slug is one the id grammar refuses — a device name such as con, the reserved `super`, or
           nothing at all — the slug with `-project` appended, `project` for an empty one, and a line
           saying why the folder name was not usable as it is, so a new project never starts without
-          an id), the chosen targets (with --yes: claude only — a tool nobody chose gets no files)
+          an id), the chosen targets (with --yes: claude only — a tool nobody chose gets no files),
+          each marked `via: plugin` when --plugin named it or its tool reported the plugin enabled,
           and projectType, execution budgets off, component-implementer and agent-file generation
           off, the store packs declaring applyByDefault seeded as selections, and machine-wide packs
-          recorded as off — and create it through the core adapter.
+          recorded as off — and create it through the core adapter. --plugin naming a tool that is
+          not a chosen target, or one with no plugin (copilot), is refused before anything is
+          written.
         type: call
         targetComponent: cli_core_adapter
         targetMethod: createProjectConfig
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           Seed the context directory (.wai/context/) with its generated files through the core
           adapter
         type: call
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
-      - stepNumber: 21
+      - stepNumber: 22
         label: bootstrap_l0
         description: >-
           Bootstrap the L0 system spec through core, completing only what is missing (the same
@@ -641,27 +654,36 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: ensureProjectInitialized
-      - stepNumber: 22
+      - stepNumber: 23
         label: export_skills
         description: Export SDD skills templates for the configured targets only
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 23
+      - stepNumber: 24
+        description: >-
+          Register the MCP server in the project for the configured targets whose tool reads a
+          project file (Claude's .mcp.json, the Gemini CLI's settings) through the MCP adapter, with
+          no backend named: a target the wairon plugin serves gets no entry there, because the
+          plugin provides the server, and the report says so
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 25
         description: >-
           For each tool the person chose to install machine-wide, find its global configuration file
           through the core adapter
         type: call
         targetComponent: cli_core_adapter
         targetMethod: globalGuideFilePath
-      - stepNumber: 24
+      - stepNumber: 26
         description: >-
           Find the in-project configuration file of each configured target as well — a target nobody
           chose gets none
         type: call
         targetComponent: cli_core_adapter
         targetMethod: localGuideFilePath
-      - stepNumber: 25
+      - stepNumber: 27
         description: >-
           Write the guide into each one the plan asked for — the machine-wide guide into the global
           file, the in-project one into the local file. They say different things on purpose: the
@@ -669,7 +691,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: injectGuide
-      - stepNumber: 26
+      - stepNumber: 28
         description: >-
           Write wairon's block of the repository-root pointer for every target that got a local
           guide, and for the targets that want only a root file. A pointer rather than a copy, so
@@ -680,7 +702,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: writeRootGuideDelegator
-      - stepNumber: 27
+      - stepNumber: 29
         description: Report what was created and where, and name the next command to run
         type: return
         outcome: initialized
@@ -923,6 +945,8 @@ methods:
             step: 25
           - value: impact
             step: 27
+          - value: publish
+            step: 29
         defaultStep: 12
       - stepNumber: 2
         label: doInit
@@ -984,8 +1008,10 @@ methods:
       - stepNumber: 13
         label: doInstall
         description: >-
-          Install a pack into this wairon install's store (applies to nothing until a project
-          selects it).
+          Install a pack into this wairon install's store — from the registry by name, or from a
+          directory, archive or URL — passing --yes, --registry and --allow-unverified-code (applies
+          to nothing until a project selects it). `wairon install` and `wairon i` run the same
+          action.
         type: call
         targetComponent: cli_packs_adapter
         targetMethod: installPack
@@ -1063,6 +1089,16 @@ methods:
         description: Done.
         type: return
         outcome: impact done
+      - stepNumber: 29
+        label: doPublish
+        description: Publish a pack directory or .wpack archive to the wairon pack registry.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: publishPack
+      - stepNumber: 30
+        description: Done.
+        type: return
+        outcome: publish done
   - name: runLock
     narrative:
       - stepNumber: 1
@@ -1661,7 +1697,10 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
       - stepNumber: 8
-        description: Re-export the SDD skills for the active targets
+        description: >-
+          Re-export the SDD skills for the active targets: a target the wairon plugin serves gets
+          only its pack skills, and the built-in copies an earlier export left in its skills
+          directory are removed and printed
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
@@ -1826,7 +1865,8 @@ methods:
           Plan the MCP registration for each active backend without writing anything — Claude in the
           project's .mcp.json; Gemini in the project's settings, or, for an Antigravity target, the
           GLOBAL mcp_config.json it alone reads — each write marked inside or outside the project
-          root, with the entry the file holds now and the one it would get
+          root, with the entry the file holds now and the one it would get; for a backend whose
+          target the wairon plugin serves, the plan removes the project file's wairon entry instead
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: planInstall
@@ -1999,7 +2039,9 @@ methods:
       - stepNumber: 57
         description: >-
           Skills: for each active target, compare the installed SDD skills with what an export would
-          write now, reporting the missing and stale ones
+          write now, reporting the missing and stale ones, and for a target the wairon plugin serves
+          the built-in skills still copied into the project, as a warning that the agent sees them
+          twice, pointing at `wairon doctor --fix`
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: checkSkillFreshness
@@ -2062,14 +2104,26 @@ methods:
         type: local
       - stepNumber: 66
         description: >-
+          Plugins: for each active target whose tool lists its plugins (Claude Code, Codex), ask
+          whether the wairon plugin is installed and enabled
+        type: call
+        targetComponent: agent_plugin_adapter
+        targetMethod: detectPlugin
+      - stepNumber: 67
+        description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and which build it would start against the running CLI — `wairon --version` for a bare
           `wairon` entry, the package version for a `node <path>` entry (nothing else from the file
           is ever executed) — warning when it differs, so two installs on one machine are named, and
           when a project entry names an absolute path of one machine; flag a legacy global
-          Antigravity plugin
+          Antigravity plugin. For a target the wairon plugin serves, a project wairon entry is a
+          warning (the agent sees every tool twice) pointing at `wairon doctor --fix`, and no entry
+          is expected. Where the tool's listing disagrees with the configuration, say so: the plugin
+          enabled for a target the project serves is a notice suggesting `via: plugin`; the plugin
+          absent for a target marked `via: plugin` is a warning that the tool gets no wairon server
+          at all; an unknown listing reports nothing
         type: local
-      - stepNumber: 67
+      - stepNumber: 68
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -3119,7 +3173,15 @@ methods:
         description: >-
           Build the ephemeral data dir (per bound root; it is disposable - the registration below
           discards it when it is unversioned or from another major) and the loopback, auth-off,
-          development-mode host configuration
+          development-mode host configuration. The port: without --port, the first port from 8080
+          upward (at most 8099) that is free on 127.0.0.1 together with the next one, which the dev
+          admin listener takes, so a second project's dev server, or anything else on 8080, never
+          stops this one from starting; with --port, exactly that port, refused with a plain message
+          naming it (and the admin port beside it) when either is taken, never a raw listen error.
+          The configuration hands the server this CLI's own human commands as its dev commands, so
+          the page runs exactly what the terminal runs: lock (unattended, of one subsystem when the
+          page names one, this machine's git identity as approver), generate and doctor --fix, each
+          with what it prints captured for the page
         type: local
       - stepNumber: 5
         description: >-
@@ -3138,11 +3200,23 @@ methods:
         targetComponent: cli_host_adapter
         targetMethod: startHostServer
       - stepNumber: 7
+        description: >-
+          Announce the page's URL in the project, so an agent's review request says where it is
+          shown
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: announceDevServer
+      - stepNumber: 8
         description: Optionally open the browser, and run until signalled
         type: call
         targetComponent: process_adapter
         targetMethod: start
-      - stepNumber: 8
+      - stepNumber: 9
+        description: On shutdown, withdraw the announcement before stopping the server
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: withdrawDevServer
+      - stepNumber: 10
         description: Return on shutdown
         type: return
         outcome: stopped
@@ -4447,6 +4521,11 @@ lint:
         them one-to-one onto mcp_install_options (hostedUrl, hostedProject, hostedToken) before the
         command adapter runs — the CLI counterpart of a router unpacking a request, with the flag
         names as the wire names.
+    - code: HIDDEN_STATE
+      reason: >-
+        src/commands/host.ts holds the dev commands' capture guard: a process-local flag set while
+        one handed command's console output is captured and cleared when it ends, so two runs never
+        interleave their output. No domain state: nothing to store, list or recover.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-31T23:49:15.889Z'
+updatedAt: '2026-11-15T02:15:14.380Z'

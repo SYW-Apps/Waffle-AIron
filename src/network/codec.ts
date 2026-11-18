@@ -99,7 +99,7 @@ function csvOf(flows: NetworkFlow[]): string {
 }
 
 function markdownOf(flows: NetworkFlow[]): string {
-  const escape = (cell: string): string => (cell === '' ? ' ' : cell.replace(/\|/g, '\\|').replace(/\n/g, ' '));
+  const escape = (cell: string): string => (cell === '' ? ' ' : cell.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' '));
   const rows = flows.map((f) => `| ${cells(f).map(escape).join(' | ')} |`);
   const header = [`| ${COLUMNS.join(' | ')} |`, `|${COLUMNS.map(() => '---').join('|')}|`];
   // When the design fails the gate, say so first: a REFUSED row is not allowed.

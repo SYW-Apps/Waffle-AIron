@@ -2,8 +2,9 @@ kind: value-object
 id: skills_export_result
 name: SkillsExportResult
 description: >-
-  What exporting the built-in SDD skills wrote: the skills directories written to, the number of
-  files, and the target types skipped because they have no skills directory.
+  What exporting the SDD skills wrote: the skills directories written to, the number of files, the
+  target types skipped because they have no skills directory, and the target types whose built-in
+  skills the wairon plugin provides, so the export left them out.
 fields:
   - name: destinations
     type: list<string>
@@ -17,7 +18,21 @@ fields:
     type: list<string>
     description: Target types that have no skills directory, and were skipped
     optional: false
+  - name: pluginServed
+    type: list<string>
+    description: >-
+      Target types whose built-in skills the wairon plugin provides (`via: plugin`): the export
+      wrote only their pack skills. A pack section extending a built-in skill reaches such a tool's
+      agent through the wairon-skill:// resource alone, and the caller says so.
+    optional: false
+  - name: removed
+    type: list<string>
+    description: >-
+      The built-in skill files the export removed from a plugin-served target's skills directory, as
+      paths: copies an earlier export left there, which the agent would see beside the plugin's own.
+      Only the built-in sdd-* names are ever removed.
+    optional: false
 methods: []
 sourcePath: src/core/skills.ts
 createdAt: '2026-09-13T23:11:48.552Z'
-updatedAt: '2026-10-04T10:29:16.660Z'
+updatedAt: '2026-11-15T02:14:56.636Z'

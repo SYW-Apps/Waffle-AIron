@@ -270,7 +270,7 @@ export function Environment({ initialUnitRoute = '' }: { initialUnitRoute?: stri
     <AsyncView state={state}>
       {(d) =>
         d.nodes.length === 0 ? (
-          <div className="empty-state">No organization units or projects in your scope yet.</div>
+          <div className="syw-empty">No organization units or projects in your scope yet.</div>
         ) : (
           <div ref={hostRef} className="canvas-host" />
         )

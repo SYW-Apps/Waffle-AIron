@@ -222,6 +222,30 @@ describe('io/files descriptors and streams', () => {
     }
   });
 
+  it('watchTree tells of a change below the directory, relative and forward-slashed, until stopped', async () => {
+    const dir = tmp();
+    fs.mkdirSync(path.join(dir, 'sub'));
+    const seen: string[] = [];
+    const stop = files.watchTree(dir, (p) => seen.push(p));
+    fs.writeFileSync(path.join(dir, 'sub', 'a.txt'), 'x');
+    const deadline = Date.now() + 5000;
+    while (!seen.some((p) => p.endsWith('sub/a.txt')) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(seen.some((p) => p === 'sub/a.txt')).toBe(true);
+    stop();
+    stop(); // a second stop does nothing
+    const count = seen.length;
+    fs.writeFileSync(path.join(dir, 'b.txt'), 'y');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(seen.length).toBe(count);
+  });
+
+  it('watchTree on a missing directory answers a stop that does nothing', () => {
+    const stop = files.watchTree(path.join(tmp(), 'nope'), () => {});
+    expect(() => stop()).not.toThrow();
+  });
+
   it('openWriteStream writes a file', async () => {
     const dir = tmp();
     const p = path.join(dir, 'f');

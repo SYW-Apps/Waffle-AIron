@@ -1,0 +1,24 @@
+kind: value-object
+id: practice_listing
+name: PracticeListing
+description: >-
+  One practice a loaded pack declares, as sdd_use_practices lists it: what a session may pick,
+  without its guidance text.
+subsystem: sdd_mcp
+fields:
+  - name: id
+    type: string
+    description: The practice id.
+    optional: false
+  - name: description
+    type: string
+    description: What the practice asks for, in one line.
+    optional: false
+  - name: pack
+    type: string
+    description: The pack that declares it.
+    optional: false
+methods: []
+sourcePath: src/mcp/session-practices.ts
+createdAt: '2026-11-06T21:46:20.961Z'
+updatedAt: '2026-11-06T21:46:22.051Z'

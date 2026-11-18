@@ -11,6 +11,7 @@ import { compareOrdinal } from '../utils/canonical-json.js';
 import type { SddRule } from './rules/types.js';
 import { RulesConfigSchema, type PackSelection, type ProjectConfig } from '../models/project.js';
 import type { PackCandidate } from '../models/pack-impact.js';
+import { INSTRUCTION_CHANNELS, type InstructionChannel } from '../models/pack-instructions.js';
 // The store is a sibling adapter; both modules reach each other only inside
 // function bodies, so the import cycle never runs at module-init time.
 import { resolveInstalledPack, packStoreDir, listInstalledPacks, computePackDigest } from './packstore.js';
@@ -134,8 +135,9 @@ export const PackSkillSchema = z.object({
 export type PackSkill = z.infer<typeof PackSkillSchema>;
 
 /**
- * One block of connecting-agent guidance contributed by a pack, appended to
- * wairon's OWN MCP `initialize` instructions under an attributed heading.
+ * One block of agent guidance contributed by a pack, delivered under an
+ * attributed heading through the channels it names (wairon's OWN MCP
+ * `initialize` instructions by default, the generated guide, live briefs).
  *
  * The split is deliberate and load-bearing: wairon owns the SDD model, so
  * wairon teaches it by default (see core/instructions.ts). A pack states its
@@ -147,8 +149,10 @@ export type PackSkill = z.infer<typeof PackSkillSchema>;
 export interface PackInstructionBlock {
   /** The guidance itself — the pack's platform delta, never a restatement of wairon's model. */
   text: string;
-  /** Optional scope: apply only when the bound project's governing profile is one of these. */
+  /** Optional scope: deliver only where the governing profile is one of these. */
   profile?: string[];
+  /** Optional: the channels this block reaches. Absent = the server instructions only. */
+  channels?: InstructionChannel[];
 }
 
 // Annotated rather than inferred: the string arm normalizes to the SAME shape as
@@ -160,6 +164,7 @@ export const PackInstructionBlockSchema: z.ZodType<PackInstructionBlock, unknown
   z.object({
     text: z.string().min(1),
     profile: z.array(z.string().min(1)).min(1).optional(),
+    channels: z.array(z.enum(INSTRUCTION_CHANNELS)).min(1).optional(),
   }),
 ]);
 
@@ -185,6 +190,19 @@ export const PatternDefSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type PatternDef = z.infer<typeof PatternDefSchema>;
+
+/**
+ * practice_def — a practice a pack declares: a way of working or a priority a
+ * project selects per scope in its project.yaml `practices` section. Process,
+ * never architecture doctrine: it carries only guidance, delivered to the
+ * agents working where it is selected. Declaring one applies it nowhere.
+ */
+export const PracticeDefSchema = z.object({
+  id: z.string().min(1),
+  description: z.string().min(1),
+  guidance: z.string().min(1),
+});
+export type PracticeDef = z.infer<typeof PracticeDefSchema>;
 
 /**
  * Selector for declarative assertions (closed, v1): absent keys match all,
@@ -246,19 +264,39 @@ export type PackAssertion = z.infer<typeof PackAssertionSchema>;
 /** A pack assertion tagged with provenance and its namespaced finding code. */
 export type LoadedAssertion = PackAssertion & { pack: string; fullCode: string };
 
-/** <PACK_NAME>_<CODE>, upper-snake, non-alphanumerics collapsed — collision-free across packs, provenance legible in every finding. */
+/**
+ * <PACK_NAME>_<CODE>, upper-snake, non-alphanumerics collapsed — collision-free
+ * across packs, provenance legible in every finding. The scope of a scoped name
+ * is written with a double underscore (`@acme/sec-lint` → `ACME__SEC_LINT_<CODE>`),
+ * so it never collides with a flat `acme-sec-lint`; a flat name is unchanged.
+ */
 export function assertionFullCode(packName: string, code: string): string {
-  const norm = (s: string): string => s.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  return `${norm(packName)}_${norm(code)}`;
+  const norm = (s: string): string => s.toUpperCase().split(/[^A-Z0-9]+/).filter((part) => part !== '').join('_');
+  const scoped = /^@([^/]+)\/(.+)$/.exec(packName);
+  const prefix = scoped ? `${norm(scoped[1])}__${norm(scoped[2])}` : norm(packName);
+  return `${prefix}_${norm(code)}`;
 }
 
 export const DeclarativePackSchema = z.object({
   name: z.string().min(1),
   version: z.string().optional(),
+  /** One line saying what the pack is for, shown where packs are listed. */
+  description: z.string().min(1).optional(),
+  /** The pack's home page URL. */
+  homepage: z.string().min(1).optional(),
+  /** The URL of the pack's source repository. */
+  repository: z.string().min(1).optional(),
+  /** The pack's license, as an SPDX identifier. */
+  license: z.string().min(1).optional(),
   profiles: z.record(z.string(), ProfileDefSchema).default({}),
   languages: z.record(z.string(), LanguagePackDefSchema).default({}),
   skills: z.array(PackSkillSchema).default([]),
   patterns: z.array(PatternDefSchema).default([]),
+  /** Practices this pack declares; a project selects them in project.yaml `practices`. */
+  practices: z.array(PracticeDefSchema).default([]).refine(
+    (list) => new Set(list.map((p) => p.id)).size === list.length,
+    { message: 'a practice id is declared twice in this pack' },
+  ),
   /** Declarative rule assertions — instances of closed kinds, hosted-safe. */
   assertions: z.array(PackAssertionSchema).default([]),
   /**
@@ -316,6 +354,8 @@ export function skillExtendErrors(skills: LoadedPackSkill[]): string[] {
     .filter((s) => s.extends !== undefined && !EXTENDABLE_BUILTIN_SKILLS.includes(s.extends))
     .map((s) => `Extension pack "${s.pack}" declares a skill extending "${s.extends}", which is not a builtin skill (extendable: ${EXTENDABLE_BUILTIN_SKILLS.join(', ')}).`);
 }
+/** loaded_practice — a pack practice tagged with the pack that declares it. */
+export type LoadedPractice = PracticeDef & { pack: string };
 /** A pack pattern definition tagged with the pack that declares it. */
 export type LoadedPattern = PatternDef & { pack: string };
 /** A pack instruction block tagged with the pack that contributes it (the attribution rendered into the composed instructions). */
@@ -407,6 +447,8 @@ export interface LoadedExtensions {
   skills: LoadedPackSkill[];
   /** Pack-registered reusable pattern definitions (with provenance). */
   patterns: LoadedPattern[];
+  /** Pack-declared practices (with provenance), in load order; a later pack's repeat of an id is reported in `errors`. */
+  practices: LoadedPractice[];
   /** Pack-declared semantic guarantee tokens (merged, deduped) — the extension half of the guarantee vocabulary. */
   guarantees: string[];
   /** Pack-contributed package names per technology name (lower-cased, deduped across packs). */
@@ -431,7 +473,7 @@ export interface LoadedExtensions {
 }
 
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], guarantees: [], technologyPackages: {}, assertions: [], instructions: [], errors: [], selectionFailures: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], practices: [], guarantees: [], technologyPackages: {}, assertions: [], instructions: [], errors: [], selectionFailures: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -510,7 +552,10 @@ export function discoverPacks(dir: string): string[] {
   const refs: string[] = [];
   for (const e of entries.sort((a, b) => compareOrdinal(a.name, b.name))) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) {
+    if (e.isDirectory() && e.name.startsWith('@')) {
+      // A scope folder (`@scope/pack/<version>/`): each pack in it, latest version.
+      refs.push(...discoverPacks(full).filter((ref) => !/\.(ya?ml|cjs|js)$/i.test(ref)));
+    } else if (e.isDirectory()) {
       if (packDirEntry(full)) refs.push(full);
       else {
         const latest = latestVersionDir(full);
@@ -585,6 +630,16 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   // ids by convention), so they accumulate across packs with their provenance.
   for (const s of pack.skills) out.skills.push({ ...s, pack: pack.name, packVersion: pack.version, sourcePath: path.resolve(packDir, s.source) });
   for (const p of pack.patterns) out.patterns.push({ ...p, pack: pack.name });
+  // Practices are selected by bare id, so an id means one practice: the first
+  // pack to declare it keeps it, and a later repeat is a load error.
+  for (const p of pack.practices) {
+    const first = out.practices.find((q) => q.id === p.id);
+    if (first) {
+      out.errors.push(`Extension pack "${pack.name}" declares practice "${p.id}", which pack "${first.pack}" already declares; the later declaration is ignored.`);
+      continue;
+    }
+    out.practices.push({ ...p, pack: pack.name });
+  }
   // Guarantee tokens are a flat vocabulary — same token from two packs is one token.
   out.guarantees = [...new Set([...out.guarantees, ...pack.guarantees])];
   // Technology packages accumulate per technology name, lower-cased and deduped.
@@ -646,10 +701,15 @@ export function readManifest(target: string, resolveFrom: string): ExtensionPack
   const parsed = DeclarativePackSchema.parse({
     name: mod.name ?? target,
     version: mod.version,
+    description: mod.description,
+    homepage: mod.homepage,
+    repository: mod.repository,
+    license: mod.license,
     profiles: mod.profiles ?? {},
     languages: mod.languages ?? {},
     skills: mod.skills ?? [],
     patterns: mod.patterns ?? [],
+    practices: mod.practices ?? [],
     guarantees: mod.guarantees ?? [],
     technologyPackages: mod.technologyPackages ?? {},
     assertions: mod.assertions ?? [],

@@ -278,7 +278,6 @@ function identityProvidersPath(dataDir: string): string {
 function sanitizeIdentityProvider(config: IdentityProviderConfig): IdentityProviderConfig {
   const clean: IdentityProviderConfig = {
     id: config.id,
-    providerType: config.providerType,
     enabled: config.enabled,
     updatedAt: config.updatedAt,
   };
@@ -309,7 +308,8 @@ function updateIdentityProviders(
   const p = identityProvidersPath(dataDir);
   files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
-    const next = change(readJsonForUpdate<IdentityProviderConfig[]>(p, []));
+    // Re-projecting every record drops fields the type no longer defines (e.g. a legacy providerType).
+    const next = change(readJsonForUpdate<IdentityProviderConfig[]>(p, [])).map(sanitizeIdentityProvider);
     replaceFile(p, JSON.stringify(next, null, 2) + '\n');
     return next;
   });
@@ -332,7 +332,8 @@ export function listIdentityProviderRecords(dataDir: string): IdentityProviderCo
     throw new Error(`Failed to read identity provider store at ${p}: ${(e as Error).message}`);
   }
   try {
-    return JSON.parse(raw) as IdentityProviderConfig[];
+    // A stored record may carry fields the type no longer defines (e.g. a legacy providerType): ignored.
+    return (JSON.parse(raw) as IdentityProviderConfig[]).map(sanitizeIdentityProvider);
   } catch (e) {
     throw new Error(`Identity provider store at ${p} contains malformed JSON: ${(e as Error).message}`);
   }

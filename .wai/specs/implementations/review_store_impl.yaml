@@ -1,0 +1,100 @@
+id: review_store_impl
+name: Review Store Implementation
+description: >-
+  src/core/review-store.ts: the review requests and the dev server announcement as YAML/JSON files
+  under the bound project's .wai/.local/.
+contract: ireview_store
+sourcePath: src/core/review-store.ts
+methods:
+  - name: save
+    narrative:
+      - stepNumber: 1
+        description: Make sure .wai/.local/reviews/ exists
+        type: call
+        targetComponent: files_adapter
+        targetMethod: ensureDir
+      - stepNumber: 2
+        description: >-
+          Make sure .wai/.gitignore keeps .local/ out of git, adding the line when it is missing and
+          keeping every other line
+        type: local
+      - stepNumber: 3
+        description: Write the request as <id>.yaml
+        type: call
+        targetComponent: files_adapter
+        targetMethod: writeText
+    detail: calls-only
+  - name: load
+    narrative:
+      - stepNumber: 1
+        description: Read <id>.yaml when it exists; a missing or unreadable file is none
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
+      - stepNumber: 2
+        description: Return the parsed request
+        type: return
+        outcome: the request or none
+    detail: calls-only
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: List the files in .wai/.local/reviews/ (none when the folder is absent)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: list
+      - stepNumber: 2
+        description: Read each one, skipping a file that cannot be read or parsed
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
+      - stepNumber: 3
+        description: Return them newest first
+        type: return
+        outcome: the requests
+    detail: calls-only
+  - name: announceDevServer
+    narrative:
+      - stepNumber: 1
+        description: Make sure .wai/.local/ exists
+        type: call
+        targetComponent: files_adapter
+        targetMethod: ensureDir
+      - stepNumber: 2
+        description: Write dev-server.json with the URL, the process id and the time
+        type: call
+        targetComponent: files_adapter
+        targetMethod: writeText
+    detail: calls-only
+  - name: withdrawDevServer
+    narrative:
+      - stepNumber: 1
+        description: Read dev-server.json
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
+      - stepNumber: 2
+        description: >-
+          Remove it only when it names this process, so a second dev server's announcement survives
+          the first one stopping
+        type: call
+        targetComponent: files_adapter
+        targetMethod: removeFileIfPresent
+    detail: calls-only
+  - name: devServer
+    narrative:
+      - stepNumber: 1
+        description: Read dev-server.json; absent or unreadable is none
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
+      - stepNumber: 2
+        description: >-
+          Return its URL only while the process it names is alive (a signal-0 probe), so a crashed
+          server is never reported as showing the request
+        type: return
+        outcome: the URL or none
+    detail: calls-only
+status: complete
+createdAt: '2026-11-07T02:37:07.880Z'
+updatedAt: '2026-11-07T02:37:08.694Z'

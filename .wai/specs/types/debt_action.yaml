@@ -1,0 +1,18 @@
+kind: enum
+id: debt_action
+name: DebtAction
+description: What a DebtChange does to the conformance debt register.
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+values:
+  - name: add
+    description: Append a new reason group (kind, why, optional revisit) with its findings
+  - name: extend
+    description: Append findings to an existing reason group
+  - name: revise
+    description: Change an existing group's kind, why or revisit
+  - name: remove
+    description: Remove findings from a group, or the whole group when no findings are named
+createdAt: '2026-11-14T16:08:46.759Z'
+updatedAt: '2026-11-14T16:13:05.125Z'

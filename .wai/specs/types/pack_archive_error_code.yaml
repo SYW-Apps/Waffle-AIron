@@ -1,0 +1,34 @@
+kind: enum
+id: pack_archive_error_code
+name: PackArchiveErrorCode
+description: >-
+  Why a .wpack archive was refused: a closed set a caller (a registry, an install step) matches on,
+  so a change of wording never changes what it means.
+fields: []
+methods: []
+sourcePath: sdk/src/errors.ts
+values:
+  - name: NOT_A_PACK
+    description: The archive carries no wairon-pack.yaml envelope
+  - name: UNSAFE_PATH
+    description: >-
+      An entry is a symlink or another non-file kind, or its path is absolute, uses a backslash or
+      drive letter, contains '..' or escapes the destination
+  - name: LIMIT_EXCEEDED
+    description: >-
+      An entry or the whole archive is over a cap: entry size, compression ratio, path depth, entry
+      count or total size
+  - name: ENVELOPE_INVALID
+    description: The envelope is not a YAML mapping, or a required field is missing or mistyped
+  - name: FORMAT_VERSION_UNSUPPORTED
+    description: The envelope's format is newer than this SDK understands
+  - name: PACK_MANIFEST_INVALID
+    description: >-
+      The inner pack manifest (pack.yaml of a declarative pack, package.json of a code pack) is
+      missing, unreadable or not a mapping
+  - name: IDENTITY_MISMATCH
+    description: The envelope's name or version differ from the inner pack manifest's
+  - name: DIGEST_MISMATCH
+    description: A file's bytes do not match the digest the envelope carries for it
+createdAt: '2026-11-07T14:23:02.050Z'
+updatedAt: '2026-11-07T14:24:55.603Z'

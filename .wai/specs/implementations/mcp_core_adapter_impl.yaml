@@ -260,7 +260,49 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadGroupSpecs
+  - name: loadProjectExtensions
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadProjectExtensions
+  - name: requestReview
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: requestReview
+  - name: reviewStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: reviewStatus
+  - name: reviseRules
+    narrative:
+      - stepNumber: 1
+        description: Forward the rules change to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: reviseRules
+  - name: reviseDebt
+    narrative:
+      - stepNumber: 1
+        description: Forward the debt register change to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: reviseDebt
+  - name: reviseProject
+    narrative:
+      - stepNumber: 1
+        description: Forward the settings change to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: reviseProject
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:34:15.383Z'
+updatedAt: '2026-11-14T16:10:20.625Z'

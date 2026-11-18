@@ -195,9 +195,14 @@ methods:
   - name: getAgentBrief
     narrative:
       - stepNumber: 1
+        description: Read the practice entries this session picked
+        type: call
+        targetComponent: session_practice_store
+        targetMethod: entries
+      - stepNumber: 2
         description: >-
-          Compose the agent's live delegation brief via the core client adapter and shape the tool
-          response
+          Compose the agent's live delegation brief via the core client adapter, passing the
+          session's practice entries, and shape the tool response
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: composeAgentBrief
@@ -1033,6 +1038,129 @@ methods:
         type: return
         outcome: written
     symbol: sdd_add_group
+  - name: usePractices
+    narrative:
+      - stepNumber: 1
+        description: 'Load the governing packs: their declared practices'
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: Read the project's configuration for its practice selection
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: Does add or drop name a practice no loaded pack declares?
+        type: branch
+        condition: an id in add or drop is not a declared practice
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse, naming each unknown id and the practices the loaded packs declare; nothing is
+          changed
+        type: throw
+        error: unknown practice
+      - stepNumber: 5
+        description: Read the session's current entries
+        type: call
+        targetComponent: session_practice_store
+        targetMethod: entries
+      - stepNumber: 6
+        description: >-
+          Apply add then drop to the entries: an added id replaces any `!<id>` for it and is
+          appended once; a dropped id removes the id and appends `!<id>`, so it also drops the
+          project's own selection of it
+        type: local
+      - stepNumber: 7
+        description: Keep the new entries for the session
+        type: call
+        targetComponent: session_practice_store
+        targetMethod: replace
+      - stepNumber: 8
+        description: >-
+          Resolve the project's practices (practice_selection.resolve with nothing but the project
+          scope) and the ones in force for the session (the same, with the session's entries);
+          compose the guidance of each one in force under '## Practice "<id>" (pack "<name>")'; list
+          every declared practice without its guidance; and say whether this server keeps the
+          entries (a stdio session does, the hosted per-request server does not)
+        type: local
+      - stepNumber: 9
+        description: Return the report
+        type: return
+        outcome: the practice report
+    symbol: sdd_use_practices
+  - name: requestReview
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Gate the request on validation first, so the human is only ever asked to review a design
+          that validates: a lock request validates as the lock will (treatAllAsComplete, the bound
+          project's family), a review request as the tree stands
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: validateFamily
+      - stepNumber: 2
+        description: >-
+          Read the active rules, to keep the design half: a finding of a rule that judges code never
+          refuses the request, as it never refuses the lock — a design is reviewed and approved
+          before its code follows it
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 3
+        description: Does the design half have errors?
+        type: branch
+        condition: the validation reports any error from a rule that judges the design
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse without recording or showing anything: answer every error, so the agent fixes them
+          and asks again
+        type: return
+        outcome: refused; nothing recorded
+      - stepNumber: 5
+        description: Record the request through the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: requestReview
+      - stepNumber: 6
+        description: >-
+          Shape the answer: the request id and kind; the warnings the validation reported, which do
+          not block (as they do not block `wairon lock`) but should be fixed or explained in the
+          note; when a dev server runs, its URL and that the page shows the request now; otherwise
+          that no dev server runs for this project, so the agent should ask the human to open
+          `wairon dev` or run `wairon lock`; and that sdd_await_review waits for the answer
+        type: return
+        outcome: the receipt
+    symbol: sdd_request_review
+  - name: awaitReview
+    narrative:
+      - stepNumber: 1
+        description: Wait for the decision
+        type: loop
+        condition: the request is pending and the timeout (default 3600 seconds) has not passed
+        loopKind: while
+        over: the request is pending and the timeout (default 3600 seconds) has not passed
+        endStep: 3
+      - stepNumber: 2
+        description: Read the request brought up to date
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: reviewStatus
+      - stepNumber: 3
+        description: >-
+          While still pending, wait two seconds; every three minutes of waiting, send a progress
+          notification on the call's progress token (when the client sent one) so a long wait is
+          never cut off as idle
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer the request: its status and, when decided, the decision with its comment and every
+          note pinned to a spec; a timeout answers pending and says to wait again
+        type: return
+        outcome: the request as it stands
+    symbol: sdd_await_review
 conformance: anchored
 lint:
   allow:
@@ -1046,4 +1174,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-01T17:55:06.438Z'
+updatedAt: '2026-11-07T11:59:57.552Z'

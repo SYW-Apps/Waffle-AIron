@@ -22,6 +22,7 @@ import {
   readLockState,
   readLockRecord,
   loadProjectConfig,
+  reviewBranchConflict,
   projectFamily,
   type LockRecord,
   type MemberPin,
@@ -63,6 +64,8 @@ export interface LockOptions {
   subsystem?: string;
   /** List every changed spec in the summary instead of summarizing a long list. */
   all?: boolean;
+  /** Lock although a pending lock request was made on another branch than the checkout has now. */
+  force?: boolean;
 }
 
 /** Flags of the `wairon lock-check` merge gate (cli_lock_adapter LockCheckOptions). */
@@ -1020,7 +1023,7 @@ function membersAsPinned(record: LockRecord, members: ProjectApproval[]): boolea
  * may approve: a project requiring approved members with a member project not
  * approved, an external never pinned, or a use its pin does not record.
  */
-export function assertApprovable(members: ProjectApproval[]): void {
+export function assertApprovable(members: ProjectApproval[], force?: boolean): void {
   const config = loadProjectConfig();
   // A PROJECT member only: a part has no approval of its own — this lock is its approval.
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
@@ -1047,6 +1050,15 @@ export function assertApprovable(members: ProjectApproval[]): void {
       `external(s) used beyond their pin — ${unrecorded.map(([alias, uses]) => `"${alias}": ${uses.join(', ')}`).join('; ')} (used now, but not in the lock): `
         + 'nothing records what these uses are judged against, so a producer that broke one could not be told. '
         + `Re-pin first (\`wairon externals pin ${unrecorded.map(([alias]) => alias).join(' ')}\`), then lock. Nothing was written.`,
+    );
+  }
+  // A pending lock request made on another branch asks to approve a design this checkout does not have.
+  const conflict = force ? undefined : reviewBranchConflict();
+  if (conflict) {
+    const here = conflict.checkedOut ? `"${conflict.checkedOut}"` : 'a detached HEAD';
+    throw new LockRefusedError(
+      `the pending lock request was made on another branch: request ${conflict.requestId} was made on "${conflict.requestedOn}", and this checkout is on ${here}, `
+        + "so this lock would approve a design the request did not ask for. Switch to the request's branch, or pass --force to approve this checkout's design anyway. Nothing was written.",
     );
   }
 }
@@ -1077,7 +1089,7 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   if (restamped) return restamped;
   summarize(gate, members, captured, options);
   // Step 9: what no lock may approve, refused before anything is written.
-  assertApprovable(members);
+  assertApprovable(members, options.force);
   const config = loadProjectConfig();
   logger.blank();
   logger.warn('This records the current design as approved in .wai/lock.json (no spec file is rewritten) and refreshes the generated outputs of this project.');

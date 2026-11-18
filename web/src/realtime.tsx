@@ -30,8 +30,11 @@ const RealtimeStatusContext = createContext<RealtimeStatus>('connecting');
 export const useRealtime = () => useContext(RealtimeContext);
 export const useRealtimeStatus = () => useContext(RealtimeStatusContext);
 
-/** App-level heartbeat interval; a ping unanswered by the next tick = half-open → reconnect. */
+/** App-level heartbeat interval. */
 const HEARTBEAT_MS = 20_000;
+/** Ticks a ping may go unanswered before the socket counts as half-open and is reconnected:
+ *  one late pong (a server busy for a moment) is tolerated, two in a row are not. */
+const MISSED_PINGS_ALLOWED = 1;
 /** Reconnect attempts before the socket is considered offline (and surfaced to the user). */
 const OFFLINE_AFTER_ATTEMPTS = 3;
 
@@ -47,23 +50,39 @@ export function RealtimeProvider(props: { children: ReactNode }) {
     [],
   );
 
-  const pushSubscription = useCallback(() => {
+  // The channel list last sent on the open socket, and whether a send is queued. A page switch
+  // unsubscribes the old view and subscribes the new one in the same tick: both changes go out as
+  // one frame, and a list equal to the one the socket already holds is not sent again.
+  const lastSent = useRef<string | undefined>(undefined);
+  const pushQueued = useRef(false);
+  const sendSubscription = useCallback(() => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'subscribe', channels: activeChannels() }));
-    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const channels = activeChannels();
+    const key = [...channels].sort().join('|');
+    if (key === lastSent.current) return;
+    lastSent.current = key;
+    ws.send(JSON.stringify({ type: 'subscribe', channels }));
   }, [activeChannels]);
+  const pushSubscription = useCallback(() => {
+    if (pushQueued.current) return;
+    pushQueued.current = true;
+    queueMicrotask(() => {
+      pushQueued.current = false;
+      sendSubscription();
+    });
+  }, [sendSubscription]);
 
   useEffect(() => {
     stopped.current = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
-    let awaitingPong = false;
+    let unanswered = 0;
 
     const stopHeartbeat = () => {
       if (heartbeat) clearInterval(heartbeat);
       heartbeat = undefined;
-      awaitingPong = false;
+      unanswered = 0;
     };
 
     const scheduleReconnect = () => {
@@ -71,7 +90,9 @@ export function RealtimeProvider(props: { children: ReactNode }) {
       const n = attempts.current++;
       // Surface 'offline' only once reconnect keeps failing (e.g. a proxy blocking
       // the upgrade); a quick blip that recovers within a few tries never shows it.
-      setStatus(n >= OFFLINE_AFTER_ATTEMPTS ? 'offline' : 'connecting');
+      // A hidden page never counts as offline: the browser throttles or freezes its
+      // timers and socket, and it reconnects as soon as it is shown again.
+      setStatus(n >= OFFLINE_AFTER_ATTEMPTS && !document.hidden ? 'offline' : 'connecting');
       const delay = Math.min(30_000, 1000 * 2 ** n);
       reconnectTimer = setTimeout(connect, delay);
     };
@@ -89,18 +110,22 @@ export function RealtimeProvider(props: { children: ReactNode }) {
       wsRef.current = ws;
       ws.onopen = () => {
         attempts.current = 0;
-        awaitingPong = false;
+        unanswered = 0;
         setStatus('connected');
-        pushSubscription();
+        // A new socket holds no subscription yet: send the whole list.
+        lastSent.current = undefined;
+        sendSubscription();
         // App-level heartbeat: catches a HALF-OPEN socket (a proxy silently dropping
         // traffic) that never fires onclose. The server answers {type:'ping'} with
         // {type:'pong'}; any inbound frame counts as proof of life.
         stopHeartbeat();
         heartbeat = setInterval(() => {
           if (ws.readyState !== WebSocket.OPEN) return;
-          if (awaitingPong) {
+          // A hidden page's timers and frames are delayed by the browser, so a late
+          // pong there is not a dead socket.
+          if (unanswered > MISSED_PINGS_ALLOWED && !document.hidden) {
             try {
-              ws.close(); // last ping went unanswered → force a reconnect
+              ws.close(); // the pings went unanswered → force a reconnect
             } catch {
               /* ignore */
             }
@@ -108,14 +133,14 @@ export function RealtimeProvider(props: { children: ReactNode }) {
           }
           try {
             ws.send(JSON.stringify({ type: 'ping' }));
-            awaitingPong = true;
+            unanswered += 1;
           } catch {
             /* ignore */
           }
         }, HEARTBEAT_MS);
       };
       ws.onmessage = (ev) => {
-        awaitingPong = false; // any inbound frame proves the connection is alive
+        unanswered = 0; // any inbound frame proves the connection is alive
         let msg: { type?: string; channel?: string };
         try {
           msg = JSON.parse(String(ev.data));
@@ -141,9 +166,23 @@ export function RealtimeProvider(props: { children: ReactNode }) {
       };
     };
 
+    // Shown again after being hidden: reconnect at once instead of waiting out the
+    // backoff that built up while the browser held the page back.
+    const onVisible = () => {
+      if (document.hidden || stopped.current) return;
+      const ws = wsRef.current;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      attempts.current = 0;
+      setStatus('connecting');
+      connect();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     connect();
     return () => {
       stopped.current = true;
+      document.removeEventListener('visibilitychange', onVisible);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       stopHeartbeat();
       try {
@@ -152,7 +191,7 @@ export function RealtimeProvider(props: { children: ReactNode }) {
         /* ignore */
       }
     };
-  }, [pushSubscription]);
+  }, [sendSubscription]);
 
   const subscribe = useCallback(
     (channels: string[], handler: ChangeHandler) => {

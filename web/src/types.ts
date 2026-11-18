@@ -331,7 +331,6 @@ export interface InstanceHealthReport {
 
 export interface IdentityProviderConfig {
   id: string;
-  providerType: string;
   displayName?: string;
   issuerUrl?: string;
   clientId?: string;
@@ -470,4 +469,72 @@ export interface DevStartProblem {
 export interface DevStatus {
   devMode: boolean;
   problems: DevStartProblem[];
+}
+
+// ── Dev cockpit (`wairon dev`): review requests and page-run commands ─────────
+
+export type ReviewStatus = 'pending' | 'locked' | 'approved' | 'changes_requested' | 'superseded' | 'withdrawn';
+
+/** A reviewer's note pinned to one spec. */
+export interface ReviewNote {
+  specId: string;
+  note: string;
+}
+
+/** How the human answered a review request. */
+export interface ReviewDecision {
+  comment?: string;
+  notes: ReviewNote[];
+  decidedAt: string;
+  decidedBy: string;
+}
+
+/** An agent's request that the human review the design (`review`) or approve it with a lock (`lock`). */
+export interface ReviewRequest {
+  id: string;
+  kind: 'review' | 'lock' | string;
+  subsystem?: string;
+  note: string;
+  designId: string;
+  requestedAt: string;
+  status: ReviewStatus;
+  decision?: ReviewDecision;
+  /** The branch the checkout had when the request was made. */
+  branch?: string;
+  commit?: string;
+}
+
+/** A direct member project's approval state (mirrors the server's ProjectApproval). */
+export type MemberApprovalState = 'approved' | 'drifted' | 'never';
+export interface MemberApproval {
+  /** The member's key (its location in the family). */
+  key: string;
+  alias?: string;
+  projectId?: string;
+  state: MemberApprovalState;
+  as?: 'part' | 'project';
+  /** False when its own tree holds nothing to approve. */
+  approvable?: boolean;
+  /** Why the approval on record does not cover it, when drifted. */
+  owed?: string;
+  pinned?: 'matches' | 'moved' | 'unpinned';
+}
+
+/** One entry of GET /web/dev/reviews: the request, and the member project it was made in (its alias), when not the served one. */
+export interface DevReview {
+  request: ReviewRequest;
+  member?: string;
+}
+
+/** What a human command run from the dev page printed. */
+export interface DevCommandResult {
+  command: string;
+  ok: boolean;
+  output: string[];
+}
+
+/** The answer to deciding a review request; the request stays pending when its lock failed. */
+export interface DevReviewDecision {
+  request: ReviewRequest;
+  lock?: DevCommandResult;
 }

@@ -969,7 +969,7 @@ describe('landscape visibility: breadcrumbs + two-tenant invisibility', () => {
     expect(g.edges.some((e) => e.from === `unit:${root.id}` && e.to === `unit:${team.id}`)).toBe(true);
   });
 
-  it('the /web graph reshape carries actionability to the environment canvas', () => {
+  it('the /web graph reshape carries actionability to the environment canvas', async () => {
     createProjectRecord(dataDir, 'bc2-mine');
     const root = upsertUnit(cfg, MASTER, unitRec({ name: 'Root2', slug: 'root2' }));
     const team = upsertUnit(cfg, MASTER, unitRec({ name: 'Team2', slug: 'team2', parentId: root.id }));
@@ -983,7 +983,7 @@ describe('landscape visibility: breadcrumbs + two-tenant invisibility', () => {
       createdAt: '',
       expiresAt: new Date(Date.now() + 3600_000).toISOString(),
     });
-    const web = getWebGraph(cfg, session.id, 'landscape', '', 1);
+    const web = await getWebGraph(cfg, session.id, 'landscape', '', 1);
     const unitNode = web.nodes.find((n) => n.kind === 'unit' && n.id === `unit:${team.id}`);
     expect(unitNode?.actionable).toBe(false);
     const projNode = web.nodes.find((n) => n.kind === 'project' && n.projectId === 'bc2-mine');

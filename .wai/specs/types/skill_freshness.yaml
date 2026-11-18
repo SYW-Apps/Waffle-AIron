@@ -3,7 +3,8 @@ id: skill_freshness
 name: SkillFreshness
 description: >-
   How one target's installed SDD skills compare with what an export would write now: the skills
-  missing on disk, those that differ, and those that match.
+  missing on disk, those that differ, those that match, and, for a target the wairon plugin serves,
+  the built-in skills still copied into the project, which the agent would see twice.
 fields:
   - name: dir
     type: string?
@@ -21,7 +22,14 @@ fields:
     type: list<string>
     description: Skills present and identical to what an export would write
     optional: false
+  - name: duplicate
+    type: list<string>
+    description: >-
+      For a target the wairon plugin serves: the built-in skills still present in the project's
+      skills directory. Empty for any other target. A plugin target owes no built-in skill, so none
+      of them is ever missing or stale.
+    optional: false
 methods: []
 sourcePath: src/core/skills.ts
 createdAt: '2026-09-25T21:13:41.731Z'
-updatedAt: '2026-10-04T10:21:06.688Z'
+updatedAt: '2026-11-15T02:12:51.816Z'

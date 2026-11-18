@@ -221,6 +221,26 @@ methods:
       - code: POLICY_REQUIREMENT_INVALID
         severity: error
         summary: A project's composition.requirePolicies names a pack range that does not parse
+  - name: practiceReferences
+    description: >-
+      Rule practice-references. Every practice the project's selection names (with or without a
+      leading `!`) is declared by a loaded pack (UNKNOWN_PRACTICE), and every scope key names
+      something that exists — a subsystem or component of this tree, or a known agent role
+      (UNKNOWN_PRACTICE_SCOPE). A selection that names nothing real would otherwise do nothing,
+      silently.
+    signature: 'practiceReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_PRACTICE
+        severity: warning
+        summary: The practice selection names a practice no loaded pack declares
+      - code: UNKNOWN_PRACTICE_SCOPE
+        severity: warning
+        summary: The practice selection names a subsystem, component or role that does not exist
 status: complete
 createdAt: '2026-09-14T06:07:43.654Z'
-updatedAt: '2026-10-18T19:03:19.347Z'
+updatedAt: '2026-11-06T21:44:39.258Z'

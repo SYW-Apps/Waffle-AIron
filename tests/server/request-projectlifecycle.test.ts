@@ -312,6 +312,28 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
     expect(got.status).toBe('pending');
   }, 20_000);
 
+  it('sdd_request_review (kind lock) is the hosted lock request; sdd_await_review waits on it; kind review is refused', async () => {
+    const token = mintToken({ id: 'agent-review', projects: ['demo'], userId: 'u-review' });
+    allow('u-review', 'project:write', 'project', 'demo', 'approval');
+
+    const refused = (await (await post(call('sdd_request_review', { kind: 'review', note: 'look' }), token)).json()) as RpcResponse;
+    expect(refused.result?.isError).toBe(true);
+    expect(toolText(refused)).toContain('local only');
+    expect(listApprovalRequests(dataDir)).toHaveLength(0);
+
+    const res = await post(call('sdd_request_review', { kind: 'lock', note: 'approve it' }), token);
+    const jsonBody = (await res.json()) as RpcResponse;
+    expect(jsonBody.result?.isError).toBeFalsy();
+    const outcome = JSON.parse(toolText(jsonBody)) as ProjectActionOutcome;
+    expect(outcome.status).toBe('pending-approval');
+    expect(outcome.approval?.kind).toBe('project:lock');
+
+    const awaited = (await (await post(call('sdd_await_review', { id: outcome.approval!.id, timeoutSeconds: 1 }), token)).json()) as RpcResponse;
+    expect(awaited.result?.isError).toBeFalsy();
+    const got = JSON.parse(toolText(awaited)) as { id: string; status: string };
+    expect(got).toMatchObject({ id: outcome.approval!.id, status: 'pending' });
+  }, 30_000);
+
   it('sdd_host_withdraw_request: the requester withdraws a pending request; a stranger is refused', async () => {
     const token = mintToken({ id: 'agent-withdraw', projects: ['demo'], userId: 'u-withdraw' });
     allow('u-withdraw', 'project:write', 'project', 'demo', 'approval');

@@ -86,9 +86,9 @@ export function CanvasRouter() {
           <div className="canvas-view">
             <div className="canvas-bar">
               <button
-                className="btn btn-ghost btn-sm"
+                className="syw-button syw-button--ghost btn-sm"
                 onClick={() => navigate('/canvas' + (unitPrefix ? '/' + unitPrefix : ''))}
-                title="Back to the environment"
+                data-tip="Back to the environment"
               >
                 ← Environment
               </button>

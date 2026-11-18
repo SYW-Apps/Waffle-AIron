@@ -1,0 +1,121 @@
+id: idev_cockpit_orchestrator
+name: Dev Cockpit Orchestrator Interface
+description: Reviews, human commands and the family panel on the local development server.
+component: dev_cockpit_orchestrator
+methods:
+  - name: reviews
+    description: >-
+      The pending review requests of the served project and of each direct member project, each
+      member's read at its own root and tagged with its alias.
+    signature: 'reviews(sessionId: string): list<dev_review>'
+    returns: list<dev_review>
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+    effect: write
+  - name: decide
+    description: >-
+      The human's answer to a pending request: `locked` runs the CLI's lock (of the request's
+      subsystem when it names one) and records the request locked only when the lock succeeded,
+      answering the lock's output either way; `approved` and `changes_requested` (with a comment and
+      per-spec notes) are recorded as given.
+    signature: >-
+      decide(sessionId: string, id: string, outcome: ReviewStatus, comment?: string, notes?:
+      list<ReviewNote>, member?: string): async DevReviewDecision
+    returns: async DevReviewDecision
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: id
+        type: string
+        description: The request id
+      - name: outcome
+        type: ReviewStatus
+        description: locked, approved or changes_requested
+      - name: comment
+        type: string
+        description: The reviewer's comment
+        optional: true
+      - name: notes
+        type: list<ReviewNote>
+        description: Notes pinned to specs
+        optional: true
+      - name: member
+        type: string
+        description: >-
+          The alias of the direct member project the request was made in; the request is read,
+          decided and, for a lock, locked at that member's root
+        optional: true
+    effect: write
+  - name: run
+    description: >-
+      Run one human command the CLI handed the server (`lock`, optionally of one subsystem,
+      `generate`, or `doctor`) and answer what it printed. One command runs at a time: a second one
+      while another runs is refused.
+    signature: >-
+      run(sessionId: string, command: string, subsystem?: string, member?: string): async
+      DevCommandResult
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: command
+        type: string
+        description: '`lock`, `generate` or `doctor`'
+      - name: subsystem
+        type: string
+        description: For lock, the one subsystem to re-approve
+        optional: true
+      - name: member
+        type: string
+        description: >-
+          With lock only: the alias of a direct member project, locked at its own root as `wairon
+          lock` run in its folder would
+        optional: true
+    effect: write
+  - name: approval
+    description: >-
+      The served project's approval state: whether the design moved since the last lock, the moved
+      specs, and who locked it when. Refused outside the local development server.
+    signature: 'approval(sessionId: string): dev_approval'
+    returns: dev_approval
+    params:
+      - name: sessionId
+        type: string
+  - name: family
+    description: >-
+      Run one family command from the dev page's family panel (externals pin or live status, network
+      declare or undeclare, or a member command) through the commands the CLI handed the server, and
+      answer what it printed. The command is checked first: its positional arguments must match the
+      action's, only the options the action takes are accepted, and no argument or option value may
+      start with `-`. A preview runs the CLI's --report and writes nothing; applying a migration
+      that asks for confirmation runs it with --yes. One command runs at a time, shared with `run`.
+    signature: 'family(sessionId: string, command: dev_family_command): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: command
+        type: dev_family_command
+        description: The family command
+    effect: write
+  - name: producers
+    description: >-
+      The projects on disk the served project reads, for the dev server to watch: every member whose
+      location is a folder (contained or a `../` sibling), and every external whose source is a
+      folder. Git and hosted sources are left out: they are not on disk. A configuration that cannot
+      be read answers none.
+    signature: 'producers(root: string): list<dev_producer>'
+    returns: list<dev_producer>
+    params:
+      - name: root
+        type: string
+        description: The served project's root
+    effect: read
+status: complete
+createdAt: '2026-11-07T02:41:40.170Z'
+updatedAt: '2026-11-12T01:02:29.078Z'

@@ -28,6 +28,7 @@ dependsOn:
   - files_adapter
   - http_client_adapter
   - process_adapter
+  - agent_plugin_adapter
 lint:
   allow:
     - code: GOD_COMPONENT
@@ -57,4 +58,4 @@ lint:
         responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-31T23:20:57.519Z'
+updatedAt: '2026-11-15T02:13:14.604Z'

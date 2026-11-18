@@ -65,6 +65,9 @@ import {
   renameField,
   renameParam,
   loadProjectConfig,
+  loadProjectExtensions,
+  requestReview as recordReviewRequest,
+  reviewStatus as readReviewRequest,
   getStatusReport,
   approvalVerdict,
   composeAgentBrief,
@@ -96,15 +99,19 @@ import { removeExternal as dropExternal, updateExternalUse as changeExternalUse 
 import { listConsumers as externalConsumers, diffSurface as surfaceDiff } from './adapters/surfaces.js';
 // The read-only network tools' workflows (mcp_network_orchestrator).
 import { flows as networkFlows, explain as explainNetworkFlow, declare as declareNetwork } from './network.js';
+import { reviseRules as reviseProjectRules, reviseDebt as reviseProjectDebt, reviseProject as reviseProjectSettings } from './configuration.js';
+import { PackSelectionSchema, TargetConfigSchema, CompositionConfigSchema, type PackSelection, type TargetConfig, type CompositionConfig } from '../models/project.js';
 import type { NetworkFlow } from './adapters/network.js';
 import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
-import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork } from './adapters/validator.js';
+import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork, listRules } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredExternals, declaredMembers } from '../models/project.js';
 import { narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
 import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
+import { practiceSections, resolvePractices } from '../models/practices.js';
+import { SessionPracticeStore, type PracticeReport } from './session-practices.js';
 // The pending-transaction banner sdd_get_status and sdd_validate_tree lead
 // with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
 import { pending as pendingMigrations, run as runMigration, scaffold as scaffoldSessions } from './migrations.js';
@@ -1662,9 +1669,9 @@ function reg<Args extends Record<string, unknown>>(
      */
     outputSchema?: Record<string, z.ZodTypeAny>;
   },
-  cb: (args: Args) => CallToolResult,
+  cb: (args: Args, extra: ToolExtra) => CallToolResult | Promise<CallToolResult>,
 ): void {
-  const guarded = (args: Args): CallToolResult => {
+  const guarded = (args: Args, extra: ToolExtra): CallToolResult | Promise<CallToolResult> => {
     // The standing guard. A tree an older major wrote must be upgraded by the
     // human first: the tool runs nothing and answers why.
     const refusal = standingRefusal(name);
@@ -1680,7 +1687,11 @@ function reg<Args extends Record<string, unknown>>(
     // A spec write is a read-modify-write of the tree: serialized across
     // processes by the tree's write lock (which also re-reads the tree), so two
     // sessions writing one spec land both writes instead of losing one.
-    const answered = SPEC_WRITE_TOOLS.has(name) ? underTreeLock(() => cb(args)) : cb(args);
+    const answered = SPEC_WRITE_TOOLS.has(name) ? underTreeLock(() => cb(args, extra) as CallToolResult) : cb(args, extra);
+    if (answered instanceof Promise) return answered.then((r) => finish(r, freshness));
+    return finish(answered, freshness);
+  };
+  const finish = (answered: CallToolResult, freshness: BuildFreshness): CallToolResult => {
     const fresh = freshness.state === 'fresh'
       ? answered
       : markStale(answered, freshness, name === 'sdd_get_status' ? 'lead' : 'trail');
@@ -1752,6 +1763,68 @@ const statusInput = z.enum(STATUS_VALUES).optional().describe(
 // ---------------------------------------------------------------------------
 
 const SKILL_RESOURCE_MIME = 'text/markdown';
+
+/** What the SDK hands a tool handler beside its arguments: the cancel signal, the call's metadata and the way to notify the client. */
+interface ToolExtra {
+  signal?: AbortSignal;
+  _meta?: { progressToken?: string | number };
+  sendNotification?: (notification: { method: string; params?: Record<string, unknown> }) => Promise<void>;
+}
+
+/** How a review wait polls and reports; the defaults are the tool's, a test passes shorter ones. */
+export interface ReviewWaitTiming {
+  /** Milliseconds between two reads of the request. */
+  pollMs: number;
+  /** Milliseconds between two progress notifications. */
+  progressMs: number;
+}
+
+const REVIEW_WAIT_TIMING: ReviewWaitTiming = { pollMs: 2000, progressMs: 3 * 60 * 1000 };
+
+/**
+ * mcp_orchestrator.awaitReview: wait for a review request to be decided and
+ * answer it as it stands. While it is pending, read it every `pollMs`; every
+ * `progressMs` send a progress notification on the call's progress token (when
+ * the client sent one) so a long wait is never cut off as idle.
+ */
+export async function awaitReview(
+  id: string,
+  timeoutSeconds: number,
+  extra: ToolExtra = {},
+  timing: ReviewWaitTiming = REVIEW_WAIT_TIMING,
+): Promise<CallToolResult> {
+  try {
+    const started = Date.now();
+    let lastProgress = started;
+    let request = readReviewRequest(id);
+    while (request.status === 'pending' && Date.now() - started < timeoutSeconds * 1000 && !extra.signal?.aborted) {
+      await new Promise((resolve) => setTimeout(resolve, timing.pollMs));
+      request = readReviewRequest(id);
+      const token = extra._meta?.progressToken;
+      if (request.status === 'pending' && token !== undefined && extra.sendNotification && Date.now() - lastProgress >= timing.progressMs) {
+        lastProgress = Date.now();
+        try {
+          await extra.sendNotification({
+            method: 'notifications/progress',
+            params: { progressToken: token, progress: Math.round((lastProgress - started) / 1000), message: `Still waiting for the human to answer review request ${id}` },
+          });
+        } catch { /* a notification that cannot be sent never ends the wait */ }
+      }
+    }
+    if (request.status === 'pending') {
+      return structured(`Review request ${id} is still pending after ${timeoutSeconds} seconds: the human has not answered. Call sdd_await_review again to keep waiting.`, { request, timedOut: true });
+    }
+    const d = request.decision;
+    const lines = [`Review request ${id} (${request.kind}) is ${request.status}${d ? `, decided by ${d.decidedBy} at ${d.decidedAt}` : ''}.`];
+    if (request.status === 'superseded') lines.push('The design changed after the request was made, so it no longer describes what the human would approve: ask again for the design as it stands.');
+    if (d?.comment) lines.push(`Comment: ${d.comment}`);
+    for (const n of d?.notes ?? []) lines.push(`Note on ${n.specId}: ${n.note}`);
+    return structured(lines.join('\n'), { request, timedOut: false });
+  } catch (e) {
+    return errMessage(e);
+  }
+}
+
 
 
 /** Resolve an MCP resource URI (wairon-skill://<id>) back to its skill id. */
@@ -2773,7 +2846,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; transport?: Transport; abi?: string; invokedBy?: { kind: 'entry'; caller?: string; scope?: 'outside' | 'network' }; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown>; variant?: string; status?: StatedStatus }>(server,
     'sdd_add_component',
     {
-      description: 'Add an L2 Component under a subsystem. A Portal states its `transport` (the retired portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess, and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its scope; the tool never defaults an entry, because a blanket entry the author did not decide would hide unreached verbs. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (state `variant: gateway` here). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): model the Repository recipe — a Store + Registry (write) + Index (read), plus a Query for computed reads over the Store, owned by a Repository facade consumers depend on; a deliberately standalone Store is the sanctioned lightweight form (workflow-layer consumers + lint.allow on UNOWNED_STORE). Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, patterns and externalLinks — and a variant this input leaves out — are carried forward; edit those with sdd_update_spec. The stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and every gate notice the write raised, each as its own entry.',
+      description: 'Add an L2 Component under a subsystem. A Portal states its `transport` (the retired portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess, and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its scope; the tool never defaults an entry, because a blanket entry the author did not decide would hide unreached verbs. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (state `variant: gateway` here). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): the default is one Store (read logic and workflows may depend on it directly); add a Repository (owning the Store, optional Indexes kept in memory with no IO, Queries, a backend Adapter) only when lookups or a backend are worth keeping private behind one facade. Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, patterns and externalLinks — and a variant this input leaves out — are carried forward; edit those with sdd_update_spec. The stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and every gate notice the write raised, each as its own entry.',
       inputSchema: componentInput,
       outputSchema: specWriteReceiptOutput,
     },
@@ -3325,7 +3398,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       },
       outputSchema: validateTreeOutput,
     },
-    ({ subsystem, recursive, family }) => {
+    async ({ subsystem, recursive, family }) => {
       // Step 1: the pending-transaction banner first — a crash mid-swap may
       // leave the tree below unreadable — each line a notice, never an error.
       const banner = pendingBanner();
@@ -3346,7 +3419,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // 3/5: the family run (within the request's reach, which it never
         // widens) or the owner's gate.
         const familyRun = selectsFamily(options, declaredMembers(config).length > 0, declaredExternals(config).length > 0);
-        const result = familyRun ? validateFamily(options) : validateProject(options);
+        const result = familyRun ? validateFamily(options) : await validateProject(options);
         // Step 6: the advisory live comparison of every external the run did
         // not compose (a family run hands over the aliases it composed in
         // reach) — marked advisory, never part of `valid`.
@@ -3995,6 +4068,168 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  reg<{ set?: Record<string, unknown>; unset?: string[]; add?: Record<string, string[]>; remove?: Record<string, string[]>; why?: string; dryRun?: boolean }>(server,
+    'sdd_update_rules',
+    {
+      description: 'Change the bound project\'s `rules` in .wai/project.yaml granularly — `set` (path: value, e.g. {"conformance.requireCode": true, "sddRuleSeverity.UNUSED_COMPONENT": "notice"}), `unset`, and `add`/`remove` on list fields (conformance.unclaimed, sourceRoots, exclude, testRoots, metaAgentTags); paths are relative to `rules`. Each value is checked against the rules schema. Setting a rule below its default severity is a LOWERING: it needs `why`, which is written beside it, and every run keeps reporting it (RULE_LOWERED) — quieting a rule is never a fix for its finding, only a decision the human approves. The debt register is not changed here (sdd_carry_findings). The rules are part of the approval, so the human re-locks after a written change. Use it instead of editing .wai/project.yaml by hand. Answers the rules before and after and every rule lowered; dryRun writes nothing. A tree-scoped write.',
+      inputSchema: {
+        set: z.record(z.string(), z.unknown()).optional().describe('Path (relative to rules, dotted) to value: each value is written at its path and checked against the rules schema'),
+        unset: z.array(z.string()).optional().describe('Paths removed, so the setting falls back to its default'),
+        add: z.record(z.string(), z.array(z.string())).optional().describe('List path to entries appended when absent'),
+        remove: z.record(z.string(), z.array(z.string())).optional().describe('List path to entries removed'),
+        why: z.string().optional().describe('Why the change lowers a rule below its default severity; required when it does, and written as that code\'s severityReasons entry'),
+        dryRun: z.boolean().optional().describe('Answer what the change would do and write nothing'),
+      },
+    },
+    ({ dryRun, ...change }) => {
+      try {
+        const revision = reviseProjectRules(change, dryRun ?? false);
+        const lowered = revision.lowered.map((l) => `${l.code}: ${l.from} -> ${l.to} (${l.why ?? 'no reason'})`);
+        const head = !revision.wrote
+          ? (dryRun ? 'Dry run: nothing was written.' : 'The rules already read that way: nothing was written.')
+          : 'Wrote the rules to .wai/project.yaml.';
+        const text = [
+          head,
+          lowered.length > 0 ? `Lowered below their default (every run reports each as RULE_LOWERED with its reason): ${lowered.join('; ')}.` : 'No rule was newly lowered.',
+          revision.wrote ? 'The rules are part of the approval: the human re-locks. Run sdd_validate_tree.' : '',
+          JSON.stringify({ before: revision.before, after: revision.after }, null, 2),
+        ].filter((line) => line !== '').join('\n');
+        return structured(text, { ...revision });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ action: 'add' | 'extend' | 'revise' | 'remove'; group?: number; kind?: 'drift' | 'undecided' | 'unreadable'; why?: string; revisit?: string | null; findings?: { code: string; spec: string; at: string; covers?: string[] }[]; dryRun?: boolean }>(server,
+    'sdd_carry_findings',
+    {
+      description: 'Change the conformance debt register (`rules.conformance.carried`) in .wai/project.yaml — `add` a reason group (kind: drift | undecided | unreadable, why, optional revisit) with its findings ({code, spec, at, covers?}), `extend` a group with findings, `revise` a group\'s kind, why or revisit, or `remove` findings from a group (the whole group when none are named). Groups are addressed by position; dryRun shows which group that is. Only a code a rule declares carryable may be carried. An entry is the claim that a finding is right and unpaid, never that it is wrong — for that, fix the spec or the code. Run sdd_validate_tree after it: it names a unit a carried finding reports that the entry does not list, and an entry that stopped applying. Use it instead of editing .wai/project.yaml by hand. Answers the register before and after. A tree-scoped write.',
+      inputSchema: {
+        action: z.enum(['add', 'extend', 'revise', 'remove']).describe('What the change does'),
+        group: z.number().int().min(0).optional().describe('The reason group\'s position (0-based); required for extend, revise and remove'),
+        kind: z.enum(['drift', 'undecided', 'unreadable']).optional().describe('The group\'s kind: required for add, optional for revise'),
+        why: z.string().optional().describe('The group\'s reason: required for add, optional for revise'),
+        revisit: z.string().nullable().optional().describe('What would settle a provisional classification; null on revise removes it'),
+        findings: z.array(z.object({
+          code: z.string().describe('The finding\'s issue code, which a rule must declare carryable'),
+          spec: z.string().describe('The spec the finding is anchored to'),
+          at: z.string().describe('The site inside that spec the finding names'),
+          covers: z.array(z.string()).optional().describe('The units an aggregating finding covers'),
+        })).optional().describe('The findings to add (add, extend) or remove (remove; by code, spec and at)'),
+        dryRun: z.boolean().optional().describe('Answer what the change would do and write nothing'),
+      },
+    },
+    ({ dryRun, ...change }) => {
+      try {
+        const revision = reviseProjectDebt(change, dryRun ?? false);
+        const head = !revision.wrote
+          ? (dryRun ? 'Dry run: nothing was written.' : 'The register already reads that way: nothing was written.')
+          : 'Wrote the debt register to .wai/project.yaml.';
+        const text = [
+          head,
+          `The register held ${revision.before.length} reason group${revision.before.length === 1 ? '' : 's'} and now holds ${revision.after.length}.`,
+          'Run sdd_validate_tree: it names a unit a carried finding reports that its entry does not list, and an entry that stopped applying.',
+          JSON.stringify({ before: revision.before, after: revision.after }, null, 2),
+        ].join('\n');
+        return structured(text, { ...revision });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ name?: string; description?: string; projectType?: string; executionTier?: string; selectPacks?: PackSelection[]; deselectPacks?: string[]; useGlobalPacks?: boolean; targets?: TargetConfig[]; composition?: CompositionConfig; dryRun?: boolean }>(server,
+    'sdd_configure_project',
+    {
+      description: 'Change the bound project\'s own settings in .wai/project.yaml — name, description, projectType, execution tier, packs to select and deselect, useGlobalPacks, targets and composition; each only when stated. Members, externals, network, practices and rules have their own tools. Answers the configuration before and after and the parts of the approval the change moves (packs, composition, projectType), which the human re-locks. Use it instead of editing .wai/project.yaml by hand. dryRun writes nothing. A tree-scoped write.',
+      inputSchema: {
+        name: z.string().optional().describe('The project\'s human-readable name'),
+        description: z.string().optional().describe('The project\'s description'),
+        projectType: z.string().optional().describe('The governing profile (backend, frontend, ...)'),
+        executionTier: z.string().optional().describe('execution.tier, the execution-budget dial'),
+        selectPacks: z.array(PackSelectionSchema).optional().describe('Packs to select (a re-selected pack moves last)'),
+        deselectPacks: z.array(z.string()).optional().describe('Pack names to deselect'),
+        useGlobalPacks: z.boolean().optional().describe('extensions.useGlobalPacks'),
+        targets: z.array(TargetConfigSchema).optional().describe('The output targets, replacing the stored list'),
+        composition: CompositionConfigSchema.optional().describe('The composition policy, replacing the stored one'),
+        dryRun: z.boolean().optional().describe('Answer what the change would do and write nothing'),
+      },
+    },
+    ({ dryRun, ...change }) => {
+      try {
+        const revision = reviseProjectSettings(change, dryRun ?? false);
+        const head = !revision.wrote
+          ? (dryRun ? 'Dry run: nothing was written.' : 'The configuration already reads that way: nothing was written.')
+          : 'Wrote the project settings to .wai/project.yaml.';
+        const text = [
+          head,
+          revision.approvalMoves.length > 0
+            ? `The change moves what the lock approves (${revision.approvalMoves.join(', ')}): the human re-locks.`
+            : 'The change moves nothing the lock approves.',
+          JSON.stringify({ before: revision.before, after: revision.after }, null, 2),
+        ].join('\n');
+        return structured(text, { ...revision });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  // The practice entries this session picked (sdd_use_practices): one store per
+  // server instance, so a stdio session keeps them and two sessions never share.
+  const sessionPractices = new SessionPracticeStore();
+
+  reg<{ add?: string[]; drop?: string[] }>(server,
+    'sdd_use_practices',
+    {
+      description: 'List the practices the loaded extension packs declare and pick the ones in force for THIS session: add a practice on top of the project\'s selection (project.yaml `practices`), or drop one, the project\'s own included. Answers the practices available, the project\'s, this session\'s entries, those now in force and their guidance. A local (stdio) session keeps its picks, and the briefs it fetches afterwards with sdd_get_agent_brief carry them; the hosted server is built per request, so there the answer covers that call only (remembered: false). Never changes project.yaml. Call with no arguments to only list.',
+      inputSchema: {
+        add: z.array(z.string().min(1)).optional().describe('Practice ids to put in force for this session'),
+        drop: z.array(z.string().min(1)).optional().describe('Practice ids to take out of force for this session, the project\'s own included'),
+      },
+    },
+    ({ add, drop }) => {
+      try {
+        // Steps 1-2: the declared practices and the project's selection.
+        const declared = loadProjectExtensions().practices ?? [];
+        const selection = loadProjectConfig()?.practices;
+        // Steps 3-4: refuse an id no loaded pack declares, changing nothing.
+        const ids = new Set(declared.map((p) => p.id));
+        const unknown = [...(add ?? []), ...(drop ?? [])].filter((id) => !ids.has(id));
+        if (unknown.length > 0) {
+          const offered = declared.length > 0 ? `The loaded packs declare: ${declared.map((p) => p.id).join(', ')}.` : 'No loaded pack declares any practice.';
+          return errText(`Unknown practice ${unknown.map((id) => `"${id}"`).join(', ')}: no loaded extension pack declares it. ${offered} Nothing was changed.`);
+        }
+        // Steps 5-7: apply add then drop to the session's entries and keep them.
+        let entries = sessionPractices.entries();
+        for (const id of add ?? []) {
+          entries = entries.filter((e) => e !== id && e !== `!${id}`);
+          entries.push(id);
+        }
+        for (const id of drop ?? []) {
+          entries = entries.filter((e) => e !== id && e !== `!${id}`);
+          entries.push(`!${id}`);
+        }
+        sessionPractices.replace(entries);
+        // Steps 8-9: the report.
+        const project = resolvePractices(selection);
+        const inForce = resolvePractices(selection, { session: entries });
+        const report: PracticeReport = {
+          available: declared.map((p) => ({ id: p.id, description: p.description, pack: p.pack })),
+          project,
+          session: entries,
+          inForce,
+          guidance: practiceSections(inForce, declared) ?? '',
+          remembered: !options.hostedTools,
+        };
+        return json(report);
+      } catch (e) {
+        return errText(String(e));
+      }
+    },
+  );
+
   reg<{ agentId: string }>(server,
     'sdd_get_agent_brief',
     {
@@ -4005,11 +4240,74 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
     ({ agentId }) => {
       try {
-        return json(composeAgentBrief(agentId));
+        // The brief carries the practices this session picked.
+        return json(composeAgentBrief(agentId, sessionPractices.entries()));
       } catch (e) {
         return errText(String(e));
       }
     },
+  );
+
+  // ── The review handshake: the agent asks, the human decides ─────────────
+  reg<{ kind: 'review' | 'lock'; note: string; subsystem?: string }>(server,
+    'sdd_request_review',
+    {
+      description: 'Ask the human to review the design (kind "review": feedback only) or to approve it with a lock (kind "lock"; optionally one subsystem), with a note saying what changed and what to look at. Validates first and refuses, recording nothing, while the design has errors; otherwise records the request and answers where the human sees it (the running `wairon dev` page, or a line to ask the human to open it or run `wairon lock`). Never locks: only the human approves. Follow with sdd_await_review to hear the answer.',
+      inputSchema: {
+        kind: z.enum(['review', 'lock']).describe('"review" for feedback only, "lock" to ask for approval'),
+        note: z.string().min(1).describe('What changed and what to review, shown to the human'),
+        subsystem: z.string().min(1).optional().describe('For a lock request: the one subsystem to re-approve'),
+      },
+    },
+    ({ kind, note, subsystem }) => {
+      try {
+        if (kind === 'review' && subsystem) return errText('sdd_request_review: a subsystem goes with kind "lock"; a review request covers the whole design.');
+        // Step 1: the validation gate. A lock request is judged as the lock will judge it.
+        const config = loadProjectConfig();
+        if (!config) throw new ProjectNotInitializedError();
+        const result = validateFamily({
+          rules: config.rules,
+          projectType: config.projectType,
+          ...(kind === 'lock' ? { treatAllAsComplete: true } : {}),
+          ...(subsystem ? { scopeSubsystem: subsystem } : {}),
+        });
+        // Step 2: the design half — a finding of a rule that judges code never refuses the request, as it never refuses the lock.
+        const codeCodes = new Set(listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
+        const design = result.issues.filter((i) => !codeCodes.has(i.code));
+        // Steps 3-4: every error is answered, nothing is recorded.
+        const errors = design.filter((i) => i.severity === 'error');
+        if (errors.length > 0) {
+          const listed = errors.map((i) => `- [${i.code}] ${i.message}`).join('\n');
+          return errText(`sdd_request_review refused: the design has ${errors.length} error(s), so the human is not asked yet. Fix them and ask again; nothing was recorded.\n${listed}`);
+        }
+        const warnings = design.filter((i) => i.severity === 'warning');
+        // Step 5: record.
+        const receipt = recordReviewRequest(kind, note, subsystem);
+        // Step 6: the answer.
+        const where = receipt.shownAt
+          ? `The \`wairon dev\` page at ${receipt.shownAt} shows it now.`
+          : 'No dev server runs for this project: ask the human to open `wairon dev` (it shows the request) or to run `wairon lock`.';
+        const warned = warnings.length > 0
+          ? ` ${warnings.length} warning(s) do not block the request (as they do not block \`wairon lock\`); fix them or explain them in the note:\n${warnings.map((i) => `- [${i.code}] ${i.message}`).join('\n')}\n`
+          : '';
+        const text = `Requested a ${kind}${subsystem ? ` of subsystem "${subsystem}"` : ''} (request ${receipt.request.id}).${warned} ${where} Call sdd_await_review with id "${receipt.request.id}" to wait for the answer.`;
+        return structured(text, { ...receipt, warnings: warnings.length });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ id: string; timeoutSeconds?: number }>(server,
+    'sdd_await_review',
+    {
+      description: 'Wait for the human to answer a review request made with sdd_request_review: blocks until it is decided (locked, approved or changes_requested, with the human\'s comment and the notes pinned to specs), superseded (the design changed after the request) or withdrawn, or until the timeout (default 3600 seconds), when it answers pending and you wait again. A lock made anywhere (the terminal included) that covers the requested design answers a lock request.',
+      inputSchema: {
+        id: z.string().min(1).describe('The request id sdd_request_review answered'),
+        timeoutSeconds: z.number().int().positive().optional().describe('How long to wait; default 3600'),
+      },
+    },
+    ({ id, timeoutSeconds }, extra) => awaitReview(id, timeoutSeconds ?? 3600, extra),
   );
 
   // ── Chained-subproject bind-time announcement ─────────────────────────────

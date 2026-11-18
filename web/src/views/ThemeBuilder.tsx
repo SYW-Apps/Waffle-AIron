@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SywSegmented } from '@syw/design-react';
 import { useToast } from '../ui';
 import { useSettings } from '../settings';
 import {
@@ -154,7 +155,7 @@ function ColorField(props: { value: string; onChange: (next: string) => void }) 
       <input type="color" className="tb-color-pick" value={shownHex} onChange={(e) => setPickerColor(e.target.value)} />
       <div className="tb-color-body">
         <input
-          className="tb-input tb-mono"
+          className="syw-input tb-input tb-mono"
           value={props.value}
           onChange={(e) => props.onChange(e.target.value)}
           placeholder="HEX, rgba(), or hsl()"
@@ -175,7 +176,7 @@ function ShadowField(props: { value: string; onChange: (next: string) => void })
   return (
     <div className="tb-shadow">
       <select
-        className="tb-input"
+        className="syw-select tb-input"
         value={select}
         onChange={(e) => {
           const next = e.target.value;
@@ -191,7 +192,7 @@ function ShadowField(props: { value: string; onChange: (next: string) => void })
         <option value="custom">Custom</option>
       </select>
       <input
-        className="tb-input tb-mono"
+        className="syw-input tb-input tb-mono"
         value={props.value}
         onChange={(e) => {
           setManual(true);
@@ -217,7 +218,7 @@ function Field(props: {
       <div className="tb-field-head">
         <span className="tb-field-label">{props.label}</span>
         {props.overridden ? (
-          <button className="tb-clear" onClick={props.onClear} title="Remove the override — derive from the primary again">
+          <button className="tb-clear" onClick={props.onClear} data-tip="Remove the override — derive from the primary again">
             custom ↺
           </button>
         ) : (
@@ -227,7 +228,7 @@ function Field(props: {
       {props.kind === 'color' && <ColorField value={props.value} onChange={props.onChange} />}
       {props.kind === 'shadow' && <ShadowField value={props.value} onChange={props.onChange} />}
       {props.kind === 'text' && (
-        <input className="tb-input tb-mono" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
+        <input className="syw-input tb-input tb-mono" value={props.value} onChange={(e) => props.onChange(e.target.value)} />
       )}
     </div>
   );
@@ -397,12 +398,12 @@ export function ThemeBuilder() {
       </div>
 
       <div className="tb-layout">
-        <aside className="panel tb-side">
+        <aside className="syw-card tb-side">
           <div className="tb-side-head">
             <strong>Custom themes</strong>
             <span className="hint">{draftThemes.length} local {draftThemes.length === 1 ? 'draft' : 'drafts'}</span>
           </div>
-          <button className="btn tb-new" onClick={createFromActive}>
+          <button className="syw-button tb-new" onClick={createFromActive}>
             ＋ New from active theme
           </button>
           <div className="tb-list">
@@ -411,6 +412,8 @@ export function ThemeBuilder() {
               <button
                 key={t.id}
                 className={`theme-opt ${t.id === selected?.id ? 'is-active' : ''}`}
+                aria-pressed={t.id === selected?.id}
+                type="button"
                 onClick={() => setSelectedThemeId(t.id)}
               >
                 <span className="swatches">
@@ -428,7 +431,7 @@ export function ThemeBuilder() {
           </div>
         </aside>
 
-        <section className="panel tb-main">
+        <section className="syw-card tb-main">
           {!selected ? (
             <div className="tb-empty-main hint">Create a custom theme to edit its palette here.</div>
           ) : (
@@ -438,7 +441,7 @@ export function ThemeBuilder() {
                   <label className="tb-field">
                     <span className="tb-field-label">Name</span>
                     <input
-                      className="tb-input"
+                      className="syw-input tb-input"
                       value={selected.label}
                       onChange={(e) => updateSelected((t) => ({ ...t, label: e.target.value }))}
                     />
@@ -446,34 +449,32 @@ export function ThemeBuilder() {
                   <label className="tb-field">
                     <span className="tb-field-label">Description</span>
                     <input
-                      className="tb-input"
+                      className="syw-input tb-input"
                       value={selected.description}
                       onChange={(e) => updateSelected((t) => ({ ...t, description: e.target.value }))}
                     />
                   </label>
                   <div className="tb-field">
                     <span className="tb-field-label">Default mode</span>
-                    <div className="seg">
-                      {MODE_OPTIONS.map((m) => (
-                        <button
-                          key={m.id}
-                          className={`seg-btn ${selected.defaultMode === m.id ? 'is-active' : ''}`}
-                          onClick={() => updateSelected((t) => ({ ...t, defaultMode: m.id }))}
-                        >
-                          {m.label}
-                        </button>
-                      ))}
-                    </div>
+                    <SywSegmented
+                      aria-label="Mode"
+                      value={selected.defaultMode}
+                      options={MODE_OPTIONS.map((m) => ({ value: m.id, label: m.label }))}
+                      onChange={(v) => {
+                        const m = MODE_OPTIONS.find((o) => o.id === v);
+                        if (m) updateSelected((t) => ({ ...t, defaultMode: m.id }));
+                      }}
+                    />
                   </div>
                 </div>
                 <div className="tb-head-actions">
-                  <button className="btn" onClick={() => setThemeId(selected.id)} disabled={themeId === selected.id}>
+                  <button className="syw-button" onClick={() => setThemeId(selected.id)} disabled={themeId === selected.id}>
                     {themeId === selected.id ? '✓ Active' : 'Use theme'}
                   </button>
-                  <button className="btn btn-ghost" onClick={duplicateSelected}>
+                  <button className="syw-button syw-button--ghost" onClick={duplicateSelected}>
                     Duplicate
                   </button>
-                  <button className="btn btn-danger" onClick={deleteSelected}>
+                  <button className="syw-button syw-button--danger" onClick={deleteSelected}>
                     Delete
                   </button>
                 </div>
@@ -491,7 +492,7 @@ export function ThemeBuilder() {
                 </div>
                 <div className="tb-seed">
                   <input type="color" className="tb-seed-pick" value={colorToHex(seed, '#22ddff')} onChange={(e) => setSeed(e.target.value)} />
-                  <button className="btn btn-primary" onClick={deriveFromSeed}>
+                  <button className="syw-button syw-button--primary" onClick={deriveFromSeed}>
                     Derive full palette
                   </button>
                 </div>
@@ -503,17 +504,15 @@ export function ThemeBuilder() {
                     <div className="tb-block-title">Preview mode</div>
                     <p className="hint">Editors and previews below resolve the theme in this appearance mode.</p>
                   </div>
-                  <div className="seg tb-seg">
-                    {MODE_OPTIONS.map((m) => (
-                      <button
-                        key={m.id}
-                        className={`seg-btn ${previewMode === m.id ? 'is-active' : ''}`}
-                        onClick={() => setPreviewMode(m.id)}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
+                  <SywSegmented
+                      className="tb-seg" aria-label="Mode"
+                      value={previewMode}
+                      options={MODE_OPTIONS.map((m) => ({ value: m.id, label: m.label }))}
+                      onChange={(v) => {
+                        const m = MODE_OPTIONS.find((o) => o.id === v);
+                        if (m) setPreviewMode(m.id);
+                      }}
+                    />
                 </div>
               </section>
 
@@ -536,7 +535,7 @@ export function ThemeBuilder() {
                   {group === 'Surfaces' && resolved && (
                     <div className="tb-strip">
                       {(['--wairon-page-bg', '--wairon-panel-bg', '--wairon-header-bg'] as ThemeVariableName[]).map((k) => (
-                        <div key={k} className="tb-strip-swatch" style={{ background: resolved[k] }} title={k} />
+                        <div key={k} className="tb-strip-swatch" style={{ background: resolved[k] }} data-tip={k} />
                       ))}
                     </div>
                   )}
@@ -547,7 +546,7 @@ export function ThemeBuilder() {
                           Pin WCAG-AA (4.5:1) text colors for the previewed mode against its resolved backgrounds,
                           stored as mode overrides.
                         </p>
-                        <button className="btn btn-ghost btn-sm" onClick={applyAccessibleTextSet}>
+                        <button className="syw-button syw-button--ghost btn-sm" onClick={applyAccessibleTextSet}>
                           Generate accessible text set
                         </button>
                       </div>
@@ -570,17 +569,15 @@ export function ThemeBuilder() {
                       following the primary per mode.
                     </p>
                   </div>
-                  <div className="seg tb-seg">
-                    {MODE_OPTIONS.map((m) => (
-                      <button
-                        key={m.id}
-                        className={`seg-btn ${modeEditMode === m.id ? 'is-active' : ''}`}
-                        onClick={() => setModeEditMode(m.id)}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
+                  <SywSegmented
+                      className="tb-seg" aria-label="Mode"
+                      value={modeEditMode}
+                      options={MODE_OPTIONS.map((m) => ({ value: m.id, label: m.label }))}
+                      onChange={(v) => {
+                        const m = MODE_OPTIONS.find((o) => o.id === v);
+                        if (m) setModeEditMode(m.id);
+                      }}
+                    />
                 </div>
                 <div className="tb-grid">
                   {MODE_OVERRIDE_KEYS.map((key) => {
@@ -604,7 +601,7 @@ export function ThemeBuilder() {
 
               <div className="tb-foot">
                 <span className="hint">Active theme: {activeOption.label}</span>
-                <button className="btn btn-primary" onClick={() => setThemeId(selected.id)}>
+                <button className="syw-button syw-button--primary" onClick={() => setThemeId(selected.id)}>
                   Set active theme
                 </button>
               </div>
@@ -621,10 +618,10 @@ export function ThemeBuilder() {
             <span className="hint">Staged locally until you save.</span>
           </div>
           <span className="spacer" />
-          <button className="btn btn-ghost" onClick={handleReset}>
+          <button className="syw-button syw-button--ghost" onClick={handleReset}>
             Reset
           </button>
-          <button className="btn btn-primary" onClick={handleSave}>
+          <button className="syw-button syw-button--primary" onClick={handleSave}>
             Save changes
           </button>
         </div>

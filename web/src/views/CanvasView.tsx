@@ -6,6 +6,7 @@ import { useSettings } from '../settings';
 import { useSession } from '../session';
 import { engineTheme, engineVars } from '../theme/canvasBridge';
 import { mountCanvas, type CanvasHandle } from '../canvas/engine';
+import { DEMO } from '../demo/flag';
 
 /**
  * The architecture canvas, mounted directly in React (no iframe) from the shared
@@ -127,12 +128,15 @@ export function CanvasView({
       // A portal opens its OWN named spec (?spec=<portalId>); a subsystem/project
       // passes '' → the landing page listing every per-portal spec (multi-portal)
       // or the single doc (one portal).
-      onOpenApi: (tag?: string) =>
-        window.open(
-          `/web/openapi?projectId=${encodeURIComponent(projectIdRef.current)}` + (tag ? `&spec=${encodeURIComponent(tag)}` : ''),
-          '_blank',
-          'noopener',
-        ),
+      hideOpenApi: DEMO,
+      onOpenApi: DEMO
+        ? undefined
+        : (tag?: string) =>
+            window.open(
+              `/web/openapi?projectId=${encodeURIComponent(projectIdRef.current)}` + (tag ? `&spec=${encodeURIComponent(tag)}` : ''),
+              '_blank',
+              'noopener',
+            ),
       // Stage G: deep-link the focused spec into the Specs value editor. Encodes
       // the qualified id as path segments (`::` → `/`, no %3A) so the editor URL
       // mirrors the same hierarchy the canvas uses. The editor lives at a
@@ -148,9 +152,9 @@ export function CanvasView({
       // record the caller may read) opens that project's own page. The server
       // stamps recordId only on records the caller may read, so a node without
       // one never offers the link.
-      onOpenProject: (recordId: string) => navigate('/projects/' + encodeURIComponent(recordId)),
+      onOpenProject: DEMO ? undefined : (recordId: string) => navigate('/projects/' + encodeURIComponent(recordId)),
       // The Network mode tab opens the derived network view (/canvas/<project>/network).
-      onOpenNetwork: () => navigate(networkUrl()),
+      onOpenNetwork: DEMO ? undefined : () => navigate(networkUrl()),
       // Stage G: focus a component / open a method's narrative modal when the URL hash asks.
       initialFlow: hashCmdRef.current.flow,
       initialSelect: hashCmdRef.current.select,
@@ -178,9 +182,22 @@ export function CanvasView({
     handleRef.current?.setTheme(canvasTheme, canvasVars);
   }, [canvasTheme, canvasVars]);
 
+  // While the gate runs on after a change (or has not answered yet), the canvas is drawn with the
+  // last known findings, or none: say so, until the server's nudge brings the gate's answer.
+  // (The static demo is a finished recording: it never says it is checking.)
+  const findingsState = DEMO ? undefined : (model as { findingsState?: string } | undefined)?.findingsState;
   return (
     <AsyncView state={state}>
-      {() => <div ref={hostRef} className="canvas-host" />}
+      {() => (
+        <>
+          <div ref={hostRef} className="canvas-host" />
+          {findingsState === 'stale' || findingsState === 'pending' ? (
+            <div className="canvas-findings-state" role="status">
+              {findingsState === 'stale' ? 'Checking… findings are from before the last change' : 'Checking… findings appear when the check finishes'}
+            </div>
+          ) : null}
+        </>
+      )}
     </AsyncView>
   );
 }

@@ -47,6 +47,8 @@ describe('scaffold.render', () => {
     const env = text(files, 'wairon-pack.yaml');
     expect(env).toContain('kind: code');
     expect(env).toContain('entry: pack.cjs');
+    // The minimum is a release core, never a pre-release.
+    expect(env).toMatch(/^minWaironVersion: [0-9]+[.][0-9]+[.][0-9]+$/m);
   });
 
   it('defaults the version to 0.1.0 when omitted', () => {

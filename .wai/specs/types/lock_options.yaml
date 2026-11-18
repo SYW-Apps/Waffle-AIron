@@ -21,7 +21,13 @@ fields:
       List every changed spec of the approval summary. Without it a long list is summarized — the
       first few paths of each kind, then a count of the rest and the flag that lists them all.
     optional: true
+  - name: force
+    type: bool
+    description: >-
+      Lock although a pending lock request was made on another branch than the checkout has now:
+      approve this checkout's design anyway.
+    optional: true
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-07-24T18:06:34.277Z'
-updatedAt: '2026-10-18T19:04:26.304Z'
+updatedAt: '2026-11-10T18:58:22.698Z'

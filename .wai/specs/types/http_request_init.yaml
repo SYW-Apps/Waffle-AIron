@@ -14,9 +14,9 @@ fields:
     optional: true
   - name: body
     type: string
-    description: The request body
+    description: 'The request body: text, or the raw bytes of an upload (the platform''s RequestInit takes both)'
     optional: true
 methods: []
 sourcePath: src/io/http.ts
 createdAt: '2026-10-31T23:14:55.341Z'
-updatedAt: '2026-10-31T23:14:56.494Z'
+updatedAt: '2026-11-06T23:40:52.143Z'

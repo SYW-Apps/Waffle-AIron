@@ -1,0 +1,15 @@
+kind: signature
+id: dev_producer_listener
+name: DevProducerListener
+description: Told which watched producer changed, once its changes settled.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/dev-watcher.ts
+params:
+  - name: producer
+    type: dev_producer
+    description: The producer whose .wai/ folder changed
+returns: void
+createdAt: '2026-11-10T00:32:48.114Z'
+updatedAt: '2026-11-10T00:32:49.375Z'

@@ -72,8 +72,9 @@ describe('doctor --fix: writes outside the project root are planned, confirmed a
 
     // A legacy global plugin whose name collides with the MCP server.
     const plugin = path.join(home, '.gemini', 'config', 'plugins', 'wairon');
-    fs.mkdirSync(plugin, { recursive: true });
-    fs.writeFileSync(path.join(plugin, 'plugin.json'), '{"name":"wairon"}');
+    // The legacy layout wairon once installed: one skills/wairon/SKILL.md and no plugin.json.
+    fs.mkdirSync(path.join(plugin, 'skills', 'wairon'), { recursive: true });
+    fs.writeFileSync(path.join(plugin, 'skills', 'wairon', 'SKILL.md'), 'legacy');
     return { home, project, globalCfg, plugin };
   }
 
@@ -150,7 +151,7 @@ describe('doctor --fix: writes outside the project root are planned, confirmed a
     const configDir = path.join(home, '.gemini', 'config');
     const moved = fs.readdirSync(configDir).filter((f) => f.startsWith('wairon-plugin.wairon-backup-'));
     expect(moved).toHaveLength(1);
-    expect(fs.readFileSync(path.join(configDir, moved[0], 'plugin.json'), 'utf8')).toBe('{"name":"wairon"}');
+    expect(fs.readFileSync(path.join(configDir, moved[0], 'skills', 'wairon', 'SKILL.md'), 'utf8')).toBe('legacy');
     // The machine-wide registration is machine-specific by nature: the CLI by its absolute path.
     expect(path.isAbsolute(after.mcpServers.wairon.args?.[0] ?? '')).toBe(true);
   }, 240_000);

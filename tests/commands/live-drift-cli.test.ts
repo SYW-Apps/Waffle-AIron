@@ -64,6 +64,7 @@ describe('live drift at the command surfaces', () => {
       'schemaVersion: 1.0.0', `waironMajor: ${WAIRON_MAJOR}`, 'id: billing', 'name: Billing',
       'externals:', '  ledger:', '    source:', '      path: ../ledger',
       'rules:', '  sddRuleSeverity:', '    TYPE_NOT_NEUTRAL: "off"', '    UNUSED_COMPONENT: "off"',
+      '  severityReasons:', '    TYPE_NOT_NEUTRAL: "The miniature types a number."', '    UNUSED_COMPONENT: "The miniature leaves an adapter unreached."',
       'targets:', '  - type: claude', '    outputDir: .claude/agents', '    enabled: true',
       "createdAt: '2026-09-27T00:00:00.000Z'", "updatedAt: '2026-09-27T00:00:00.000Z'", '',
     ].join('\n'));

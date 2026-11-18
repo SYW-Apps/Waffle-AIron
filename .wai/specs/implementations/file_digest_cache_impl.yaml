@@ -1,0 +1,19 @@
+id: file_digest_cache_impl
+name: File Digest Cache Implementation
+description: >-
+  src/core/content-fingerprint.ts: a process-local map from absolute path to digest, cleared when it
+  reaches its bound.
+contract: ifile_digest_cache
+sourcePath: src/core/content-fingerprint.ts
+methods:
+  - name: get
+    narrative: []
+    detail: intent
+    intent: Answer the entry held under the path, or none.
+  - name: put
+    narrative: []
+    detail: intent
+    intent: Clear the map when it holds its bound of entries, then hold the digest under the path.
+status: complete
+createdAt: '2026-11-10T19:02:00.573Z'
+updatedAt: '2026-11-10T19:02:02.005Z'

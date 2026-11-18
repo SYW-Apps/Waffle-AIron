@@ -1,5 +1,6 @@
 import { files as fileIo } from '../io/index.js';
 import * as path from 'path';
+import * as os from 'os';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as yaml from 'js-yaml';
 
@@ -140,6 +141,18 @@ export function removeFile(filePath: string): void {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
     }
     treeFileGuard?.noteWritten(filePath, null);
+  });
+}
+
+/** Delete a folder when it is empty, under the guard of its tree; absent or not empty is no error. */
+export function removeDirIfEmpty(dirPath: string): void {
+  guarded([dirPath], () => {
+    try {
+      if (fileIo.list(dirPath).length === 0) fileIo.removeEmptyDir(dirPath);
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTEMPTY') throw e;
+    }
   });
 }
 
@@ -638,7 +651,7 @@ function isAtOrBelow(outer: string, inner: string): boolean {
  * under the declaring folder). Read leniently — an unreadable configuration
  * declares nothing — because binding must never fail on someone else's file.
  */
-function declaredMemberDirs(projectRoot: string): string[] {
+export function declaredMemberDirs(projectRoot: string): string[] {
   let parsed: unknown;
   try {
     const text = fileIo.readText(path.join(projectRoot, '.wai', 'project.yaml'));
@@ -869,4 +882,14 @@ export function replaceFile(file: string, text: string | Uint8Array, mode?: numb
     try { fileIo.removeFileIfPresent(tmp); } catch { /* nothing left to clean */ }
     throw e;
   }
+}
+
+/** wairon user cache folder: WAIRON_CACHE_DIR, else the platform cache folder under `wairon`. Never inside a project. */
+export function userCacheDir(): string {
+  const setting = process.env.WAIRON_CACHE_DIR ?? "";
+  if (setting !== "") return path.resolve(setting);
+  const platformBase = process.platform === "win32"
+    ? process.env.LOCALAPPDATA ?? path.join(os.homedir(), "AppData", "Local")
+    : process.platform === "darwin" ? path.join(os.homedir(), "Library", "Caches") : process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), ".cache");
+  return path.join(platformBase, "wairon");
 }

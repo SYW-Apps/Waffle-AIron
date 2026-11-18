@@ -1050,7 +1050,67 @@ methods:
         targetComponent: web_project_orchestrator
         targetMethod: devStatus
     symbol: getDevStatus
+  - name: getDevReviews
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session the router decoded to dev_cockpit_orchestrator.reviews, and hand back
+          its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: reviews
+    detail: calls-only
+  - name: decideDevReview
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded to
+          dev_cockpit_orchestrator.decide, and hand back its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: decide
+    detail: calls-only
+  - name: runDevCommand
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded to dev_cockpit_orchestrator.run,
+          and hand back its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: run
+    detail: calls-only
+  - name: getDevApproval
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session the router decoded to dev_cockpit_orchestrator.approval, and hand back
+          its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: approval
+  - name: runDevFamilyCommand
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the command the router decoded to dev_cockpit_orchestrator.family,
+          and hand back its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: family
+    detail: calls-only
+  - name: projectMembers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the arguments the router decoded from the request to
+          web_graph_orchestrator.getProjectMembers, and hand back its result for the router to
+          encode
+        type: call
+        targetComponent: web_graph_orchestrator
+        targetMethod: getProjectMembers
+    symbol: getProjectMembers
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-10-23T22:29:57.968Z'
+updatedAt: '2026-11-10T19:05:59.211Z'

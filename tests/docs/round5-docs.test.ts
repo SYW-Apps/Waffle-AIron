@@ -20,7 +20,7 @@ const read = (rel: string): string => fs.readFileSync(path.join(REPO_ROOT, rel),
 
 /** The options `.command('rename')` registers under `wairon method`, from the CLI source. */
 function methodRenameOptions(): string[] {
-  const src = read('src/cli/index.ts');
+  const src = read('src/cli/program.ts');
   const at = src.indexOf(".command('rename <component> <method> <new-name>')");
   expect(at, 'wairon method rename is registered').toBeGreaterThan(-1);
   const block = src.slice(at, src.indexOf('.action(', at));

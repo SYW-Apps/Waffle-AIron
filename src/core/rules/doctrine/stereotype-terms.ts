@@ -15,15 +15,13 @@ import type { ComponentSpec } from '../../../models/index.js';
 const NEVER_INLINE_STATE =
   ' Never resolve this by merging the store\'s state into the consuming component — state hidden inside a logic block is invisible to the spec and unrecoverable.';
 
-/** The resolution a refused Store link is given, by what the refused consumer is. */
-export const storeResolutionHint = (consumerType: string, storeId: string): string => {
-  if (consumerType === 'Orchestrator') {
-    return ` Resolution: wrap "${storeId}" in a Repository pattern (owns: Store + Registry + Index) and depend on that Repository facade instead.${NEVER_INLINE_STATE}`;
-  }
-  // Any other consumer (a Portal, Observer or View): even the
-  // Repository facade is out of its reach — the hop goes through the logic side.
-  return ` Resolution: wrap "${storeId}" in a Repository pattern and reach it through an Orchestrator that uses the Repository facade.${NEVER_INLINE_STATE}`;
-};
+/**
+ * The resolution a refused Store link is given. A Store is the default data
+ * component and needs no Repository around it: the consumer that may not reach
+ * it directly goes through an Orchestrator that may — read logic or a workflow.
+ */
+export const storeResolutionHint = (_consumerType: string, storeId: string): string =>
+  ` Resolution: reach "${storeId}" through an Orchestrator that may depend on it (read logic or a workflow) — a Store needs no Repository around it.${NEVER_INLINE_STATE}`;
 
 /** Pure logic: an Orchestrator whose dependencyClass is pure. Any block may use it. */
 export const isPureLogic = (comp: ComponentSpec): boolean =>
@@ -48,4 +46,6 @@ export interface EdgeFinding {
   severity: 'error' | 'warning';
   code: string;
   message: string;
+  /** The site the finding names inside its spec (FindingParts.at), when it has one: what a lint.allow's `at` matches. */
+  at?: string;
 }

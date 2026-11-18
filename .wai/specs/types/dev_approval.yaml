@@ -1,0 +1,48 @@
+kind: value-object
+id: dev_approval
+name: DevApproval
+description: >-
+  The served project's approval state for the dev page: whether the design moved since the last lock
+  and which specs, who locked it when, the branch the checkout has, and the project's name. Drives
+  the page's lock bar, the lock confirmation, the header and tab title naming which project the page
+  serves, and what the page says when the checkout switched branches or a review request was made on
+  another branch.
+fields:
+  - name: approved
+    type: bool
+    description: Whether the project carries a lock record at all
+    optional: false
+  - name: approvedAt
+    type: string
+    description: When the last lock was taken
+    optional: true
+  - name: approvedBy
+    type: string
+    description: Who took the last lock
+    optional: true
+  - name: verdict
+    type: ApprovalVerdict
+    description: 'What the lock says about the tree now: drifted, the moved specs, the line to show'
+    optional: false
+  - name: branch
+    type: string
+    description: The branch the served checkout has now; absent outside a git checkout or on a detached HEAD
+    optional: true
+  - name: projectName
+    type: string
+    description: >-
+      The served project's display name (its system spec's name); absent when the system spec cannot
+      be read
+    optional: true
+  - name: members
+    type: list<ProjectApproval>
+    description: >-
+      Each direct member project's approval, judged at its own root, so the page can offer its lock;
+      parts are approved with the served project and are not listed. Absent when the project
+      declares no member project
+    optional: true
+methods: []
+componentClass: dev_cockpit_orchestrator
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-07T15:07:10.520Z'
+updatedAt: '2026-11-12T01:02:16.565Z'

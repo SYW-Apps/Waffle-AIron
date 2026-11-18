@@ -13,7 +13,7 @@ import { buildServerInstructions } from '../../src/core/instructions.js';
 // is checked through JSDoc.
 // ---------------------------------------------------------------------------
 
-const templates = path.join(__dirname, '..', '..', 'src', 'templates', 'skills');
+const templates = path.join(__dirname, '..', '..', 'plugins', 'wairon', 'skills');
 
 describe.each(['local', 'global'] as const)('the %s guide', (scope) => {
   const body = guideBody(scope);
@@ -58,7 +58,7 @@ describe('the MCP server instructions and the skills, round 9', () => {
   });
 
   it('the architect skill keeps injectedParams out of the design and plans type files per owner', () => {
-    const architect = fs.readFileSync(path.join(templates, 'sdd-architect.md'), 'utf8');
+    const architect = fs.readFileSync(path.join(templates, 'sdd-architect', 'SKILL.md'), 'utf8');
     expect(architect).toContain('**`injectedParams` are NOT design-time**');
     expect(architect).toContain('Plan type files per owner, not one file for all');
     // Forwarders: the one between a Portal and an Adapter is required, a
@@ -68,7 +68,7 @@ describe('the MCP server instructions and the skills, round 9', () => {
   });
 
   it('the implement skill says when and how the implementer sets injectedParams, and that guesses are removed', () => {
-    const implement = fs.readFileSync(path.join(templates, 'sdd-implement.md'), 'utf8');
+    const implement = fs.readFileSync(path.join(templates, 'sdd-implement', 'SKILL.md'), 'utf8');
     expect(implement).toContain('`injectedParams` are yours to set, when the code exists');
     expect(implement).toContain('{"injectedParams": [{"value": "db", "action": "delete"}]}');
   });

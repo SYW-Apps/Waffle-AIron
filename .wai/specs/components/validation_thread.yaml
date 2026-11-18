@@ -1,0 +1,15 @@
+id: validation_thread
+name: Validation Thread
+description: >-
+  Owns one worker thread that runs the remembered gates off the serving process's request path, one
+  job at a time. For each job it binds the job's project root for the run and answers through the
+  validation memo, so the thread keeps its own memory of recent runs and shares the result file with
+  every other process. A serving process stays responsive while a cold validation runs here.
+subsystem: sdd_validator
+componentType: Actor
+owns: []
+dependsOn:
+  - validation_memo
+status: complete
+createdAt: '2026-11-11T23:25:32.853Z'
+updatedAt: '2026-11-11T23:25:34.318Z'

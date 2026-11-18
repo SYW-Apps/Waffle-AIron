@@ -7,6 +7,7 @@ import {
   type AppearanceMode,
   type CustomTheme,
 } from './theme/themes';
+import { DEMO } from './demo/flag';
 
 /**
  * User UI preferences (theme, appearance mode, sidebar collapse) persisted to
@@ -42,6 +43,8 @@ function load(): Persisted {
     sidebarCollapsed: false,
     customThemes: [],
   };
+  // The static demo starts from the defaults and remembers nothing.
+  if (DEMO) return fallback;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -79,6 +82,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   // Persist on every change.
   useEffect(() => {
+    if (DEMO) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {

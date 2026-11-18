@@ -78,9 +78,15 @@ methods:
           project node; a part's subsystems as this project's own subsystems, each carrying the
           part's alias and a storage badge (contained, sibling path, git with its short commit),
           never a node of their own: composition decides what is drawn, storage only how it is
-          labelled — and an edge per dependency and ownership between the nodes emitted, consumption
-          edges between projects included. Ids stay honest; only the displayed label collapses a
-          subsystem whose key repeats its member's alias
+          labelled — and an edge per dependency between the nodes emitted, consumption edges between
+          projects included, each tagged with the strongest form it is stated in: `depends` for a
+          `dependsOn` entry or ownership, `calls` for a narrative call or register step whose target
+          resolves to an emitted node (an `alias::` target landing on its project's node) and has no
+          `dependsOn` beside it, `uses` from a component to the project that owns a type its fields,
+          params or returns name when that project is another one of the family or a declared
+          external, and `declared` from a project to each member or external it declares that no
+          other edge between the two projects already shows. Ids stay honest; only the displayed
+          label collapses a subsystem whose key repeats its member's alias
         type: local
       - stepNumber: 11
         description: >-
@@ -134,14 +140,29 @@ methods:
         description: >-
           Embed the styles, the markup skeleton and the interaction engine alongside it, so the page
           needs no server and no network to open — the same text scripts/gen-canvas-engine.mjs
-          extracts for the React app. The engine draws relation health by glyph and line as well as
-          colour, folds edges at a collapsed level to their worst health, shows a relation on hover
-          and in the details panel, adds the one legend row when a consumption edge exists, draws an
-          external project node dashed, and offers a project's own page only through a host's
-          open-project hook. It also lists every finding of the model in a Findings panel (a finding
-          that names a drawn spec focuses its node on click; one that names none is listed as the
-          project's), takes the issues overlay's first-visit default from the host's showIssues
-          option, and draws a partial model as it is
+          extracts for the React app. The engine draws every line itself beneath the boxes: chevrons
+          along its whole length point its direction (the plain line alone when zoomed too far out
+          to read them), a boundary hop carries a thin red stripe through it, and an edge's kind
+          sets its weight — `depends` and `calls` full, `uses` thinner and grey, `declared` thin,
+          grey and dotted. In orthogonal mode each line leaves and enters on the side facing the
+          other end and runs the cheapest orthogonal path around the boxes, lines into one box merge
+          into one trunk (they flow the same way), lines with different ends are spread across a
+          shared channel, and a horizontal run hops a vertical one it crosses; in curved mode each
+          line takes the shortest way around the boxes as a smooth curve, a corner several lines
+          pass taken a little wider by each; straight lines are drawn as they are. A PNG export
+          carries the lines as drawn. Clicking a line focuses it and the two boxes it joins. While
+          an element is selected, a glowing dot travels its focused lines in their direction — first
+          every line into it, then every line out of it, repeating — so the direction reads at any
+          zoom; the animation runs only while something is selected and the page is visible, draws
+          only those lines, and is off when the reader asks for reduced motion. The engine draws
+          relation health by glyph and line as well as colour, folds edges at a collapsed level to
+          their worst health and strongest kind, shows a relation on hover and in the details panel,
+          adds the one legend row when a consumption edge exists, draws an external project node
+          dashed, and offers a project's own page only through a host's open-project hook. It also
+          lists every finding of the model in a Findings panel (a finding that names a drawn spec
+          focuses its node on click; one that names none is listed as the project's), takes the
+          issues overlay's first-visit default from the host's showIssues option, and draws a
+          partial model as it is
         type: local
       - stepNumber: 3
         description: >-
@@ -158,4 +179,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-10-23T22:30:17.891Z'
+updatedAt: '2026-11-12T13:45:33.819Z'

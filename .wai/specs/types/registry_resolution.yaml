@@ -1,0 +1,70 @@
+kind: value-object
+id: registry_resolution
+name: RegistryResolution
+description: >-
+  What the wairon pack registry answers when a name and a range resolve to one exact version: what
+  to download, what it must hash to, and the facts the install's trust check reads.
+subsystem: sdd_cli
+fields:
+  - name: name
+    type: string
+    description: The pack name (`@scope/pack` or a flat trusted name).
+    optional: false
+  - name: range
+    type: string
+    description: The range asked for, echoed.
+    optional: false
+  - name: version
+    type: string
+    description: The exact version chosen.
+    optional: false
+  - name: integrity
+    type: string
+    description: >-
+      The content integrity (`sha256-<hex>`) the extracted pack must hash to — what project.yaml
+      pins.
+    optional: false
+  - name: archiveDigest
+    type: string
+    description: sha256 of the archive bytes, `sha256-<hex>`.
+    optional: false
+  - name: kind
+    type: string
+    description: '`declarative` or `code`, derived by the registry from the archive''s content.'
+    optional: false
+  - name: minWaironVersion
+    type: string
+    description: The lowest wairon version the pack runs under, when it states one.
+    optional: true
+  - name: yanked
+    type: bool
+    description: Whether the version is yanked (only an exact version can resolve to one).
+    optional: false
+  - name: yankReason
+    type: string
+    description: Why it was yanked.
+    optional: true
+  - name: archiveUrl
+    type: string
+    description: Where to download the archive.
+    optional: false
+  - name: source
+    type: string
+    description: The fetch template project.yaml records for the selection (with a `{version}` placeholder).
+    optional: false
+  - name: verifiedAtPublish
+    type: bool
+    description: Whether the publisher was verified when this version was published.
+    optional: false
+  - name: publisher
+    type: RegistryPublisher
+    description: The account that published this version.
+    optional: false
+  - name: newerIncompatible
+    type: string
+    description: A newer version the range would have chosen, skipped because it needs a later wairon.
+    optional: true
+methods: []
+sourcePath: src/commands/registry.ts
+createdAt: '2026-11-06T23:41:02.174Z'
+updatedAt: '2026-11-06T23:41:03.017Z'

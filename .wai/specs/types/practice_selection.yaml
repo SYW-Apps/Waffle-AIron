@@ -1,0 +1,57 @@
+kind: value-object
+id: practice_selection
+name: PracticeSelection
+description: >-
+  The `practices` section of .wai/project.yaml: which pack practices apply where. Process lives
+  here, outside the spec tree, so selecting or dropping a practice never re-opens the design's
+  approval. Every list adds to what the scope around it selected, and an entry written `!<id>` drops
+  an inherited practice; the scopes apply in the order project, subsystem, component, role, then the
+  session's own picks.
+subsystem: sdd_core
+fields:
+  - name: use
+    type: list<string>
+    description: Practices for the whole project.
+    optional: true
+  - name: subsystems
+    type: map<string, list<string>>
+    description: Practice entries per subsystem id, applied to every component of that subsystem.
+    optional: true
+  - name: components
+    type: map<string, list<string>>
+    description: Practice entries per component id.
+    optional: true
+  - name: roles
+    type: map<string, list<string>>
+    description: >-
+      Practice entries per agent role — the built-in agent template a brief is composed from
+      (architect, domain-owner, guardian, implementer, reviewer, tester).
+    optional: true
+methods:
+  - name: resolve
+    signature: >-
+      resolve(subsystem: string?, component: string?, role: string?, session: list<string>):
+      list<string>
+    params:
+      - name: subsystem
+        type: string?
+        description: The subsystem the work belongs to, or none
+      - name: component
+        type: string?
+        description: The component the work belongs to, or none
+      - name: role
+        type: string?
+        description: The agent role (template) doing the work, or none
+      - name: session
+        type: list<string>
+        description: The entries the current session picked, applied last
+    returns: list<string>
+    description: >-
+      The practice ids in force: start empty, then apply the entries of use, the subsystem's, the
+      component's, the role's and the session's, in that order — an id adds itself once (first
+      position kept), `!<id>` removes it. Pure
+    sourcePath: src/models/practices.ts
+    symbol: resolvePractices
+sourcePath: src/models/project.ts
+createdAt: '2026-11-06T21:43:43.261Z'
+updatedAt: '2026-11-06T22:00:48.269Z'

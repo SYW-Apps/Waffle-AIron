@@ -1,0 +1,27 @@
+kind: value-object
+id: rule_lowering
+name: RuleLowering
+description: >-
+  A rule code set below its default severity, and why: what sdd_update_rules names in its answer and
+  RULE_LOWERED reports on every run.
+fields:
+  - name: code
+    type: string
+    description: The rule code
+    optional: false
+  - name: from
+    type: string
+    description: Its default severity
+    optional: false
+  - name: to
+    type: string
+    description: The severity the project sets (warning, notice or off)
+    optional: false
+  - name: why
+    type: string
+    description: The project's reason, from severityReasons; absent when none is given
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-11-14T16:08:37.522Z'
+updatedAt: '2026-11-14T16:13:02.809Z'

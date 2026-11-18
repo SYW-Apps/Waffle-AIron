@@ -1,0 +1,30 @@
+kind: value-object
+id: loaded_practice
+name: LoadedPractice
+description: >-
+  A pack practice as loaded: the authored PracticeDef tagged with the pack that declares it, the
+  attribution rendered wherever its guidance is delivered. When two loaded packs declare the same
+  practice id, the one loaded first is kept and the later one is reported as a pack load error, so a
+  selected id always means one practice.
+subsystem: sdd_core
+fields:
+  - name: id
+    type: string
+    description: The practice id a project selects.
+    optional: false
+  - name: description
+    type: string
+    description: One line saying what the practice asks for.
+    optional: false
+  - name: guidance
+    type: string
+    description: The guidance delivered under this practice.
+    optional: false
+  - name: pack
+    type: string
+    description: 'Provenance: the name of the pack declaring this practice.'
+    optional: false
+methods: []
+sourcePath: src/core/extensions.ts
+createdAt: '2026-11-06T21:43:37.177Z'
+updatedAt: '2026-11-06T21:43:38.385Z'

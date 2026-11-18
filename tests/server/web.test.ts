@@ -146,7 +146,6 @@ function stubClaims(claims: Record<string, unknown>): void {
 function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
   return {
     id: PROVIDER_ID,
-    providerType: 'oidc',
     issuerUrl,
     clientId: 'test-client',
     clientSecretRef: SECRET_REF,
@@ -542,7 +541,7 @@ describe('web graph orchestrator (sdd_host)', () => {
     invalidateSpecCache();
   }
 
-  it('project tier: returns a level-filtered graph with per-node issueCounts overlaid', () => {
+  it('project tier: returns a level-filtered graph with per-node issueCounts overlaid', async () => {
     const rec = createProjectRecord(dataDir, 'proj-a');
     seedProjectTree(rec.rootPath);
     // The web project listing gates the graph — a project must be PLACED to be
@@ -564,7 +563,14 @@ describe('web graph orchestrator (sdd_host)', () => {
       if (iss.specId) expectedCounts.set(iss.specId, (expectedCounts.get(iss.specId) ?? 0) + 1);
     }
 
-    const graph = getGraph(cfg, s.id, 'project', 'proj-a', 3);
+    // A read whose gate runs longer than the wait is drawn with the findings pending, and a later
+    // read draws the gate's answer. Read until the findings are current.
+    let graph = await getGraph(cfg, s.id, 'project', 'proj-a', 3);
+    for (let i = 0; i < 120 && graph.findingsState !== 'current'; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      graph = await getGraph(cfg, s.id, 'project', 'proj-a', 3);
+    }
+    expect(graph.findingsState).toBe('current');
     expect(graph.tier).toBe('project');
     expect(graph.scope).toBe('proj-a');
     expect(graph.level).toBe(3);
@@ -577,18 +583,18 @@ describe('web graph orchestrator (sdd_host)', () => {
     }
 
     // Level filtering: level 1 keeps only the project + subsystem tier.
-    const l1 = getGraph(cfg, s.id, 'project', 'proj-a', 1);
+    const l1 = await getGraph(cfg, s.id, 'project', 'proj-a', 1);
     expect(l1.nodes.every((n) => n.level <= 1)).toBe(true);
     expect(l1.nodes.some((n) => n.kind === 'component' || n.kind === 'interface')).toBe(false);
   });
 
-  it('project tier: throws Forbidden on a cross-project request', () => {
+  it('project tier: throws Forbidden on a cross-project request', async () => {
     createProjectRecord(dataDir, 'proj-a');
     const s = session(['proj-a']);
-    expect(() => getGraph(cfg, s.id, 'project', 'proj-b', 3)).toThrow(ForbiddenError);
+    await expect(getGraph(cfg, s.id, 'project', 'proj-b', 3)).rejects.toThrow(ForbiddenError);
   });
 
-  it('landscape tier: reshapes the scoped landscape and level-filters (scope instance)', () => {
+  it('landscape tier: reshapes the scoped landscape and level-filters (scope instance)', async () => {
     createOrgUnit(dataDir, { id: '', slug: 'unit-1', name: 'Team One', kind: 'team', status: 'active', createdAt: now, createdBy });
     createProjectRecord(dataDir, 'proj-a');
     placeProject(dataDir, { id: 'pl-1', projectId: 'proj-a', unitId: 'unit-1', role: 'owner', createdAt: now, createdBy });
@@ -601,7 +607,7 @@ describe('web graph orchestrator (sdd_host)', () => {
     });
     const admin = adminGraphSession();
 
-    const g2 = getGraph(cfg, admin.id, 'landscape', '', 2);
+    const g2 = await getGraph(cfg, admin.id, 'landscape', '', 2);
     expect(g2.tier).toBe('landscape');
     expect(g2.scope).toBe('instance');
     expect(g2.level).toBe(2);
@@ -613,13 +619,13 @@ describe('web graph orchestrator (sdd_host)', () => {
     expect(g2.edges.some((e) => e.from === 'unit:unit-1' && e.to === 'project:proj-a')).toBe(true);
 
     // Level 0 drops the interface (level 2) node and any edge referencing it.
-    const g0 = getGraph(cfg, admin.id, 'landscape', '', 0);
+    const g0 = await getGraph(cfg, admin.id, 'landscape', '', 0);
     expect(g0.nodes.some((n) => n.kind === 'interface')).toBe(false);
     expect(g0.nodes.some((n) => n.id === 'unit:unit-1')).toBe(true);
     expect(g0.edges.every((e) => e.to !== 'iface:proj-a:iface-1')).toBe(true);
   });
 
-  it('landscape tier: a relation targeting a published interface survives level 1 as a project→project edge', () => {
+  it('landscape tier: a relation targeting a published interface survives level 1 as a project→project edge', async () => {
     createOrgUnit(dataDir, { id: '', slug: 'unit-1', name: 'Team One', kind: 'team', status: 'active', createdAt: now, createdBy });
     createProjectRecord(dataDir, 'proj-a');
     createProjectRecord(dataDir, 'proj-b');
@@ -648,12 +654,12 @@ describe('web graph orchestrator (sdd_host)', () => {
     const admin = adminGraphSession();
 
     // Level 2 keeps the interface node, so the relation edge ends on it untouched.
-    const g2 = getGraph(cfg, admin.id, 'landscape', '', 2);
+    const g2 = await getGraph(cfg, admin.id, 'landscape', '', 2);
     expect(g2.edges.some((e) => e.relationId === 'rel-1' && e.to === 'iface:proj-b:b-api')).toBe(true);
 
     // Level 1 (the environment canvas fetch) drops the interface node — the
     // relation edge retargets to the owning project instead of vanishing.
-    const g1 = getGraph(cfg, admin.id, 'landscape', '', 1);
+    const g1 = await getGraph(cfg, admin.id, 'landscape', '', 1);
     expect(g1.nodes.some((n) => n.kind === 'interface')).toBe(false);
     const rel = g1.edges.filter((e) => e.relationId === 'rel-1');
     expect(rel).toHaveLength(1);
@@ -662,13 +668,13 @@ describe('web graph orchestrator (sdd_host)', () => {
     expect(g1.edges.some((e) => e.edgeKind === 'publishes')).toBe(false);
   });
 
-  it('rejects an unknown graph tier', () => {
+  it('rejects an unknown graph tier', async () => {
     const s = adminGraphSession();
-    expect(() => getGraph(cfg, s.id, 'galaxy', '', 0)).toThrow(/unsupported graph tier/i);
+    await expect(getGraph(cfg, s.id, 'galaxy', '', 0)).rejects.toThrow(/unsupported graph tier/i);
   });
 
-  it('rejects an absent/expired session before any tier work', () => {
-    expect(() => getGraph(cfg, 'ws_missing', 'landscape', '', 0)).toThrow(UnauthenticatedError);
+  it('rejects an absent/expired session before any tier work', async () => {
+    await expect(getGraph(cfg, 'ws_missing', 'landscape', '', 0)).rejects.toThrow(UnauthenticatedError);
   });
 
   // ── getProjectCanvas: the REAL renderCanvasHtml canvas, scoped per project ──
@@ -701,14 +707,14 @@ describe('web graph orchestrator (sdd_host)', () => {
 
   // ── getWebProjectCanvasModel: the CanvasModel as JSON (data sibling of the HTML) ──
 
-  it('getWebProjectCanvasModel returns the bound project CanvasModel as data', () => {
+  it('getWebProjectCanvasModel returns the bound project CanvasModel as data', async () => {
     const rec = createProjectRecord(dataDir, 'proj-a');
     seedProjectTree(rec.rootPath);
     createOrgUnit(dataDir, { id: '', slug: 'unit-cm', name: 'CM', kind: 'team', status: 'active', createdAt: now, createdBy });
     placeProject(dataDir, { id: 'pl-cm', projectId: 'proj-a', unitId: 'unit-cm', role: 'owner', createdAt: now, createdBy });
     const s = session(['proj-a']);
 
-    const model = getWebProjectCanvasModel(cfg, s.id, 'proj-a') as {
+    const model = (await getWebProjectCanvasModel(cfg, s.id, 'proj-a')) as {
       system: { name: string };
       components: unknown[];
       subsystems: unknown[];
@@ -719,14 +725,14 @@ describe('web graph orchestrator (sdd_host)', () => {
     expect(Array.isArray(model.subsystems)).toBe(true);
   });
 
-  it('getWebProjectCanvasModel throws Forbidden for a cross-project / unknown project id', () => {
+  it('getWebProjectCanvasModel throws Forbidden for a cross-project / unknown project id', async () => {
     createProjectRecord(dataDir, 'proj-a');
     const s = session(['proj-a']);
-    expect(() => getWebProjectCanvasModel(cfg, s.id, 'proj-b')).toThrow(ForbiddenError);
+    await expect(getWebProjectCanvasModel(cfg, s.id, 'proj-b')).rejects.toThrow(ForbiddenError);
   });
 
-  it('getWebProjectCanvasModel rejects an absent/expired session before any project work', () => {
-    expect(() => getWebProjectCanvasModel(cfg, 'ws_missing', 'proj-a')).toThrow(UnauthenticatedError);
+  it('getWebProjectCanvasModel rejects an absent/expired session before any project work', async () => {
+    await expect(getWebProjectCanvasModel(cfg, 'ws_missing', 'proj-a')).rejects.toThrow(UnauthenticatedError);
   });
 });
 
@@ -807,10 +813,10 @@ describe('web portal legacy client app shell (sdd_host)', () => {
     expect(html).toContain('/web/admin/providers/remove');
     expect(html).toContain('/web/admin/org/units');
     expect(html).toContain('/web/admin/org/placements');
-    // The Identity-Provider form exposes the provider types and the split-horizon
+    // The Identity-Provider form has no provider type (plain OIDC) and exposes the split-horizon
     // override fields that make self-hosted Keycloak/Authentik work.
-    expect(html).toContain('google_workspace');
-    expect(html).toContain('entra_id');
+    expect(html).not.toContain('google_workspace');
+    expect(html).not.toContain('pType');
     expect(html).toContain('clientSecretRef');
     expect(html).toContain('authorizationEndpoint');
     expect(html).toContain('tokenEndpoint');
@@ -1651,7 +1657,7 @@ describe('web admin routes over HTTP (sdd_host)', () => {
       method: 'POST',
       path: '/web/admin/providers',
       headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' },
-      body: JSON.stringify({ id: PROVIDER_ID, providerType: 'oidc', enabled: true, updatedAt: '' }),
+      body: JSON.stringify({ id: PROVIDER_ID, enabled: true, updatedAt: '' }),
     });
     expect(put.status).toBe(200);
     // The body names no redirect address: the save is answered with the warning.

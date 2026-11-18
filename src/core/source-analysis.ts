@@ -1,7 +1,6 @@
 import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { createHash } from 'crypto';
 import {
   implementationSourceFiles,
   routerLinkage,
@@ -3271,14 +3270,23 @@ function walkDeclaredRoots(
 // ---------------------------------------------------------------------------
 
 /**
- * Parsed source files reused across runs, keyed on what a parse depends on:
+ * Parsed source files shared within one run, keyed on what a parse depends on:
  * the compiler module, the options it was parsed under and the file's exact
- * text. A long-lived process never answers from a stale parse — a changed
- * file, or a different compiler, misses — and a run over an unchanged tree
- * parses nothing twice (the language library alone is most of the cost).
+ * text. A file the program asks for twice is parsed once; a changed file, or a
+ * different compiler, misses. Released once the run's reading is taken.
  */
 const parsedSources = new Map<string, { ts: TsModule; settings: string; text: string; sf: import('typescript').SourceFile }>();
 const PARSED_SOURCES_MAX = 4000;
+
+/**
+ * Once a reading is taken, every parse is let go. The checker bound them to
+ * the program it built, so holding them holds that program's symbols in a
+ * long-lived process (about 0.5 GB on a large tree), for a saving of a few
+ * seconds on the next run, which a code edit starts afresh anyway.
+ */
+function releaseParsedSources(): void {
+  parsedSources.clear();
+}
 
 /** The compiler options the program is built under: the project's tsconfig module resolution, with emit, ambient types and the DOM library left out. */
 function checkerOptions(ts: TsModule, projectRoot: string): import('typescript').CompilerOptions {
@@ -4477,7 +4485,7 @@ interface CheckerReading {
 }
 
 /**
- * The one file set both buildCodeModel and fingerprintSources take: every
+ * The one file set both buildCodeModel and sourceFiles take: every
  * source file an implementation names (its own path, then each method's), its
  * simPath and router module, then every file a type names, then the walked
  * root files — in that order, before deduplication. `claimed` is the files
@@ -4565,44 +4573,25 @@ function importChain(seeds: readonly string[], projectRoot: string): string[] {
 }
 
 /**
- * A fingerprint of the files buildCodeModel would read: the same set, each
- * file's path with its size and modification time (stat only, no content), or
- * its classification when it is missing, escaped or not a file; folded in
- * path order into one digest. Not a content hash: a change that keeps both
- * size and modification time is not seen.
+ * The source files buildCodeModel reads for these specs, in the order it walks
+ * them and deduplicated, and the ones the implementations claim; no file's
+ * content is read.
  */
-export function fingerprintSources(
+export function sourceFiles(
   implementations: ImplementationSpec[],
   types: TypeSpec[],
   projectRoot: string,
   sourceRoots: readonly string[] = [],
   exclude: readonly string[] = [],
-): string {
-  const { declaredPaths } = sourceFileSet(implementations, types, projectRoot, sourceRoots, exclude);
-  const entries = new Map<string, string>();
-  for (const declared of declaredPaths) {
-    const key = pathKey(declared);
-    if (entries.has(key)) continue;
-    if (path.isAbsolute(key) || path.normalize(key).split(path.sep)[0] === '..') {
-      entries.set(key, 'escaped');
-      continue;
-    }
-    const absolute = path.resolve(projectRoot, key);
-    if (path.relative(projectRoot, absolute).startsWith('..')) {
-      entries.set(key, 'escaped');
-      continue;
-    }
-    try {
-      const stat = ioFiles.stat(absolute);
-      entries.set(key, stat.isFile() ? `${stat.size}:${stat.mtimeMs}` : 'missing');
-    } catch {
-      entries.set(key, 'missing');
-    }
-  }
-  const hash = createHash('sha256');
-  for (const key of [...entries.keys()].sort()) hash.update(`${key} ${entries.get(key)}
-`);
-  return hash.digest('hex');
+): SourceFileSet {
+  const { declaredPaths, claimed } = sourceFileSet(implementations, types, projectRoot, sourceRoots, exclude);
+  return { files: [...new Set(declaredPaths.map(pathKey))], claimed: [...new Set(claimed.map(pathKey))] };
+}
+
+/** The source files the code model reads, and the ones the implementations claim. */
+export interface SourceFileSet {
+  files: string[];
+  claimed: string[];
 }
 
 /**
@@ -4785,6 +4774,8 @@ export function buildCodeModel(
     } catch {
       resolved = new Map();
       imports = new Map();
+    } finally {
+      releaseParsedSources();
     }
     const held = new Set<string>();
     for (const facts of files) {

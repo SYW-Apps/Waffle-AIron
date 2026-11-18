@@ -1,0 +1,23 @@
+kind: value-object
+id: dev_review
+name: DevReview
+description: >-
+  One pending review request as the dev page lists it: the request, and the member project it was
+  made in when it is not the served project's own. An agent working inside a member project's folder
+  asks at that member's root; the parent's page shows and decides it.
+subsystem: sdd_host
+fields:
+  - name: request
+    type: ReviewRequest
+    description: The request as it now stands
+    optional: false
+  - name: member
+    type: string
+    description: >-
+      The alias of the direct member project the request was made in; absent for the served
+      project's own
+    optional: true
+methods: []
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-12T01:02:14.363Z'
+updatedAt: '2026-11-12T01:02:15.346Z'

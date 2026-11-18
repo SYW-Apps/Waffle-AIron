@@ -1,0 +1,18 @@
+/* The static demo only: this file is imported by the demo page and is absent from the normal web app. */
+.demo-note {
+  font-size: 12px;
+  color: var(--wairon-text-muted, var(--syw-color-text-muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .demo-note { display: none; }
+}
+/* A recorded spec takes no edits: its fields look at rest. */
+.demo-readonly input,
+.demo-readonly textarea,
+.demo-readonly select {
+  cursor: default;
+}

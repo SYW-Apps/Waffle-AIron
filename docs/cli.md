@@ -1094,7 +1094,8 @@ rules (see [Extending wairon](extending-wairon.md)).
 |---------|-------------|
 | `wairon pack init <name> [--kind declarative\|code] [--dir <path>] [--skill]` | Scaffold a new pack project |
 | `wairon pack build [source] [--out <file>]` | Build an installable `.wpack` archive from a pack directory |
-| `wairon pack install <source> [-y]` | Install a pack (`.wpack`/`.zip` or a directory) into this machine's pack store. It applies to nothing until a project selects it |
+| `wairon pack install <source> [-y] [--registry] [--allow-unverified-code]` | Install a pack into this machine's pack store: from the wairon pack registry by name (`@scope/pack`, `@scope/pack@^1.2`), or from a `.wpack`/`.zip`, a directory or a URL. It applies to nothing until a project selects it. `wairon install` and `wairon i` do the same. A code pack from a publisher who is not verified needs `--allow-unverified-code` or a yes to the question; `-y` is not that consent |
+| `wairon pack publish [source]` | Publish a pack directory (built first) or a `.wpack` to the wairon pack registry, with the token in `WAIRON_REGISTRY_TOKEN` |
 | `wairon pack uninstall <name>[@version]` | Remove a pack from the store |
 | `wairon pack use <name>[@version] [--source <url>] [--pin] [--bundle] [-y]` | Select an installed pack for this project, recorded in `.wai/project.yaml` |
 | `wairon pack unuse <name> [-y]` | Deselect a pack for this project (it stays installed) |
@@ -1609,7 +1610,7 @@ its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in 
 content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
 `which -a wairon` elsewhere), then reconnect the assistant.
 
-The local server offers 52 tools:
+The local server offers 58 tools:
 
 | Group | Tools |
 |-------|-------|
@@ -1622,8 +1623,11 @@ The local server offers 52 tools:
 | Externals | `sdd_add_external`, `sdd_update_external`, `sdd_remove_external`, `sdd_pin_externals`, `sdd_get_externals_status` |
 | Public surface (the producer's side) | `sdd_list_consumers`, `sdd_surface_diff` |
 | Network | `sdd_set_network`, `sdd_get_network_flows`, `sdd_explain_flow` |
+| Project configuration (each takes `dryRun`; the human re-locks after a write) | `sdd_update_rules` (rules; a rule set below its default severity needs a reason (why) and is reported on every run), `sdd_carry_findings` (the conformance debt register), `sdd_configure_project` (name, description, project type, execution tier, packs, targets, composition) |
 | Packs | `sdd_pack_impact` |
 | Delegation | `sdd_get_agent_brief` (the live brief for one agent; also served as the `wairon-agent://` resource) |
+| Review | `sdd_request_review` (ask the human to review the design, or to approve it with a lock; validates first, records the request under `.wai/.local/reviews/`), `sdd_await_review` (wait for the answer: the decision, its comment and the notes pinned to specs) |
+| Practices | `sdd_use_practices` (list the practices the loaded packs declare; add or drop practices for this session, which later briefs carry) |
 
 Every tool description ends with its argument names (`Arguments: id, newId, dryRun?.`). Every write
 tool refuses a spec of another project — a member's spec read through this tree is written from the
@@ -1832,7 +1836,7 @@ A person signs in one of two ways; the startup log names the ones configured:
   Sign-in (SSO) view and the startup log warn about it). A provider added in
   the UI names the same list under Allowed redirect URIs, usually the one
   address `<public URL>/web/sso/callback`. Optional: `WAIRON_OIDC_DISPLAY_NAME` (the button
-  label), `WAIRON_OIDC_PROVIDER_TYPE` (default `oidc`),
+  label),
   `WAIRON_OIDC_ALLOWED_DOMAINS` (email domains admitted),
   `WAIRON_OIDC_ADMIN_GROUPS` (group claims bound to the built-in `sso-admin`
   role: project administration and creation everywhere, never the
@@ -1909,7 +1913,7 @@ again.
 
 | Command | Description |
 |---------|-------------|
-| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only). It serves the same project over MCP (streamable HTTP) at `POST http://127.0.0.1:<port>/mcp?project=local` — the current project is registered as `local`; without `?project=local` the endpoint answers 403. For an AI tool on the same machine the stdio server (`wairon mcp serve`, what `wairon mcp install` registers) remains the usual route |
+| `wairon dev [--port <port>] [--open]` | A local single-project dev server: the wairon web UI over the current project, no login or tenancy (loopback only). Without `--port` it takes the first free port from 8080 upward (to 8099; the dev admin listener uses the next port), so a second project's dev server never collides with the first; it prints the URL it chose. With `--port` it uses exactly that port and says so plainly when it is taken. It serves the same project over MCP (streamable HTTP) at `POST http://127.0.0.1:<port>/mcp?project=local` — the current project is registered as `local`; without `?project=local` the endpoint answers 403. For an AI tool on the same machine the stdio server (`wairon mcp serve`, what `wairon mcp install` registers) remains the usual route |
 | `wairon update [--check] [--channel <name>]` | Check/install the latest release; switch channel |
 | `wairon aliases list` | Show command aliases (`wai`) and their status |
 | `wairon aliases enable <name>` / `disable <name>` | Create / remove an alias |

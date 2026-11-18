@@ -53,7 +53,7 @@ instructions: |
 
 ## SDD skills (not templates)
 
-The five SDD skill files in `src/templates/skills/` (`sdd-architect`,
+The five SDD skill files in `plugins/wairon/skills/` (`sdd-architect`,
 `sdd-narrative`, `sdd-auditor`, `sdd-implement`, `sdd-delegate`) are different:
 they are copied verbatim (with the
 CLI command substituted) into each target tool's `skills/` directory by

@@ -78,29 +78,40 @@ methods:
         optional: true
   - name: installPack
     description: >-
-      `wairon pack install <source>` — install a pack into this wairon install's store from a pack
-      DIRECTORY, a local .wpack archive, or an HTTP(S) URL. Applies to nothing: a project opts in
-      separately by selecting the pack by name. A URL is fetched to a temporary file and then
-      follows the identical archive path (SDK envelope inspection, code-pack refusal, extraction
-      limits), so a remote pack is validated exactly like a local one with no second code path to
-      diverge. A local-path origin is reported as unfetchable, because CI and a fresh clone could
-      not obtain it. One exception to "applies to nothing" is an update in disguise: run inside a
-      project whose selection of the same name floats (no version pin), a version that would become
-      the latest installed changes that project's doctrine. Then, before the store write, it shows
-      that project's impact (the extracted manifest measured as a supplied candidate for the
-      floating selection) and asks to install; declining installs nothing. Under --yes, or with no
-      terminal, it installs and says the floating selection now resolves to the new version, without
-      the report. Other projects on the machine that float on the name are not measured: nothing
-      here knows them.
-    signature: 'installPack(source: string, yes?: bool): async void'
+      `wairon pack install <source>` (also `wairon install` and `wairon i`) — install a pack into
+      this wairon install's store from the wairon pack registry by name (`@scope/pack`, a flat
+      trusted name, either with `@range`), from a pack DIRECTORY, a local .wpack archive, or an
+      HTTP(S) URL. Applies to nothing: a project opts in separately by selecting the pack by name. A
+      registry name resolves to one exact version first; a code pack from a publisher not verified
+      both at publish time and now needs explicit consent (--allow-unverified-code or an interactive
+      yes; --yes is not consent), and the installed content must hash to the integrity the registry
+      reports. A URL or a registry archive is fetched to a temporary file and then follows the
+      identical archive path (SDK envelope inspection, extraction limits), so a remote pack is
+      validated exactly like a local one with no second code path to diverge. A local-path origin is
+      reported as unfetchable, because CI and a fresh clone could not obtain it; a registry install
+      records the registry's source template, which they can. One exception to "applies to nothing"
+      is an update in disguise: run inside a project whose selection of the same name floats (no
+      version pin), a version that would become the latest installed changes that project's
+      doctrine. Then, before the store write, it shows that project's impact (the extracted manifest
+      measured as a supplied candidate for the floating selection) and asks to install; declining
+      installs nothing. Under --yes, or with no terminal, it installs and says the floating
+      selection now resolves to the new version, without the report. Other projects on the machine
+      that float on the name are not measured: nothing here knows them.
+    signature: 'installPack(source: string, yes?: bool, options?: PackInstallOptions): async void'
     returns: async void
     params:
       - name: source
         type: string
-        description: A pack directory or a .wpack/.zip archive.
+        description: >-
+          A registry name (`name` or `name@range`), a pack directory, a .wpack/.zip archive, or an
+          HTTP(S) URL.
       - name: 'yes'
         type: bool
         description: Install without showing the impact report
+        optional: true
+      - name: options
+        type: PackInstallOptions
+        description: Registry install switches
         optional: true
   - name: uninstallStorePack
     description: >-
@@ -194,9 +205,15 @@ methods:
       naming the manual route. A pinned integrity digest is verified at install time rather than
       being discovered later by the gate. Fetching happens ONLY here and in `pack install <url>` —
       never during validation — because the core workflow must work offline.
-    signature: 'syncPacks(): async void'
+    signature: 'syncPacks(allowUnverifiedCode?: bool): async void'
     returns: async void
-    params: []
+    params:
+      - name: allowUnverifiedCode
+        type: bool
+        description: >-
+          Consent to a registry code pack from an unverified publisher whose selection pins no
+          integrity (--allow-unverified-code)
+        optional: true
   - name: impactPack
     description: >-
       `wairon pack impact <name>[@version]` — show, on demand and writing nothing, what the pack
@@ -212,6 +229,21 @@ methods:
       - name: spec
         type: string
         description: A pack name, or name@version.
+  - name: publishPack
+    description: >-
+      `wairon pack publish [source]` — publish a pack to the wairon pack registry. A pack directory
+      is built into a .wpack first (the SDK's build); a .wpack is sent as it is. Needs a registry
+      token in WAIRON_REGISTRY_TOKEN (created on the registry's account page). Reports the published
+      version and its page; for a version already published, says whether the stored content is the
+      same as this archive (the registry never reuses a version); for a refusal, the registry's
+      reason and every validation finding.
+    signature: 'publishPack(source?: string): async void'
+    returns: async void
+    params:
+      - name: source
+        type: string
+        description: A pack directory or a .wpack archive; the current directory when absent
+        optional: true
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-10-04T10:31:58.164Z'
+updatedAt: '2026-11-07T00:23:14.106Z'

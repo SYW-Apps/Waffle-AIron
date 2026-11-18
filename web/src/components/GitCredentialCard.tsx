@@ -31,7 +31,7 @@ export function GitCredentialCard() {
   }
 
   return (
-    <div className="panel">
+    <div className="syw-card">
       <h4>
         Shared git access token {isSet ? <Badge tone="ok">set</Badge> : <Badge tone="warn">not set</Badge>}
       </h4>
@@ -91,7 +91,7 @@ export function GitPatSummary() {
 /** The exact, least-privilege PAT recipe per provider — Contents/repo write only. */
 function TokenHelp() {
   return (
-    <div className="token-help">
+    <div className="syw-alert token-help">
       <p className="token-help-note">
         The token only needs to <strong>read and write repository contents</strong> (clone, commit, push). Grant
         nothing else — no admin, workflows, packages, or org scopes. A brand-new <em>empty</em> repo is fine — wairon

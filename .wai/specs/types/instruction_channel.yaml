@@ -1,0 +1,24 @@
+kind: enum
+id: instruction_channel
+name: InstructionChannel
+description: >-
+  Where a pack's instruction block is delivered to agents. A block names the channels it reaches;
+  one naming none reaches the server only, as every block did before channels existed, so an
+  existing pack's guidance lands exactly where it did.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/pack-instructions.ts
+values:
+  - name: server
+    description: The MCP initialize instructions a connecting agent receives at the start of a session
+  - name: guide
+    description: >-
+      The generated in-project guide file (the project instructions an AI tool loads), under the
+      project's governing profile. The machine-wide guide never carries pack text
+  - name: brief
+    description: >-
+      A live agent brief, under the profile governing that agent's component: its subsystem's
+      profile, else the project's
+createdAt: '2026-11-06T19:52:13.065Z'
+updatedAt: '2026-11-06T21:07:19.562Z'

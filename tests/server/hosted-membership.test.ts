@@ -592,7 +592,9 @@ describe('the UI routes', () => {
     platformConsumesBilling();
     const snapshot = captureSnapshot(dataDir, principalOf('u-view'), 'platform', 'canvas', ['html']);
     const model = JSON.parse(snapshot.canvasModel) as RelModel;
-    expect(model.relations).toEqual([expect.objectContaining({ id: '→billing', health: 'ok', comparedAt: expect.stringMatching(/^\d{4}-/) })]);
+    // The family's bare declarations (billing ⊃ payments, docs → billing) are drawn too, each naming its own relation.
+    expect(model.relations).toContainEqual(expect.objectContaining({ id: '→billing', health: 'ok', comparedAt: expect.stringMatching(/^\d{4}-/) }));
+    expect(model.relations?.every((r) => /^\d{4}-/.test(r.comparedAt))).toBe(true);
     expect(model.subsystems.some((s) => s.recordId !== undefined)).toBe(false);
     expect(snapshot.html).toContain('"relations":[');
     expect(snapshot.html).not.toContain('"recordId"');
@@ -605,6 +607,23 @@ describe('the UI routes', () => {
     expect(answer.externals).toEqual([expect.objectContaining({ alias: 'billing', sourceKind: 'family', reachable: true })]);
     user('u-out');
     expect((await web(sessionFor('u-out'), '/web/projects/externals?projectId=docs')).status).toBe(403);
+  });
+
+  it('GET /web/projects/members: the declared members of an authorized project; another project is Forbidden', async () => {
+    seedPeople();
+    const answer = (await web(sessionFor('u-view'), '/web/projects/members?projectId=platform')).body as { alias: string; kind: string; storage: string; subsystems: string[] }[];
+    expect(Array.isArray(answer)).toBe(true);
+    expect(answer.map((m) => m.alias)).toEqual(['billing', 'payments', 'docs']);
+    expect(answer[0]).toMatchObject({ kind: 'project', storage: 'contained', subsystems: [] });
+    user('u-out');
+    expect((await web(sessionFor('u-out'), '/web/projects/members?projectId=platform')).status).toBe(403);
+  });
+
+  it('GET /web/projects/members: a project that declares no members answers 200 with an empty list', async () => {
+    seedPeople();
+    const res = await web(sessionFor('u-view'), '/web/projects/members?projectId=docs');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
   });
 
   it('GET /web/projects/network: the network view model of an authorized project; another project is Forbidden', async () => {

@@ -1,0 +1,29 @@
+kind: value-object
+id: project_revision
+name: ProjectRevision
+description: >-
+  What a ProjectChange did, or with dryRun would do: the configuration before and after, which parts
+  of what the lock approves it moves, and whether it wrote.
+fields:
+  - name: before
+    type: ProjectConfig
+    description: The configuration as stored before the change
+    optional: false
+  - name: after
+    type: ProjectConfig
+    description: The configuration the change writes
+    optional: false
+  - name: approvalMoves
+    type: list<string>
+    description: >-
+      The parts of the approval the change moves (packs, composition, projectType), so the human
+      re-locks; empty when none
+    optional: false
+  - name: wrote
+    type: bool
+    description: Whether the configuration was written
+    optional: false
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-11-14T16:09:02.422Z'
+updatedAt: '2026-11-14T16:13:08.775Z'

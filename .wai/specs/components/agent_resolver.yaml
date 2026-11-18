@@ -16,6 +16,7 @@ dependsOn:
   - execution_profiler
   - budget_policy
   - files_adapter
+  - extension_orchestrator
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-31T23:22:02.879Z'
+updatedAt: '2026-11-06T19:53:03.393Z'

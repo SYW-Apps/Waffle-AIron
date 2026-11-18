@@ -267,10 +267,10 @@ methods:
         description: >-
           depPure = edge.to is pure logic, an Orchestrator whose dependencyClass is pure; storeHint
           = storeResolutionHint(edge.from.componentType, edge.to.id) when edge.to is a Store, else
-          empty — the family's shared helper, ending in its NEVER_INLINE_STATE sentence: a logic
-          consumer is told to wrap the Store in a Repository and depend on that facade, any other
-          consumer to reach it through an Orchestrator on that facade, and both never to merge the
-          state into the consumer
+          empty — the family's shared helper, ending in its NEVER_INLINE_STATE sentence: a consumer
+          that may not reach a Store directly is told to reach it through an Orchestrator that may
+          (read logic or a workflow) — a Store needs no Repository around it — and never to merge
+          the state into the consumer
         type: local
       - stepNumber: 4
         label: pureClass
@@ -284,20 +284,20 @@ methods:
           edge.draftContext) naming edge.from as an Orchestrator of class pure and edge.to with its
           componentType and its dependencyClass when it has one: pure logic depends only on pure
           Orchestrators, so move that dependency to the workflow that calls it, or declare it read
-          when it reads through read logic, a Repository, an Index or an Adapter. The message ends
-          with storeHint
+          when it reads through read logic, a Store, a Repository, an Index or an Adapter. The
+          message ends with storeHint
         type: local
       - stepNumber: 6
         label: readClass
         description: >-
-          Does read logic depend on anything but pure or read logic, a Repository, an Index or an
-          Adapter? Only the dependency's stereotype and class are judged here: whether read logic
-          calls a write method on a Repository, Index or Adapter is judged only once facade methods
-          carry effect tags
+          Does read logic depend on anything but pure or read logic, a Store, a Repository, an Index
+          or an Adapter? Only the dependency's stereotype and class are judged here: whether read
+          logic calls a write method on a Store, Repository, Index or Adapter is judged only once
+          facade methods carry effect tags
         type: branch
         condition: >-
           edge.from is an Orchestrator whose dependencyClass is read, and edge.to is not depPure,
-          not read logic, and not a Repository, an Index or an Adapter
+          not read logic, and not a Store, a Repository, an Index or an Adapter
         onFalseStep: 1
       - stepNumber: 7
         label: readViolation
@@ -305,8 +305,8 @@ methods:
           Report DEPENDENCY_CLASS_VIOLATION (error, on edge.from.id; draft context
           edge.draftContext) naming edge.from as an Orchestrator of class read and edge.to with its
           componentType and its dependencyClass when it has one: read logic depends only on pure or
-          read Orchestrators, Repositories, Indexes and Adapters, so move that dependency to the
-          workflow that calls it, or unset its dependencyClass when it is itself a workflow. The
+          read Orchestrators, Stores, Repositories, Indexes and Adapters, so move that dependency to
+          the workflow that calls it, or unset its dependencyClass when it is itself a workflow. The
           message ends with storeHint
         type: local
     symbol: check
@@ -323,7 +323,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.dependencyEdges().matrix
-        endStep: 13
+        endStep: 16
       - stepNumber: 2
         label: entrypointTarget
         description: >-
@@ -381,26 +381,44 @@ methods:
           Store or any other Orchestrator
         type: local
       - stepNumber: 10
-        label: indexDep
+        label: indexIo
         description: >-
-          Does an Index, a read projection, depend on anything but its Store, a backend Adapter,
-          pure logic — or, the exceptional derived-Index case, another Index owned by the same
-          Repository that does not reach back to it through Index edges (no Index cycle)?
+          Does an Index depend on an Adapter? An Index is a lookup kept in memory over its Store's
+          entries and does no IO: reading data is the Store's work
         type: branch
-        condition: >-
-          edge.from is an Index, ownStoreOnly, and the edge is not a derived-Index edge (edge.to is
-          an Index owned by the same Repository as edge.from, and edge.to does not reach edge.from
-          through Index-to-Index edges)
-        onFalseStep: 12
+        condition: edge.from is an Index and edge.to is an Adapter
+        onFalseStep: 13
       - stepNumber: 11
         description: >-
-          Report ARCHITECTURE_VIOLATION_INDEX_DEP (error, on edge.from.id; draft context
-          edge.draftContext) naming both components: an Index may depend only on its Store, a
-          backend Adapter or pure logic — or, as an exceptional case, on another Index of the same
-          Repository, never in a cycle; the message says which of the two guardrails an
-          Index-to-Index edge broke
+          Report INDEX_DOES_IO (warning, on edge.from.id, at the Adapter's id as its site; draft
+          context edge.draftContext) naming the Index and the Adapter: an Index keeps a lookup over
+          its Store's entries in memory, so move the read to the Store (the Store may depend on the
+          Adapter) and have the Index project what the Store holds
         type: local
       - stepNumber: 12
+        description: On to the next edge
+        type: jump
+        toStep: 1
+      - stepNumber: 13
+        label: indexDep
+        description: >-
+          Does an Index, a lookup projection, depend on anything but its Store, pure logic — or, the
+          exceptional derived-Index case, another Index owned by the same Repository that does not
+          reach back to it through Index edges (no Index cycle)? An Adapter was judged at indexIo
+        type: branch
+        condition: >-
+          edge.from is an Index, edge.to is not an Adapter, ownStoreOnly, and the edge is not a
+          derived-Index edge (edge.to is an Index owned by the same Repository as edge.from, and
+          edge.to does not reach edge.from through Index-to-Index edges)
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Report ARCHITECTURE_VIOLATION_INDEX_DEP (error, on edge.from.id; draft context
+          edge.draftContext) naming both components: an Index may depend only on its Store or pure
+          logic — or, as an exceptional case, on another Index of the same Repository, never in a
+          cycle; the message says which of the two guardrails an Index-to-Index edge broke
+        type: local
+      - stepNumber: 15
         label: queryDep
         description: >-
           Does a Query, a computed read over its Repository's Store, depend on anything but a Store,
@@ -408,7 +426,7 @@ methods:
         type: branch
         condition: edge.from is a Query and ownStoreOnly
         onFalseStep: 1
-      - stepNumber: 13
+      - stepNumber: 16
         label: queryViolation
         description: >-
           Report ARCHITECTURE_VIOLATION_QUERY_DEP (error, on edge.from.id; draft context
@@ -894,25 +912,12 @@ methods:
         type: loop
         loopKind: forEach
         over: the components of ctx.components whose id ownership.ownedMembers lacks
-        endStep: 9
+        endStep: 7
       - stepNumber: 3
         label: draft
         description: isDraftCtx = ctx.isComponentDraft(comp.id)
         type: local
       - stepNumber: 4
-        label: unownedStore
-        description: Is it a Store?
-        type: branch
-        condition: comp.componentType is Store
-        onFalseStep: 6
-      - stepNumber: 5
-        description: >-
-          Report UNOWNED_STORE (warning, on comp.id; draft context isDraftCtx) naming the Store: the
-          recommended shape is a Repository owning it with its Registry and Index; a deliberate
-          standalone Store stays visible, is reached from the workflow layer and carries a
-          lint.allow reason; never merge the state into a consuming component
-        type: local
-      - stepNumber: 6
         label: standaloneRegistry
         description: >-
           Is it a Registry with no Store to write to, and no Supervisor's directory of live handles?
@@ -921,14 +926,14 @@ methods:
         condition: >-
           comp.componentType is Registry, handleDirectories does not hold comp.id, and no id in
           comp.dependsOn resolves through ctx.componentMap to a Store
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 6
+      - stepNumber: 5
         description: >-
           Report REGISTRY_WITHOUT_STORE (warning, on comp.id; draft context isDraftCtx) naming the
           Registry: if it holds the record state itself, retype it as a Store with honest
           durability; otherwise wire its Store, or lint.allow with a reason
         type: local
-      - stepNumber: 8
+      - stepNumber: 6
         label: unownedQuery
         description: >-
           Is it a Query? A Query that a non-Repository pattern owns is that pattern's containment
@@ -936,7 +941,7 @@ methods:
         type: branch
         condition: comp.componentType is Query
         onFalseStep: 2
-      - stepNumber: 9
+      - stepNumber: 7
         label: unownedQueryReport
         description: >-
           Report UNOWNED_QUERY (error, on comp.id; draft context isDraftCtx) naming the Query: a
@@ -1632,4 +1637,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-31T21:51:53.784Z'
+updatedAt: '2026-11-14T19:07:30.085Z'

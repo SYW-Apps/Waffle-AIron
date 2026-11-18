@@ -26,6 +26,7 @@ dependsOn:
   - gate_identity
   - reach_model_projector
   - doctrine_rules
+  - code_model_loader
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-08T19:14:48.774Z'
+updatedAt: '2026-11-10T19:03:12.767Z'

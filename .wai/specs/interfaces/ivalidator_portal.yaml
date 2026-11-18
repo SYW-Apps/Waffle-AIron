@@ -316,6 +316,42 @@ methods:
       `sdd_validate_tree` append it beside a member's owner-gate findings when the run was not a
       family run; it never decides `valid` or `--ci`.
     signatureFrom: family_validator.adviseNetwork
+    effect: read
+  - name: validateProjectAsync
+    description: >-
+      The owner's gate for the bound project, run off the caller's thread: a serving process keeps
+      answering requests while a cold run takes its time. Answered by the validation memo on the
+      validation thread.
+    signature: 'validateProjectAsync(options?: ValidationOptions): async ValidationResult'
+    returns: async ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        optional: true
+  - name: validateAsCompleteAsync
+    description: The as-complete gate for the bound project, run off the caller's thread.
+    signature: 'validateAsCompleteAsync(options?: ValidationOptions): async ValidationResult'
+    returns: async ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        optional: true
+  - name: warm
+    description: >-
+      Start both gates for the bound project in the background, with the options the page will ask
+      them with, so the first page that needs them finds them remembered. Failures are ignored: the
+      page asks again.
+    signature: 'warm(options?: ValidationOptions): void'
+    returns: void
+    params:
+      - name: options
+        type: ValidationOptions
+        optional: true
+  - name: stopBackground
+    description: Stop the validation thread when it runs, for a serving process that shuts down.
+    signature: 'stopBackground(): async void'
+    returns: async void
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T12:03:46.249Z'
+updatedAt: '2026-11-12T00:39:35.099Z'

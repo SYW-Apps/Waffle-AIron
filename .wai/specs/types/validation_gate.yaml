@@ -1,0 +1,15 @@
+kind: enum
+id: validation_gate
+name: ValidationGate
+description: Which remembered gate a background run answers.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/core/validation-runner.ts
+values:
+  - name: owner
+    description: The owner's gate, each spec at its authored status (validateProject)
+  - name: as_complete
+    description: The as-complete gate, every spec judged as complete (validateAsComplete)
+createdAt: '2026-11-11T23:25:16.619Z'
+updatedAt: '2026-11-11T23:25:18.092Z'

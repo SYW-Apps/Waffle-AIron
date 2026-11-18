@@ -37,7 +37,9 @@ verdict" job unless a passing verdict covers the code being merged (stage 5).
 5. **The verdict file, then the release merge.** Write `qa/verdicts/<version>.md`
    (format in `qa/verdicts/README.md`) and the release's curated highlights in
    `release-notes/<version>.md` (a few `- ` lines: what a user notices, not every change), add the unfixed edge majors to the CHANGELOG as known
-   limitations, take the lock if the specs moved, and open dev -> main.
+   limitations, take the lock if the specs moved, stamp the agent-tool plugins with the release
+   version (`node scripts/plugin/stamp-version.mjs <version>`; the Release workflow refuses a stable
+   tag whose plugin manifests name another version), and open dev -> main.
 
 ## CORE and EDGE
 

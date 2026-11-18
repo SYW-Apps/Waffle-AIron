@@ -1,0 +1,17 @@
+id: validation_memo_cache_impl
+name: Validation Memo Cache Implementation
+description: >-
+  src/core/validation-memo.ts: a process-local map from project root and options key to the last
+  entry.
+contract: ivalidation_memo_cache
+sourcePath: src/core/validation-memo.ts
+methods:
+  - name: get
+    narrative: []
+    intent: Answer the entry held under the root and options key, or none.
+  - name: put
+    narrative: []
+    intent: Hold the entry under the root and its options key, replacing an earlier one.
+status: complete
+createdAt: '2026-11-07T15:06:38.867Z'
+updatedAt: '2026-11-07T15:06:39.721Z'

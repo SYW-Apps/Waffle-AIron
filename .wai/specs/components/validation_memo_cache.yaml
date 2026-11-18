@@ -1,0 +1,19 @@
+id: validation_memo_cache
+name: Validation Memo Cache
+description: >-
+  The last few gate results per project root and run options (up to eight, newest first), each with
+  the content fingerprints of the files it read, so a tree switched away and back (another branch,
+  then this one again) is answered from memory. Evictable and loss-safe: a lost entry costs one
+  validation run, never a wrong answer, because an entry is found only by both fingerprints. Held in
+  the process only (a long-running server: the dev server, the hosted server, an MCP session);
+  validation_result_file keeps them across processes.
+subsystem: sdd_validator
+componentType: Store
+owns: []
+dependsOn: []
+durability: cache
+lint:
+  allow: []
+status: complete
+createdAt: '2026-11-07T15:06:15.144Z'
+updatedAt: '2026-11-14T19:08:30.785Z'

@@ -7,9 +7,11 @@ description: >-
   applies its own landscape:read scoping) or projects one authorized project's spec tree at the
   requested detail level (binding the project via the project repository within the principal's
   authorized set, projecting through the host core adapter, and overlaying validator issues as node
-  issue counts). Split out of the web session orchestrator so neither exceeds the god-component
-  dependency threshold; the web portal reaches it directly, because a hop that only forwards
-  separates no responsibility.
+  issue counts). A project's built graph and canvas model are kept in the web view cache between
+  reads: an unchanged project is answered from it, and a changed one is drawn at once with the last
+  known findings while the gate runs again in the background. Split out of the web session
+  orchestrator so neither exceeds the god-component dependency threshold; the web portal reaches it
+  directly, because a hop that only forwards separates no responsibility.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -23,6 +25,7 @@ dependsOn:
   - host_surfaces_adapter
   - host_network_adapter
   - files_adapter
+  - web_view_cache
 status: complete
 createdAt: '2026-07-11T11:31:43.700Z'
-updatedAt: '2026-10-31T23:25:45.674Z'
+updatedAt: '2026-11-13T16:01:58.685Z'

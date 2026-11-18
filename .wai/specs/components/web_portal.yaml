@@ -37,10 +37,11 @@ dependsOn:
   - landscape_orchestrator
   - operations_orchestrator
   - project_lifecycle_orchestrator
+  - dev_cockpit_orchestrator
 transport: HTTP
 invokedBy:
   kind: entry
   caller: Clients served through the listener host_http_portal under "/web", "/"
 status: complete
 createdAt: '2026-07-11T11:31:55.624Z'
-updatedAt: '2026-10-06T18:55:11.771Z'
+updatedAt: '2026-11-07T02:42:49.038Z'

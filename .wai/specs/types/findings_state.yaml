@@ -1,0 +1,21 @@
+kind: enum
+id: findings_state
+name: FindingsState
+description: How current the findings a drawn view carries are, so the page can say so while the gate runs on.
+fields: []
+methods: []
+sourcePath: src/core/canvas.ts
+symbol: FindingsState
+values:
+  - name: current
+    description: The findings are the gate's answer for the tree and code as they are now
+  - name: stale
+    description: >-
+      The findings are the last ones the gate gave; the tree or the code has changed since, and the
+      gate is running again in the background
+  - name: pending
+    description: >-
+      No gate has answered for this project yet: the view carries no findings, and the gate is
+      running in the background
+createdAt: '2026-11-13T16:01:19.638Z'
+updatedAt: '2026-11-13T16:01:20.231Z'

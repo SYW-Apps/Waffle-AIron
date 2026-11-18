@@ -1,0 +1,15 @@
+kind: signature
+id: change_listener
+name: ChangeListener
+description: Told that a file below a watched directory was created, changed or removed.
+subsystem: sdd_io
+fields: []
+methods: []
+sourcePath: src/io/files.ts
+params:
+  - name: path
+    type: string
+    description: The changed path, relative to the watched directory
+returns: void
+createdAt: '2026-11-07T02:40:22.968Z'
+updatedAt: '2026-11-07T02:40:23.834Z'

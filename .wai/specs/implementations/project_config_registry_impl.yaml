@@ -320,7 +320,54 @@ methods:
     calls:
       - project_config_store.read
       - project_config_store.write
+  - name: reviseRules
+    narrative: []
+    intent: >-
+      Reads the configuration through the store; refuses when there is none. Refuses a path under
+      `conformance.carried`. Applies the change to a copy of `rules`: each `set` value at its dotted
+      path (a map key is the segment after the map's name), each `unset` path removed, each `add`
+      entry appended to its list when absent, each `remove` entry dropped; refuses a path that is
+      not a rules field and a value the rules schema rejects, naming it. For each `sddRuleSeverity`
+      code the change sets: below its default severity (error > warning > notice > off) is a
+      lowering, refused without `why` and otherwise recorded as that code's `severityReasons` entry;
+      at or above its default drops any reason. Each `sddRuleSeverity` code it unsets drops its
+      reason too. Answers the rules before and after, the codes newly lowered with their reasons,
+      and whether it wrote; it writes through the store, leaving every other field and key
+      untouched, only when not dryRun and the rules changed.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: reviseDebt
+    narrative: []
+    intent: >-
+      Reads the configuration through the store; refuses when there is none. Works on a copy of
+      `rules.conformance.carried`: add appends a group (refused without kind and why); extend
+      appends findings to the group at `group`; revise sets the stated kind, why and revisit (null
+      removes revisit); remove drops the named findings (matched by code, spec and at) from the
+      group at `group`, or the whole group when none are named, and drops a group left with no
+      findings. Refuses a position the register does not hold, and a finding whose code is not in
+      `carryable`, naming it. Answers the register before and after and whether it wrote; it writes
+      through the store only when not dryRun and the register changed, leaving every other field,
+      key and the register's comments untouched.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: reviseProject
+    narrative: []
+    intent: >-
+      Reads the configuration through the store; refuses when there is none. Applies to a copy each
+      field the change states: name, description, projectType, execution.tier, each selected pack
+      (dropping earlier selections naming it and appending it last, as upsertPackSelection does),
+      each deselected pack (as removePackSelection does), extensions.useGlobalPacks, targets and
+      composition (both replacing the stored value); refuses a value the schema rejects, naming it.
+      Answers the configuration before and after, the approval parts it moves (`packs` when
+      selections or useGlobalPacks change, `composition`, and `rules` when projectType changes), and
+      whether it wrote; it writes through the store only when not dryRun and something changed,
+      leaving every other field and key untouched.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-10-18T14:33:22.771Z'
+updatedAt: '2026-11-14T16:09:45.229Z'

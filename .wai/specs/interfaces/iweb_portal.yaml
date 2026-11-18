@@ -93,8 +93,8 @@ methods:
     description: >-
       Return the live level-of-detail graph for the requested tier/project/level by forwarding to
       the web orchestrator's getGraph.
-    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: int): WebGraphModel'
-    returns: WebGraphModel
+    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: int): async WebGraphModel'
+    returns: async WebGraphModel
     params:
       - name: sessionId
         type: string
@@ -1461,8 +1461,8 @@ methods:
       clickable to focus its node; and on the local development server (getDevStatus reports
       devMode) mounts the engine with its issues overlay ON by default, a reader's own toggle
       winning.
-    signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
-    returns: CanvasModel
+    signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): async CanvasModel'
+    returns: async CanvasModel
     params:
       - name: sessionId
         type: string
@@ -1626,6 +1626,144 @@ methods:
       transport: HTTP
       method: GET
       path: /web/dev/status
+  - name: getDevReviews
+    description: >-
+      Local development server only: the served project's pending review requests
+      (dev_cockpit_orchestrator.reviews). Mounted only under devMode. CLIENT CONTRACT: the app reads
+      this on start and on every `reviews` realtime nudge; a pending request shows in the floating
+      action bar wherever the human is, and Review opens the review screen: the agent's note, every
+      spec changed since the last approval (getDevApproval), the current warnings
+      (sdd_validate_tree; a request with errors is never made), a comment box and a note box per
+      spec, with Lock (a lock request, through the lock confirmation), Approve (a review request)
+      and Request changes.
+    signature: 'getDevReviews(sessionId: string): list<dev_review>'
+    returns: list<dev_review>
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev/reviews
+  - name: decideDevReview
+    description: >-
+      Local development server only: the human's decision on a review request
+      (dev_cockpit_orchestrator.decide); locking runs the CLI's own lock first and answers its
+      output. Mounted only under devMode.
+    signature: >-
+      decideDevReview(sessionId: string, id: string, outcome: ReviewStatus, comment?: string,
+      notes?: list<ReviewNote>, member?: string): async DevReviewDecision
+    returns: async DevReviewDecision
+    params:
+      - name: sessionId
+        type: string
+      - name: id
+        type: string
+      - name: outcome
+        type: ReviewStatus
+      - name: comment
+        type: string
+        optional: true
+      - name: notes
+        type: list<ReviewNote>
+        optional: true
+      - name: member
+        type: string
+        description: The alias of the direct member project the request was made in
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/reviews/decide
+  - name: runDevCommand
+    description: >-
+      Local development server only: run a human command the CLI handed the server — `lock` (whole
+      design, or one subsystem), `generate` or `doctor` (with --fix) — and answer what it printed
+      (dev_cockpit_orchestrator.run). Mounted only under devMode. CLIENT CONTRACT: the dev page
+      offers these in a Commands panel, each with a one-line explanation of what it does, and shows
+      the output when it finishes.
+    signature: >-
+      runDevCommand(sessionId: string, command: string, subsystem?: string, member?: string): async
+      DevCommandResult
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+      - name: command
+        type: string
+      - name: subsystem
+        type: string
+        optional: true
+      - name: member
+        type: string
+        description: 'With lock only: the alias of a direct member project to lock at its own root'
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/commands
+  - name: getDevApproval
+    description: >-
+      Local development server only: the served project's approval state
+      (dev_cockpit_orchestrator.approval). Mounted only under devMode. CLIENT CONTRACT: the whole
+      dev page is the cockpit, with no separate commands tab. A floating action bar shows on every
+      view while there is something to approve: a pending review or lock request, or a design that
+      moved since the last lock (read on start and on every `project:<id>` and `reviews` nudge). It
+      offers Lock, or Review for a pending request. The specs view and the diagrams offer Lock in
+      place, scoped to the subsystem being looked at when only that subsystem moved. Every Lock
+      opens a confirmation modal: what moved since the last lock, the current warnings, and whole
+      design or one subsystem; Confirm runs the lock (runDevCommand) and the modal shows it running
+      and then its output, success or failure. The header cog opens the settings panel: appearance,
+      plus Generate and Doctor --fix with what each does, each showing its output.
+    signature: 'getDevApproval(sessionId: string): dev_approval'
+    returns: dev_approval
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev/approval
+  - name: runDevFamilyCommand
+    description: >-
+      Local development server only: run one family command from the dev page's family panel
+      (externals pin or live status, network declare or undeclare, or a member command), previewed
+      with its report or applied, and answer what it printed (dev_cockpit_orchestrator.family).
+      Mounted only under devMode. CLIENT CONTRACT: the dev page's family panel lists the members,
+      the externals with their relation health and the network state; each row offers its actions,
+      and each action opens a form that says in plain words what it does, then Preview (the report)
+      and Apply. An action without a report (member move, network undeclare) asks for confirmation
+      instead. When the externals channel nudges, the panel re-reads relation health and names an
+      external that drifted or broke, offering its pin.
+    signature: 'runDevFamilyCommand(sessionId: string, command: dev_family_command): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+      - name: command
+        type: dev_family_command
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/family
+  - name: projectMembers
+    description: >-
+      Serve the members one authorized project declares as JSON, one row per member (a part with its
+      subsystems, a member project, each with its storage), read without validating. Forwards to the
+      web graph orchestrator's getProjectMembers; session-cookie authenticated, so cross-project
+      access is Forbidden. The family panel lists members from it, on the dev page's Family tab and
+      the hosted Relations tab alike.
+    signature: 'projectMembers(sessionId: string, projectId: string): list<family_member>'
+    returns: list<family_member>
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/projects/members
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-30T12:10:51.907Z'
+updatedAt: '2026-11-13T01:36:59.349Z'

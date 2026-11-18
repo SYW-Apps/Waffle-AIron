@@ -23,11 +23,14 @@ RUN npm ci
 # caches independently of the app source. The React bundle is built self-contained
 # and embedded into dist/ — nothing from web/ ships to the runtime image.
 COPY web/package.json web/package-lock.json ./web/
+# The vendored design-system tarballs are file: dependencies, so npm ci needs them.
+COPY web/vendor ./web/vendor
 RUN npm --prefix web ci
 COPY tsconfig.json tsup.config.ts ./
 COPY sdk ./sdk
 COPY src ./src
 COPY scripts ./scripts
+COPY plugins/wairon/skills ./plugins/wairon/skills
 COPY web ./web
 # Build the @wairon/sdk workspace FIRST (sdk/dist) so the root build can bundle it
 # into dist (tsup noExternal), then the web bundle (web/dist/index.html), then the

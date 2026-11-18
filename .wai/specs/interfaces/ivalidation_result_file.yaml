@@ -1,0 +1,43 @@
+id: ivalidation_result_file
+name: Validation Result File Interface
+description: >-
+  Keyed by project root, then by options, fingerprints and release. Loss-safe: an absent entry only
+  costs its reader a validation run.
+component: validation_result_file
+methods:
+  - name: get
+    description: >-
+      The entry held on disk for this root with exactly these options, fingerprints and this wairon
+      release, or none (also for a missing or unreadable file).
+    signature: >-
+      get(root: string, optionsKey: string, treeFingerprint: string, codeFingerprint: string):
+      validation_memo_entry?
+    returns: validation_memo_entry?
+    params:
+      - name: root
+        type: string
+        description: The resolved project root
+      - name: optionsKey
+        type: string
+      - name: treeFingerprint
+        type: string
+      - name: codeFingerprint
+        type: string
+    effect: read
+  - name: put
+    description: >-
+      Hold this entry on disk for the root under this wairon release, newest first, keeping the last
+      few; never fails.
+    signature: 'put(root: string, entry: validation_memo_entry): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+      - name: entry
+        type: validation_memo_entry
+    guarantees:
+      - idempotent
+    effect: write
+status: complete
+createdAt: '2026-11-10T19:03:31.169Z'
+updatedAt: '2026-11-10T19:03:35.563Z'

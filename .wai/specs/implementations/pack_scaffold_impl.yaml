@@ -16,8 +16,9 @@ methods:
         description: >-
           Render the code-pack file map: package.json depending on @wairon/sdk pinned to the running
           SDK version, pack.ts importing defineRule from @wairon/sdk, tsconfig.json, a
-          wairon-pack.yaml stub (kind: code, entry pack.cjs, build script), and a README — with
-          name/version substituted.
+          wairon-pack.yaml stub (kind: code, entry pack.cjs, build script, minWaironVersion the
+          running version's release core major.minor.patch, never a pre-release), and a README —
+          with name/version substituted.
         type: local
       - stepNumber: 3
         description: Skip the declarative variant.
@@ -47,4 +48,4 @@ methods:
         outcome: success
 status: complete
 createdAt: '2026-07-21T18:25:06.219Z'
-updatedAt: '2026-09-15T20:47:13.688Z'
+updatedAt: '2026-11-07T17:05:05.200Z'

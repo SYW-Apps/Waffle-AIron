@@ -16,17 +16,33 @@ import { identifierProblem, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 // which output targets are active, project metadata, and high-level rules.
 // ---------------------------------------------------------------------------
 
+/** target_source — where a target's tool gets the wairon MCP server and the built-in skills: the project, or the wairon plugin. */
+export const TargetSourceSchema = z.enum(['project', 'plugin']);
+export type TargetSource = z.infer<typeof TargetSourceSchema>;
+
+/** The built-in targets whose tool has a wairon plugin; copilot and custom targets have none. */
+const PLUGIN_TARGET_TYPES = ['claude', 'codex', 'cursor', 'agy', 'gemini'];
+
 export const BuiltinTargetConfigSchema = z.object({
   type: z.enum(['claude', 'gemini', 'agy', 'cursor', 'copilot', 'codex']),
   /** Output directory for generated agent files, relative to project root */
   outputDir: z.string(),
   /** Whether this target is active */
   enabled: z.boolean().default(true),
+  /** Where the tool gets the wairon MCP server and built-in skills; `project` when absent. */
+  via: TargetSourceSchema.optional(),
+}).refine((t) => t.via !== 'plugin' || PLUGIN_TARGET_TYPES.includes(t.type), {
+  message: 'via: plugin is not available for this target: its tool has no wairon plugin',
+  path: ['via'],
 });
 export type BuiltinTargetConfig = z.infer<typeof BuiltinTargetConfigSchema>;
 
 export const CustomTargetConfigSchema = CustomTargetSchema.extend({
   enabled: z.boolean().default(true),
+  via: TargetSourceSchema.optional(),
+}).refine((t) => t.via !== 'plugin', {
+  message: 'via: plugin is not available for a custom target: it has no wairon plugin',
+  path: ['via'],
 });
 export type CustomTargetConfig = z.infer<typeof CustomTargetConfigSchema>;
 
@@ -413,6 +429,14 @@ export const RulesConfigSchema = z.object({
    */
   sddRuleSeverity: z.record(z.string(), z.enum(['error', 'warning', 'notice', 'off'])).default({}),
 
+  /**
+   * Why a rule code is set below its default severity, keyed by the code in
+   * sddRuleSeverity. A lowered rule is never silent: every run reports it with
+   * its reason (RULE_LOWERED), and a lowered rule with no reason here is
+   * RULE_LOWERED_WITHOUT_REASON.
+   */
+  severityReasons: z.record(z.string(), z.string()).optional(),
+
   /** Dynamic naming conventions and stereotype suffix rules */
   naming: NamingRuleConfigSchema.optional(),
 
@@ -664,6 +688,15 @@ const NetworkFieldSchema = z.preprocess(
   NetworkDeclarationSchema.optional(),
 );
 
+const PracticeEntriesSchema = z.array(z.string().min(1));
+export const PracticeSelectionSchema = z.object({
+  use: PracticeEntriesSchema.optional(),
+  subsystems: z.record(z.string(), PracticeEntriesSchema).optional(),
+  components: z.record(z.string(), PracticeEntriesSchema).optional(),
+  roles: z.record(z.string(), PracticeEntriesSchema).optional(),
+});
+export type PracticeSelection = z.infer<typeof PracticeSelectionSchema>;
+
 export const ProjectConfigSchema = z.object({
   /**
    * Schema version — used to detect incompatible config formats in future
@@ -753,6 +786,14 @@ export const ProjectConfigSchema = z.object({
    * part's configuration.
    */
   network: NetworkFieldSchema.optional(),
+
+  /**
+   * practice_selection — which pack practices apply where: the whole project
+   * (`use`), per subsystem, per component and per agent role. Every list adds
+   * to the scope around it; `!<id>` drops an inherited practice. Process, not
+   * design: outside the approval, so changing it never asks for a re-lock.
+   */
+  practices: PracticeSelectionSchema.optional(),
 
   /**
    * The type/profile of the project, which configures targeted guidelines, rules,
@@ -847,6 +888,108 @@ export const ProjectConfigSchema = z.object({
 
 export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 
+/** One granular change to a project's `rules` (sdd_update_rules). Paths are relative to `rules` and dotted. */
+export interface RulesChange {
+  /** Path to value: each value is written at its path and checked against the rules schema. */
+  set?: Record<string, unknown>;
+  /** Paths removed, so the setting falls back to its default. */
+  unset?: string[];
+  /** List path to entries appended when absent. */
+  add?: Record<string, string[]>;
+  /** List path to entries removed. */
+  remove?: Record<string, string[]>;
+  /** Why the change lowers a rule below its default severity; written as that code's severityReasons entry. */
+  why?: string;
+}
+
+/** A rule code set below its default severity, and why. */
+export interface RuleLowering {
+  /** The rule code. */
+  code: string;
+  /** Its default severity. */
+  from: string;
+  /** The severity the project sets (warning, notice or off). */
+  to: string;
+  /** The project's reason, from severityReasons; absent when none is given. */
+  why?: string;
+}
+
+/** What a RulesChange did, or with dryRun would do. */
+export interface RulesRevision {
+  /** The rules as stored before the change. */
+  before: RulesConfig;
+  /** The rules the change writes. */
+  after: RulesConfig;
+  /** Every rule the change newly sets below its default severity, with the reason written for it. */
+  lowered: RuleLowering[];
+  /** Whether the configuration was written (false for a dry run and for a change that changes nothing). */
+  wrote: boolean;
+}
+
+/** What a DebtChange does to the conformance debt register. */
+export const DebtActionSchema = z.enum(['add', 'extend', 'revise', 'remove']);
+export type DebtAction = z.infer<typeof DebtActionSchema>;
+
+/** One change to the conformance debt register (`rules.conformance.carried`, sdd_carry_findings). */
+export interface DebtChange {
+  /** What the change does. */
+  action: DebtAction;
+  /** The reason group's position (0-based); required for extend, revise and remove. */
+  group?: number;
+  /** The group's kind: required for add, optional for revise. */
+  kind?: CarriedDebtKind;
+  /** The group's reason: required for add, optional for revise. */
+  why?: string;
+  /** What would settle a provisional classification; null on revise removes it. */
+  revisit?: string | null;
+  /** The findings to add (add, extend) or remove (remove; by code, spec and at). */
+  findings?: CarriedFinding[];
+}
+
+/** What a DebtChange did, or with dryRun would do. */
+export interface DebtRevision {
+  /** The register as stored before the change. */
+  before: CarriedDebt[];
+  /** The register the change writes. */
+  after: CarriedDebt[];
+  /** Whether the configuration was written. */
+  wrote: boolean;
+}
+
+/** One change to the bound project's own settings in .wai/project.yaml (sdd_configure_project). */
+export interface ProjectChange {
+  /** The project's human-readable name. */
+  name?: string;
+  /** The project's description. */
+  description?: string;
+  /** The governing profile (backend, frontend, ...). */
+  projectType?: string;
+  /** execution.tier. */
+  executionTier?: string;
+  /** Packs to select (a re-selected pack moves last). */
+  selectPacks?: PackSelection[];
+  /** Pack names to deselect. */
+  deselectPacks?: string[];
+  /** extensions.useGlobalPacks. */
+  useGlobalPacks?: boolean;
+  /** The output targets, replacing the stored list. */
+  targets?: TargetConfig[];
+  /** The composition policy, replacing the stored one. */
+  composition?: CompositionConfig;
+}
+
+/** What a ProjectChange did, or with dryRun would do. */
+export interface ProjectRevision {
+  /** The configuration as stored before the change. */
+  before: ProjectConfig;
+  /** The configuration the change writes. */
+  after: ProjectConfig;
+  /** The parts of the approval the change moves (packs, composition, rules); empty when none. */
+  approvalMoves: string[];
+  /** Whether the configuration was written. */
+  wrote: boolean;
+}
+
 /**
  * project_config.activeTargetTypes — the target types this configuration
  * enables: every target not explicitly disabled, in declaration order. A string
@@ -858,6 +1001,18 @@ export function activeTargetTypes(config: ProjectConfig): string[] {
   return targets
     .filter((t) => typeof t === 'string' || t.enabled !== false)
     .map((t) => (typeof t === 'string' ? t : t.type));
+}
+
+/**
+ * project_config.pluginTargetTypes — the enabled target types whose tool gets the
+ * wairon MCP server and the built-in skills from the wairon plugin (`via: plugin`),
+ * in declaration order. Empty when no target names the plugin.
+ */
+export function pluginTargetTypes(config: ProjectConfig): string[] {
+  const targets = config.targets as ReadonlyArray<TargetConfig | string>;
+  return targets
+    .filter((t): t is TargetConfig => typeof t !== 'string' && t.enabled !== false && t.via === 'plugin')
+    .map((t) => t.type);
 }
 
 // ── project_config type behaviour ───────────────────────────────────────────
@@ -1093,6 +1248,16 @@ export function admits(requirement: Pick<PackRequirement, 'version'>, version?: 
 // `.test` agrees with it: at most 64 characters, never a Windows device name or super.
 export const PROJECT_ID_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$))(?!super$)(?=.{1,64}$)[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
 
+/** A text with every leading and trailing character outside [a-z0-9] cut, by index rather than a pattern. */
+function trimToAlphanumeric(text: string): string {
+  const keep = (c: string): boolean => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+  let start = 0;
+  let end = text.length;
+  while (start < end && !keep(text.charAt(start))) start += 1;
+  while (end > start && !keep(text.charAt(end - 1))) end -= 1;
+  return text.slice(start, end);
+}
+
 /**
  * A display name slugified into the project-id grammar: lower-cased, every run
  * of characters outside [a-z0-9-_.] collapsed to one '-', then trimmed until it
@@ -1101,14 +1266,10 @@ export const PROJECT_ID_RE = /^(?!(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$))
  * papered over with an invented one.
  */
 function slugifyProjectName(name: string): string | null {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^[^a-z0-9]+/, '')
-    .replace(/[^a-z0-9]+$/, '');
+  const slug = trimToAlphanumeric(name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'));
   // Cut to the cap and re-trimmed; a slug the grammar still refuses (a device
   // name, super) is no id — reported as missing, never papered over.
-  const cut = slug.slice(0, MAX_IDENTIFIER_LENGTH).replace(/[^a-z0-9]+$/, '');
+  const cut = trimToAlphanumeric(slug.slice(0, MAX_IDENTIFIER_LENGTH));
   return cut === '' || identifierProblem(cut, 'project-id') !== null ? null : cut;
 }
 

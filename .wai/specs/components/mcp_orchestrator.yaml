@@ -14,6 +14,7 @@ dependsOn:
   - mcp_skills_adapter
   - mcp_surfaces_adapter
   - mcp_migration_orchestrator
+  - session_practice_store
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-20T21:58:55.879Z'
+updatedAt: '2026-11-06T21:46:58.449Z'

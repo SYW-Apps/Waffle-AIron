@@ -91,6 +91,8 @@ export function UnitSelect(props: {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setOpen(false);
+        // Consume it: an enclosing modal <dialog> must not also close on this Escape.
+        e.preventDefault();
         e.stopPropagation();
       }
     }
@@ -159,7 +161,7 @@ export function UnitSelect(props: {
     <div className="unitsel" ref={rootRef}>
       <button
         type="button"
-        className="input unitsel-trigger"
+        className="syw-input unitsel-trigger"
         disabled={disabled}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
@@ -180,9 +182,9 @@ export function UnitSelect(props: {
         </span>
       </button>
       {open && (
-        <div className="unitsel-pop">
+        <div className="syw-popover unitsel-pop">
           <input
-            className="input unitsel-search"
+            className="syw-input unitsel-search"
             autoFocus
             placeholder="Filter units…"
             value={query}

@@ -1,0 +1,30 @@
+kind: value-object
+id: pack_contents
+name: PackContents
+description: >-
+  A .wpack archive read in memory under the extraction guards, nothing written: its envelope, its
+  parsed inner pack manifest and its files. What a registry or an upload handler needs to judge and
+  describe a pack without a temporary directory.
+fields:
+  - name: manifest
+    type: pack_archive_manifest
+    description: The parsed envelope
+    optional: false
+  - name: packManifest
+    type: map<string, any>
+    description: >-
+      The parsed inner pack manifest as authored: pack.yaml of a declarative pack, package.json of a
+      code pack (name, version, description, keywords, license, repository, homepage among its
+      fields)
+    optional: false
+  - name: files
+    type: list<pack_file>
+    description: >-
+      Every approved file, inflated, integrity-checked when the envelope carries digests, paths
+      relative to the pack root
+    optional: false
+methods: []
+componentClass: sdk_orchestrator
+sourcePath: sdk/src/types.ts
+createdAt: '2026-11-07T14:23:07.805Z'
+updatedAt: '2026-11-07T14:23:08.632Z'

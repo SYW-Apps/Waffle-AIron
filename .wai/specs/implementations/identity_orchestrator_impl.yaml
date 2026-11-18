@@ -131,7 +131,7 @@ methods:
       - stepNumber: 13
         description: >-
           Resolve the provider's concrete OIDC endpoints through the identity provider adapter
-          (explicit overrides -> OIDC discovery -> providerType template)
+          (explicit overrides -> OIDC discovery)
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveEndpoints
@@ -1179,4 +1179,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-30T12:10:42.306Z'
+updatedAt: '2026-11-11T21:05:57.751Z'

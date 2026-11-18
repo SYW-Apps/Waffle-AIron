@@ -12,7 +12,6 @@ import type { IdentityProviderConfig, ProviderEndpoints } from '../../src/server
 function cfg(overrides: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
   return {
     id: 'authentik-corp',
-    providerType: 'oidc',
     issuerUrl: 'https://idp.example',
     clientId: 'test-client',
     clientSecretRef: 'oidc-client-secret',

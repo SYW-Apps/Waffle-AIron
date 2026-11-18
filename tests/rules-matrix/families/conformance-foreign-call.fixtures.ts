@@ -4,11 +4,13 @@
  *
  * Documented intent pinned here (rule description):
  *  - CALL_TARGET_UNJUDGED (notice): a narrative call step or declared call
- *    whose target is another project's component is not judged against that
- *    project's code, whether or not the code exists. It is said once per
- *    method naming the project, and never as CALL_TARGET_PLANNED (which is
- *    for a component of this project whose code is not written yet) nor as an
- *    unrealized call.
+ *    whose target is another project's component, made by the function under
+ *    one of the target's names, is not judged against that project's code:
+ *    where it lands is not read here. It is said once per method naming the
+ *    project, and never as CALL_TARGET_PLANNED (which is for a component of
+ *    this project whose code is not written yet).
+ *  - A claimed call to another project's component made under none of its
+ *    names is CALL_STEP_UNREALIZED: whether the call is made is read here.
  *
  * The scenario: TileStudio, a map editor, asks the GeoKit tile library
  * (a member project) for the tile under the centre of the view.
@@ -50,7 +52,12 @@ function geokitMember(): Record<string, string> {
   };
 }
 
-/** TileStudio calling the pinned GeoKit tile verb, or (a control) a step that calls nothing, its function written as given. */
+/** The TypeScript function making the GeoKit call. */
+export const MADE_TS = 'import { tileAt } from \'geokit\';\nexport function centreTile(lat: number, lon: number): string {\n  return tileAt(lat, lon);\n}\n';
+/** The TypeScript function making no call at all. */
+export const NOT_MADE_TS = 'export function centreTile(lat: number, lon: number): string {\n  return `${lat},${lon}`;\n}\n';
+
+/** TileStudio calling the pinned GeoKit tile verb, or (a control) a step that calls nothing, its function written as given (by default, a TypeScript function making the call it claims). */
 export function foreignCallTree(opts: { calls: boolean; language?: 'typescript' | 'python'; body?: string } = { calls: true }): FixtureTree {
   const python = opts.language === 'python';
   const file = python ? 'src/editor/map_renderer.py' : 'src/editor/map-renderer.ts';
@@ -86,7 +93,7 @@ export function foreignCallTree(opts: { calls: boolean; language?: 'typescript' 
       ...geokitMember(),
       [file]: opts.body ?? (python
         ? 'def centre_tile(lat: float, lon: float) -> str:\n    return f"{lat},{lon}"\n'
-        : 'export function centreTile(lat: number, lon: number): string {\n  return `${lat},${lon}`;\n}\n'),
+        : opts.calls ? MADE_TS : NOT_MADE_TS),
     },
   };
 }
@@ -97,8 +104,16 @@ export default [
     expectFire: true,
     severity: 'notice',
     anchoredTo: 'map_renderer_impl',
-    scenario: 'The map renderer narrates a call to GeoKit\'s tile library, another project\'s component, and its function does not make it.',
+    scenario: 'The map renderer narrates a call to GeoKit\'s tile library, another project\'s component, and its function makes it.',
     tree: foreignCallTree({ calls: true }),
+  }),
+  defineRuleFixture({
+    code: 'CALL_STEP_UNREALIZED',
+    expectFire: true,
+    severity: 'warning',
+    anchoredTo: 'map_renderer_impl',
+    scenario: 'The map renderer narrates a call to GeoKit\'s tile library, another project\'s component, and its function never makes it.',
+    tree: foreignCallTree({ calls: true, body: NOT_MADE_TS }),
   }),
   defineRuleFixture({
     code: 'CALL_TARGET_UNJUDGED',

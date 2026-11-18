@@ -1,9 +1,11 @@
 import type { LockRecord } from '../core/lockfile.js';
+import type { FindingsState } from '../core/canvas.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ProfileFamily } from '../core/extensions.js';
 import type { GitPublish } from '../git/types.js';
 import type { MigrationPlan, TransactionOutcome } from '../migrations/types.js';
+import type { DevCommands } from './dev-commands.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -1152,10 +1154,6 @@ export interface LandscapeGraphModel {
   scope?: string;
 }
 
-/** The identity provider kinds an operator can configure. keycloak and authentik have
- *  endpoint templates of their own; every other kind resolves as generic OIDC. */
-export type IdentityProviderType = 'oidc' | 'keycloak' | 'authentik' | 'google_workspace' | 'entra_id';
-
 /** The name a person knows a provider by: its display name, else its id. */
 function providerLabel(provider: IdentityProviderConfig): string {
   return provider.displayName || provider.id;
@@ -1186,7 +1184,6 @@ export function providerNotSetUpMessage(provider: IdentityProviderConfig): strin
  *  clientSecretRef points into the host secret mechanism. */
 export interface IdentityProviderConfig {
   id: string;
-  providerType: IdentityProviderType;
   /** Optional admin-set human label, shown on the login screen's
    *  "Sign in with <displayName>" button. Defaults to the provider id when
    *  unset. Presentation only — never used for provider resolution. */
@@ -1204,17 +1201,16 @@ export interface IdentityProviderConfig {
    *  through the provider (see providerSetupProblem in idp.ts). */
   allowedRedirectUris?: string[];
   /** Explicit browser-facing (front-channel) authorization endpoint override.
-   *  When set, wins over OIDC discovery and providerType templates. The PUBLIC URL
+   *  When set, wins over OIDC discovery. The PUBLIC URL
    *  the user's browser is redirected to; the split-horizon lever paired with an
    *  internal tokenEndpoint. */
   authorizationEndpoint?: string;
   /** Explicit server-facing (back-channel) token endpoint override. When set, wins
-   *  over discovery/templates. The URL the host calls directly for code->token
+   *  over discovery. The URL the host calls directly for code->token
    *  exchange, so it may be a VPC-internal address unreachable from the internet. */
   tokenEndpoint?: string;
   /** Explicit JWKS URI override for id_token signature verification (server-facing
-   *  back-channel; may be VPC-internal). When unset, resolved from discovery or the
-   *  providerType template. */
+   *  back-channel; may be VPC-internal). When unset, resolved from discovery. */
   jwksUri?: string;
   /** Explicit userinfo endpoint override (server-facing back-channel), used as a
    *  fallback identity-verification path when JWKS verification is unavailable. */
@@ -1224,8 +1220,7 @@ export interface IdentityProviderConfig {
 }
 
 /** The resolved set of OIDC endpoints for one identity provider, computed once by
- *  the identity provider adapter (from explicit config overrides, OIDC discovery, or
- *  a providerType template) and threaded through the authorization-URL build,
+ *  the identity provider adapter (from explicit config overrides, OIDC discovery) and threaded through the authorization-URL build,
  *  code->token exchange, and id_token verification. Splits the browser-facing
  *  front-channel (authorizationEndpoint) from the server-facing back-channel
  *  (tokenEndpoint, jwksUri, userinfoEndpoint) so the two may live at different
@@ -1309,6 +1304,8 @@ export interface WebGraphModel {
   level: number;
   generatedAt: string;
   scope?: string;
+  /** Project tier: how current the overlaid findings are; absent means current. */
+  findingsState?: FindingsState;
 }
 
 /** A project's editable configuration view for the web UI: the project-level
@@ -1501,6 +1498,10 @@ export interface HostConfig {
    *  working directory. NEVER set by the hosted `serve` command, so the dev-only
    *  auto-session path can never appear in a real deployment. */
   devMode?: boolean;
+  /** Only on the local development server: the human commands the starting CLI hands the server,
+   *  which the dev page runs (lock, generate, doctor). Absent on a hosted server, where the page
+   *  offers none of them. */
+  devCommands?: DevCommands;
   /** Built-in super-admin web-login username, read from WAIRON_ADMIN_USER by the
    *  serve command. When this or builtinAdminPassword is unset, password login is
    *  disabled (SSO-only) — the server still starts. */

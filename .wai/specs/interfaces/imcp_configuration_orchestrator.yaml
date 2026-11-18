@@ -1,0 +1,59 @@
+id: imcp_configuration_orchestrator
+name: MCP Configuration Orchestrator Interface
+description: The workflows behind the project configuration tools.
+component: mcp_configuration_orchestrator
+methods:
+  - name: reviseRules
+    description: >-
+      Apply one granular change to the bound project's rules, with each rule code's default severity
+      read from the active rule set, so a lowering is told apart and must carry its reason. Answers
+      the rules before and after and every rule lowered, with its reason; the rules are part of the
+      approval, so a written change re-opens it.
+    signature: 'reviseRules(change: RulesChange, dryRun?: bool): RulesRevision'
+    returns: RulesRevision
+    params:
+      - name: change
+        type: RulesChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+        optional: true
+    guarantees:
+      - idempotent
+  - name: reviseDebt
+    description: >-
+      Apply one change to the conformance debt register, with the codes the active rule set declares
+      carryable. Answers the register before and after; sdd_validate_tree then names any unit a
+      carried finding reports that the entry does not list, and any entry that stopped applying.
+    signature: 'reviseDebt(change: DebtChange, dryRun?: bool): DebtRevision'
+    returns: DebtRevision
+    params:
+      - name: change
+        type: DebtChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+        optional: true
+    guarantees:
+      - idempotent
+  - name: reviseProject
+    description: >-
+      Apply one change to the bound project's own settings. Answers the configuration before and
+      after and the parts of the approval it moves.
+    signature: 'reviseProject(change: ProjectChange, dryRun?: bool): ProjectRevision'
+    returns: ProjectRevision
+    params:
+      - name: change
+        type: ProjectChange
+        description: The change
+      - name: dryRun
+        type: bool
+        description: Answer the revision and write nothing
+        optional: true
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-11-14T16:10:38.364Z'
+updatedAt: '2026-11-14T16:10:40.768Z'

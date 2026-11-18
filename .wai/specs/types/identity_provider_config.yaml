@@ -11,13 +11,11 @@ fields:
     type: string
     description: Stable identity provider config id.
     optional: false
-  - name: providerType
-    type: IdentityProviderType
-    description: Provider kind.
-    optional: false
   - name: issuerUrl
     type: string
-    description: OIDC issuer/discovery URL when applicable.
+    description: >-
+      OIDC issuer URL. Its discovery document (<issuerUrl>/.well-known/openid-configuration) gives
+      every endpoint not set explicitly; every provider is plain OIDC.
     optional: true
   - name: clientId
     type: string
@@ -56,24 +54,23 @@ fields:
   - name: authorizationEndpoint
     type: string
     description: >-
-      Explicit browser-facing authorization endpoint override. When set, wins over OIDC discovery
-      and providerType templates. This is the PUBLIC front-channel URL the user's browser is
-      redirected to — set it to a browser-reachable address (public, or VPN-internal if all users
-      are inside the network). The split-horizon lever paired with an internal tokenEndpoint.
+      Explicit browser-facing authorization endpoint override. When set, wins over OIDC discovery.
+      This is the PUBLIC front-channel URL the user's browser is redirected to — set it to a
+      browser-reachable address (public, or VPN-internal if all users are inside the network). The
+      split-horizon lever paired with an internal tokenEndpoint.
     optional: true
   - name: tokenEndpoint
     type: string
     description: >-
-      Explicit server-facing token endpoint override. When set, wins over discovery/templates. This
-      is the BACK-CHANNEL URL the host server calls directly for code->token exchange, so it may be
-      a VPC-internal address (e.g. https://authentik.internal) unreachable from the public internet.
+      Explicit server-facing token endpoint override. When set, wins over discovery. This is the
+      BACK-CHANNEL URL the host server calls directly for code->token exchange, so it may be a
+      VPC-internal address (e.g. https://idp.internal) unreachable from the public internet.
     optional: true
   - name: jwksUri
     type: string
     description: >-
       Explicit JWKS URI override for id_token signature verification. Server-facing back-channel
-      (may be VPC-internal, like tokenEndpoint). When unset, resolved from discovery or the
-      providerType template.
+      (may be VPC-internal, like tokenEndpoint). When unset, resolved from discovery.
     optional: true
   - name: userinfoEndpoint
     type: string
@@ -112,4 +109,4 @@ methods:
     symbol: providerSetupProblem
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-10-19T22:37:02.255Z'
+updatedAt: '2026-11-11T21:06:12.046Z'

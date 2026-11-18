@@ -2,26 +2,35 @@ kind: value-object
 id: pack_instruction_block
 name: PackInstructionBlock
 description: >-
-  One block of connecting-agent guidance contributed by an extension pack, appended to wairon's OWN
-  MCP `initialize` instructions under an attributed heading (## From pack "<name>") in pack load
-  order. The split is deliberate: wairon owns the SDD model and teaches it by default, so a pack
+  One block of agent guidance contributed by an extension pack, delivered under an attributed
+  heading (## From pack "<name>") in pack load order through the channels it names: wairon's own MCP
+  `initialize` instructions (the default), the generated in-project guide, and the live agent
+  briefs. The split is deliberate: wairon owns the SDD model and teaches it by default, so a pack
   states only its platform delta and never restates the model. An optional `profile` list scopes the
-  block to the bound project's governing profile/projectType, exactly as declarative assertions
+  block to the governing profile of where it lands — the project's for the server and the guide, the
+  component's subsystem profile (else the project's) for a brief — exactly as declarative assertions
   scope their doctrine.
+subsystem: sdd_core
 fields:
   - name: text
     type: string
     description: >-
-      The guidance appended to wairon's instructions — the pack's platform delta only, never a
-      restatement of wairon's SDD model.
+      The guidance delivered — the pack's platform delta only, never a restatement of wairon's SDD
+      model.
     optional: false
   - name: profile
     type: list<string>
     description: >-
-      Optional scope: apply this block only when the bound project's governing profile/projectType
-      is one of these. Absent = applies to every project the pack governs.
+      Optional scope: deliver this block only where the governing profile is one of these. Absent =
+      applies to every project the pack governs.
+    optional: true
+  - name: channels
+    type: list<InstructionChannel>
+    description: >-
+      Optional: the channels this block reaches. Absent = the server instructions only, where every
+      block went before channels existed.
     optional: true
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-29T10:47:52.530Z'
-updatedAt: '2026-10-04T10:20:39.350Z'
+updatedAt: '2026-11-06T19:52:32.926Z'

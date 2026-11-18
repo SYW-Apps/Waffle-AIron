@@ -24,7 +24,6 @@ const ISSUER = 'https://sso.example.com/application/o/wairon/';
 const RAW_SECRET = 'raw-oidc-client-secret-value';
 
 const OIDC_ENV_KEYS = [
-  'WAIRON_OIDC_PROVIDER_TYPE',
   'WAIRON_OIDC_ISSUER',
   'WAIRON_OIDC_DISPLAY_NAME',
   'WAIRON_OIDC_CLIENT_ID',
@@ -62,7 +61,7 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
   });
 
   it('seeds a fully-configured default provider: raw secret → oidc-default ref, comma-lists parsed, endpoints persisted', () => {
-    process.env.WAIRON_OIDC_PROVIDER_TYPE = 'authentik';
+    process.env.WAIRON_OIDC_PROVIDER_TYPE = 'authentik'; // ignored: every provider is plain OIDC
     process.env.WAIRON_OIDC_ISSUER = ISSUER;
     process.env.WAIRON_OIDC_DISPLAY_NAME = 'Corporate SSO';
     process.env.WAIRON_OIDC_CLIENT_ID = 'wairon-client';
@@ -83,7 +82,7 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
     const provider = records[0];
     expect(provider.id).toBe('default'); // the sign-in screen's default provider id
     expect(provider.enabled).toBe(true);
-    expect(provider.providerType).toBe('authentik');
+    expect('providerType' in provider).toBe(false);
     expect(provider.issuerUrl).toBe(ISSUER);
     // The login-button label survives the whitelist projection (sign-in screen
     // renders "Sign in with Corporate SSO" for the seeded default provider).
@@ -112,14 +111,13 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
     expect(listed.map((l) => l.provider.id)).toEqual(['default']);
   });
 
-  it('minimal env: only the issuer set → providerType defaults to oidc, no secret is stored', () => {
+  it('minimal env: only the issuer set → no secret is stored', () => {
     process.env.WAIRON_OIDC_ISSUER = ISSUER;
 
     seedIdentityProviderFromEnv(cfg);
 
     const records = listIdentityProviderRecords(dataDir);
     expect(records).toHaveLength(1);
-    expect(records[0].providerType).toBe('oidc');
     expect(records[0].issuerUrl).toBe(ISSUER);
     expect(records[0].displayName).toBeUndefined(); // label defaults to the id downstream
     expect(records[0].clientSecretRef).toBeUndefined();

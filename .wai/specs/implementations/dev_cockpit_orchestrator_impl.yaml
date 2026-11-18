@@ -1,0 +1,351 @@
+id: dev_cockpit_orchestrator_impl
+name: Dev Cockpit Orchestrator Implementation
+description: >-
+  src/server/dev-commands.ts: the dev page's reviews and commands, over the core adapter and the
+  commands the CLI handed the server in its configuration.
+contract: idev_cockpit_orchestrator
+sourcePath: src/server/dev-commands.ts
+injectedParams:
+  - cfg
+methods:
+  - name: reviews
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server
+        type: branch
+        condition: the server is not the local development server
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Refuse: reviews are a local development server''s'
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Resolve the served project's root, which the requests are read under
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
+        description: Read the pending review requests
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: pendingReviews
+      - stepNumber: 6
+        description: >-
+          Name the direct member projects, each judged at its own root (parts are approved with this
+          project and ask here)
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 7
+        description: For each direct member project
+        type: loop
+        loopKind: forEach
+        over: the direct member projects
+        endStep: 9
+      - stepNumber: 8
+        description: Bind the member's root, its folder from the served project's member declarations
+        type: local
+      - stepNumber: 9
+        description: Read its pending requests, tagged with its alias
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: pendingReviews
+      - stepNumber: 10
+        description: Return them all, the served project's own first
+        type: return
+        outcome: the pending requests
+  - name: decide
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server, or without the commands the CLI hands it
+        type: branch
+        condition: the server is not the local development server or has no dev commands
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Refuse: deciding is a local development server''s'
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Resolve the served project's root, which the request is read and decided under
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
+        description: Was the request made in a member project?
+        type: branch
+        condition: a member alias is named
+        onFalseStep: 10
+      - stepNumber: 6
+        description: Name the direct member projects
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 7
+        description: Does the alias name one of them?
+        type: branch
+        condition: the alias names no direct member project
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Refuse an alias that names no direct member project
+        type: throw
+        error: no member project of that alias
+      - stepNumber: 9
+        label: memberRoot
+        description: >-
+          Bind the member's root, its folder from the served project's member declarations: the
+          request is read, decided and, for a lock, locked there
+        type: local
+      - stepNumber: 10
+        label: read
+        description: Read the request brought up to date, for its kind and subsystem
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: reviewStatus
+      - stepNumber: 11
+        description: Is the decision to lock?
+        type: branch
+        condition: the outcome is locked
+        onFalseStep: 15
+      - stepNumber: 12
+        description: >-
+          Run the CLI's lock at the bound root (of the request's subsystem when it names one),
+          capturing what it prints
+        type: local
+      - stepNumber: 13
+        description: 'A failed lock leaves the request pending: answer it with the lock''s output'
+        type: branch
+        condition: the lock failed
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Answer the pending request and the failed lock
+        type: return
+        outcome: not locked
+      - stepNumber: 15
+        label: record
+        description: Record the decision with the comment and the notes
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: decideReview
+      - stepNumber: 16
+        description: Answer the decided request and, for a lock, its output
+        type: return
+        outcome: the decision
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse outside the local development server, a command it was not handed, or while another
+          command runs
+        type: branch
+        condition: >-
+          the server has no dev commands, the command is not lock, generate or doctor, or a command
+          is already running
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming the reason
+        type: throw
+        error: the command cannot run
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Is a member project named?
+        type: branch
+        condition: a member alias is named
+        onFalseStep: 9
+      - stepNumber: 5
+        description: Name the direct member projects
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 6
+        description: Is it a lock of one of them?
+        type: branch
+        condition: >-
+          the command is not lock, or the alias names no direct member project (a part is approved
+          with the served project)
+        onFalseStep: 8
+      - stepNumber: 7
+        description: 'Refuse: only a direct member project''s lock runs at another root'
+        type: throw
+        error: only a direct member project can be locked from here
+      - stepNumber: 8
+        label: memberRoot
+        description: >-
+          Resolve the member's folder from the served project's member declarations: the lock runs
+          there, as `wairon lock` in that folder would
+        type: local
+      - stepNumber: 9
+        label: runIt
+        description: >-
+          Run the command the CLI handed over, at the member's folder when one is named, capturing
+          every line it prints with colour codes removed
+        type: local
+      - stepNumber: 10
+        description: Answer whether it succeeded and its output
+        type: return
+        outcome: the command's result
+  - name: approval
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server
+        type: branch
+        condition: the server is not the local development server
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Refuse: the approval state is a local development server''s'
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Resolve the served project's root, which the approval is read under
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
+        description: Read the lock record, for who locked and when
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 6
+        description: 'Read what the lock says about the tree now: drifted and the moved specs'
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: approvalVerdict
+      - stepNumber: 7
+        description: Read the branch the served checkout has now
+        type: call
+        targetComponent: git_head_adapter
+        targetMethod: head
+      - stepNumber: 8
+        description: Read the served project's system spec, for the name the page heads itself with
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 9
+        description: Read each direct member project's approval at its own root, so the page can offer its lock
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 10
+        description: >-
+          Answer the approval state with the branch, the project's name and its member projects'
+          approvals
+        type: return
+        outcome: the approval state
+  - name: family
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse outside the local development server, without the commands the CLI hands it, or
+          while another command runs
+        type: branch
+        condition: the server has no dev commands or a command is already running
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming the reason
+        type: throw
+        error: the command cannot run
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: >-
+          Check the command against its action's shape: the number of positional arguments, the
+          options the action takes, and that no argument or option value starts with `-`
+        type: local
+      - stepNumber: 5
+        description: Is the command malformed?
+        type: branch
+        condition: the check found a problem
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Refuse, naming the problem
+        type: throw
+        error: the family command is malformed
+      - stepNumber: 7
+        description: >-
+          Run the family command the CLI handed over (one at a time, shared with run), capturing
+          every line it prints with colour codes removed; a thrown error is a failed result
+        type: local
+      - stepNumber: 8
+        description: Answer whether it succeeded and its output
+        type: return
+        outcome: the command's result
+  - name: producers
+    narrative:
+      - stepNumber: 1
+        description: Read the served project's configuration (bound to the root)
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: No configuration, or one that cannot be read?
+        type: branch
+        condition: there is no configuration
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer none
+        type: return
+        outcome: no producers
+      - stepNumber: 4
+        description: >-
+          Collect every member whose location is a folder, resolved against the root, as a member
+          producer
+        type: local
+      - stepNumber: 5
+        description: >-
+          Collect every external whose source is a folder, resolved against the root, as an external
+          producer; git and hosted sources are skipped
+        type: local
+      - stepNumber: 6
+        description: Keep only producers whose .wai/ folder exists
+        type: local
+      - stepNumber: 7
+        description: Answer them
+        type: return
+        outcome: the producers
+lint:
+  allow:
+    - code: HIDDEN_STATE
+      reason: >-
+        The one-command-at-a-time guard: a process-local in-flight flag set and cleared around one
+        command run, never read after it ends, and meaningless across processes. No domain state:
+        nothing to store, list or recover.
+    - code: UNDECLARED_WRITE_CALL
+      at: reviews
+      covers:
+        - review_orchestrator.pending
+      reason: >-
+        Step 5's call to host_core_adapter.pendingReviews is this call: the adapter re-exports the
+        core approval portal, so the analyzer reads the core workflow behind the forward (bringing a
+        pending request up to date saves it).
+    - code: UNDECLARED_WRITE_CALL
+      at: decide
+      covers:
+        - review_orchestrator.status
+        - review_orchestrator.decide
+      reason: >-
+        Steps 5 and 10 call host_core_adapter.reviewStatus and decideReview: the adapter re-exports
+        the core approval portal, so the analyzer reads the core workflow behind each forward.
+status: complete
+createdAt: '2026-11-07T02:41:56.569Z'
+updatedAt: '2026-11-12T01:03:09.642Z'
