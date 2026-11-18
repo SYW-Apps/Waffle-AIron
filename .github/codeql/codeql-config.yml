@@ -1,0 +1,12 @@
+name: wairon CodeQL configuration
+
+# The default query suite, as default setup ran it.
+#
+# Left out: test code. Test files are never published (the npm packages ship
+# built output, schemas and docs), so a finding there is not a finding in what
+# users run. Test fixtures deliberately hold odd strings, partial HTML and
+# crafted inputs, which made every alert raised there a false positive.
+paths-ignore:
+  - tests/**
+  - sdk/tests/**
+  - '**/*.test.ts'
