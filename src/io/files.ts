@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as nodePath from 'path';
 
 // ---------------------------------------------------------------------------
 // io/files — the filesystem, one call per outside action
@@ -246,15 +247,59 @@ export type ChangeListener = (path: string) => void;
 export type StopWatching = () => void;
 
 /**
- * Watch a directory and everything below it (fs.watch, recursive). Each event
- * calls `onChange` with the changed path relative to `dir`, forward-slashed. A
- * watch that cannot start answers a stop function that does nothing.
+ * Whether a watch event is a real change of the entry: fs.watch on Windows also
+ * reports a file that was only read (its last-access time moved), and a reader
+ * must not see that as a change. An entry's change and modification times move
+ * on a write, a metadata change, a create or a remove, never on a read: the
+ * event is a change when they differ from the last ones seen, when the entry is
+ * new since the watch started, or when it is gone. A rename event is always one.
+ */
+function changeFilter(): (event: string, file: string) => boolean {
+  const started = Date.now();
+  const seen = new Map<string, string>();
+  return (event, file) => {
+    if (event === 'rename') {
+      seen.delete(file);
+      return true;
+    }
+    let st: fs.Stats | undefined;
+    try {
+      st = fs.lstatSync(file, { throwIfNoEntry: false });
+    } catch {
+      st = undefined;
+    }
+    if (!st) {
+      seen.delete(file);
+      return true;
+    }
+    const sig = `${st.mtimeMs}:${st.ctimeMs}:${st.size}`;
+    const prev = seen.get(file);
+    seen.set(file, sig);
+    // Not seen before: a change only when it was written after the watch started (a small margin
+    // for clocks with a coarse resolution).
+    if (prev === undefined) return Math.max(st.mtimeMs, st.ctimeMs) >= started - 1000;
+    return prev !== sig;
+  };
+}
+
+/**
+ * Watch a directory and everything below it (fs.watch, recursive). Each change
+ * calls `onChange` with the changed path relative to `dir`, forward-slashed; a
+ * file that was only read is no change. A watch that cannot start answers a stop
+ * function that does nothing.
  */
 export function watchTree(dir: string, onChange: ChangeListener): StopWatching {
   let watcher: fs.FSWatcher;
+  const changed = changeFilter();
   try {
-    watcher = fs.watch(dir, { recursive: true }, (_event, name) => {
-      onChange(name === null || name === undefined ? '' : String(name).split('\\').join('/'));
+    watcher = fs.watch(dir, { recursive: true }, (event, name) => {
+      if (name === null || name === undefined) {
+        onChange('');
+        return;
+      }
+      const rel = String(name);
+      if (!changed(event, nodePath.join(dir, rel))) return;
+      onChange(rel.split('\\').join('/'));
     });
   } catch {
     return () => {};
@@ -270,16 +315,23 @@ export function watchTree(dir: string, onChange: ChangeListener): StopWatching {
 }
 
 /**
- * Watch one directory without descending (fs.watch, not recursive). Each event
+ * Watch one directory without descending (fs.watch, not recursive). Each change
  * calls `onChange` with the entry's name (the empty string when the event has
- * none). A watch that cannot start answers a stop function that does nothing; an
- * error after start closes it quietly.
+ * none); an entry that was only read is no change. A watch that cannot start
+ * answers a stop function that does nothing; an error after start closes it
+ * quietly.
  */
 export function watchFolder(dir: string, onChange: ChangeListener): StopWatching {
   let watcher: fs.FSWatcher;
+  const changed = changeFilter();
   try {
-    watcher = fs.watch(dir, (_event, name) => {
-      onChange(name === null || name === undefined ? '' : String(name));
+    watcher = fs.watch(dir, (event, name) => {
+      if (name === null || name === undefined) {
+        onChange('');
+        return;
+      }
+      if (!changed(event, nodePath.join(dir, String(name)))) return;
+      onChange(String(name));
     });
   } catch {
     return () => {};

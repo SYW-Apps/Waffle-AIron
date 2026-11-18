@@ -241,6 +241,32 @@ describe('io/files descriptors and streams', () => {
     expect(seen.length).toBe(count);
   });
 
+  it('watchTree does not tell of a file that was only read, and tells of the next write to it', async () => {
+    const dir = tmp();
+    const file = path.join(dir, 'read.txt');
+    fs.writeFileSync(file, 'x');
+    // A last access hours ago, so a read moves it (NTFS moves it only when it is over an hour old).
+    const old = new Date(Date.now() - 3 * 3600 * 1000);
+    fs.utimesSync(file, old, old);
+    // Older than the watch: a read event for it (Windows reports the last-access time moving) is no change.
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const seen: string[] = [];
+    const stop = files.watchTree(dir, (p) => seen.push(p));
+    try {
+      for (let k = 0; k < 5; k++) fs.readFileSync(file, 'utf8');
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(seen.filter((p) => p === 'read.txt')).toEqual([]);
+      fs.writeFileSync(file, 'changed');
+      const deadline = Date.now() + 5000;
+      while (!seen.includes('read.txt') && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(seen).toContain('read.txt');
+    } finally {
+      stop();
+    }
+  });
+
   it('watchTree on a missing directory answers a stop that does nothing', () => {
     const stop = files.watchTree(path.join(tmp(), 'nope'), () => {});
     expect(() => stop()).not.toThrow();
