@@ -47,7 +47,11 @@ export function CanvasView({
   const navigate = useNavigate();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const handleRef = useRef<CanvasHandle | null>(null);
-  const model = state.data;
+  // A refetch that answers the same model keeps the mounted graph (and the reader's
+  // pan and zoom): the mount effect follows the model's content, not each response.
+  const modelText = useMemo(() => (state.data === undefined ? '' : JSON.stringify(state.data)), [state.data]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const model = useMemo(() => state.data, [modelText]);
   // The route we last synced with the engine (either seeded at mount, pushed to
   // the URL from an in-canvas drill, or applied from the URL). Used to skip
   // redundant openRoute calls and redundant history pushes — the engine already
