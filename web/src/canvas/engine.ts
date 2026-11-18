@@ -481,6 +481,10 @@ export function mountCanvas(host, model, opts = {}) {
         'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText,
         'font-weight': 'bold', 'font-size': 12, 'border-width': 2, 'text-wrap': 'wrap',
       }},
+      // A box that holds boxes keeps its border and name here, but its fill is
+      // painted by the edge overlay, under the lines (containerFill): drawn here,
+      // above the overlay, it would hide every line inside it.
+      { selector: ':parent', style: { 'background-opacity': 0 } },
     ];
   }
 
@@ -2274,9 +2278,42 @@ export function mountCanvas(host, model, opts = {}) {
         }
       }
     }
+    // The fills of the boxes that hold boxes, outermost first, so the lines
+    // drawn after them show on top. Their border and name stay with the graph.
+    function containerFill(n) { return n.hasClass('typeBox') ? 0.18 : 1; }
+    function containers(ctx) {
+      var list = [];
+      cy.nodes(':parent').forEach(function (n) {
+        if (!n.visible()) return;
+        var op = n.effectiveOpacity() * containerFill(n);
+        if (op <= 0.001) return;
+        list.push({ n: n, depth: n.ancestors().length, op: op });
+      });
+      list.sort(function (a, b) { return a.depth - b.depth; });
+      list.forEach(function (c) {
+        var bw = c.n.pstyle('border-width').pfValue || 0;
+        var bb = c.n.boundingBox({ includeLabels: false, includeOverlays: false });
+        var x = bb.x1 + bw / 2, y = bb.y1 + bw / 2, w = bb.w - bw, h = bb.h - bw;
+        if (!(w > 0 && h > 0)) return;
+        var r = Math.min(w / 4, h / 4, 8);
+        var rgb = c.n.pstyle('background-color').value;
+        ctx.globalAlpha = c.op;
+        ctx.fillStyle = 'rgb(' + rgb.join(',') + ')';
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
     var stubLabels = [];
     function paint(ctx, z) {
       stubLabels = [];
+      containers(ctx);
       var theme = THEMES[state.theme];
       var list = items();
       // Receding lines first, lifted ones last; per tier the tubes, then what sits in them.
@@ -2970,6 +3007,60 @@ export function mountCanvas(host, model, opts = {}) {
   })();
   edgeRouter.schedule();
   var pinnedProxy = null;
+  // ---- fit to view ------------------------------------------------------------
+  // Fits the design into the part of the canvas the floating chrome leaves free:
+  // below the toolbar and view hint, above the legend. Until the reader pans or
+  // zooms, a canvas that changes size (an embedding frame settling, the panel
+  // opening) fits again.
+  var autoFit = false, fitting = false;
+  function freeArea() {
+    var host = cy.container();
+    if (!host || !host.getBoundingClientRect) return { w: cy.width(), h: cy.height(), top: 0, bottom: 0 };
+    var hr = host.getBoundingClientRect();
+    var top = 0, bottom = 0;
+    var below = function (id) {
+      var el = ROOT.getElementById(id);
+      if (!el || !el.getBoundingClientRect) return;
+      var r = el.getBoundingClientRect();
+      if (r.height > 0 && r.bottom > hr.top && r.top < hr.top + hr.height / 2) top = Math.max(top, r.bottom - hr.top);
+    };
+    below('hdr');
+    below('viewHint');
+    var lg = ROOT.getElementById('legend');
+    if (lg && lg.getBoundingClientRect) {
+      var lr = lg.getBoundingClientRect();
+      if (lr.height > 0 && lr.top < hr.bottom && lr.bottom > hr.top + hr.height / 2) bottom = hr.bottom - lr.top;
+    }
+    return { w: hr.width, h: hr.height, top: top, bottom: bottom };
+  }
+  function fitView(pad) {
+    pad = pad === undefined ? 40 : pad;
+    cy.resize();
+    var eles = cy.elements(':visible');
+    if (!eles.length) return;
+    var a = inBrowser ? freeArea() : { w: cy.width(), h: cy.height(), top: 0, bottom: 0 };
+    var x0 = pad, y0 = a.top + pad * 0.5, aw = a.w - pad * 2, ah = a.h - a.bottom - y0 - pad * 0.5;
+    fitting = true;
+    try {
+      // Too little room left by the chrome: fit to the whole canvas instead.
+      if (aw < 80 || ah < 80) { cy.fit(eles, pad); return; }
+      var bb = eles.boundingBox();
+      var z = Math.max(cy.minZoom(), Math.min(cy.maxZoom(), Math.min(aw / (bb.w || 1), ah / (bb.h || 1))));
+      cy.viewport({ zoom: z, pan: { x: x0 + (aw - bb.w * z) / 2 - bb.x1 * z, y: y0 + (ah - bb.h * z) / 2 - bb.y1 * z } });
+    } finally {
+      fitting = false;
+      autoFit = true;
+    }
+  }
+  cy.on('pan zoom', function () { if (!fitting) autoFit = false; });
+  if (inBrowser && typeof ResizeObserver !== 'undefined' && cy.container()) {
+    var fitTimer = null;
+    new ResizeObserver(function () {
+      if (!autoFit) return;
+      if (fitTimer) clearTimeout(fitTimer);
+      fitTimer = setTimeout(function () { fitTimer = null; if (autoFit) fitView(); }, 80);
+    }).observe(cy.container());
+  }
   positionView(true);
   renderCrumbs();
   renderViewHint();
@@ -3071,7 +3162,7 @@ export function mountCanvas(host, model, opts = {}) {
     var hasSaved = sv && Object.keys(sv).length > 0;
     if (state.view.kind !== 'types' && state.layout !== 'layered' && !hasSaved) runNativeLayout();
     applySavedPositions();
-    if (fit) cy.fit(undefined, 60);
+    if (fit) fitView();
     if (typeof edgeRouter !== 'undefined' && edgeRouter) edgeRouter.schedule();
   }
   function rebuild(fit) {
@@ -3651,7 +3742,7 @@ export function mountCanvas(host, model, opts = {}) {
       });
     }
   })();
-  ROOT.getElementById('fitBtn').addEventListener('click', function () { cy.fit(undefined, 60); });
+  ROOT.getElementById('fitBtn').addEventListener('click', function () { fitView(); });
   ROOT.getElementById('resetBtn').addEventListener('click', function () {
     var all = saved.positionsByView || {};
     delete all[viewKey()];
@@ -3679,13 +3770,13 @@ export function mountCanvas(host, model, opts = {}) {
       CBODY.classList[on ? 'add' : 'remove']('presentation');
       if (!on) CBODY.classList.remove('show-details');
     }
-    setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
+    setTimeout(function () { fitView(); }, 60);
   }
   ROOT.getElementById('presentBtn').addEventListener('click', function () { setPresentation(true); });
   ROOT.getElementById('exitPresent').addEventListener('click', function () { setPresentation(false); });
   ROOT.getElementById('presentDetails').addEventListener('click', function () {
     if (CBODY.classList) CBODY.classList.toggle('show-details');
-    setTimeout(function () { cy.resize(); cy.fit(undefined, 40); }, 60);
+    setTimeout(function () { fitView(); }, 60);
   });
 
   // Anchor a fixed dropdown menu just under its button, right-aligned, clamped to
