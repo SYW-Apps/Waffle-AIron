@@ -334,7 +334,10 @@ function treeRootPrefix(relativePath: string): string {
 
 /** A packed root's canonical project-relative form: POSIX separators, '.' for the top root. */
 function normalizeRootPath(relativePath: string): string {
-  const posix = relativePath.split(path.sep).join('/').replace(/^\.\//, '').replace(/\/+$/, '');
+  const joined = relativePath.split(path.sep).join('/').replace(/^\.\//, '');
+  let end = joined.length;
+  while (end > 0 && joined.charAt(end - 1) === '/') end -= 1;
+  const posix = joined.slice(0, end);
   return posix === '' || posix === '.' ? '.' : posix;
 }
 

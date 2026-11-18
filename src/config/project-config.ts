@@ -974,39 +974,44 @@ function rawAt(rules: Record<string, unknown>, segments: string[]): unknown {
   return node;
 }
 
-/** A key that would reach an object's prototype instead of a rules mapping. */
-const PROTOTYPE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-/** Refuse segments naming a prototype key, at the write itself, whatever its caller checked. */
-function assertOwnSegments(segments: string[]): void {
-  const bad = segments.find((segment) => PROTOTYPE_KEYS.has(segment));
-  if (bad !== undefined) throw new WaironError(`Refusing the rules key "${bad}": it is not a rules name.`);
+/** Refuse a rules key that would reach an object's prototype instead of a rules mapping. */
+function refusePrototypeKey(key: string): never {
+  throw new WaironError(`Refusing the rules key "${key}": it is not a rules name.`);
 }
+
+// The raw write and drop check each key where it is used, whatever their
+// callers checked: a prototype key never reaches an assignment or a delete.
 
 /** Write a raw rules value at the segments, creating the mappings above it. */
 function writeRawAt(rules: Record<string, unknown>, segments: string[], value: unknown): void {
-  assertOwnSegments(segments);
   let node = rules;
   for (const segment of segments.slice(0, -1)) {
+    if (segment === '__proto__' || segment === 'constructor' || segment === 'prototype') refusePrototypeKey(segment);
     if (!isPlainObject(node[segment])) node[segment] = {};
     node = node[segment] as Record<string, unknown>;
   }
-  node[segments[segments.length - 1]] = value;
+  const last = segments[segments.length - 1];
+  if (last === '__proto__' || last === 'constructor' || last === 'prototype') refusePrototypeKey(last);
+  node[last] = value;
 }
 
 /** Drop the raw rules value at the segments, and the mappings it leaves empty. */
 function dropRawAt(rules: Record<string, unknown>, segments: string[]): void {
-  assertOwnSegments(segments);
   const trail: Record<string, unknown>[] = [rules];
   for (const segment of segments.slice(0, -1)) {
+    if (segment === '__proto__' || segment === 'constructor' || segment === 'prototype') refusePrototypeKey(segment);
     const next = trail[trail.length - 1][segment];
     if (!isPlainObject(next)) return;
     trail.push(next);
   }
-  delete trail[trail.length - 1][segments[segments.length - 1]];
+  const last = segments[segments.length - 1];
+  if (last === '__proto__' || last === 'constructor' || last === 'prototype') refusePrototypeKey(last);
+  delete trail[trail.length - 1][last];
   for (let i = trail.length - 1; i > 0; i -= 1) {
     if (Object.keys(trail[i]).length > 0) break;
-    delete trail[i - 1][segments[i - 1]];
+    const key = segments[i - 1];
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') refusePrototypeKey(key);
+    delete trail[i - 1][key];
   }
 }
 

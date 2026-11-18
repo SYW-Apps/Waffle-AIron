@@ -4797,11 +4797,16 @@ function collectMentions(specsDir: string | readonly string[], methodName: strin
 
 /**
  * A method name matched as a whole identifier, so a name a longer word merely
- * contains is not a use of it. No escaping: a method name is alphanumeric by
- * schema, so nothing in one is a regular-expression operator.
+ * contains is not a use of it. Escaped: the naming rule is checked by the
+ * validator, not when a spec is read, so a name may still hold an operator.
  */
 function identifierPattern(methodName: string): RegExp {
-  return new RegExp(`(?<![A-Za-z0-9_])${methodName}(?![A-Za-z0-9_])`);
+  return new RegExp(`(?<![A-Za-z0-9_])${escapeForPattern(methodName)}(?![A-Za-z0-9_])`);
+}
+
+/** A text matched literally inside a regular expression. */
+function escapeForPattern(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ---------------------------------------------------------------------------
@@ -5603,9 +5608,10 @@ function respellPlaceholder<E extends { transport: string; path?: string } | und
     path = path.split(`{${from}}`).join(`{${to}}`);
     rewritten.push(`${label}: {${from}} -> {${to}}`);
   }
-  const colon = new RegExp(`/:${from}(?![A-Za-z0-9_])`, 'g');
+  const colon = new RegExp(`/:${escapeForPattern(from)}(?![A-Za-z0-9_])`, 'g');
   if (colon.test(path)) {
-    path = path.replace(colon, `/:${to}`);
+    colon.lastIndex = 0;
+    path = path.replace(colon, () => `/:${to}`);
     rewritten.push(`${label}: :${from} -> :${to}`);
   }
   return path === endpoint.path ? endpoint : { ...endpoint, path };
