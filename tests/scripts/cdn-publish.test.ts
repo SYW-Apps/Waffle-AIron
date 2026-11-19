@@ -1,11 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { execFileSync } from 'child_process';
 // @ts-expect-error — a plain .mjs script with no declarations
-import { channelOf, aliasesOf, rewriteLinks, planAliases, checkRequestBudget, REQUEST_BUDGET_BYTES } from '../../scripts/cdn-publish.mjs';
+import { channelOf, aliasesOf, rewriteLinks, planAliases, checkRequestBudget, REQUEST_BUDGET_BYTES, send, landed } from '../../scripts/cdn-publish.mjs';
 
 // ---------------------------------------------------------------------------
 // The CDN publish script (docs/cdn-release.md): which aliases a version moves,
@@ -188,3 +188,40 @@ describe('a dry run', () => {
   });
 });
 
+
+describe('sending a release', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  const req = { label: '6.2.0-windows-x64', version: '6.2.0-windows-x64', aliases: [], description: 'wairon 6.2.0', tags: 'release,stable', files: [{ path: 'a.zip', bytes: Buffer.from(BYTES) }] };
+  const file = { name: 'a.zip', bytes: Buffer.byteLength(BYTES), sha256: DIGEST };
+  const timedOut = (): Response => new Response('<html>timeout</html>', { status: 524 });
+  const quiet = { delayMs: 0, waitMs: 50, pollMs: 1 };
+
+  it('a timed-out request whose release landed meanwhile is not sent again', async () => {
+    let posts = 0;
+    let stored = false;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') { posts++; stored = true; return timedOut(); }
+      return stored ? new Response(BYTES) : new Response('', { status: 404 });
+    }));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const answer = await send(req, 'token', { ...quiet, landed: () => landed('apps/wairon', req.label, file) });
+    expect(answer).toBeUndefined();
+    expect(posts).toBe(1);
+  });
+
+  it('a timed-out request that never lands is sent again, then fails naming the 524', async () => {
+    let posts = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') { posts++; return timedOut(); }
+      return new Response('', { status: 404 });
+    }));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    await expect(send(req, 'token', { ...quiet, landed: () => landed('apps/wairon', req.label, file) })).rejects.toThrow(/HTTP 524/);
+    expect(posts).toBe(3);
+  });
+
+  it('a public copy with other bytes fails at once', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('other bytes')));
+    await expect(landed('apps/wairon', req.label, file)).rejects.toThrow(/with other bytes/);
+  });
+});

@@ -121,13 +121,19 @@ Without that secret it does nothing. Nothing else waits on it, so a CDN failure
 never holds back the GitHub release or npm. The sequence is:
 
 1. refuse unless the five platform archives (and their `.sha256`) are all there;
-2. for each platform, publish `<version>-<target>` (archive + checksum, no aliases),
+2. for each platform, skip it when its archive is already on the CDN with the same
+   bytes; otherwise publish `<version>-<target>` (archive + checksum, no aliases),
    then fetch the archive back and check its SHA-256 and length;
 3. read each alias's current `version.json` and decide which aliases may move;
 4. publish the index `<version>` with those aliases.
 
-A request that fails with a lost response or a 5xx is sent again with the same bytes
-(up to three times; the CDN treats an identical republish as idempotent). A `409`
+A platform request that fails with a lost response or a 5xx is not sent again at
+once: the publisher first watches the archive's public URL for up to five minutes.
+Cloudflare answers `524` when the CDN takes more than 100 seconds to answer, but the
+CDN goes on and stores the release; once the archive is served with the expected
+bytes, the request counts as published. Only when it does not appear is it sent
+again with the same bytes (up to three times; the CDN treats an identical republish
+as idempotent). The index request is small and is resent directly. A `409`
 means the CDN holds different bytes under that exact version, and is not retried.
 A failure prints the HTTP status, the URL, the body size and the `CF-Ray` /
 request id, never the token.

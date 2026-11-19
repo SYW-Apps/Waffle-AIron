@@ -55,6 +55,15 @@ export const REQUEST_BUDGET_BYTES = 90_000_000;
 const SEND_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 5000;
 
+/**
+ * After a lost response or a 5xx, how long to watch the public copy before sending the
+ * bytes again, and how often to look. Cloudflare answers 524 when the CDN takes more
+ * than 100 s to answer, but the CDN goes on and stores the release: a large archive
+ * has landed about two minutes after a 524. Sending it again only starts that wait over.
+ */
+const LANDED_WAIT_MS = 5 * 60_000;
+const LANDED_POLL_MS = 15_000;
+
 /** The platforms release.yml builds, with the archive extension each one gets. */
 export const TARGETS = [
   { target: 'windows-x64', ext: '.zip' },
@@ -310,9 +319,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * POST one release request. A 409 is different bytes (or a different file set) under an
  * exact version: a retry cannot fix it, so it fails at once. A thrown fetch (lost
  * response) or a 5xx is retried a bounded number of times with the SAME bytes, which
- * the CDN accepts as idempotent.
+ * the CDN accepts as idempotent. When the caller can tell whether the release landed
+ * (`landed`), a lost response or a 5xx first watches for it for `waitMs`: the CDN may
+ * have stored it after the proxy gave up waiting. Returns the CDN's answer, or
+ * undefined when the release was found landed.
  */
-async function send(req, token, delayMs = RETRY_DELAY_MS) {
+export async function send(req, token, { delayMs = RETRY_DELAY_MS, landed, waitMs = LANDED_WAIT_MS, pollMs = LANDED_POLL_MS } = {}) {
   const { contentType, body } = await encode(req);
   const url = `${BASE}/api/v1/publish/releases`;
   let last;
@@ -326,6 +338,14 @@ async function send(req, token, delayMs = RETRY_DELAY_MS) {
     } catch (err) {
       if (err.final) throw err;
       last = `publish ${req.label}: no response from ${url} (${err.message}; body ${body.length} bytes)`;
+    }
+    if (landed) {
+      console.log(`${last}\nwatching for ${req.label} on the CDN for up to ${Math.round(waitMs / 1000)}s before sending it again`);
+      for (const until = Date.now() + waitMs; ;) {
+        if (await landed()) return undefined;
+        if (Date.now() + pollMs > until) break;
+        await sleep(pollMs);
+      }
     }
     if (attempt < SEND_ATTEMPTS) {
       console.log(`${last}\nretrying the same bytes in ${delayMs / 1000}s (attempt ${attempt + 1} of ${SEND_ATTEMPTS})`);
@@ -355,6 +375,21 @@ async function verify(prefix, release, f) {
     if (attempt < SEND_ATTEMPTS) await sleep(RETRY_DELAY_MS);
   }
   throw new Error(last);
+}
+
+/**
+ * Whether the archive is already on the CDN as these bytes: one public GET. Absent or
+ * unreadable is false (the caller sends it); a copy with other bytes fails at once,
+ * because an exact version never changes.
+ */
+export async function landed(prefix, release, f) {
+  const url = `${BASE}${releasePath(prefix, release, f.name)}`;
+  let res;
+  try { res = await fetch(url); } catch { return false; }
+  if (!res.ok) return false;
+  const got = Buffer.from(await res.arrayBuffer());
+  if (got.length === f.bytes && sha256(got) === f.sha256) return true;
+  throw new Error(`${url} is on the CDN with other bytes: got ${got.length} bytes sha256 ${sha256(got)}, expected ${f.bytes} bytes sha256 ${f.sha256}`);
 }
 
 /**
@@ -442,8 +477,14 @@ async function main() {
 
   for (const req of platforms) {
     const f = files.find((x) => platformRelease(version, x.platform) === req.label);
-    await send(req, token);
-    console.log(`Published ${req.label} (${f.bytes} bytes)`);
+    // A platform release already on the CDN with these bytes (an earlier run stored it,
+    // though that run failed later) is not sent again, so a re-run resumes where it stopped.
+    if (await landed(prefix, req.label, f)) {
+      console.log(`${req.label} is already on the CDN with these bytes: not sent again`);
+      continue;
+    }
+    const answer = await send(req, token, { landed: () => landed(prefix, req.label, f) });
+    console.log(answer === undefined ? `Published ${req.label} (${f.bytes} bytes; it landed after the response was lost)` : `Published ${req.label} (${f.bytes} bytes)`);
     await verify(prefix, req.label, f);
     console.log(`Verified ${req.label}: sha256 and length match the public copy`);
   }
