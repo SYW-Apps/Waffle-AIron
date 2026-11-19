@@ -355,13 +355,22 @@ export async function send(req, token, { delayMs = RETRY_DELAY_MS, landed, waitM
   throw new Error(last);
 }
 
+/**
+ * The public URL of an archive, read past the edge cache. Cloudflare keeps a 404 for
+ * hours: a look before the archive was published would otherwise answer every later
+ * look from that PoP with the stale 404. A unique query string is its own cache entry.
+ */
+export function uncachedUrl(url) {
+  return `${url}?check=${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`;
+}
+
 /** Fetch a published archive back from its public URL and compare its SHA-256 and length. */
 async function verify(prefix, release, f) {
   const url = `${BASE}${releasePath(prefix, release, f.name)}`;
   let last;
   for (let attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(uncachedUrl(url));
       if (res.ok) {
         const got = Buffer.from(await res.arrayBuffer());
         if (got.length === f.bytes && sha256(got) === f.sha256) return;
@@ -385,7 +394,7 @@ async function verify(prefix, release, f) {
 export async function landed(prefix, release, f) {
   const url = `${BASE}${releasePath(prefix, release, f.name)}`;
   let res;
-  try { res = await fetch(url); } catch { return false; }
+  try { res = await fetch(uncachedUrl(url)); } catch { return false; }
   if (!res.ok) return false;
   const got = Buffer.from(await res.arrayBuffer());
   if (got.length === f.bytes && sha256(got) === f.sha256) return true;
