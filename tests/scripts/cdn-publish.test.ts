@@ -225,3 +225,17 @@ describe('sending a release', () => {
     await expect(landed('apps/wairon', req.label, file)).rejects.toThrow(/with other bytes/);
   });
 });
+
+describe('reading the public copy', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it('every look uses its own URL, so an edge-cached 404 from before the publish is never the answer', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => { urls.push(url); return new Response('', { status: 404 }); }));
+    const file = { name: 'a.zip', bytes: 1, sha256: 'x' };
+    await landed('apps/wairon', '6.2.0-linux-x64', file);
+    await landed('apps/wairon', '6.2.0-linux-x64', file);
+    expect(urls).toHaveLength(2);
+    for (const u of urls) expect(u).toMatch(/\/apps\/wairon\/releases\/6\.2\.0-linux-x64\/a\.zip\?check=[0-9a-z]+$/);
+    expect(urls[0]).not.toBe(urls[1]);
+  });
+});
