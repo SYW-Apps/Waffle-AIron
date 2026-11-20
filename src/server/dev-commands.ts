@@ -78,6 +78,8 @@ export interface DevApproval {
   projectName?: string;
   /** The direct member projects' approvals, each judged at its own root; absent when they cannot be read. */
   members?: ProjectApproval[];
+  /** The subsystems a `wairon lock --subsystem` here may re-approve: the served project's own, a part's included; never a member project's (locked at its own root, through `members`). */
+  lockScopes: string[];
 }
 
 /** The id of the one project the development server serves. */
@@ -249,8 +251,15 @@ export function approval(cfg: HostConfig, sessionId: string): DevApproval {
     } catch {
       members = undefined;
     }
-    // Step 10.
-    const branchOf = { ...(branch ? { branch } : {}), ...(name ? { projectName: name } : {}), ...(members ? { members } : {}) };
+    // Step 10: the served tree's own subsystems (a part's included): an id qualified `alias::name` is another project's.
+    let lockScopes: string[];
+    try {
+      lockScopes = hostCore.loadSubsystemSpecs().map((s) => s.id).filter((id) => !id.includes('::')).sort();
+    } catch {
+      lockScopes = [];
+    }
+    // Step 11.
+    const branchOf = { lockScopes, ...(branch ? { branch } : {}), ...(name ? { projectName: name } : {}), ...(members ? { members } : {}) };
     if (!record) return { approved: false, verdict, ...branchOf };
     const state: DevApproval = { approved: true, verdict, ...branchOf };
     if (typeof record.lockedAt === 'string' && record.lockedAt !== '') state.approvedAt = record.lockedAt;

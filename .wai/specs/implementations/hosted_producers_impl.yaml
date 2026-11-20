@@ -5,6 +5,8 @@ description: >-
   of the admin orchestrator's module).
 contract: ihosted_producers
 sourcePath: src/server/hosted-producers.ts
+injectedParams:
+  - cfg
 methods:
   - name: configure
     narrative:
@@ -185,4 +187,4 @@ methods:
         outcome: removed
 status: complete
 createdAt: '2026-11-20T01:02:25.647Z'
-updatedAt: '2026-11-20T01:02:51.980Z'
+updatedAt: '2026-11-20T19:08:24.494Z'

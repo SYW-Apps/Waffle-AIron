@@ -215,13 +215,13 @@ describe('a hosted lock needs approval:decide, per role', () => {
     expect(lockProject(cfg, MASTER, PROJECT).status).toBe('completed');
   });
 
-  it('a hosted lock records its gate parts, exactly as the local lock does', () => {
+  it('a hosted lock records its approval parts, exactly as the local lock does', () => {
     lockProject(cfg, MASTER, PROJECT);
-    const record = JSON.parse(fs.readFileSync(lockFile(), 'utf8')) as { stateId: { algorithm: string; digest: string }; gateParts?: Record<string, string> };
+    const record = JSON.parse(fs.readFileSync(lockFile(), 'utf8')) as { stateId: { algorithm: string; digest: string }; parts?: Record<string, string> };
     const root = existingProjectRoot(dataDir, PROJECT)!;
     const now = runWithProjectRoot(root, () => computeApprovalId());
-    expect(record.gateParts).toBeDefined();
-    expect(record.gateParts).toEqual(now.parts);
+    expect(record.parts).toBeDefined();
+    expect(record.parts).toEqual(now.parts);
     // The parts break the recorded identity down, so no reading calls the record stale.
     expect(gatePartsProblem(record as never, now)).toBeNull();
   });

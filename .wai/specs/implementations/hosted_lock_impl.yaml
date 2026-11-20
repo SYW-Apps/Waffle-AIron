@@ -6,6 +6,8 @@ description: >-
   checks. Pre-authorized throughout.
 contract: ihosted_lock
 sourcePath: src/server/hosted-lock.ts
+injectedParams:
+  - cfg
 methods:
   - name: execute
     narrative:
@@ -274,4 +276,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-11-20T00:38:27.765Z'
-updatedAt: '2026-11-20T00:39:11.347Z'
+updatedAt: '2026-11-20T19:08:23.772Z'

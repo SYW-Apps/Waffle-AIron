@@ -19,6 +19,8 @@ import {
   memberName,
   memberOfScope,
   membersToLock,
+  memberReason,
+  lockScopeOptions,
   movedKind,
   MEMBER_SCOPE_PREFIX,
   pendingReviews,
@@ -275,7 +277,7 @@ function ChangesButton(props: { approval?: DevApprovalData; nodes: ScopeNode[] }
               {members.map((m) => (
                 <div key={m.key} className="change-member">
                   <span className="change-name">{memberName(m)}</span>
-                  <span className="dim">{m.state === 'never' ? 'never locked' : 'changed'}</span>
+                  <span className="dim">{memberReason(m)}</span>
                   <Button
                     size="sm"
                     variant="primary"
@@ -404,7 +406,7 @@ export function LockModal(props: {
     return { errors: r.errors ?? [], warnings: r.warnings ?? [] };
   }, []);
   const moved = parseMoved(approval?.verdict.moved);
-  const subsystems = nodes.filter((n) => n.kind === 'subsystem').map((n) => n.id).sort();
+  const subsystems = lockScopeOptions(approval, nodes);
   if (subsystem && !member && !subsystems.includes(subsystem)) subsystems.push(subsystem);
   const memberOptions = membersToLock(approval).map(memberName);
   if (member && !memberOptions.includes(member)) memberOptions.push(member);

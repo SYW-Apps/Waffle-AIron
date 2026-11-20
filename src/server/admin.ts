@@ -1,14 +1,9 @@
 import * as crypto from 'crypto';
 import type { DiagramFormat } from '../core/diagram.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
-import { WAIRON_VERSION } from '../config/defaults.js';
 
 import type { LockRecord } from '../core/lockfile.js';
-import type { StateId } from '../core/statehash.js';
-import type { ValidationResult } from '../core/validation.js';
-import type { ProjectConfig } from '../models/project.js';
-import { designOnly, type ApproverIdentity, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
-import { effectiveProjectId } from '../models/project.js';
+import type { ApproverIdentity } from '../models/lock.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { placeProject, listOrganizationUnits } from './organization.js';
@@ -33,16 +28,15 @@ import {
 } from './projects.js';
 import * as hostCore from './adapters/core.js';
 import * as hostGit from './adapters/git.js';
-import * as hostProducer from './adapters/producer.js';
-import { validateAsComplete, computeApprovalId, familyApprovals, familyRelations } from './adapters/validator.js';
+import * as hostedLock from './hosted-lock.js';
+import { familyRelations } from './adapters/validator.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 // The secret store's write is reached through its module namespace: this module
 // exports its own credential-checked setSecret, and a call written through an
 // import alias is one the call-graph conformance analysis cannot follow.
 import * as secretStore from '../utils/secrets.js';
-import { listSecretKeys, resolveGitToken, resolveSecret } from '../utils/secrets.js';
-import type { ProducerConfig } from '../producers/index.js';
+import { listSecretKeys, resolveGitToken } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
   DevFamilyRegistration,
@@ -67,7 +61,7 @@ import type {
 // the git-backed publish opens.
 // ---------------------------------------------------------------------------
 
-import { AdminAuthError, LockValidationError } from './errors.js';
+import { AdminAuthError } from './errors.js';
 
 function requireAdmin(credential: string | null): void {
   if (!authenticateMaster(credential).authenticated) throw new AdminAuthError();
@@ -265,7 +259,7 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
         + 'a writer requests the lock with sdd_host_lock_project, for someone else to approve',
     );
   }
-  return executeApprovedLock(cfg, project, hostedApprover(principal.subject));
+  return hostedLock.execute(cfg, project, hostedApprover(principal.subject));
 }
 
 /**
@@ -305,211 +299,6 @@ function repositoryScopeOf(cfg: HostConfig, projectId: string): RepositoryScope 
   const scope = projectRepositoryScope(cfg.dataDir, projectId);
   if (!scope) throw new Error(`Unknown project "${projectId}".`);
   return scope;
-}
-
-/**
- * Thrown when a hosted lock refuses before writing anything for a reason other
- * than design errors: the design moved after the lock was requested, an input
- * moved while the lock ran, or composition.requireApprovedMembers found a
- * direct member not approved. Nothing is written in any of these cases.
- */
-class LockRefusedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'LockRefusedError';
-  }
-}
-
-/**
- * The refusal of a lock requested about a design that has since moved. It
- * carries both identities, so the approval workflow can cancel the request
- * with the reason; its name stays LockRefusedError, which the portals map.
- */
-class RequestedDesignMovedError extends LockRefusedError {
-  constructor(readonly requested: string, readonly now: string) {
-    super(`The design changed since the lock was requested (requested ${requested}, now ${now}); `
-      + 'request the lock again. Nothing was written.');
-  }
-}
-
-/** A gate identity rendered the way requests and member pins store it. */
-function renderIdentity(stateId: StateId): string {
-  return `${stateId.algorithm}:${stateId.digest}`;
-}
-
-/**
- * The gate identity of the tree a lock of this project's own record would certify NOW, rendered `<algorithm>:<digest>`.
- * Pre-authorized like executeApprovedLock and for the same caller: the project
- * lifecycle orchestrator records it on a project:lock request when the request
- * is created, so the approved execution can refuse a tree that moved after the
- * request. Read-only: no sync, no validation, no write.
- */
-export function gateIdentity(cfg: HostConfig, projectId: string): string {
-  const root = boundLifecycleRoot(cfg, projectId);
-  return runWithProjectRoot(root, () => renderIdentity(computeApprovalId()));
-}
-
-/**
- * Pre-authorized like executeApprovedLock and for the same caller: validate the
- * tree of this project's own record the way an approved lock would (as-complete,
- * the design half) and refuse with a LockValidationError naming the error count
- * and each error's code. Warnings and notices never refuse, as at the local
- * `wairon lock`. Read-only: no sync, no lock record, no write — the project
- * lifecycle orchestrator calls it before it creates a pending project:lock
- * request, so a request is never made about a tree the approved lock would refuse.
- */
-export function checkLockable(cfg: HostConfig, projectId: string): void {
-  const root = boundLifecycleRoot(cfg, projectId);
-  runWithProjectRoot(root, () => {
-    refuseDesignErrors(validateAsComplete());
-  });
-}
-
-/**
- * Pre-authorized entry for the approval workflow: the same privileged action as
- * lockProject but WITHOUT credential authentication — the caller
- * (project_lifecycle_orchestrator, or lockProject after its own authorization)
- * has already enforced permission-based authorization and resolved `approver`
- * from the credential. Never routed from any portal.
- *
- * The same flow as the local `wairon lock` (stage 5): the gate identity is
- * CAPTURED before validation; an `expected` identity (an approval request's
- * gateStateId) must equal it; only the DESIGN half of the as-complete run may
- * refuse (code findings are recorded beside the claim as `code`);
- * composition.requireApprovedMembers refuses while a direct member is drifted
- * or never approved; the identity is re-confirmed before the record is
- * written; and the record is format 2 (`members`, never `children`). It
- * writes one file, the bound root's .wai/lock.json, and nothing below it.
- *
- * It locks the project's OWN record: a member is a record since stage 7, so
- * its own tree is bound. Git goes through the project's family repository:
- * sync at the family root's repository root, and publish ONLY the project's own
- * .wai/ pathspec there, so a member's lock reaches the remote without sweeping
- * its parent's or siblings' trees.
- */
-export function executeApprovedLock(
-  cfg: HostConfig,
-  projectId: string,
-  approver: ApproverIdentity,
-  expected?: string,
-): LockRecord {
-  // Step 1: the family repository scope, and the project's own root to bind.
-  const scope = repositoryScopeOf(cfg, projectId);
-  const root = boundLifecycleRoot(cfg, projectId);
-  return runWithProjectRoot(root, () => {
-    // Step 2: git-backed — pull the default branch into the working branch at
-    // the family repository root first, so the lock (and PR) is based on the
-    // latest. No-op for a native family.
-    runWithProjectRoot(scope.repositoryRoot, () => hostGit.sync());
-    // Capture what the record will certify before anything is judged.
-    const captured = computeApprovalId();
-    refuseUnrequestedDesign(captured, expected);
-    const gate = validateAsComplete();
-    const design = refuseDesignErrors(gate);
-    const members = familyApprovals(1).filter((a) => a.parent === '');
-    const config = hostCore.loadProjectConfig();
-    refuseUnapprovedMembers(config?.composition?.requireApprovedMembers === true, members);
-    const specs = hostCore.captureApprovedSpecs();
-    // Did any input move while the lock ran? Then the validation just
-    // performed does not describe what would be recorded.
-    refuseMovedInputs(captured, computeApprovalId());
-    const record = lockRecordOf(captured, approver, design, gate, config, specs);
-    // Write the record BEFORE publishing, so the commit that ships the specs
-    // also contains the approval that certifies them.
-    hostCore.writeLockRecord(record);
-    return publishLock(record, scope);
-  });
-}
-
-/** Refuse, writing nothing, when the lock was requested about a different design. */
-function refuseUnrequestedDesign(captured: StateId, expected: string | undefined): void {
-  if (expected === undefined || renderIdentity(captured) === expected) return;
-  // Approving now would certify a design nobody asked to have approved.
-  throw new RequestedDesignMovedError(expected, renderIdentity(captured));
-}
-
-/** The design half of the as-complete run, or a refusal naming its errors. */
-function refuseDesignErrors(gate: ValidationResult): ValidationResult {
-  const design = designOnly(gate);
-  const errors = design.issues.filter((i) => i.severity === 'error');
-  if (errors.length) {
-    throw new LockValidationError(errors.map((e) => ({ code: e.code, message: e.message, specId: e.specId })));
-  }
-  return design;
-}
-
-/** composition.requireApprovedMembers: refuse, naming each direct member not approved. */
-function refuseUnapprovedMembers(required: boolean, members: ProjectApproval[]): void {
-  // A PROJECT member only: a part's approval is this lock (stage 8).
-  const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
-  if (!required || unapproved.length === 0) return;
-  const named = unapproved.map((m) => `${m.alias ?? m.key} (${m.state})`);
-  throw new LockRefusedError(
-    `composition.requireApprovedMembers: direct member(s) not approved — ${named.join(', ')}. `
-      + 'Lock each at its own root first; a parent never approves below itself. Nothing was written.',
-  );
-}
-
-/** Refuse, writing nothing, when the gate identity moved between capture and write. */
-function refuseMovedInputs(captured: StateId, now: StateId): void {
-  if (now.algorithm === captured.algorithm && now.digest === captured.digest) return;
-  throw new LockRefusedError(
-    'The lock\'s inputs changed while it ran — a spec, the project\'s policy (rule tuning, the composition block, '
-      + 'the network declaration, pack selections) moved between the validation and the write. Nothing was written; run the lock again.',
-  );
-}
-
-/** A format-2 record at the captured identity: members and code beside the claim, never `children`. */
-function lockRecordOf(
-  captured: StateId,
-  approver: ApproverIdentity,
-  design: ValidationResult,
-  gate: ValidationResult,
-  config: ProjectConfig | null,
-  specs: LockRecord['specs'],
-): LockRecord {
-  const count = (severity: string): number => design.issues.filter((i) => i.severity === severity).length;
-  // The bound tree's effective id, so a later id change is caught (PROJECT_ID_CHANGED).
-  const projectId = config ? effectiveProjectId(config) : null;
-  return {
-    // Format 4: the approval of the own design and policy.
-    format: 4,
-    stateId: { algorithm: captured.algorithm, digest: captured.digest },
-    lockedAt: new Date().toISOString(),
-    lockedBy: approver,
-    validatorVersion: WAIRON_VERSION,
-    validationResult: { valid: design.valid, errors: count('error'), warnings: count('warning'), notices: count('notice') },
-    status: 'ready',
-    ...(projectId !== null ? { projectId } : {}),
-    specs,
-    // Each half of the certified identity on its own, exactly as the local
-    // lock records them: what lets a later check name the one that moved.
-    parts: captured.parts ?? {},
-    ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
-  };
-}
-
-/** The analysis as a lock records it: its codes list is noise the analyzer identity already pins. */
-function withoutCodes(analysis: CodeAnalysis): CodeAnalysis {
-  const { codes: _codes, ...rest } = analysis;
-  return rest;
-}
-
-/**
- * Git-backed: the lock is the semantic checkpoint — commit ONLY the project's
- * own .wai/ pathspec at the family repository root with a message referencing
- * the certified identity, and push. No-op for a native family or a clean
- * pathspec. Only a real publish has a commit to record: the two published
- * fields are known only AFTER the commit, so they are re-written into a record
- * the commit already carries.
- */
-function publishLock(record: LockRecord, scope: RepositoryScope): LockRecord {
-  const message = `wairon lock: ${record.projectId ?? 'project'} @ ${renderIdentity(record.stateId)}`;
-  const publish = runWithProjectRoot(scope.repositoryRoot, () => hostGit.publish(message, scope.pathspecs));
-  if (!publish.published) return record;
-  const published: LockRecord = { ...record, commitSha: publish.commitSha, compareUrl: publish.compareUrl };
-  hostCore.writeLockRecord(published);
-  return published;
 }
 
 // ── Git backing ─────────────────────────────────────────────────────────────
@@ -685,55 +474,6 @@ function familyPathspecs(cfg: HostConfig, familyRootId: string): string[] {
   const specs = listFamilyRecords(cfg.dataDir, familyRootId)
     .flatMap((r) => projectRepositoryScope(cfg.dataDir, r.id)?.pathspecs ?? []);
   return [...new Set(specs)];
-}
-
-// ── Producers ───────────────────────────────────────────────────────────────
-
-function boundProject(cfg: HostConfig, project: string): string {
-  const root = existingProjectRoot(cfg.dataDir, project);
-  if (!root) throw new Error(`Unknown project "${project}".`);
-  return root;
-}
-
-/** A producer publishes the project's specs to an external target — project
- *  administration. Shared gate for the four producer methods. */
-function requireProducerAdmin(cfg: HostConfig, credential: string | null, project: string, verb: string): void {
-  const principal = requirePrincipal(cfg, credential);
-  if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
-    throw new AdminAuthError(`Forbidden — ${verb} requires project:admin over the project`);
-  }
-}
-
-export function configureProducer(cfg: HostConfig, credential: string | null, project: string, target: string, parentPageId: string): void {
-  requireProducerAdmin(cfg, credential, project, 'configuring a producer');
-  runWithProjectRoot(boundProject(cfg, project), () => hostProducer.configure(target, parentPageId));
-}
-
-export async function produceProducer(cfg: HostConfig, credential: string | null, project: string, target: string): Promise<void> {
-  requireProducerAdmin(cfg, credential, project, 'running a producer');
-  const root = boundProject(cfg, project);
-  const base = process.env['WAIRON_PUBLIC_URL'] || `http://${cfg.host}:${cfg.port}`;
-  const diagramUrl = `${base}/view/diagram?token=${signViewToken(project, 'canvas')}`;
-  // The host resolves the target's token from its own secret repository and
-  // hands it to the one call it authorizes; the producer never asks for it. An
-  // unconfigured target needs no token: the producer refuses it by name.
-  const configured = runWithProjectRoot(root, () => hostProducer.list()).some((p) => p.target === target);
-  const token = configured ? resolveSecret(`${target}-token`) : null;
-  if (configured && !token) {
-    const label = target.charAt(0).toUpperCase() + target.slice(1);
-    throw new Error(`No ${label} token — set WAIRON_${target.toUpperCase()}_TOKEN or run \`wairon host secret set ${target}-token <secret>\`.`);
-  }
-  await runWithProjectRoot(root, () => hostProducer.produce(target, diagramUrl, token ?? ''));
-}
-
-export function removeProducer(cfg: HostConfig, credential: string | null, project: string, target: string): void {
-  requireProducerAdmin(cfg, credential, project, 'removing a producer');
-  runWithProjectRoot(boundProject(cfg, project), () => hostProducer.remove(target));
-}
-
-export function listProducers(cfg: HostConfig, credential: string | null, project: string): ProducerConfig[] {
-  requireProducerAdmin(cfg, credential, project, 'listing producers');
-  return runWithProjectRoot(boundProject(cfg, project), () => hostProducer.list());
 }
 
 // ── Secrets (runtime-configurable integration tokens) ─────────────────────────

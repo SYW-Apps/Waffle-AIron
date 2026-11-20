@@ -517,7 +517,10 @@ export interface MemberApproval {
   approvable?: boolean;
   /** Why the approval on record does not cover it, when drifted. */
   owed?: string;
-  pinned?: 'matches' | 'moved' | 'unpinned';
+  /** On a drifted entry: the parts of its approval identity that moved (design, rules, composition, network, selections). */
+  partsMoved?: string[];
+  /** What its build inputs owe beside the approval. */
+  inputs?: { kind: string; subject: string; sentence: string }[];
 }
 
 /** One entry of GET /web/dev/reviews: the request, and the member project it was made in (its alias), when not the served one. */

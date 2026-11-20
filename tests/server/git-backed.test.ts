@@ -19,6 +19,7 @@ import {
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as admin from '../../src/server/admin.js';
+import * as hostedLock from '../../src/server/hosted-lock.js';
 import { AdminAuthError } from '../../src/server/errors.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
@@ -316,7 +317,7 @@ describe('git-backed projects (sdd_git)', () => {
     invalidateSpecCache();
 
     const headBefore = git(['rev-parse', 'wairon/work'], root);
-    const rec = admin.executeApprovedLock(cfg, 'billing', TEST_APPROVER);
+    const rec = hostedLock.execute(cfg, 'billing', TEST_APPROVER);
 
     // The member froze at its own root and its lock reached the remote.
     expect(rec.status).toBe('ready');

@@ -10,6 +10,7 @@ import { handleWebRequest, startDevSession } from './web.js';
 import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtime.js';
 import { handleShareRequest } from './sharehttp.js';
 import * as admin from './admin.js';
+import * as hostedProducers from './hosted-producers.js';
 import * as packs from './packs.js';
 import * as backupSchedule from './backup-schedule.js';
 import * as devTreeWatcher from './dev-watcher.js';
@@ -515,17 +516,17 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
         admin.syncGit(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
       }
-      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'producers') return sendJson(res, 200, admin.listProducers(cfg, cred, parts[2]));
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'producers') return sendJson(res, 200, hostedProducers.list(cfg, cred, parts[2]));
       if (req.method === 'POST' && parts.length === 5 && parts[3] === 'producers') {
-        admin.configureProducer(cfg, cred, parts[2], parts[4], body.parentPageId);
+        hostedProducers.configure(cfg, cred, parts[2], parts[4], body.parentPageId);
         return sendJson(res, 201, { ok: true });
       }
       if (req.method === 'DELETE' && parts.length === 5 && parts[3] === 'producers') {
-        admin.removeProducer(cfg, cred, parts[2], parts[4]);
+        hostedProducers.remove(cfg, cred, parts[2], parts[4]);
         return sendJson(res, 200, { ok: true });
       }
       if (req.method === 'POST' && parts.length === 6 && parts[3] === 'producers' && parts[5] === 'produce') {
-        await admin.produceProducer(cfg, cred, parts[2], parts[4]);
+        await hostedProducers.produce(cfg, cred, parts[2], parts[4]);
         return sendJson(res, 200, { ok: true });
       }
       if (req.method === 'GET' && parts.length === 4 && parts[3] === 'canvas-link') {

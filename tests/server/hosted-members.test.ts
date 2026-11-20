@@ -29,7 +29,7 @@ import { listCredentials, createCredential } from '../../src/server/credentials.
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { handleMcpRequest } from '../../src/server/request.js';
 import { migratePermissionModel } from '../../src/server/migration.js';
-import { executeApprovedLock } from '../../src/server/admin.js';
+import { execute as executeApprovedLock } from '../../src/server/hosted-lock.js';
 import { executeApprovedRequest } from '../../src/server/projectlifecycle.js';
 import { createApprovalRequest, decideApprovalRequest } from '../../src/server/approvals.js';
 import * as transaction from '../../src/migrations/transaction.js';

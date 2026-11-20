@@ -16,7 +16,7 @@ import { captureApprovedSpecs } from '../../src/core/approval.js';
 import { writeLockRecord } from '../../src/core/lockfile.js';
 import type { LockRecord } from '../../src/core/lockfile.js';
 import { computeApprovalId } from '../../src/core/validation.js';
-import { requestReview } from '../../src/core/index.js';
+import { requestReview, loadSubsystemSpecs } from '../../src/core/index.js';
 import { channelsForWebMutation } from '../../src/server/realtime.js';
 import type { HostConfig } from '../../src/server/types.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
@@ -71,6 +71,8 @@ function writeLock(root: string): void {
     writeLockRecord(record);
   });
 }
+
+const hostCoreSubsystemIds = (): string[] => loadSubsystemSpecs().map((x) => x.id);
 
 const ok = (command: string, output: string[] = []): DevCommandResult => ({ command, ok: true, output });
 
@@ -369,6 +371,12 @@ describe('dev cockpit (sdd_host)', () => {
       expect((state.members ?? []).map((m) => m.alias)).toEqual(['billing']);
       expect(state.members?.[0]?.as).not.toBe('part');
       expect(state.members?.[0]?.state).toBe('never');
+    });
+
+    it('offers the served project own subsystems as lock scopes, never a member project subsystem', () => {
+      const loaded = runWithProjectRoot(root, () => hostCoreSubsystemIds());
+      expect(loaded.some((id) => id.includes('::'))).toBe(true);
+      expect(approval(cfg, session).lockScopes).toEqual(['dom']);
     });
 
     it('reviews tag a member project request with its alias, the served project first', () => {

@@ -27,7 +27,7 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: computeApprovalId
-    symbol: computeGateStateId
+    symbol: computeApprovalId
   - name: builtinProfileIds
     narrative:
       - stepNumber: 1
@@ -149,4 +149,4 @@ methods:
         targetMethod: resolvedPacks
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-11-20T00:28:49.050Z'
+updatedAt: '2026-11-20T19:02:40.808Z'

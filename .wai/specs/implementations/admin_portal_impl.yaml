@@ -103,6 +103,7 @@ methods:
         type: call
         targetComponent: hosted_producers
         targetMethod: configure
+    symbol: configure
   - name: produceProducer
     narrative:
       - stepNumber: 1
@@ -110,6 +111,7 @@ methods:
         type: call
         targetComponent: hosted_producers
         targetMethod: produce
+    symbol: produce
   - name: removeProducer
     narrative:
       - stepNumber: 1
@@ -117,6 +119,7 @@ methods:
         type: call
         targetComponent: hosted_producers
         targetMethod: remove
+    symbol: remove
   - name: listProducers
     narrative:
       - stepNumber: 1
@@ -124,6 +127,7 @@ methods:
         type: call
         targetComponent: hosted_producers
         targetMethod: list
+    symbol: list
   - name: setSecret
     narrative:
       - stepNumber: 1
@@ -238,4 +242,4 @@ methods:
         targetMethod: previewProjectPackRemoval
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-11-20T01:02:27.482Z'
+updatedAt: '2026-11-20T19:08:30.662Z'
