@@ -457,7 +457,8 @@ methods:
       - stepNumber: 3
         description: >-
           Read the bound project's graph: its direct live members, each with its alias and root, and
-          its own namespace
+          its own namespace. A path external (`../x` under `externals`) is not a member: it is a
+          live node of the scan judged for validity only, so it is never listed here
         type: call
         targetComponent: spec_loader
         targetMethod: graph
@@ -467,8 +468,8 @@ methods:
         type: loop
         loopKind: forEach
         over: >-
-          the graph's direct project members that are contained or `../` siblings (never a part, a
-          git or a hosted one)
+          the graph's direct project members that are contained or `../` siblings declared under
+          `members` (never a part, a git or a hosted one, and never a path external)
         endStep: 10
       - stepNumber: 5
         description: Map the bound project's references into it onto its public names
@@ -518,4 +519,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-11-20T14:17:28.166Z'
+updatedAt: '2026-11-20T19:41:08.510Z'

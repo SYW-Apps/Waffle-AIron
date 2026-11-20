@@ -22,20 +22,21 @@ methods:
       than the one requested; the lock gates on the design half of the as-complete run only; the
       record is format 4 (the identity, its five parts, the per-spec design digests and the code
       results beside the claim, no members); and with composition.requireApprovedMembers it refuses
-      while a direct member is drifted or never approved, naming each. The outcome names the input
-      debts that remain. Nothing is ever written below the bound project.
-    signature: 'execute(projectId: string, approver: ApproverIdentity, expected?: string): LockRecord'
-    returns: LockRecord
+      while a direct member is drifted or never approved, naming each. It answers a
+      HostedLockOutcome: the persisted record, the pin outcomes of the refresh (a refused one
+      included) and the input debts that remain. Nothing is ever written below the bound project.
+    signature: 'execute(projectId: string, approver: ApproverIdentity, expected?: string): HostedLockOutcome'
+    returns: HostedLockOutcome
     params:
       - name: projectId
         type: string
       - name: approver
         type: ApproverIdentity
         description: >-
-          Who approves, as the caller AUTHENTICATED it: the credential's subject on a direct lock,
-          the decider on an approved request (hostedApprover; the bootstrap master credential when
-          there is no subject). Recorded as the record's lockedBy. Pre-authorized callers resolve
-          it; nothing here re-authenticates.
+          Who approves, as the caller AUTHENTICATED it: the approving subject's approver() (the
+          credential's subject on a direct lock, the decider on an approved request), or the
+          instance master credential when the credential resolved no subject. Recorded as the
+          record's lockedBy. Pre-authorized callers resolve it; nothing here re-authenticates.
       - name: expected
         type: string
         description: >-
@@ -99,4 +100,4 @@ methods:
       - iadmin_orchestrator.refreshInputs
 status: complete
 createdAt: '2026-11-20T00:38:27.764Z'
-updatedAt: '2026-11-20T00:39:01.386Z'
+updatedAt: '2026-11-20T19:48:16.919Z'

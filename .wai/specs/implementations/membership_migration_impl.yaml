@@ -116,12 +116,13 @@ methods:
           widened to the instance audience, shown as `widen <name> <audience>→instance (used by …)`
           — only those used names, never another; then in the bound project, the member removed and
           an external declared under the same alias (`project` its id when that differs from the
-          alias, its source, its `use` and description), then pinned; in each collected consumer,
-          its external's source to the member; in the member, each collected external's source. The
-          source is `source.path` relative to the declaring project locally, and `source.hosted`
-          (the producer's id, which is its hosted record id) with a relocation — then the member's
-          move to the relocation target is planned too, made after its edits and before the pin. No
-          reference is respelled: the alias is unchanged
+          alias, its source, its `use` and description); in each collected consumer, its external's
+          source to the member; in the member, each collected external's source. The source is
+          `source.path` relative to the declaring project locally — a path external, read live as a
+          node of the scan and never pinned — and `source.hosted` (the producer's id, which is its
+          hosted record id) with a relocation, a hosted external pinned only when owed — then the
+          member's move to the relocation target is planned too, made after its edits and before
+          that pin. No reference is respelled: the alias is unchanged
         type: local
       - stepNumber: 8
         description: Answer the plan
@@ -180,14 +181,15 @@ methods:
         type: local
       - stepNumber: 8
         description: >-
-          Plan the edits: in the bound project, the external's pin removed, the external removed and
-          a member declared under the same alias with its path (relocated: request.path), `use` and
-          description; in every other family project, an external source (`source.path`, or
-          `source.hosted` naming the adoptee) that resolves to the adoptee removed; in the adoptee,
-          each external source that resolves to a family project removed. With a relocation the
-          adoptee's move from relocation.from to relocation.to is planned too, made last. A source
-          that was already redundant before a detach is named as a note: adopt removes it too, so
-          detach-then-adopt is exact only without one
+          Plan the edits: in the bound project, the external removed (with its pin, when it was a
+          hosted or git one that held one) and a member declared under the same alias with its path
+          (relocated: request.path), `use` and description; no pin of the member is planned, a
+          member is never pinned; in every other family project, an external source (`source.path`,
+          or `source.hosted` naming the adoptee) that resolves to the adoptee removed; in the
+          adoptee, each external source that resolves to a family project removed. With a relocation
+          the adoptee's move from relocation.from to relocation.to is planned too, made last. A
+          source that was already redundant before a detach is named as a note: adopt removes it
+          too, so detach-then-adopt is exact only without one
         type: local
       - stepNumber: 9
         description: Answer the plan
@@ -228,7 +230,7 @@ methods:
         description: >-
           Bind the member's rehearsal root and widen each planned export of its L0 to the instance
           audience through the gated authoring seam — new content, never core's raw write — before
-          anything reads or pins the member (only when the plan widens)
+          anything reads the member (only when the plan widens)
         type: call
         targetComponent: migration_authoring_adapter
         targetMethod: updateSpecGated
@@ -254,14 +256,15 @@ methods:
         description: >-
           With a relocation (hosted), move the member's rehearsal image — every file under its
           directory, its own members included — to the relocation target's image, after every edit
-          of the member and before the pin reads it
+          of the member and before a hosted pin reads it
         type: call
         targetComponent: family_file_adapter
         targetMethod: move
       - stepNumber: 11
         description: >-
-          Last, bind the bound project's rehearsal root again and pin the new external, reading the
-          member's final state
+          Last, bind the bound project's rehearsal root again and pin the new external only when it
+          is a hosted one (a relocation) owed a pin, reading the member's final state; a path
+          external is read live and never pinned
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
@@ -271,7 +274,9 @@ methods:
         toStep: 18
       - stepNumber: 13
         label: adopt
-        description: Bind the bound project's rehearsal root and remove the external's pin
+        description: >-
+          Bind the bound project's rehearsal root and drop the external's pin, when it was a git or
+          hosted external that held one (a path external has none)
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: unpin
@@ -305,4 +310,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:06.370Z'
-updatedAt: '2026-10-09T11:36:20.394Z'
+updatedAt: '2026-11-20T19:39:11.980Z'

@@ -41,14 +41,15 @@ methods:
     description: >-
       Write the position share of a confirmed chaining migration plan into the rehearsal's roots,
       after its ids, exports (the carried and positional entries included) and externals are written
-      and BEFORE its pins: move each planned mount into its parent's `members` under the parent's
+      and BEFORE any pin: move each planned mount into its parent's `members` under the parent's
       binding, rewrite each deprecated long-form `path` entry to the one location key, add each
       positional import to its consumer's `use`, rewrite each planned reference from the rehearsal's
       top root (where the deprecated forms still bind; self-prefixed ones to their bare local id),
-      and delete each project's superseded stage-1 family pins under its binding. Every write is
-      idempotent: a mount already moved, an entry already in the one key, a name already imported, a
-      spec already canonical and a pin already gone change nothing. Answers what it wrote and which
-      projects must be re-locked; locks nothing.
+      and delete each project's superseded stage-1 family pins under its binding — dropped because
+      path producers are read live. Every write is idempotent: a mount already moved, an entry
+      already in the one key, a name already imported, a spec already canonical and a pin already
+      gone change nothing. Answers what it wrote and which projects must be re-locked; locks
+      nothing.
     signature: 'write(plan: ChainingMigrationPlan, rehearsal: Rehearsal): PositionMigrationResult'
     returns: PositionMigrationResult
     params:
@@ -62,4 +63,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-27T10:45:32.019Z'
-updatedAt: '2026-10-02T20:45:42.261Z'
+updatedAt: '2026-11-20T19:40:25.899Z'

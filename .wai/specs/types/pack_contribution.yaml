@@ -1,0 +1,29 @@
+kind: value-object
+id: pack_contribution
+name: PackContribution
+description: >-
+  What one loaded pack contributed to the merged doctrine by itself: its own profiles, language
+  tables, guarantee tokens and rules, before the merge with other packs. A pack's recorded digest in
+  the inputs lock (packContents) covers exactly this, so one pack's change never moves another
+  pack's digest.
+fields:
+  - name: profiles
+    type: list<ProfileDef>
+    description: The profiles this pack registers, keyed by id.
+    optional: false
+  - name: languages
+    type: list<LanguagePackDef>
+    description: The language tables this pack registers, keyed by language.
+    optional: false
+  - name: guarantees
+    type: list<string>
+    description: The guarantee tokens this pack declares.
+    optional: false
+  - name: rules
+    type: list<SddRule>
+    description: The programmatic rules this pack ships.
+    optional: false
+methods: []
+sourcePath: src/core/extensions.ts
+createdAt: '2026-11-20T19:49:19.676Z'
+updatedAt: '2026-11-20T19:49:20.287Z'

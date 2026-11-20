@@ -16,6 +16,7 @@ dependsOn:
   - authorization
   - host_producer_adapter
   - secret_repository
+  - project_repository
 status: complete
 createdAt: '2026-11-20T01:02:18.609Z'
-updatedAt: '2026-11-20T01:02:19.054Z'
+updatedAt: '2026-11-20T19:41:51.892Z'

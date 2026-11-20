@@ -38,6 +38,13 @@ methods:
   - name: getLoaderIssues
     narrative:
       - stepNumber: 1
+        description: >-
+          Scan the bound tree first: a rehearsal copy nothing has loaded yet records no diagnostics,
+          so reading them before a scan would report none
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: scanAllSpecs
+      - stepNumber: 2
         description: Forward to the core portal
         type: call
         targetComponent: spec_tree_portal
@@ -65,4 +72,4 @@ methods:
         targetMethod: loadProjectConfig
 status: draft
 createdAt: '2026-10-18T14:14:23.627Z'
-updatedAt: '2026-11-20T19:12:09.884Z'
+updatedAt: '2026-11-20T19:41:23.660Z'

@@ -141,14 +141,17 @@ methods:
         onFalseStep: 7
       - stepNumber: 4
         description: >-
-          Authorized: lock directly via the admin plane's pre-authorized entry with the caller as
-          the approver, forwarding the project id — a member's own record id when a member is
-          locked; no qualifier exists any more
+          Authorized: lock directly via the pre-authorized lock entry, forwarding the project id — a
+          member's own record id when a member is locked; no qualifier exists any more — with the
+          approver the record names: the caller's subject's approver(), or the instance master
+          credential when the credential resolved no subject
         type: call
         targetComponent: hosted_lock
         targetMethod: execute
       - stepNumber: 5
-        description: Build a completed ProjectActionOutcome (action project:lock) carrying the lock record
+        description: >-
+          Build a completed ProjectActionOutcome (action project:lock) carrying the lock record of
+          the HostedLockOutcome the lock answered
         type: local
       - stepNumber: 6
         description: Executed — continue to auditing
@@ -510,12 +513,13 @@ methods:
             step: 16
       - stepNumber: 14
         description: >-
-          project:lock - execute through the admin plane's pre-authorized lock entry on the
-          request's record id (a member's own record for a member lock) with the request's
-          approvalId as the expected identity (so an approval never certifies a design other than
-          the one requested; a request without one executes against the tree as it stands). A lock
-          request carrying a payload (the member-qualifier scope an older major recorded, which the
-          instance upgrade closes) is refused, never executed on the record it names.
+          project:lock - execute through the pre-authorized lock entry on the request's record id (a
+          member's own record for a member lock) with the request's approvalId as the expected
+          identity (so an approval never certifies a design other than the one requested; a request
+          without one executes against the tree as it stands), and as approver the deciding caller's
+          subject's approver() (the instance master credential when no subject). A lock request
+          carrying a payload (the member-qualifier scope an older major recorded, which the instance
+          upgrade closes) is refused, never executed on the record it names.
         type: call
         targetComponent: hosted_lock
         targetMethod: execute
@@ -669,9 +673,10 @@ methods:
             step: 17
       - stepNumber: 15
         description: >-
-          project:lock - execute through the admin plane's pre-authorized lock entry on the
-          request's record id with the request's approvalId as the expected identity (the retry path
-          must confine and pin exactly as the auto-execute path does). A lock request carrying a
+          project:lock - execute through the pre-authorized lock entry on the request's record id
+          with the request's approvalId as the expected identity (the retry path must confine and
+          pin exactly as the auto-execute path does), and as approver the approving subject's
+          approver() (the instance master credential when no subject). A lock request carrying a
           payload is refused, as on the auto-execute path.
         type: call
         targetComponent: hosted_lock
@@ -868,6 +873,8 @@ methods:
         outcome: the withdrawn approval request
     detail: full
     symbol: withdrawRequest
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-11-20T00:38:29.536Z'
+updatedAt: '2026-11-20T19:47:56.756Z'

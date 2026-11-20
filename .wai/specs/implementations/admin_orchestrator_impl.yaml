@@ -444,21 +444,16 @@ methods:
         error: Forbidden — locking a project approves it, which requires approval:decide over it
       - stepNumber: 5
         description: >-
-          Name the approver the lock records: the authenticated caller's subject, or the instance
-          master credential
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: approverFor
-      - stepNumber: 6
-        description: >-
-          Lock through the pre-authorized entry with the authenticated caller as approver: the same
-          workflow an approved request runs, so capture-before-validation, the design-only gate, the
-          member states and requireApprovedMembers hold identically on both paths
+          Lock through the pre-authorized entry with the authenticated caller as approver (its
+          subject's approver(), or the instance master credential when the credential resolved no
+          subject): the same workflow an approved request runs, so capture-before-validation, the
+          design-only gate, the member states and requireApprovedMembers hold identically on both
+          paths
         type: call
         targetComponent: hosted_lock
         targetMethod: execute
-      - stepNumber: 7
-        description: Return the lock record
+      - stepNumber: 6
+        description: Return the lock record of the HostedLockOutcome the lock answered
         type: return
         outcome: lock record
     detail: full
@@ -842,24 +837,6 @@ methods:
         description: Return what was written and where the replaced tree was backed up
         type: return
         outcome: imported tree
-  - name: approverFor
-    narrative:
-      - stepNumber: 1
-        description: Decide whether a subject was resolved
-        type: branch
-        condition: no subject (the master credential)
-        onTrueStep: 2
-        onFalseStep: 3
-      - stepNumber: 2
-        description: Return the instance master credential as the approver, source hosted
-        type: return
-        outcome: the master approver
-      - stepNumber: 3
-        description: Return the subject's user id and display name as the approver, source hosted
-        type: return
-        outcome: the subject's approver identity
-    detail: full
-    symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-11-20T01:02:26.151Z'
+updatedAt: '2026-11-20T19:48:33.908Z'

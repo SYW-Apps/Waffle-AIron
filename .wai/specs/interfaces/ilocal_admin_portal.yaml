@@ -94,8 +94,8 @@ methods:
         type: string
   - name: produceProducer
     description: Run a configured producer target for a project.
-    signature: 'produceProducer(credential: string?, project: string, target: string): void'
-    returns: void
+    signature: 'produceProducer(credential: string?, project: string, target: string): async void'
+    returns: async void
     params:
       - name: credential
         type: string?
@@ -477,4 +477,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-09-25T22:39:47.086Z'
-updatedAt: '2026-10-30T12:05:14.883Z'
+updatedAt: '2026-11-20T19:43:25.432Z'

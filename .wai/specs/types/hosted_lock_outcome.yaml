@@ -1,0 +1,27 @@
+kind: value-object
+id: hosted_lock_outcome
+name: HostedLockOutcome
+description: >-
+  What a hosted lock answers: the persisted record, the outcome of each pin the lock took of an owed
+  external (a refused one included), and the input debts that remain after it. Inputs never block
+  the approval; the debts are reported beside it.
+subsystem: sdd_host
+fields:
+  - name: record
+    type: LockRecord
+    description: The persisted format-4 record, with commitSha and compareUrl when the lock was published
+    optional: false
+  - name: pins
+    type: list<ExternalPin>
+    description: One outcome per owed git or hosted external the lock tried to pin; empty when none was owed
+    optional: false
+  - name: debts
+    type: list<InputDebt>
+    description: >-
+      The build input debts that remain after the lock ("approved; the build owes: <debts>"); empty
+      when none
+    optional: false
+methods: []
+sourcePath: src/server/hosted-lock.ts
+createdAt: '2026-11-20T19:42:57.677Z'
+updatedAt: '2026-11-20T19:42:58.244Z'

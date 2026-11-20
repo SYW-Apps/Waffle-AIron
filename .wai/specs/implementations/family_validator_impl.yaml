@@ -521,7 +521,9 @@ methods:
           Read the bound root's project graph: its project members at every level — contained or in
           a `../` sibling checkout — with their directories and parents, and its referenced project
           members (a git or hosted source) with the root each is opened at (the fetch cache at the
-          pinned commit, or the hosted record within reach)
+          pinned commit, or the hosted record within reach). A path external (`../x` under
+          `externals`) is not a member: it is a live node of the scan judged for validity only, so
+          it is never selected below, never answered as a member approval and never a member debt
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
@@ -1116,4 +1118,4 @@ methods:
     symbol: projectInputs
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-11-20T00:18:33.330Z'
+updatedAt: '2026-11-20T19:41:12.825Z'

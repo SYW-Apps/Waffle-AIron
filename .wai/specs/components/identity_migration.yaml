@@ -5,9 +5,10 @@ description: >-
   migration that reaches every reference to the old id across the family and asks every project it
   writes to re-lock) and `member rename-alias` (one alias in the parent only — the parent's own
   spellings change, and nothing in any member or sibling does). Both respell references at their
-  parsed positions from the scan taken before anything changed, and carry pins to their new key
-  without re-pinning. It resolves stage 3's id-locked case: a member whose lock approved an id other
-  than its mount alias is renamed deliberately, and the old id kept in previousIds lets the re-lock
+  parsed positions from the scan taken before anything changed, and carry the pin of a git or hosted
+  external to its new key without re-pinning (a path external is read live and has none; a member is
+  never pinned). It resolves stage 3's id-locked case: a member whose lock approved an id other than
+  its mount alias is renamed deliberately, and the old id kept in previousIds lets the re-lock
   through. It holds no state. The caller must gate on reach itself.
 subsystem: sdd_migrations
 componentType: Orchestrator
@@ -17,4 +18,4 @@ dependsOn:
   - migration_surfaces_adapter
 status: complete
 createdAt: '2026-09-30T20:34:12.691Z'
-updatedAt: '2026-09-30T22:58:26.183Z'
+updatedAt: '2026-11-20T19:38:50.130Z'

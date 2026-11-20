@@ -7,8 +7,10 @@ component: v6_to_v7_tree_step
 methods:
   - name: familyRoots
     description: >-
-      The project roots of the family under a root (its own members, at every depth), the top first,
-      read through the core: v6 and v7 spec forms are the same.
+      The roots of the family under a root, the top first, read through the core: its own members at
+      every depth and its PARTS. A part is included because its own externals.lock.yaml and parent
+      entry are converted, and its specs are copied into the rehearsal with its declaring project so
+      the approval comparison sees them; v6 and v7 spec forms are the same.
     signature: 'familyRoots(root: string): list<string>'
     returns: list<string>
     params:
@@ -60,4 +62,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-11-20T01:24:43.593Z'
-updatedAt: '2026-11-20T01:24:45.174Z'
+updatedAt: '2026-11-20T19:41:32.246Z'

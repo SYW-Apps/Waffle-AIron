@@ -3,12 +3,11 @@ name: Core Orchestrator Implementation
 description: >-
   Concrete implementation of the Core Orchestrator: spec tree read/write workflows in
   src/core/specs.ts. Methods whose bodies live in sibling core modules name them in their own
-  sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts, and the
-  Specialist retirement in stereotype-migration.ts. The lock-record write and the diagram render are
-  real forwards in specs.ts, which the core portal barrel publishes, so a Portal reaches the lock
-  store's write only through this Orchestrator. The state-hash and lock-record read forwards,
-  realized in statehash.ts and lockfile.ts and republished by the barrel, keep their
-  method-realization checks dialed off.
+  sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts. The
+  lock-record write and the diagram render are real forwards in specs.ts, which the core portal
+  barrel publishes, so a Portal reaches the lock store's write only through this Orchestrator. The
+  state-hash and lock-record read forwards, realized in statehash.ts and lockfile.ts and republished
+  by the barrel, keep their method-realization checks dialed off.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -3972,4 +3971,4 @@ methods:
         targetMethod: reviseProject
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T01:30:47.927Z'
+updatedAt: '2026-11-20T19:41:47.918Z'

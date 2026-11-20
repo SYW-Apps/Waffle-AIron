@@ -53,7 +53,13 @@ fields:
   - name: compareUrl
     type: string
     optional: true
+  - name: validatorVersion
+    type: string
+    description: >-
+      The wairon release that wrote the record, as the v6 record carries it (provenance only, not
+      part of the approval); the write narrative keeps it and format 4 requires it
+    optional: true
 methods: []
 sourcePath: src/upgrade/steps/v6-to-v7/files.ts
 createdAt: '2026-11-20T01:23:11.737Z'
-updatedAt: '2026-11-20T01:23:12.310Z'
+updatedAt: '2026-11-20T19:41:25.019Z'

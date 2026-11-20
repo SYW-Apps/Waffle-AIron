@@ -240,12 +240,14 @@ methods:
       its lock record against its own approval identity recomputed there, and its inputs against its
       own inputs lock (inputs), so the answer about a project is the same whichever root asked
       (status-agrees). A parent records nothing about its members and reads nothing of theirs but
-      their own records: a member re-locking never moves its parent. Below a selected project that
-      sets composition.requireApprovedMembers the selection reaches one level further, so its member
-      debts are judged from real entries. Each PART of a selected project is answered too, as a
-      part: its state is its declaring project's. A declared member with no project on disk is
-      `never`. Reads each project's own tree once and writes nothing; the caller must gate on reach
-      itself before it asks about a family.
+      their own records: a member re-locking never moves its parent. A path external (`../x`
+      declared under `externals`) is not a member: it is read live as a node of the scan and the
+      owner's gate judges it for validity only, so it is never answered here as a member approval
+      and never a member debt. Below a selected project that sets composition.requireApprovedMembers
+      the selection reaches one level further, so its member debts are judged from real entries.
+      Each PART of a selected project is answered too, as a part: its state is its declaring
+      project's. A declared member with no project on disk is `never`. Reads each project's own tree
+      once and writes nothing; the caller must gate on reach itself before it asks about a family.
     signature: 'approvals(depth?: int): list<ProjectApproval>'
     returns: list<ProjectApproval>
     params:
@@ -464,4 +466,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-11-20T14:17:49.382Z'
+updatedAt: '2026-11-20T19:41:11.460Z'

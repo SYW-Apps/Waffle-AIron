@@ -42,7 +42,7 @@ methods:
           Refresh the owed build inputs BEFORE anything is judged, exactly as the local lock does:
           the aliases the own entry owes (input debts of kind unpinned or unrecorded), and the packs
           as they resolve. A refused pin is kept as an outcome to report: inputs never block the
-          approval
+          approval. The pin outcomes are kept for the answer
         type: call
         targetComponent: hosted_lock
         targetMethod: refreshInputs
@@ -174,10 +174,11 @@ methods:
         onFalseStep: 23
       - stepNumber: 22
         description: >-
-          Return the persisted record unchanged, with the pin outcomes and the input debts that
-          remain ("approved; the build owes: <debts>")
+          Answer a HostedLockOutcome: the persisted record unchanged, the pin outcomes of the
+          refresh and the input debts of the own entry that remain after it ("approved; the build
+          owes: <debts>")
         type: return
-        outcome: lock record
+        outcome: HostedLockOutcome
       - stepNumber: 23
         label: published
         description: >-
@@ -190,9 +191,11 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
       - stepNumber: 25
-        description: Return the published record with the pin outcomes and the input debts that remain.
+        description: >-
+          Answer a HostedLockOutcome: the published record (with the compare URL to open the PR),
+          the pin outcomes of the refresh and the input debts that remain
         type: return
-        outcome: lock record with the compare URL to open the PR
+        outcome: HostedLockOutcome
   - name: identity
     narrative:
       - stepNumber: 1
@@ -276,4 +279,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-11-20T00:38:27.765Z'
-updatedAt: '2026-11-20T19:08:23.772Z'
+updatedAt: '2026-11-20T19:43:26.813Z'

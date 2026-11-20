@@ -9,14 +9,17 @@ methods:
   - name: familyRoots
     narrative:
       - stepNumber: 1
-        description: Read the project graph under the root through the core
+        description: Read the project graph under the root through the core, parts included
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: projectFamily
       - stepNumber: 2
         description: >-
-          Answer the root of every project in it, the top first (parts are left out: a part has no
-          lock of its own)
+          Answer the root of every project in it and of every part, the top first. A part is
+          included: its own externals.lock.yaml and parent entry are converted with the rest, and
+          its specs are copied into the rehearsal together with its declaring project, so the
+          approval comparison of that project sees them. A part has no lock record of its own, so
+          none is written for it
         type: return
         outcome: list<string>
     detail: full
@@ -260,4 +263,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-11-20T01:25:12.264Z'
-updatedAt: '2026-11-20T01:29:10.771Z'
+updatedAt: '2026-11-20T19:41:29.569Z'

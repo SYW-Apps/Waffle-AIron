@@ -51,7 +51,7 @@ methods:
       - stepNumber: 8
         description: >-
           With the member bound, read its configuration for the externals the bound project will
-          carry (to pin there); restore the binding
+          carry; restore the binding
         type: call
         targetComponent: migration_core_adapter
         targetMethod: loadProjectConfig
@@ -59,15 +59,15 @@ methods:
         description: >-
           Plan each consumer's edits: one that already declares an alias for the bound project gets
           its `member::name` references respelled to that alias at their positions (from the graph's
-          authoredReferences), the member alias's `use` merged into it, and the member external and
-          pin removed; any other gets its external repointed at the bound project's id (a source
-          path re-expressed) and re-pinned, with a note that the pin will read drifted — and, when
-          the bound project (or the member it takes in) uses that consumer, a note that the two now
-          depend on each other in a loop (PROJECT_DEPENDENCY_CYCLE), with the uses that close it and
-          the exits (move what the consumer uses into it, or demote it first). A project member in a
-          `../` sibling checkout is demoted in place and moved in as the part it became. Plan the
-          core's internalize with the completed destination, and the carried externals pinned in the
-          bound project
+          authoredReferences), the member alias's `use` merged into it, and the member external
+          removed; any other gets its external repointed at the bound project's id (a source path
+          re-expressed; a path external stays unpinned, being read live), and — when the bound
+          project (or the member it takes in) uses that consumer — a note that the two now depend on
+          each other in a loop (PROJECT_DEPENDENCY_CYCLE), with the uses that close it and the exits
+          (move what the consumer uses into it, or demote it first). A project member in a `../`
+          sibling checkout is demoted in place and moved in as the part it became. Plan the core's
+          internalize with the completed destination, and the carried externals declared in the
+          bound project, pinned only when git or hosted and owed
         type: local
       - stepNumber: 10
         description: Answer the plan
@@ -140,19 +140,20 @@ methods:
         type: local
       - stepNumber: 11
         description: >-
-          As a project: under each family project that pins the bound project, read its externals'
-          status; a pin whose every use is unchanged is re-pinned after the move, one already broken
+          As a project: under each family project that consumes the bound project, read its
+          externals' status: a use that stays valid needs nothing after the move, one already broken
           is left with a note
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: getExternalsStatus
       - stepNumber: 12
         description: >-
-          Plan the core's externalize, the new member's externals pinned in the member — its
-          external for the bound project, and one for every other project its moved specs name
-          through the bound project's members or externals, which the core declares — and the re-pin
-          of each family consumer read intact. The references the move respells and the externals it
-          declares are listed when the plan is rehearsed, from what the core answers
+          Plan the core's externalize, the new member's externals declared in the member — its
+          external for the bound project, written with its source path (`source: { path: <relative>
+          }`) and never pinned, and one for every other project its moved specs name through the
+          bound project's members or externals, which the core declares, pinned only when git or
+          hosted and owed. The references the move respells and the externals it declares are listed
+          when the plan is rehearsed, from what the core answers
         type: local
       - stepNumber: 13
         description: Answer the plan
@@ -167,7 +168,7 @@ methods:
         description: Which verb?
         type: branch
         condition: plan.request.verb is internalize
-        onFalseStep: 11
+        onFalseStep: 10
       - stepNumber: 3
         description: >-
           Bind the rehearsal's top root and respell each consumer's planned references, while the
@@ -191,39 +192,35 @@ methods:
         targetComponent: migration_core_adapter
         targetMethod: importNames
       - stepNumber: 6
-        description: Remove that consumer's pin of the member alias
-        type: call
-        targetComponent: migration_surfaces_adapter
-        targetMethod: unpin
-      - stepNumber: 7
         description: Remove that consumer's member external
         type: call
         targetComponent: migration_core_adapter
         targetMethod: removeExternal
-      - stepNumber: 8
+      - stepNumber: 7
         description: >-
           For each other consumer, bind its rehearsal root and repoint its external at the bound
           project's id
         type: call
         targetComponent: migration_core_adapter
         targetMethod: repointExternal
-      - stepNumber: 9
+      - stepNumber: 8
         description: >-
-          Last, pin what changed producer: each repointed consumer's external under its binding, and
-          the carried externals under the bound project's
+          Last, pin only what is owed: a git or hosted external this migration repointed or carried
+          that is unpinned or whose uses go beyond its pin, under its binding. A path external (a
+          sibling project in a folder) is read live as a node of the scan and is never pinned
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
-      - stepNumber: 10
+      - stepNumber: 9
         description: Internalize written
         type: jump
-        toStep: 21
-      - stepNumber: 11
+        toStep: 19
+      - stepNumber: 10
         description: Externalize, or a composition verb?
         type: branch
         condition: plan.request.verb is externalize
-        onFalseStep: 15
-      - stepNumber: 12
+        onFalseStep: 14
+      - stepNumber: 11
         label: externalize
         description: >-
           Bind the bound project's rehearsal root and externalize the subsystem — into a part, or
@@ -236,25 +233,26 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: externalizeSubsystem
-      - stepNumber: 13
+      - stepNumber: 12
         description: >-
-          For an externalize as project, bind the new member's rehearsal root and pin its external
-          for the bound project, then re-pin each family consumer the plan read intact; a part needs
-          no pin
+          For an externalize as project, the new member's external for the bound project was written
+          with its source path (a path external, read live, never pinned); bind the new member's
+          rehearsal root and pin only a git or hosted external it declares that is owed a pin. A
+          part needs no pin, and a member is never pinned by the bound project
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
-      - stepNumber: 14
+      - stepNumber: 13
         description: Externalize written
         type: jump
-        toStep: 21
-      - stepNumber: 15
+        toStep: 19
+      - stepNumber: 14
         label: promote-or-demote
         description: Promote or demote?
         type: branch
         condition: plan.request.verb is promote
-        onFalseStep: 19
-      - stepNumber: 16
+        onFalseStep: 18
+      - stepNumber: 15
         description: >-
           Bind the bound project's rehearsal root and promote the part in place; a core refusal
           propagates. Record what the core answers — each respelled reference, export and re-pointed
@@ -265,19 +263,20 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: promoteMember
-      - stepNumber: 17
+      - stepNumber: 16
         description: >-
-          Pin LAST, on both sides: the new project's external for the bound project under its
-          binding, the bound project's pin of the new member under its own, and each family consumer
-          the plan read intact re-pinned under its own
+          Pin last, and only what is owed: a git or hosted external the promote declared that is
+          unpinned or used beyond its pin. The new project's external for the bound project is a
+          path external written with its source path, read live and never pinned, and the bound
+          project records nothing about the new member: its own committed lock answers for it
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
-      - stepNumber: 18
+      - stepNumber: 17
         description: Promote written
         type: jump
-        toStep: 21
-      - stepNumber: 19
+        toStep: 19
+      - stepNumber: 18
         label: demote
         description: >-
           Bind the bound project's rehearsal root and demote the member in place with the plan's
@@ -287,14 +286,7 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: demoteMember
-      - stepNumber: 20
-        description: >-
-          Remove the bound project's pin of the member: a part is not pinned, its specs are the
-          project's own
-        type: call
-        targetComponent: migration_surfaces_adapter
-        targetMethod: unpin
-      - stepNumber: 21
+      - stepNumber: 19
         label: restore
         description: Restore the caller's binding
         type: local
@@ -338,22 +330,23 @@ methods:
         outcome: refused plan
       - stepNumber: 7
         description: >-
-          Under each family project that pins the bound project, read its externals' status: a pin
-          whose every use is unchanged is re-pinned after the promote (its names only moved
-          location, which re-pinning alone answers); one already broken is left as it is, with a
-          note, so a migration never launders a real incompatibility
+          Under each family project that consumes the bound project, read its externals' status: a
+          use that stays valid needs nothing after the promote (its names only moved location), one
+          already broken is left as it is, with a note, so a migration never launders a real
+          incompatibility
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: getExternalsStatus
       - stepNumber: 8
         description: >-
-          Plan the core's promote with the id, then the pins: the new project's externals (for the
-          bound project, and for every other project its specs name, which the core declares), and
-          the re-pin of each family consumer read intact; for a part in a sibling checkout, note
-          that files are all-or-nothing and commits one per repository — the new project is then a
-          sibling member composed live like a contained one, never pinned (round 8); the bound
-          project to re-lock and the new project to lock for the first time. The references the
-          promote respells are listed when the plan is rehearsed, from what the core answers
+          Plan the core's promote with the id, then the new project's externals (for the bound
+          project, written with its source path and never pinned, and for every other project its
+          specs name, which the core declares, pinned only when git or hosted and owed); for a part
+          in a sibling checkout, note that files are all-or-nothing and commits one per repository —
+          the new project is then a sibling member composed live like a contained one, never pinned;
+          the bound project to re-lock and the new project to lock for the first time. The
+          references the promote respells are listed when the plan is rehearsed, from what the core
+          answers
         type: local
       - stepNumber: 9
         description: Answer the plan
@@ -396,8 +389,8 @@ methods:
           Plan the core's demote with the destination; name, as an edit each for confirmation, every
           L0 export entry of the bound project the demote removes (audience project, naming a target
           only the member used — read from the member's references back into the bound project and
-          the bound project's export table — hand-written ones included); plan the removal of the
-          bound project's pin of the member (one an earlier release took of a sibling); for a member
+          the bound project's export table — hand-written ones included); drop any leftover pin of
+          the member an earlier release took of a sibling (members are not pinned now); for a member
           in a sibling checkout, note that files are all-or-nothing and commits one per repository;
           the bound project to re-lock, the member's lock listed as ended
         type: local
@@ -472,4 +465,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-20T21:40:34.585Z'
+updatedAt: '2026-11-20T19:37:54.288Z'
