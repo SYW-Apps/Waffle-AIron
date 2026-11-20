@@ -100,10 +100,14 @@ methods:
     description: >-
       This contract as the approval sees it: its status (authoring readiness, never what the design
       says) and createdAt/updatedAt left out; every other field stays, the methods, endpoints and
-      findings included. Pure: over the spec's own fields, and a stored (raw) file reads as readily
-      as a loaded spec.
+      findings included. A method that names a signatureFrom is read as authored: its signatureFrom
+      stays, and the params, returns and signature text its source supplies are left out — they are
+      the source's design, digested where the source is, so a producer read live never moves this
+      contract's approval through them. Its effect stays: an effect the method states is its own
+      design. Pure: over the spec's own fields, and a stored (raw) file reads as readily as a loaded
+      spec.
     sourcePath: src/models/specs.ts
     symbol: interfaceDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T23:03:31.586Z'
+updatedAt: '2026-11-20T23:18:35.150Z'
