@@ -1,15 +1,15 @@
 {
-  "format": 3,
+  "format": 4,
   "stateId": {
-    "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "d6dd1c52abfc3e6b9d741cc1b59d21360678c7f6a937c2d9514153306f8f74a4"
+    "algorithm": "sha256+design+policy",
+    "digest": "f44eec0cf959cc67e4b38216c962c69e573a815aa155cffc4a99b4022a5aff5d"
   },
-  "lockedAt": "2026-11-20T19:58:50.671Z",
+  "lockedAt": "2026-11-20T21:27:07.836Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.7.5-dev.4",
+  "validatorVersion": "7.0.0-dev.0",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -1572,7 +1572,7 @@
     ".wai/specs/types/planned_edit_kind.yaml": "dbd4ba8f3924214c74451573c6ff37777490e852487d3d1824f7686d9b51fead",
     ".wai/specs/types/planned_export.yaml": "28087ab47e40fe95caf33bb795b1ed24f43dd0ca66ea8ad75d2fca257da36b06",
     ".wai/specs/types/planned_export_reason.yaml": "55733c2e8acfa13246ddbbe671172628757f7f57b01debb43eac5694a397717e",
-    ".wai/specs/types/planned_external.yaml": "89e6dd1ec1d5c4016c0ace977574419e848d2cf12c78722d3949eb74bb8daec5",
+    ".wai/specs/types/planned_external.yaml": "a166a4a91274c96616b9ff07a9819c362ed92d756fbd74ac64dae6cdf2a3c064",
     ".wai/specs/types/planned_external_reason.yaml": "7f6002ef5aa8bca13c0f6f198bec7c6ca2db040f4845f2e06af015ae2978f874",
     ".wai/specs/types/planned_import.yaml": "82363dd9fcb8bc524100fb5f69e2e6973c54d23a7356e9857d4606a555ee5d13",
     ".wai/specs/types/planned_member.yaml": "e09dcf3eb8f5a81c99a002f775acb498dab434263d51b84dd628afb026e838b1",
@@ -1618,7 +1618,7 @@
     ".wai/specs/types/project_import.yaml": "8dfe58d0ee588ee4b0d1e4b355744a025d8925aadacb7082229be0528acc73b3",
     ".wai/specs/types/project_init_request.yaml": "d93927eced382e3499e5d0e6628ace94ae3519141d9a2b3f6cf8872d9e715039",
     ".wai/specs/types/project_migration.yaml": "25d9be0f241c141413d712b0d57f818cd5500db5612a40875770c6962dbbd6a8",
-    ".wai/specs/types/project_node.yaml": "e16bc60eebdc6d73c1f5f3f323d13b260ba0c5d30c28faee90e7d655a6b61cb5",
+    ".wai/specs/types/project_node.yaml": "f9f35d1360b5918325baff27be58824583caeece5f87512d7dd23a7eeac8a173",
     ".wai/specs/types/project_pack_reference.yaml": "b3513b6479522212034cedc700cb53ae7fabeb70bf25eb68bb23eac468388e02",
     ".wai/specs/types/project_parent_link.yaml": "9f3c80f138deb0a39748e747fa44ff056b168ba49df4b4e8ab2b0f52bbff7651",
     ".wai/specs/types/project_placement.yaml": "c87c6cf73b980f86eadc25f30b22a7ed4f7e3f1c08520e56686f503f6979a9d7",
@@ -1706,7 +1706,7 @@
     ".wai/specs/types/run_options.yaml": "dcfb05bedb6921dbc9ea11c2d8ae20ab6f86b16bca191715f632e81df7166418",
     ".wai/specs/types/scalar_edit.yaml": "914c02786c76ea07aedc09d88d18b24ffa4e14f4443fd9ecd43e71d399b16262",
     ".wai/specs/types/scanned_part.yaml": "893db4f24b73c676210378a687efcfc6e21c09501bf1884e48bef4e32dab9d1e",
-    ".wai/specs/types/scanned_project_root.yaml": "9c46901185cac588220afc5e212cf78c46b6cbda81551347677f784a0e50f27b",
+    ".wai/specs/types/scanned_project_root.yaml": "1657b2ae29347c87d295272e2c866cfdfc0dcdaa0b5383a436625971fe775fce",
     ".wai/specs/types/scope_kind.yaml": "7f565e8cb9f321c47aeeaba4e373ad04a9658d782d8ea95220d4f1f87aad6840",
     ".wai/specs/types/score_mark.yaml": "347e89762cad1117c6a843fe3000492f744b0a5d53885f486c38fdd527a3e903",
     ".wai/specs/types/sdd_rule.yaml": "a8d20c431806fa9bae28894bc23bce062255b171f1a9a8b554e9365f74fce8ac",
@@ -1889,25 +1889,20 @@
     ".wai/specs/types/write_stream.yaml": "451c1989b0362fb476101cc6e3e51a4406dc88c380fdafd2648fc8d9b6bbed31",
     ".wai/specs/types/writing_share.yaml": "e11bc5a6cb8657f5922f09c10f594a9cb1106687ea0c9b3d3c6925703526e8a8"
   },
-  "specsReading": "design",
-  "gateParts": {
-    "design": "34c708f76b3fe576ea04b911aaa9e5ed048a2325ccdfa0e0230af7a7166fb75b",
-    "release": "6d9cf70060e4371ec9f6d286cdfc72108ca87f202996d38d25e73b52a222ed86",
-    "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
-    "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
+  "parts": {
     "composition": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-    "contracts": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-    "members": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    "design": "77ed75a69e993e194afe1b44e5b10d07b84e8a5b93114be3bdff071a56113b0d",
+    "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
+    "selections": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
-  "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.7.5-dev.4",
+      "validatorVersion": "7.0.0-dev.0",
       "doctrineDigest": "d2d1c7948542a202b27a6ca98b46774ecc1afc867ec3da9daf0b5c0ad96c2c90",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 5,
+    "warnings": 0,
     "notices": 96
   }
 }
