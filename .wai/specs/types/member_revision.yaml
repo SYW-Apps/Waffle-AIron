@@ -27,11 +27,10 @@ fields:
   - name: revision
     type: approved_revision
     description: >-
-      The member's tree at the approval it is judged against — the one the bound project's lock
-      records for it (its composition subject), else the member's own last committed approval; none
-      when the member is in no git work tree or no commit holds that approval.
+      The member's tree at its own last committed approval (as of the moment asked for, when one
+      was); none when the member is in no git work tree or no commit holds an approval.
     optional: true
 methods: []
 sourcePath: src/core/external-producers.ts
 createdAt: '2026-10-09T11:37:42.535Z'
-updatedAt: '2026-10-09T12:02:21.890Z'
+updatedAt: '2026-11-20T00:07:16.377Z'

@@ -1,0 +1,22 @@
+id: hosted_lock
+name: Hosted Lock
+description: >-
+  The hosted lock workflow behind every authorized caller: refresh a project's owed build inputs,
+  capture and confirm its approval identity, validate its design half, write the format-4 lock
+  record and publish the project's own .wai/ pathspec through its family repository. Also the
+  read-only pre-checks a lock request is made with (the identity a request records, whether the tree
+  is lockable). Pre-authorized: the admin orchestrator's direct lock and the project lifecycle's
+  approved requests authorize the caller first; nothing here authenticates. Writes the bound
+  project's .wai/lock.json and .wai/inputs.lock.yaml, never anything below it.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - project_repository
+  - host_git_adapter
+  - host_core_adapter
+  - host_validator_adapter
+  - host_surfaces_adapter
+status: complete
+createdAt: '2026-11-20T00:38:23.901Z'
+updatedAt: '2026-11-20T00:38:24.348Z'

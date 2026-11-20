@@ -2,10 +2,10 @@ kind: value-object
 id: gate_config
 name: GateConfig
 description: >-
-  The project-level half of the gate identity: which profile governs, how the project tuned the
-  design rules, what it requires of the projects it contains, and whether it declares a network. A
-  lock taken under one and honoured under another was never judged by the gate it claims to have
-  passed.
+  The project's policy: the half of the approval identity beside its own design — which profile
+  governs, how the project tuned the design rules, what it requires of the projects it contains,
+  whether it declares a network, and which packs it selects. A lock taken under one policy and
+  honoured under another was never approved under the policy it claims.
 fields:
   - name: projectType
     type: string
@@ -16,23 +16,29 @@ fields:
     description: >-
       The project's rule tuning: severity overrides, complexity caps and design depth. Its
       code-conformance tuning — rules.conformance, and every sddRuleSeverity override of a code a
-      code-judging rule declares — is left out of the gate identity, since it tunes only findings
-      the approval does not certify, and enters the analyzer's doctrine digest instead.
+      code-judging rule declares — is left out of the approval identity, since it tunes only
+      findings the approval does not certify, and enters the analyzer's doctrine digest instead.
     optional: true
   - name: composition
     type: CompositionConfig
     description: >-
       The project's `composition` block (requirePolicies, requireApprovedMembers), null when absent.
-      Stage 5: a changed requirement stales the requiring project's lock.
+      A changed requirement re-opens the requiring project's approval.
     optional: true
   - name: network
     type: NetworkDeclaration
     description: >-
       The project's network declaration, when it declares one: it changes the family run's network
-      verdicts (GATEWAY_BYPASSED, ENTRY_UNPROVEN, EXPORT_BEYOND_NETWORK), so a lock taken without it
-      is not a lock of the gate with it
+      verdicts, so declaring, removing or redescribing one re-opens the declaring project's approval
+    optional: true
+  - name: selections
+    type: list<PackSelection>
+    description: >-
+      The packs the project selects, by name, declared version and scope, as .wai/project.yaml
+      states them — what the project CHOSE. What a selection resolves to (the pack's content) is a
+      build input, recorded in .wai/inputs.lock.yaml, never part of the approval.
     optional: true
 methods: []
 sourcePath: src/core/rules/gate-identity.ts
 createdAt: '2026-09-15T10:51:01.644Z'
-updatedAt: '2026-10-06T12:54:47.149Z'
+updatedAt: '2026-11-19T21:52:48.770Z'

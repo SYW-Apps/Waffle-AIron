@@ -534,14 +534,13 @@ methods:
           destination neither adopts nor drops, conformance debt or severity overrides the parent
           does not share, a destination export colliding with a public name the parent already
           exports, or a file of its .wai that cannot end with its boundary. Every entry wairon
-          itself writes under a project's .wai is recognised (round 8 — `wairon init` writes
-          phased_design.md into every project it scaffolds): project.yaml; the lock; pins and
-          snapshots (externals.lock.yaml, externals); legacy surfaces; derived outputs (agents,
+          itself writes under a project's .wai is recognised (round 8: `wairon init` writes
+          phased_design.md into every project it scaffolds): project.yaml; the lock; the inputs lock
+          and its snapshots (inputs.lock.yaml, externals); legacy surfaces; derived outputs (agents,
           context, docs, generated, rules, templates, topology.yaml, mcp); the design workbook
           phased_design.md; host and producer bindings (git.json, remote.json, producers.json); and
-          what the home project keeps — variants and vendored packs. An entry wairon never writes,
-          or a variant or pack file the home holds under the same name with other content, is
-          refused
+          what the home project keeps: variants and vendored packs. An entry wairon never writes, or
+          a variant or pack file the home holds under the same name with other content, is refused
         type: local
       - stepNumber: 9
         description: Is anything refused?
@@ -912,12 +911,11 @@ methods:
         outcome: unlocked
       - stepNumber: 4
         description: >-
-          Compare the recorded gate identity with the one the caller computed now — or, for a
-          format-2 record, with current.asRecorded: the same identity recomputed under the algorithm
-          that record was taken with. Nothing is hashed here. Accepting asRecorded is what keeps a
-          lock taken before code linkage left the approval valid while nothing it covered moved
+          Compare the recorded approval identity with the one the caller computed now. Nothing is
+          hashed here. Only a format-4 record reaches this step: the lock store refuses an earlier
+          one, naming `wairon upgrade`
         type: branch
-        condition: the record's stateId equals current, or equals current.asRecorded
+        condition: the record's stateId equals current
         onFalseStep: 6
       - stepNumber: 5
         description: Return locked with the record and current
@@ -930,152 +928,6 @@ methods:
           never frozen
         type: return
         outcome: stale
-  - name: consumedContractInputs
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Read the BOUND root's consumed contracts only: its stored surface snapshots under
-          .wai/surfaces, its pinned external snapshots under .wai/externals and its
-          .wai/externals.lock.yaml. No member root is read: a member's inputs are its own gate's,
-          and reach this project only through the member's composition subject. A missing directory
-          or lock holds none, and a malformed file is skipped rather than aborting the read. Read
-          locally: the snapshot and lock files are modelled in sdd_surfaces, which sdd_core must not
-          depend on
-        type: local
-      - stepNumber: 2
-        description: >-
-          Reduce each to its canonical content key: a snapshot with its provenance (stateId,
-          generatedAt, origin) stripped and the rest canonicalized, so re-pinning an unchanged
-          contract never moves the key; the lock canonicalized whole, since its digests and `used`
-          map are what a verdict consults. Each key names its kind (surface, external, lock) so
-          equal content in two kinds never collides
-        type: local
-      - stepNumber: 3
-        description: Return the root's content keys
-        type: return
-        outcome: string[]
-  - name: retireSpecialists
-    sourcePath: src/core/stereotype-migration.ts
-    narrative:
-      - stepNumber: 1
-        description: Load every component spec in the bound tree
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpecs
-      - stepNumber: 2
-        description: Collect the Specialists, each unclassified. Gateways are retireGateways' to merge
-        type: local
-      - stepNumber: 3
-        description: Classify over the dependency graph in passes, until a pass classifies nothing
-        type: loop
-        condition: the pass classified at least one Specialist
-        loopKind: doWhile
-        endStep: 14
-      - stepNumber: 4
-        description: Try each Specialist still unclassified
-        type: loop
-        loopKind: forEach
-        over: each Specialist still unclassified
-        endStep: 13
-      - stepNumber: 5
-        description: A Specialist with a dependency still unclassified waits for the next pass
-        type: branch
-        condition: 'every dependency is decided: none is a Specialist still unclassified'
-        onFalseStep: 4
-      - stepNumber: 6
-        description: Pure when every dependency is pure
-        type: branch
-        condition: >-
-          every dependency is pure: an Orchestrator declaring dependencyClass pure, or a Specialist
-          classified pure
-        onFalseStep: 9
-      - stepNumber: 7
-        description: Classify it pure
-        type: local
-      - stepNumber: 8
-        description: Go record its reason
-        type: jump
-        toStep: 13
-      - stepNumber: 9
-        description: Read when every dependency is pure or read logic, or a data facade it may read
-        type: branch
-        condition: >-
-          every dependency is pure or read logic (declared or classified), or a Repository, Index or
-          Adapter
-        onFalseStep: 12
-      - stepNumber: 10
-        description: Classify it read
-        type: local
-      - stepNumber: 11
-        description: Go record its reason
-        type: jump
-        toStep: 13
-      - stepNumber: 12
-        description: 'Leave its class unset, a workflow Orchestrator: some dependency fits neither class'
-        type: local
-      - stepNumber: 13
-        label: record
-        description: Record the dependencies that decided its class as its reason
-        type: local
-      - stepNumber: 14
-        description: Close the pass, noting whether it classified any Specialist
-        type: local
-      - stepNumber: 15
-        description: >-
-          Settle the Specialists still unclassified, those in a dependency cycle or waiting on one,
-          with the weakest class that fits: read when every dependency is pure or read logic, a
-          Repository, Index or Adapter, or another of them; otherwise unset. One left unset makes
-          those depending on it unset in turn, until nothing changes. Each records the dependencies
-          that decided it
-        type: local
-      - stepNumber: 16
-        description: >-
-          Read the project's own variants through the variant registry adapter, keeping those whose
-          base is Specialist
-        type: call
-        targetComponent: variant_registry_adapter
-        targetMethod: listProjectVariants
-      - stepNumber: 17
-        description: >-
-          Compose the plan: retyped, each Specialist with its dependencyClass when set and its
-          reason; rebasedVariants, the ids of those variants
-        type: local
-      - stepNumber: 18
-        description: Without apply, nothing is written
-        type: branch
-        condition: apply is false
-        onFalseStep: 20
-      - stepNumber: 19
-        description: Return the plan with applied false
-        type: return
-        outcome: planned
-      - stepNumber: 20
-        description: Write each retype
-        type: loop
-        loopKind: forEach
-        over: each retyped Specialist
-        endStep: 21
-      - stepNumber: 21
-        description: Save it with componentType Orchestrator and its dependencyClass when set
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-      - stepNumber: 22
-        description: >-
-          Rebase those variant files in place through the variant registry adapter, from base
-          Specialist to base Orchestrator; its result gives the rebased ids
-        type: call
-        targetComponent: variant_registry_adapter
-        targetMethod: rebaseProjectVariants
-      - stepNumber: 23
-        description: Invalidate the spec cache
-        type: call
-        targetComponent: spec_loader
-        targetMethod: invalidateCache
-      - stepNumber: 24
-        description: Return the plan with applied true
-        type: return
-        outcome: applied
   - name: renameComponent
     sourcePath: src/core/provision.ts
     narrative:
@@ -2095,32 +1947,6 @@ methods:
         type: local
       - stepNumber: 2
         description: Return the pairs
-        type: return
-        outcome: success
-  - name: findChainingSubprojectsMissingConfig
-    sourcePath: src/core/provision.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Walk the members recursively from the root — each project's `members` entries and, in the
-          v5 reading `wairon upgrade` binds, its legacy L1 mounts — and keep each directory that
-          holds a spec tree but no project configuration
-        type: local
-      - stepNumber: 2
-        description: Return the directories
-        type: return
-        outcome: success
-  - name: backfillChainedSubprojectConfigs
-    sourcePath: src/core/provision.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Walk the members recursively from the root, either declaration form; for each that holds a
-          spec tree but no project configuration, write a default configuration named for its alias
-          and declaring the alias as its project id, leaving its specs untouched
-        type: local
-      - stepNumber: 2
-        description: Return the directories repaired
         type: return
         outcome: success
   - name: assertContainedProjectPath
@@ -3801,95 +3627,6 @@ methods:
       - stepNumber: 1
         description: Remove the copy's folder and everything in it
         type: local
-  - name: retireGateways
-    sourcePath: src/core/stereotype-migration.ts
-    narrative:
-      - stepNumber: 1
-        description: Load every component spec in the bound tree
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpecs
-      - stepNumber: 2
-        description: >-
-          Collect the Gateways, and the narrative call steps of every other spec that target one of
-          them
-        type: local
-      - stepNumber: 3
-        description: Judge each Gateway
-        type: loop
-        loopKind: forEach
-        over: each Gateway
-        endStep: 8
-      - stepNumber: 4
-        description: >-
-          Can it be merged? It owns exactly one Portal, and no other spec's narrative calls a method
-          of its own
-        type: branch
-        condition: the Gateway owns exactly one Portal and no other narrative calls it
-        onFalseStep: 7
-      - stepNumber: 5
-        description: >-
-          Plan the merge: the Portal takes the gateway variant; the other owned members become the
-          Portal's dependencies; each consumer's dependency on the Gateway names the Portal; each L1
-          or L0 export naming the Gateway names the Portal
-        type: local
-      - stepNumber: 6
-        description: Planned
-        type: jump
-        toStep: 8
-      - stepNumber: 7
-        label: refuse
-        description: >-
-          Refuse it, naming why (no Portal owned, more than one, or the callers of its own methods)
-          and the hand steps
-        type: local
-      - stepNumber: 8
-        label: next
-        description: On to the next Gateway
-        type: local
-      - stepNumber: 9
-        description: Without apply, nothing is written
-        type: branch
-        condition: apply is false
-        onFalseStep: 11
-      - stepNumber: 10
-        description: Return the plan with applied false
-        type: return
-        outcome: planned
-      - stepNumber: 11
-        label: write
-        description: Write each merge
-        type: loop
-        loopKind: forEach
-        over: each planned merge
-        endStep: 14
-      - stepNumber: 12
-        description: >-
-          Save the Portal with the gateway variant and its new dependencies, and each consumer with
-          its retargeted dependency
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-      - stepNumber: 13
-        description: Save each L1 subsystem or L0 whose export entry now names the Portal
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSpec
-      - stepNumber: 14
-        label: deleted
-        description: Delete the Gateway's spec, its contract and its implementation
-        type: call
-        targetComponent: spec_loader
-        targetMethod: deleteSpec
-      - stepNumber: 15
-        description: Invalidate the spec cache
-        type: call
-        targetComponent: spec_loader
-        targetMethod: invalidateCache
-      - stepNumber: 16
-        description: Return the plan with applied true
-        type: return
-        outcome: applied
   - name: renameGroup
     sourcePath: src/core/provision.ts
     narrative:
@@ -4235,4 +3972,4 @@ methods:
         targetMethod: reviseProject
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-14T16:10:06.705Z'
+updatedAt: '2026-11-20T01:30:47.927Z'

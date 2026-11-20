@@ -3,49 +3,34 @@ id: state_id
 name: StateId
 description: >-
   The deterministic identity of a spec-tree state. Two states with identical content produce the
-  same StateId; any change alters it. Two flavours exist, distinguished by `algorithm` so they can
-  never compare equal: the CONTENT identity over the spec tree alone (surface/landscape snapshot
-  stamps, where doctrine is irrelevant), and the GATE identity a lock records and every staleness
-  re-check recomputes — the project's OWN spec content, the governing design doctrine, the consumed
-  contract inputs of its own root, its `composition`, and each direct member's composition subject —
-  because a lock asserts that these specs pass THIS gate against THESE inputs.
+  same StateId; any change alters it. Flavours are distinguished by `algorithm` so they can never
+  compare equal: the CONTENT identity over the spec tree alone (surface/landscape snapshot stamps),
+  the DESIGN identity of a project's own specs (state_hash.ownDesign, code linkage and readiness
+  out), and the APPROVAL identity a lock records and every staleness check recomputes — the
+  project's own design together with its policy (type, design rule tuning, composition, network,
+  pack selections). Nothing a project consumes is in the approval identity: those are build inputs.
 fields:
   - name: algorithm
     type: string
     description: >-
       Algorithm identifier, also distinguishing the flavour: "sha256" = spec-tree content only;
-      "sha256+content+doctrine+inputs+members" = the stage-5 gate identity. Earlier gate markers
-      ("sha256+doctrine+inputs", "sha256+content+doctrine+inputs") are no longer produced;
-      stateIdEquals compares this field, so a lock taken under an earlier marker reads stale once
-      (LockStatus.upgraded) instead of passing.
+      "sha256-design-2" = a project's own design; "sha256+design+policy" = the approval identity.
+      equals compares this field, so two flavours never match.
     optional: false
   - name: digest
     type: string
     description: >-
-      Hex digest over the canonicalized content (the spec tree, plus for the gate flavour the
-      doctrine projection, the consumed contract inputs, the composition block and the members'
-      subjects)
+      Hex digest over the canonicalized content (the spec tree; for the approval flavour the own
+      design digest and the policy projection)
     optional: false
-  - name: asRecorded
-    type: StateId?
-    description: >-
-      On a gate identity only: the same gate identity computed under the algorithm the bound
-      project's lock record was taken with, when that is the previous algorithm this release can
-      still recompute (the content reading that kept code linkage in). Present only while the record
-      on disk carries that earlier algorithm, so a lock taken before linkage left the approval is
-      judged exactly as it was taken — never a forced re-lock of an unchanged design. Never
-      recorded: a lock writes algorithm and digest alone.
-    optional: true
   - name: parts
     type: map<string, string>?
     description: >-
-      On a gate identity only: the digest of each input the identity covers, taken on its own
-      (gate_identity.parts) — `design` (the own design), `release` (this wairon release's built-in
-      design rules), `rules` (projectType and the design rule tuning), `packs` (the governing
-      extensions' doctrine), `network` (absent when none is declared), `composition`, `contracts`
-      (the consumed contract inputs) and `members` (the direct members' subjects). Never part of the
-      digest; a lock records them as gateParts, so a later check can say WHICH input moved, and tell
-      a release change (only `release` moved) from a change the project made.
+      On an approval identity only: the digest of each half it covers, taken on its own
+      (gate_identity.parts) — `design` (the own design), `rules` (projectType and the design rule
+      tuning), `composition`, `network` (absent when none is declared) and `selections` (the packs
+      selected by name, declared version and scope). Never part of the digest; a lock records them
+      as `parts`, so a later check can say WHICH half moved.
     optional: true
 methods:
   - name: equals
@@ -57,4 +42,4 @@ methods:
     symbol: stateIdEquals
 sourcePath: src/core/statehash.ts
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-10-08T08:35:39.792Z'
+updatedAt: '2026-11-19T20:30:18.465Z'

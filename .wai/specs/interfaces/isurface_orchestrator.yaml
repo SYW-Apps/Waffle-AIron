@@ -56,34 +56,14 @@ methods:
         type: string
   - name: pinExternals
     description: >-
-      The `wairon externals pin` / sdd_pin_externals workflow. At a project: for each declared
-      external and each referenced project member (a `../`, git or hosted source; the named aliases,
-      else all): project the producer's resolved project export table at the consumer's audience
-      ceiling (project for a family producer, instance for a source.path, git or hosted one) into
-      .wai/externals/<alias>.yaml, and record in .wai/externals.lock.yaml the producer id, the
-      snapshot path, the snapshot's canonical content digest, the role, the commit, and the `used`
-      map — every public name the consumer's references land on or spell, `alias::name` references
-      and bare names bound through the alias's `use` import alike, each used member with its
-      canonical signature digest (each method of an implemented extension point too) — filled for
-      outside producers too since stage 8; a name imported by `use` but referenced nowhere is not
-      used. A used member the snapshot no longer carries is named in the outcome's unexported
-      references (with the spec that uses it) and its detail, so the CLI line and the MCP answer
-      agree; a pin that records no use at all says plainly that no spec references the external yet
-      and that it fills on the next pin. A producer whose spec files fail to parse is unreadable,
-      naming the file and the error. A git external is pinned at its ref's head, fetched; a git
-      member at its declared commit (moving a member's commit is `wairon member update`, never a
-      pin). An unchanged snapshot is not rewritten; with no aliases named, lock entries and
-      snapshots for aliases no longer declared are removed (the lock file itself with its last
-      entry). At a non-contained PART (stage 8): pin its parent instead — the excerpt of the
-      parent's specs the part references and the parent's governing configuration, read with the
-      parent on disk at PartOf.path, into .wai/externals/<parent id>.yaml and the lock's `parent`
-      entry; naming an alias at a part is refused. An alias the project does not declare is refused
-      before anything is written; an unresolved or unreachable producer is reported and keeps its
-      previous pin. So is a pin over a rename: when a member the previous lock entry records as used
-      is gone from the new snapshot — renamed (said with the new name) or removed, not merely
-      exported narrower — the alias is refused and keeps its previous pin, since the uses must
-      follow it first; pinned over, they would point at nothing the lock compares, and a second pin
-      and lock would be owed. Never locks.
+      Pin the bound project's declared hosted and git externals and its referenced git or hosted
+      members (the named aliases, else all) into .wai/inputs.lock.yaml, snapshots under
+      .wai/externals/. Each pin is taken from the producer's approved state: a git producer's commit
+      must carry an approved lock matching its tree, and a hosted producer must hold its approval;
+      otherwise the pin is refused, naming why, and the previous pin stays. A path producer (a
+      family or `../` external) is read live: it is never pinned, and a pin an earlier wairon
+      recorded for it is removed. The lock's `packs` section is left as it is. A part pins its
+      parent excerpt instead. The caller must gate on reach itself.
     signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
     returns: list<ExternalPin>
     params:
@@ -145,14 +125,10 @@ methods:
       - idempotent
   - name: listPinnedExternals
     description: >-
-      The owner's gate read of the bound project's pins: each declared external's alias — and, since
-      stage 8, each member declared with a `../`, git or hosted source, which a referenced project
-      is judged against exactly as an external (the gate drops the ones the scan found to be parts)
-      — with its lock entry and the snapshot that entry names, read from the bound root's own
-      .wai/externals.lock.yaml and .wai/externals/ through the externals Repository. It never
-      resolves a producer, never reads another root and never climbs: an alias that was never
-      pinned, or whose snapshot file is missing or malformed, is answered with its problem instead
-      of a snapshot. Writes nothing.
+      The bound project's declared hosted and git externals and referenced git or hosted members,
+      each with its lock entry and pinned snapshot, read from its own .wai files only: what the
+      owner's gate judges a reference into another project against. A path producer is read live and
+      carries no entry.
     signature: 'listPinnedExternals(): list<PinnedExternal>'
     returns: list<PinnedExternal>
     params: []
@@ -193,8 +169,8 @@ methods:
       - idempotent
   - name: pinnedParent
     description: >-
-      The owner's gate read of a PART's pinned parent (stage 8): its lock's `parent` entry and the
-      excerpt it names, from the bound root's own .wai/externals.lock.yaml and .wai/externals/ —
+      The owner's gate read of a PART's pinned parent (stage 8): its inputs lock's `parent` entry
+      and the excerpt it names, from the bound root's own .wai/inputs.lock.yaml and .wai/externals/,
       never the parent's live tree. Null when the bound root is not a part; a part never pinned, or
       whose excerpt is missing or malformed, is answered with its problem instead of an excerpt.
       Writes nothing.
@@ -222,11 +198,11 @@ methods:
     description: >-
       Drop every lock entry whose alias is no longer declared, with its snapshot; answers whether
       the lock changed. The prune half of a pin with no aliases named.
-    signature: 'prune(lock: ExternalsLock, declared: list<string>): bool'
+    signature: 'prune(lock: InputsLock, declared: list<string>): bool'
     returns: bool
     params:
       - name: lock
-        type: ExternalsLock
+        type: InputsLock
         description: The lock being written, edited in place
       - name: declared
         type: list<string>
@@ -301,12 +277,8 @@ methods:
     effect: read
   - name: memberApprovedSurfaces
     description: >-
-      Each live member of the bound project (contained or a `../` sibling, never pinned) projected
-      as its tree stood at the approval it is judged against — the one the bound project's lock
-      records for it, else the member's own last committed approval — keyed by the alias the bound
-      project declares it under: what a binding into a member is compared with beside the member's
-      live export, so a name the member dropped since its approval is named as removed. A member
-      with no such revision is left out. Read-only.
+      Each live member's surface at its own last committed approval, keyed by alias: what a member
+      consumer is judged against. The bound project's lock records no member.
     signature: 'memberApprovedSurfaces(): map<string, SurfaceSnapshot>'
     returns: map<string, SurfaceSnapshot>
     params: []
@@ -325,8 +297,47 @@ methods:
     returns: list<ExternalStatus>
     params: []
     effect: io
+  - name: lockedPacks
+    description: >-
+      The `packs` section of the bound project's inputs lock: each extension pack as it resolved at
+      the last `wairon packs sync` or `wairon lock`. Empty when no lock was written.
+    signature: 'lockedPacks(): map<string, LockedPack>'
+    returns: map<string, LockedPack>
+    params: []
+    effect: read
+  - name: recordPacks
+    description: >-
+      Replace the `packs` section of the bound project's inputs lock with the packs as they resolved
+      now, keeping its externals and parent as they are. Writes nothing when the section already
+      says exactly this. Called by `wairon packs sync` and `wairon lock`; never moves the approval.
+    signature: 'recordPacks(packs: map<string, LockedPack>): void'
+    returns: void
+    params:
+      - name: packs
+        type: map<string, LockedPack>
+        description: >-
+          Pack name → its declared version, resolved version, source and content digest
+          (approval_identity.packContents)
+    effect: write
+  - name: pinProducer
+    description: >-
+      Pin one hosted or git producer from its approved state: bind its root, refuse when its design
+      is not approved as it stands, project its surface, write the snapshot when anything it carries
+      moved, and compute the lock entry. A used member the producer renamed or removed refuses the
+      pin. Writes the snapshot only; the caller writes the lock.
+    signature: 'pinProducer(binding: ExternalBinding, previous?: ExternalLockEntry): ProducerPin'
+    returns: ProducerPin
+    params:
+      - name: binding
+        type: ExternalBinding
+        description: The external or member, bound to its hosted or git producer
+      - name: previous
+        type: ExternalLockEntry
+        description: The lock entry pinned for the alias now, if any
+        optional: true
+    effect: write
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-22T09:35:40.097Z'
+updatedAt: '2026-11-20T01:30:36.138Z'

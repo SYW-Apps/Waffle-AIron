@@ -124,7 +124,7 @@ methods:
           Digest the code analyzer's doctrine: the rules of the sequence that judge code and the
           project's rules.conformance tuning
         type: call
-        targetComponent: gate_identity
+        targetComponent: approval_identity
         targetMethod: analyzer
       - stepNumber: 18
         description: >-
@@ -228,7 +228,7 @@ methods:
           along as the write's notices, each list kept apart
         type: return
         outcome: CandidateVerdict
-  - name: computeGateStateId
+  - name: computeApprovalId
     narrative:
       - stepNumber: 1
         description: Scan every spec once, so the identity reads one consistent tree
@@ -238,174 +238,53 @@ methods:
       - stepNumber: 2
         description: >-
           Compute the DESIGN identity of the bound project's OWN specs through the core adapter —
-          code linkage and timestamps left out, its parts' specs included (stage 8: a part is the
-          project's own subsystems, wherever stored), never a project member's, whose subject stands
-          for it below
+          code linkage, readiness and timestamps left out, its parts' specs included (a part is the
+          project's own subsystems, wherever stored), never a project member's
         type: call
         targetComponent: validator_core_adapter
         targetMethod: computeOwnDesignId
       - stepNumber: 3
-        description: >-
-          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
-          and pattern definitions — the doctrine the gate identity covers
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadProjectExtensions
-      - stepNumber: 4
-        description: >-
-          Read the bound project's configuration through the core adapter for its projectType, rule
-          tuning and composition block
+        description: Read the bound project's configuration through the core adapter for its policy
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Take the gate config from the configuration's projectType, rules, composition, network
+          declaration and pack selections, empty when the project has no configuration or its
+          configuration fails its schema: the design identity still stands on its own
+        type: local
       - stepNumber: 5
-        description: >-
-          Take the gate config from the configuration's projectType, rules, composition and network
-          declaration, empty when the project has no configuration or its configuration fails its
-          schema: the tree identity still stands on its own
-        type: local
-      - stepNumber: 6
-        description: >-
-          Read the bound root's own consumed contract inputs through the core adapter: its stored
-          surface snapshots, pinned external snapshots and externals lock, as canonical content keys
-          — never a member's, never an ancestor's
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: consumedContractInputs
-      - stepNumber: 7
-        description: >-
-          Read the project graph for the PROJECT members the bound root declares DIRECTLY —
-          contained ones, referenced `../` and git ones (opened at their sibling checkout or the
-          fetch cache at the pinned commit) and, in the v5 reading `wairon upgrade` binds, legacy
-          mounts — each with its alias and directory. A referenced `hosted:` member is not read
-          here: only the hosting server can resolve it, so it would make the identity differ locally
-          and hosted; it is covered through its pin in the bound project's externals lock, which is
-          a consumed contract input of the identity, never its live subject. Parts are not read
-          here: their content is already in the own identity. Deeper members are not read: they
-          reach this identity through each direct member's subject
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: projectFamily
-      - stepNumber: 8
-        description: For each direct member
-        type: loop
-        loopKind: forEach
-        over: the bound root's direct members
-        endStep: 10
-      - stepNumber: 9
-        description: >-
-          Read the member's own lock record from its directory — one small file, no scan, no
-          validation
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: approvalRecord
-      - stepNumber: 10
-        description: >-
-          Its composition subject is that record's approval subject (lock_record.approvalSubject),
-          rendered `<algorithm>:<digest>` — the member's gate identity at the moment its owner
-          APPROVED it, the decision its owner made: a release stamp `wairon lock` refreshed without
-          a re-approval keeps the subject the approval had, so a member's restamp never moves this
-          identity; `never` when the member carries no record or has no project on disk. Recorded,
-          not recomputed: the member's live edits are the member's to re-approve, and recomputing
-          here would load the member's tree into every parent identity
-        type: local
-      - stepNumber: 11
         description: Seed the built-in SDD rule set into the in-memory rule set
         type: call
         targetComponent: rule_repository
         targetMethod: registerBuiltinRules
-      - stepNumber: 12
+      - stepNumber: 6
         description: >-
-          Read the rule sequence: the built-in rules (gate_identity.compute keeps only those that
-          judge design). No pack rule is registered yet; pack rules enter the identity through the
-          extensions
+          Read the built-in rule sequence: approval_identity reads it only to tell the code-judging
+          severity overrides apart
         type: call
         targetComponent: rule_repository
         targetMethod: ruleSequence
-      - stepNumber: 13
+      - stepNumber: 7
         description: >-
-          Compute the gate identity from the own content identity, the extensions, the built-in
-          rules, the own consumed contract inputs, the gate config and the members' subjects
+          Compute the approval identity from the own design identity, the built-in rules and the
+          gate config
         type: call
-        targetComponent: gate_identity
+        targetComponent: approval_identity
         targetMethod: compute
-      - stepNumber: 14
+      - stepNumber: 8
         description: >-
-          Digest each input of that identity on its own and carry them as the answer's `parts`: the
-          lock records them (gateParts), and a later check compares them input by input — to name
-          the input that moved, and to judge a change of the wairon release alone by re-validation
-          rather than by digest
+          Digest each half of that identity on its own and carry them as the answer's `parts`: the
+          lock records them, and a later check compares them half by half to name the one that moved
         type: call
-        targetComponent: gate_identity
+        targetComponent: approval_identity
         targetMethod: parts
-      - stepNumber: 15
-        label: readOwnRecord
-        description: Read the bound project's own lock record, to know which gate algorithm it was taken under
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: approvalRecord
-      - stepNumber: 16
-        description: >-
-          Was it taken under the previous, full-content gate algorithm
-          (`sha256+content+doctrine+inputs+members`, a format-2 record)? Then it must be judged as
-          it was taken, never forced into a re-lock of an unchanged design
-        type: branch
-        condition: the record exists and its stateId.algorithm is the full-content gate algorithm
-        onFalseStep: 20
-      - stepNumber: 17
-        description: >-
-          Compute the full-content identity of the own specs (code linkage included), the content
-          reading that record was taken in
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: computeOwnStateId
-      - stepNumber: 18
-        description: >-
-          Recompute the gate identity from that full-content identity and the SAME doctrine, inputs,
-          gate config and members' subjects — gate_identity.compute marks it with the previous
-          algorithm because its content is a full-content identity — and carry it as the answer's
-          asRecorded
-        type: call
-        targetComponent: gate_identity
-        targetMethod: compute
-      - stepNumber: 19
-        description: That record is judged; answer
-        type: jump
-        toStep: 24
-      - stepNumber: 20
-        label: earlierDesign
-        description: >-
-          Was it taken in the earlier design reading (`sha256+design+doctrine+inputs+members`,
-          status still in the view)? Then it is judged as it was taken too, with each spec's status
-          as approved, so a tree in which nothing but a status moved still matches it
-        type: branch
-        condition: the record exists and its stateId.algorithm is the earlier design gate algorithm
-        onFalseStep: 24
-      - stepNumber: 21
-        description: Recover each own spec's approved status from the record's design digests
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: approvedStatuses
-      - stepNumber: 22
-        description: Compute the own design identity in the earlier reading, statuses put back as approved
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: computeOwnDesignIdAsRecorded
-      - stepNumber: 23
-        description: >-
-          Recompute the gate identity from it and the SAME doctrine, inputs, gate config and
-          members' subjects — gate_identity.compute marks it with the earlier design gate algorithm
-          — and carry it as the answer's asRecorded
-        type: call
-        targetComponent: gate_identity
-        targetMethod: compute
-      - stepNumber: 24
-        label: answer
-        description: >-
-          Return the gate identity, with asRecorded when the record on disk was taken under an
-          earlier algorithm this release still recomputes
+      - stepNumber: 9
+        description: Return the approval identity with its parts
         type: return
-        outcome: StateId (the gate identity)
+        outcome: StateId (the approval identity)
+    symbol: computeGateStateId
   - name: findTestsReferencing
     narrative:
       - stepNumber: 1
@@ -580,9 +459,9 @@ methods:
       - stepNumber: 22
         label: pins
         description: >-
-          Read the bound project's pinned externals via the surfaces adapter — each declared alias
-          with its lock entry and the snapshot it names, from the project's own
-          .wai/externals.lock.yaml and .wai/externals/ only. A reference into a project outside the
+          Read the bound project's pinned externals via the surfaces adapter: each declared hosted
+          or git alias with its lock entry and the snapshot it names, from the project's own
+          .wai/inputs.lock.yaml and .wai/externals/ only. A reference into a project outside the
           scan is judged against these and nothing else: the producer is never read here, so the
           verdict is the same with or without the family on disk
         type: call
@@ -895,23 +774,6 @@ methods:
         type: return
         outcome: the project's own reach model
     symbol: ownReachModel
-  - name: validateDesign
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Run the owner's gate with the options given, each spec judged at the status it is authored
-          with (the run validateProject makes)
-        type: local
-      - stepNumber: 2
-        description: >-
-          Summarise its code half with the analyzer that took it — the codes the code-judging rules
-          declare, counted per severity, with the analyzer's doctrine digest and the weakest grade —
-          exactly as validateAsComplete does
-        type: local
-      - stepNumber: 3
-        description: Answer the result with its analysis
-        type: return
-        outcome: ValidationResult
   - name: introducedFindings
     sourcePath: src/core/rules/candidate.ts
     narrative:
@@ -992,6 +854,38 @@ methods:
           code the project tuned down) rides along as one of its notices
         type: return
         outcome: CandidateVerdict
+  - name: resolvedPacks
+    sourcePath: src/core/validation.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project's own configuration: its pack selections, each with its declared version
+          and recorded source
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Load the extension packs those selections name
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 3
+        description: Digest each loaded pack's doctrine
+        type: call
+        targetComponent: approval_identity
+        targetMethod: packContents
+      - stepNumber: 4
+        description: >-
+          Assemble one LockedPack per selection that loaded: declared = the selection's version as
+          written, resolved = the loaded manifest's version, source = the selection's recorded
+          source, else the bundled path or `installed`, digest = its doctrine digest. A selection
+          that did not load is left out
+        type: local
+      - stepNumber: 5
+        description: Answer the packs by name
+        type: return
+        outcome: map<string, LockedPack>
+    detail: full
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -1007,4 +901,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-10T19:03:14.331Z'
+updatedAt: '2026-11-20T01:30:41.903Z'

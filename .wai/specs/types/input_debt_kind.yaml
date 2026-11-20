@@ -1,0 +1,31 @@
+kind: enum
+id: input_debt_kind
+name: InputDebtKind
+description: >-
+  What a project's build inputs owe beside an approval that holds: the reason `wairon lock-check`
+  refuses although the approved design and policy did not move. Each kind names the command that
+  clears it; none of them is a change of the approval.
+fields: []
+methods: []
+sourcePath: src/models/lock.ts
+values:
+  - name: unpinned
+    description: >-
+      A hosted or git external, or a referenced project member, the project uses with no entry in
+      .wai/inputs.lock.yaml: nothing records what the design is judged against. Cleared by `wairon
+      externals pin <alias>`.
+  - name: unrecorded
+    description: >-
+      A use of a pinned producer that its pin does not record: a name or method the design now uses
+      beyond what was pinned. Cleared by `wairon externals pin <alias>`.
+  - name: pack
+    description: >-
+      A selected pack whose resolved content no longer matches the digest the inputs lock records
+      for it (or that has no entry there). Cleared by `wairon packs sync`.
+  - name: member
+    description: >-
+      A direct member project whose own lock does not hold (drifted or never approved), counted only
+      when the project sets composition.requireApprovedMembers. Cleared by locking the member at its
+      own root.
+createdAt: '2026-11-19T20:29:25.667Z'
+updatedAt: '2026-11-19T20:29:26.152Z'

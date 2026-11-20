@@ -2,12 +2,13 @@ kind: value-object
 id: external_lock_entry
 name: ExternalLockEntry
 description: >-
-  What `wairon externals pin` recorded for one pinned producer in .wai/externals.lock.yaml: which
-  producer it pinned, where the snapshot is, the snapshot's content digest, the digest of every
-  member the consumer's references use (so a later status says stale only when something used
-  changed), and since stage 8 the producer's commit and the role it was pinned in — an external, a
-  referenced project member (pinned exactly as an external), or, in a non-contained part's lock, the
-  part's parent (whose snapshot is a ParentExcerpt).
+  What a pin recorded for one pinned producer in .wai/inputs.lock.yaml: which producer it pinned,
+  where the snapshot is, the snapshot's content digest, the digest of every member the consumer's
+  references use (so a later status says stale only when something used changed), the producer's
+  commit, and the role it was pinned in: a hosted or git external, a referenced git or hosted
+  project member (pinned exactly as an external), or, in a non-contained part's lock, the part's
+  parent (whose snapshot is a ParentExcerpt). An external or member entry is taken from the
+  producer's approved state, never from unapproved live specs.
 subsystem: sdd_surfaces
 fields:
   - name: project
@@ -38,12 +39,10 @@ fields:
   - name: commit
     type: string
     description: >-
-      The producer's commit at pin time, recorded only when the producer lives in another git
-      repository than the consumer: the fetched commit of a git source (an external's ref head; a
-      referenced project's pinned commit), or the head of the work tree holding a `../` sibling or
-      path producer that is its own repository. A family, contained or same-repository producer
-      records none, so a monorepo re-pin never churns the lock. Provenance for a reader and the base
-      an `externals status` reports `ahead` against; never compared by a verdict.
+      The producer's commit at pin time, recorded for a git producer only: the fetched commit of a
+      git source (an external's ref head; a referenced project's pinned commit). A hosted producer
+      and a part's parent record none. Provenance for a reader and the base an `externals status`
+      reports `ahead` against; never compared by a verdict.
     optional: true
   - name: role
     type: string
@@ -52,4 +51,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-26T17:46:57.120Z'
-updatedAt: '2026-10-04T10:20:10.607Z'
+updatedAt: '2026-11-20T00:05:37.392Z'

@@ -1157,72 +1157,85 @@ methods:
         type: return
         outcome: nothing to approve
       - stepNumber: 9
+        label: refresh-inputs
+        description: >-
+          Refresh the owed build inputs BEFORE anything is judged, so the gate validates against the
+          inputs being recorded: pin each external never pinned or used beyond its pin, from its
+          producer's approved state, and record the selected packs as they resolve. An up-to-date
+          pin is never advanced, and a refused pin does not stop the lock: inputs are never part of
+          the approval
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: refreshInputs
+      - stepNumber: 10
         label: capture
         description: >-
-          CAPTURE the gate identity before anything is judged — the identity the record will
-          certify. The lock adapter re-confirms it immediately before writing, so a lock never
-          certifies inputs that moved while it ran (the validation and the confirmation prompt
-          included)
+          CAPTURE the approval identity (own design and policy) before anything is judged: the
+          identity the record will certify. The lock adapter re-confirms it immediately before
+          writing, so a lock never certifies a design that moved while it ran (the validation and
+          the confirmation prompt included)
         type: call
         targetComponent: cli_validator_adapter
-        targetMethod: computeGateStateId
-      - stepNumber: 10
+        targetMethod: computeApprovalId
+      - stepNumber: 11
         description: >-
           Run the as-complete dry-run gate over the tree; the result carries its code half
           summarized with the analyzer identity
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateAsComplete
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Take the design half (ValidationResult.designOnly): what the approval certifies and the
           only findings that may refuse it. Code-conformance findings are recorded beside the
           approval and never refuse it, so a design can be approved before its code exists — CI
           enforces code conformance (`wairon validate --ci`), not the lock
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: The design half found errors (an invalid design is never frozen)
         type: branch
         condition: the design half reported errors
-        onTrueStep: 13
-        onFalseStep: 14
-      - stepNumber: 13
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
         description: Refuse the lock, printing the blocking findings; nothing was changed
         type: return
         outcome: refused
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
-          Summarize, apply requireApprovedMembers, confirm with the human (skipped under --yes),
-          re-confirm the captured identity and write the record through the lock adapter
+          Summarize, apply requireApprovedMembers and the branch check, confirm with the human
+          (skipped under --yes), re-confirm the captured identity and write the record through the
+          lock adapter
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: lockTree
-      - stepNumber: 15
+      - stepNumber: 16
         description: Did the human decline?
         type: branch
         condition: the lock adapter answered no record
-        onTrueStep: 16
-        onFalseStep: 17
-      - stepNumber: 16
+        onTrueStep: 17
+        onFalseStep: 18
+      - stepNumber: 17
         description: 'Cancelled: nothing was changed'
         type: return
         outcome: cancelled
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Refresh THIS project's generated outputs only — never --family: a parent lock writes
           nothing below itself, generated outputs included
         type: call
         targetComponent: cli_runner
         targetMethod: runGenerate
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
-          Print the lock record — written, or, when this run re-recorded nothing (the same approval
-          on file, no evidence beside it to refresh), that this run left .wai/lock.json untouched,
-          as the summary promised: a difference from the committed record, if there is one, was
-          written by an earlier run — each direct member's state, and the code results plainly on
-          their own line — "code: N errors, M warnings recorded beside the claim (analyzer
-          <version>, grade <grade>)" — so an approval taken over failing code is never mistaken for
-          clean code; then return
+          Print the lock record (written, or, when this run re-recorded nothing, that it left
+          .wai/lock.json untouched, as the summary promised: a difference from the committed record,
+          if there is one, was written by an earlier run), each direct member's own state, the code
+          results plainly on their own line ("code: N errors, M warnings recorded beside the claim
+          (analyzer <version>, grade <grade>)") so an approval taken over failing code is never
+          mistaken for clean code, and the inputs the refresh pinned or recorded, each refused pin
+          with its reason and what stays owed ("approved; lock-check fails until: <debts>"); then
+          return
         type: return
         outcome: locked
     symbol: lockCommand
@@ -2049,7 +2062,7 @@ methods:
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
-        targetMethod: computeGateStateId
+        targetMethod: computeApprovalId
       - stepNumber: 59
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
@@ -4528,4 +4541,4 @@ lint:
         interleave their output. No domain state: nothing to store, list or recover.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-15T02:15:14.380Z'
+updatedAt: '2026-11-20T00:21:04.210Z'

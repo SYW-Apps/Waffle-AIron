@@ -1,8 +1,8 @@
 id: host_validator_adapter_impl
 name: Host Validator Client Adapter Implementation
 description: >-
-  Forwards the as-complete conformance run and the gate identity computation to the validator
-  portal.
+  Forwards the as-complete conformance run, the approval identity computation and the resolved packs
+  to the validator portal.
 contract: ihost_validator_adapter
 sourcePath: src/server/adapters/validator.ts
 methods:
@@ -20,13 +20,14 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: validateAsComplete
-  - name: computeGateStateId
+  - name: computeApprovalId
     narrative:
       - stepNumber: 1
-        description: Forward the gate identity computation to the validator portal
+        description: Forward the approval identity computation to the validator portal
         type: call
         targetComponent: validator_portal
-        targetMethod: computeGateStateId
+        targetMethod: computeApprovalId
+    symbol: computeGateStateId
   - name: builtinProfileIds
     narrative:
       - stepNumber: 1
@@ -139,6 +140,13 @@ methods:
         description: Answer its result
         type: return
         outcome: the gate's result
+  - name: resolvedPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: resolvedPacks
 status: complete
 createdAt: '2026-07-04T12:53:08.409Z'
-updatedAt: '2026-11-12T21:50:13.650Z'
+updatedAt: '2026-11-20T00:28:49.050Z'

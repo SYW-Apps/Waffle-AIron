@@ -11,8 +11,9 @@ methods:
     returns: list<SurfaceSnapshot>
   - name: listPinnedExternals
     description: >-
-      The bound project's declared externals with their lock entries and pinned snapshots, via the
-      surface portal — the owner's gate judges references into other projects against these alone.
+      The bound project's declared externals with their inputs-lock entries and pinned snapshots,
+      via the surface portal — the owner's gate judges references into a hosted or git producer
+      against these alone; a path external carries no entry and is read live.
     signature: 'listPinnedExternals(): list<PinnedExternal>'
     returns: list<PinnedExternal>
     params: []
@@ -41,8 +42,8 @@ methods:
   - name: unrecordedUses
     description: >-
       The uses of each pinned external of the bound project its pin does not record, keyed by alias,
-      via the surface portal — what a project's approval owes before it can be re-approved
-      (family_validator.approvals, unrecorded).
+      via the surface portal — what the build inputs owe (family_validator.inputs, InputDebtKind
+      unrecorded).
     signature: 'unrecordedUses(): map<string, list<string>>'
     returns: map<string, list<string>>
     params: []
@@ -64,6 +65,16 @@ methods:
     returns: list<ExternalStatus>
     params: []
     effect: io
+  - name: lockedPacks
+    description: >-
+      The pack entries of the bound project's inputs lock (.wai/inputs.lock.yaml `packs`), by pack
+      name, via the surface portal: each selected pack's resolved version and the doctrine digest
+      recorded when it was last synced — what family_validator.inputs compares the loaded packs
+      against.
+    signature: 'lockedPacks(): map<string, LockedPack>'
+    returns: map<string, LockedPack>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-07-10T23:14:09.299Z'
-updatedAt: '2026-10-09T11:38:46.576Z'
+updatedAt: '2026-11-19T21:54:14.630Z'

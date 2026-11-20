@@ -1,0 +1,59 @@
+kind: value-object
+id: v6_lock_record
+name: V6LockRecord
+description: >-
+  A .wai/lock.json as wairon 6 wrote it (format 2 or 3), read raw by the v6-to-v7 step only: the
+  core reads format 4 alone. Only what the step compares or carries is modelled; the member pins,
+  children, release stamps and re-expression traces it also held are dropped by the step and never
+  read.
+subsystem: sdd_upgrade
+fields:
+  - name: format
+    type: int
+    description: 2 or 3; absent reads as an older record, never carried
+    optional: true
+  - name: stateId
+    type: StateId
+    description: The gate identity the record certified, under wairon 6's algorithm
+    optional: false
+  - name: specs
+    type: map<string, string>
+    description: Per-spec digests, keyed by spec path
+    optional: true
+  - name: specsReading
+    type: string
+    description: >-
+      How the digests read the specs: `design` (code linkage out) or the older content reading; only
+      a design reading can be compared
+    optional: true
+  - name: gateParts
+    type: map<string, string>
+    description: >-
+      Each input of the gate identity digested on its own; design, rules, composition and network
+      share the v7 approval parts' projection
+    optional: true
+  - name: lockedAt
+    type: string
+    optional: false
+  - name: lockedBy
+    type: ApproverIdentity
+    optional: true
+  - name: validationResult
+    type: ValidationResult
+    optional: true
+  - name: code
+    type: CodeAnalysis
+    optional: true
+  - name: projectId
+    type: string
+    optional: true
+  - name: commitSha
+    type: string
+    optional: true
+  - name: compareUrl
+    type: string
+    optional: true
+methods: []
+sourcePath: src/upgrade/steps/v6-to-v7/files.ts
+createdAt: '2026-11-20T01:23:11.737Z'
+updatedAt: '2026-11-20T01:23:12.310Z'

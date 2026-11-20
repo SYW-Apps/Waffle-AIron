@@ -1,9 +1,10 @@
 id: upgrade_core_adapter
 name: Upgrade Core Adapter
 description: >-
-  The client adapter to sdd_core and sdd_validator: reaches the spec, maintenance and approval
-  rewrites the v5 to v6 step needs until their bodies move into it, and the gate identity a lock
-  re-expression is judged under.
+  The client adapter to sdd_core and sdd_validator for the v6-to-v7 step: the project family, the
+  loader's diagnostics and legacy spec file names (where a wairon 5 tree shows), the project
+  configuration, the per-spec design digests and the approval identity an old record is compared
+  with, the packs as they resolve, and the format-4 lock record write.
 subsystem: sdd_upgrade
 componentType: Adapter
 owns: []
@@ -16,4 +17,4 @@ dependsOn:
 transport: InProcess
 status: complete
 createdAt: '2026-10-18T13:02:24.736Z'
-updatedAt: '2026-10-18T14:34:38.164Z'
+updatedAt: '2026-11-20T01:30:28.408Z'

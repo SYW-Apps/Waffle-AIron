@@ -152,13 +152,12 @@ methods:
         targetMethod: resolveChainingParent
       - stepNumber: 16
         description: >-
-          The approval line: read the bound project's own approval entry (depth 0). When its
-          approval was taken under another wairon release, say so in one line beside the findings —
-          carried: `approved under <old>, re-validated under <new>: still approved`; not carried:
-          `the new release finds N issue(s) in the approved design`, naming them — the very verdict
-          `lock-check` exits on; with no release verdict, an approval an older release took that
-          still holds is one notice line (lock_record.carriedNotice). Informational: it is never
-          part of the failure decision
+          The approval line: read the bound project's own approval entry (depth 0) and say in one
+          line beside the findings whether the approval covers the design and its policy, and, when
+          its build owes inputs, each debt's sentence (an external to pin, a pack to sync, a member
+          to lock under requireApprovedMembers): the very verdict `lock-check` exits on. The wairon
+          release never appears in it: a release change never moves the approval. Informational: it
+          is never part of the failure decision
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: familyApprovals
@@ -190,13 +189,14 @@ methods:
           without it. The 'the spec tree is empty' wording is used only when step 17 answered false.
         type: local
     symbol: runValidate
-  - name: computeGateStateId
+  - name: computeApprovalId
     narrative:
       - stepNumber: 1
         description: Call computeGateStateId on the validator portal
         type: call
         targetComponent: validator_portal
-        targetMethod: computeGateStateId
+        targetMethod: computeApprovalId
+    symbol: computeGateStateId
   - name: validateFamily
     narrative:
       - stepNumber: 1
@@ -236,4 +236,4 @@ methods:
     symbol: adviseNetwork
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T12:03:52.196Z'
+updatedAt: '2026-11-20T00:21:54.352Z'

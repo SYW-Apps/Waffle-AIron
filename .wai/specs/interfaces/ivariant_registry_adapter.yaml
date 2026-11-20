@@ -55,26 +55,6 @@ methods:
       - name: variantsById
         type: list<VariantDef>
         description: The loaded variant registry, keyed by id.
-  - name: listProjectVariants
-    description: >-
-      The variants the project's own .wai/variants/ files define, without the built-in or global
-      layers: the variants a migration may rewrite.
-    signature: 'listProjectVariants(): list<VariantDef>'
-    returns: list<VariantDef>
-    params: []
-  - name: rebaseProjectVariants
-    description: >-
-      Rewrite the base of every project variant whose base is fromBase to toBase, in place in its
-      .wai/variants/ file, keeping the file's other content; returns the ids rebased.
-    signature: 'rebaseProjectVariants(fromBase: string, toBase: string): list<string>'
-    returns: list<string>
-    params:
-      - name: fromBase
-        type: string
-        description: The retired base stereotype
-      - name: toBase
-        type: string
-        description: The stereotype that replaces it
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-10-17T16:34:57.816Z'
+updatedAt: '2026-11-20T01:28:09.068Z'

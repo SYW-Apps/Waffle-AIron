@@ -1,14 +1,9 @@
 id: admin_orchestrator
 name: Admin Orchestrator
 description: >-
-  Owns the existing control-plane workflows: provision a new isolated project, mint/rotate/revoke
-  API keys, the state-scoped lock, per-project git backing (bind to the project's REAL repository —
-  wairon commits ONLY .wai/, with the deliberate commitProject primitive, the lock auto-publish, and
-  the periodic skip-if-clean sweep), and per-project producer targets. Lock validates the tree
-  as-complete via the validator adapter, then records a lock scoped to the exact validated state id.
-  Never merges to production itself. Project/key/lifecycle methods authorize through the permission
-  rules (project:create/write/admin over the relevant scope); git and producer administration
-  require project:admin over the project (sync/commit require project:write).
+  Control-plane workflows behind the admin portal: credential authentication, then project
+  create/destroy, API keys, secrets, diagrams, git backing and tree export/import, and the direct
+  lock (authorized here, run by hosted_lock). Producer targets are hosted_producers'.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -19,12 +14,12 @@ dependsOn:
   - host_core_adapter
   - host_validator_adapter
   - host_git_adapter
-  - host_producer_adapter
   - secret_repository
   - organization_repository
   - authorization
+  - hosted_lock
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:51.178Z'
-updatedAt: '2026-10-23T22:31:26.859Z'
+updatedAt: '2026-11-20T01:02:35.638Z'

@@ -671,10 +671,10 @@ methods:
         targetMethod: loadProjectConfig
       - stepNumber: 5
         description: >-
-          Ask what the lock says about the tree as it stands, passing the pin tree so the verdict
-          names members whose pin moved and the stage-5 upgrade. An agent reading this tool is
+          Ask what the lock says about the tree as it stands, passing the approvals so the verdict
+          names each member's own state and the inputs the build owes. An agent reading this tool is
           deciding whether it may write code against these specs, so a tree that has drifted from
-          its approval is the single most important thing this answer can carry — and silence would
+          its approval is the single most important thing this answer can carry, and silence would
           read exactly like being current
         type: call
         targetComponent: mcp_core_adapter
@@ -1174,4 +1174,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-07T11:59:57.552Z'
+updatedAt: '2026-11-20T00:31:35.400Z'

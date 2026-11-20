@@ -1,15 +1,16 @@
 id: cli_lock_adapter
 name: CLI Lock Adapter
 description: >-
-  CLI-side forwarding of the local `wairon lock` mechanics: reads the direct members' approval
-  states and re-confirms the captured gate identity through the validator's published portal, reads
-  the project's composition block and effective id from its configuration, and persists the
-  commit-scoped lock record — the approval, the members' subjects and states, and the code results
-  beside the claim — through the core subsystem's published approval portal. The capture of the gate
-  identity and the as-complete gate run BEFORE this adapter (through the validator adapter), and the
-  project's own generated outputs are refreshed AFTER it; the runner owns that workflow, and this
-  adapter owns only the lock-record hop. It writes one file, this project's .wai/lock.json, and
-  never anything below the project.
+  CLI-side forwarding of the local `wairon lock` mechanics: refreshes the owed build inputs through
+  the surfaces portal (pins the owed externals, records the packs as they resolve), reads the direct
+  members' approval states and re-confirms the captured approval identity through the validator's
+  published portal, reads the project's composition block and effective id from its configuration,
+  and persists the commit-scoped lock record (the approval, its parts and the code results beside
+  the claim) through the core subsystem's published approval portal. The capture of the approval
+  identity and the as-complete gate run BEFORE the record is assembled (through the validator
+  adapter), and the project's own generated outputs are refreshed AFTER it; the runner owns that
+  workflow. It writes this project's .wai/lock.json and .wai/inputs.lock.yaml (with its snapshots),
+  and never anything below the project.
 subsystem: sdd_cli
 componentType: Adapter
 owns: []
@@ -19,6 +20,7 @@ dependsOn:
   - spec_maintenance_portal
   - approval_portal
   - project_config_portal
+  - surface_portal
 status: complete
 createdAt: '2026-07-24T18:05:06.885Z'
-updatedAt: '2026-10-07T21:48:38.248Z'
+updatedAt: '2026-11-20T00:18:55.124Z'

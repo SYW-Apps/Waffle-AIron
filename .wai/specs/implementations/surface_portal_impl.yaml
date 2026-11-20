@@ -139,6 +139,20 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: memberStatuses
+  - name: lockedPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward lockedPacks to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: lockedPacks
+  - name: recordPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward recordPacks to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: recordPacks
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-10-09T11:38:41.925Z'
+updatedAt: '2026-11-20T00:09:01.543Z'

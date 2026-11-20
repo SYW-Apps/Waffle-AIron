@@ -601,10 +601,13 @@ methods:
       method: tools/call getProjectConfig
   - name: pinExternals
     description: >-
-      Tool (scope: tree, a write): pin the bound project's declared externals — the named aliases,
-      else all — into .wai/externals/<alias>.yaml and .wai/externals.lock.yaml, recording each used
-      member's signature digest. Answers one outcome per alias (pinned, unchanged, unresolved,
-      unreachable) with its unexported references.
+      Tool (scope: tree, a write): pin the bound project's declared hosted and git externals (the
+      named aliases, else all), each from its producer's approved state, into
+      .wai/externals/<alias>.yaml and .wai/inputs.lock.yaml, recording each used member's signature
+      digest. A path external is read live and never pinned. Answers one outcome per alias (pinned,
+      unchanged, unresolved, unreachable, or refused: a producer with no approved design, or a used
+      member renamed or removed) with its unexported references. A pin refreshes a build input and
+      never moves the approval.
     signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
     returns: list<ExternalPin>
     params:
@@ -1559,4 +1562,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-14T16:11:10.961Z'
+updatedAt: '2026-11-20T00:31:30.895Z'

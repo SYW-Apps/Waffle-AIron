@@ -196,15 +196,18 @@ methods:
         optional: true
   - name: syncPacks
     description: >-
-      `wairon pack sync` — install every declared-but-missing pack from the source its selection
-      records. Takes NO arguments, because each selection carries its own source (copied from the
-      store's install record when the pack was selected): this is the single command a fresh machine
-      or CI runner needs, and the reason a cloned repository can reproduce its own doctrine.
-      Already-resolvable selections (installed or bundled) are skipped; a selection with no source,
-      an unexpanded {version} placeholder with no pinned version, or a non-URL source is an error
-      naming the manual route. A pinned integrity digest is verified at install time rather than
-      being discovered later by the gate. Fetching happens ONLY here and in `pack install <url>` —
-      never during validation — because the core workflow must work offline.
+      `wairon pack sync`: install every declared-but-missing pack from the source its selection
+      records, then record every selected pack as it resolves in .wai/inputs.lock.yaml (its `packs`
+      section: declared and resolved versions, source and doctrine digest). Takes NO arguments,
+      because each selection carries its own source (copied from the store's install record when the
+      pack was selected): this is the single command a fresh machine or CI runner needs, and the
+      reason a cloned repository can reproduce its own doctrine. Already-resolvable selections
+      (installed or bundled) are not fetched again; a selection with no source, an unexpanded
+      {version} placeholder with no pinned version, or a non-URL source is an error naming the
+      manual route. A pinned integrity digest is verified at install time rather than being
+      discovered later by the gate. Fetching happens ONLY here and in `pack install <url>`, never
+      during validation, because the core workflow must work offline. Recording the packs refreshes
+      a build input and never moves the approval.
     signature: 'syncPacks(allowUnverifiedCode?: bool): async void'
     returns: async void
     params:
@@ -246,4 +249,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-14T20:09:24.660Z'
-updatedAt: '2026-11-07T00:23:14.106Z'
+updatedAt: '2026-11-20T00:21:23.928Z'

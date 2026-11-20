@@ -21,7 +21,7 @@ fields:
     type: ApprovalRequestStatus
     description: >-
       Lifecycle status. An approved request is cancelled when its execution refused because the
-      request no longer describes what would be done (a project:lock whose gateStateId no longer
+      request no longer describes what would be done (a project:lock whose approvalId no longer
       matches the tree); executionSummary then says why, and the requester asks again. A pending
       request its requester withdrew also reads as cancelled, its executionSummary stating it was
       withdrawn by the requester (with their reason when given).
@@ -87,17 +87,21 @@ fields:
       project:lock: "the design changed since it was requested (requested <id>, now <id>); request
       the lock again"). Absent for every other kind and before execution.
     optional: true
-  - name: gateStateId
+  - name: approvalId
     type: string
     description: >-
-      A project:lock request only: the gate identity of the tree the request was made about,
-      captured when the request was created and rendered `<algorithm>:<digest>`. The approved
-      execution refuses when the tree's gate identity no longer matches it — an approver decides
-      about the design the requester asked about, and an approval must never certify a design nobody
-      asked to have approved — and the request is cancelled with that reason. Absent on a request
-      created before stage 5, which executes against the tree as it then stands.
+      A project:lock request only: the approval identity (own design plus own policy) of the tree
+      the request was made about, captured when the request was created and rendered
+      `<algorithm>:<digest>`. The approved execution refuses when the tree's approval identity no
+      longer matches it (an approver decides about the design the requester asked about, and an
+      approval must never certify a design nobody asked to have approved) and the request is
+      cancelled with that reason. A pending request recorded by wairon 6 carries an identity under
+      the older algorithm, which never matches: it reads as a design that changed since it was
+      requested and is cancelled the same way when decided, so the requester asks again.
     optional: true
+    previousNames:
+      - gateStateId
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:44.031Z'
-updatedAt: '2026-10-30T12:10:08.269Z'
+updatedAt: '2026-11-20T01:28:32.551Z'

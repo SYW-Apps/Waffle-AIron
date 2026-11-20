@@ -1,0 +1,71 @@
+id: ihosted_producers
+name: Hosted Producers Interface
+description: >-
+  Contract of a hosted project's producer targets: configure, list, remove and produce the
+  destinations its design is published to. Each method authenticates the caller and requires
+  project:admin over the project.
+component: hosted_producers
+methods:
+  - name: configure
+    description: >-
+      Authenticate, require project:admin over the project, and configure a producer target for it
+      (tokens come from the secret store by ref, never inline).
+    signature: 'configure(credential: string, project: string, target: string, parentPageId: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+      - name: parentPageId
+        type: string
+    previousNames:
+      - iadmin_orchestrator.configureProducer
+      - ihosted_producers.configureProducer
+  - name: produce
+    description: >-
+      Authenticate, require project:admin over the project, mint a signed canvas link, and project
+      the project to the target.
+    signature: 'produce(credential: string, project: string, target: string): async void'
+    returns: async void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+    previousNames:
+      - iadmin_orchestrator.produceProducer
+      - ihosted_producers.produceProducer
+  - name: remove
+    description: Authenticate, require project:admin over the project, and remove a producer target.
+    signature: 'remove(credential: string, project: string, target: string): void'
+    returns: void
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: target
+        type: string
+    previousNames:
+      - iadmin_orchestrator.removeProducer
+      - ihosted_producers.removeProducer
+  - name: list
+    description: Authenticate, require project:admin over the project, and list its configured producers.
+    signature: 'list(credential: string, project: string): list<ProducerConfig>'
+    returns: list<ProducerConfig>
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+    previousNames:
+      - iadmin_orchestrator.listProducers
+      - ihosted_producers.listProducers
+status: complete
+createdAt: '2026-11-20T01:02:25.646Z'
+updatedAt: '2026-11-20T01:02:55.427Z'

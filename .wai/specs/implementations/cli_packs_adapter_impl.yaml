@@ -955,18 +955,18 @@ methods:
         condition: the project selects no packs
         onFalseStep: 9
       - stepNumber: 8
-        description: Report that there is nothing to sync.
-        type: return
-        outcome: nothing selected
+        description: 'Nothing to fetch: report that nothing is selected, then record the (empty) packs'
+        type: jump
+        toStep: 18
       - stepNumber: 9
         description: Everything may already be available.
         type: branch
         condition: every selection already resolves
         onFalseStep: 11
       - stepNumber: 10
-        description: Report that all selected packs are already available.
-        type: return
-        outcome: already available
+        description: 'Nothing to fetch: report that all selected packs are already available, then record them'
+        type: jump
+        toStep: 18
       - stepNumber: 11
         description: Fetch each missing selection in turn.
         type: loop
@@ -1023,7 +1023,25 @@ methods:
         targetComponent: extension_portal
         targetMethod: installPackFromDirectory
       - stepNumber: 18
-        description: Report how many packs were synced.
+        label: record
+        description: >-
+          Resolve the selected packs as they load now: declared and resolved versions, source and
+          doctrine digest
+        type: call
+        targetComponent: validator_portal
+        targetMethod: resolvedPacks
+      - stepNumber: 19
+        description: >-
+          Record them in the inputs lock's packs section (a no-op when it already says exactly
+          this): a sync is how the build's pack inputs are refreshed, and it never moves the
+          approval
+        type: call
+        targetComponent: surface_portal
+        targetMethod: recordPacks
+      - stepNumber: 20
+        description: >-
+          Report how many packs were synced (or that none was selected, or all were available) and
+          whether the inputs lock's packs section changed
         type: return
         outcome: the synced count
     detail: full
@@ -1181,4 +1199,4 @@ lint:
         hosted server.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-11-07T00:41:13.761Z'
+updatedAt: '2026-11-20T00:21:20.151Z'

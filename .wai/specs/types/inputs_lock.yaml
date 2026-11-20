@@ -1,0 +1,41 @@
+kind: value-object
+id: inputs_lock
+name: InputsLock
+description: >-
+  The content of .wai/inputs.lock.yaml: the project's build inputs from outside its own files,
+  recorded mechanically and judged beside the approval, never part of it. `externals` holds one
+  entry per pinned producer: every hosted or git external and every referenced git or hosted project
+  member, each pinned from the producer's approved state. A path producer (a `../` external or
+  member) is read live and has no entry. `parent` holds a non-contained part's pinned parent
+  excerpt. `packs` records each extension pack as resolved. With the snapshots it names under
+  .wai/externals/, it is one aggregate. A pin, a pack sync or a lock refreshes it; none of them
+  moves the approval.
+subsystem: sdd_surfaces
+fields:
+  - name: externals
+    type: map<string, ExternalLockEntry>
+    description: >-
+      Alias → what was pinned for it: a hosted or git external (role external) or a referenced git
+      or hosted project member (role member). A path producer is never listed.
+    optional: false
+  - name: parent
+    type: ExternalLockEntry
+    description: >-
+      A part's lock only: the pinned excerpt of its parent (role parent, snapshot
+      .wai/externals/<parent id>.yaml). What a part opened alone is judged against; absent means
+      "part of <parent>; validate from the parent" (PART_UNPINNED).
+    optional: true
+  - name: packs
+    type: map<string, LockedPack>
+    description: >-
+      Pack name → how it resolved at the last `wairon packs sync` or `wairon lock`: the declared
+      version, the resolved version, the source and the content digest
+      (approval_identity.packContents). Empty when the project selects no pack. A selected pack with
+      no entry, or whose digest differs, is an input debt (InputDebt kind pack).
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+previousIds:
+  - externals_lock
+createdAt: '2026-09-26T17:46:59.348Z'
+updatedAt: '2026-11-20T00:05:33.091Z'

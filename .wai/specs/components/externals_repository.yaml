@@ -1,10 +1,11 @@
 id: externals_repository
 name: Externals Repository
 description: >-
-  Facade over the project's pinned externals — the lock at .wai/externals.lock.yaml and the
-  snapshots it names under .wai/externals/ — one aggregate, apart from the legacy .wai/surfaces
-  snapshots the Surface Repository holds. Reads and writes forward 1:1 to the Pinned Externals
-  Store; the file I/O lives in the Externals File Adapter. Consumers use the facade only.
+  Facade over the project's build inputs: the inputs lock at .wai/inputs.lock.yaml (pinned hosted
+  and git externals, a part's parent, the recorded packs) and the snapshots it names under
+  .wai/externals/, one aggregate, apart from the legacy .wai/surfaces snapshots the Surface
+  Repository holds. Reads and writes forward 1:1 to the Pinned Externals Store; the file I/O lives
+  in the Externals File Adapter. Consumers use the facade only.
 subsystem: sdd_surfaces
 componentType: Repository
 owns:
@@ -14,4 +15,4 @@ dependsOn:
   - files_adapter
 status: complete
 createdAt: '2026-09-26T18:11:59.426Z'
-updatedAt: '2026-10-31T23:22:27.880Z'
+updatedAt: '2026-11-20T01:30:19.124Z'

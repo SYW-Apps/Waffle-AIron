@@ -2,12 +2,13 @@ kind: value-object
 id: project_approval
 name: ProjectApproval
 description: >-
-  One project's approval state, computed at that project's OWN root — its lock record against its
-  own gate identity recomputed there — so the answer is the same whichever root asked
-  (status-agrees). The family's pin tree is a list of these: the root's own entry first, then each
-  member within the requested depth, each with how its parent's lock pinned it. The lock workflow
-  reads the direct members' entries to record `members` and to enforce
-  composition.requireApprovedMembers; status and sdd_get_status print them.
+  One project's approval and build-input state, computed at that project's OWN root — its lock
+  record against its own approval identity recomputed there, and its inputs against its own
+  .wai/inputs.lock.yaml — so the answer is the same whichever root asked (status-agrees). The
+  family's approvals are a list of these: the root's own entry first, then each member within the
+  requested depth. Two separate questions: `state` says whether the approved design and policy still
+  hold; `inputs` says what the build inputs owe beside it. `wairon lock-check` passes when the state
+  is approved and nothing is owed; status, sdd_get_status and the dev page print both.
 fields:
   - name: key
     type: string
@@ -29,87 +30,39 @@ fields:
     optional: true
   - name: state
     type: ProjectApprovalState
-    description: Its approval, judged at its own root.
+    description: >-
+      Its approval, judged at its own root: whether its own design and policy moved since its lock.
+      Never moved by a release, a re-pin, a pack's content or a member's lock.
     optional: false
-  - name: subject
-    type: string
-    description: >-
-      Its composition subject: what its approval stands for (lock_record.approvalSubject) — the
-      stateId its own lock record carries, or, when that record's release stamp was refreshed
-      without a re-approval, the subject the human approval had — rendered `<algorithm>:<digest>`.
-      Absent when state is never.
-    optional: true
-  - name: upgraded
-    type: bool
-    description: >-
-      True when the project is drifted ONLY in the sense that its lock was taken under an earlier
-      gate identity algorithm (LockStatus.upgraded): the identity gained inputs in stage 5, which
-      says nothing about whether the design moved.
-    optional: true
-  - name: pinned
-    type: PinState
-    description: How the parent's lock pinned this member. Absent on the root's own entry.
-    optional: true
   - name: as
     type: MemberKind
     description: >-
-      What the member is (stage 8). A part's state is its declaring project's, and it has no subject
-      of its own.
-    optional: true
-  - name: contentDigest
-    type: string
-    description: A part's content digest (ScannedPart.contentDigest), recorded by the lock as its MemberPin.
-    optional: true
-  - name: commit
-    type: string
-    description: >-
-      The commit a part or a referenced project member was read at, recorded only when it lives in
-      another git repository than its declaring project (a git source, or a `../` sibling that is
-      its own repository) — provenance the lock records.
+      What the member is. A part's state is its declaring project's (its specs are that project's
+      own and in its record), and it carries no inputs of its own.
     optional: true
   - name: owed
     type: string
     description: >-
-      Why the approval on record does not cover the project although its gate identity matches, in
-      one sentence a verdict can quote: its project id moved since the approval (renamed by the
-      rename migration, or changed by hand — the id is no input of the gate identity), or a declared
-      external was never pinned or is used beyond what its pin records (a name or method the design
-      now uses that the pin does not hold). Set only on a drifted entry; `wairon status`,
-      sdd_get_status, `wairon lock-check` and `wairon lock` all read the same entry, so none of them
-      can call the project approved while another says the approval is owed.
+      Why the approval on record does not cover the project although its approval identity matches,
+      in one sentence a verdict can quote: its project id moved since the approval (renamed by the
+      rename migration, or changed by hand — the id is no input of the identity). Set only on a
+      drifted entry.
     optional: true
-  - name: release
-    type: ReleaseVerdict?
-    description: >-
-      Set when the identity no longer matches only because the wairon release changed
-      (family_validator.releaseVerdict): carried — the entry is approved, re-validated under this
-      release — or not, the entry drifted for exactly the findings it carries. Never set together
-      with upgraded.
-    optional: true
-  - name: inputsMoved
+  - name: partsMoved
     type: list<string>?
     description: >-
-      On a drifted entry whose record carries gateParts: the inputs of its gate identity that moved
-      (lock_record.movedGateParts), so every verdict names the one that did — the network
-      declaration, the rule tuning, a consumed contract's pin — instead of listing every candidate.
+      On a drifted entry: the parts of its approval identity that moved (lock_record.movedParts) —
+      design, rules, composition, network, selections — so every verdict names the one that did
+      instead of listing every candidate.
     optional: true
+    previousNames:
+      - inputsMoved
   - name: partsIgnored
     type: string?
     description: >-
-      Set when the record's gateParts do not break down its stateId (lock_record.partsProblem), or
-      when a record whose identity still matches carries no gate parts at all (every record wairon
-      5.1.1-dev.111 and later writes carries them): why, in one clause. They are ignored — no input
-      is named from them and no approval is carried over by them — and every surface says so as a
-      notice; `wairon lock` rewrites them from the identity when it still matches.
-    optional: true
-  - name: stampProblem
-    type: string?
-    description: >-
-      Set when the record's release stamp is missing, no wairon version, or newer than the running
-      release (lock_record.stampProblem) and no release verdict already names it: the clause, which
-      every surface — lock-check, status, sdd_get_status, validate — reports as a notice beside the
-      verdict the identity decided, and which `wairon lock` clears by replacing the stamp with the
-      running release. Never decides the state on its own.
+      Set when the record's `parts` do not break down its stateId (lock_record.partsProblem): why,
+      in one clause. They are ignored — no part is named from them — and every surface says so as a
+      notice; `wairon lock` rewrites them.
     optional: true
   - name: approvable
     type: bool
@@ -121,7 +74,15 @@ fields:
       finding is then MEMBER_NOTHING_APPROVABLE, a notice). Absent when the member's tree could not
       be read.
     optional: true
+  - name: inputs
+    type: list<InputDebt>
+    description: >-
+      What the build inputs owe beside the approval (unpinned or unrecorded external uses, a pack
+      whose content no longer matches the inputs lock, and — under
+      composition.requireApprovedMembers — a direct member whose own lock does not hold). Empty when
+      they hold. Never makes the state drifted: the approval holds, the build does not.
+    optional: false
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-23T22:14:56.749Z'
+updatedAt: '2026-11-19T20:30:21.533Z'

@@ -1,0 +1,45 @@
+id: v6_lock_file_adapter_impl
+name: v6 Lock File Adapter Implementation
+description: 'src/upgrade/steps/v6-to-v7/files.ts: JSON and YAML over the shared files adapter.'
+contract: iv6_lock_file_adapter
+sourcePath: src/upgrade/steps/v6-to-v7/files.ts
+methods:
+  - name: readRecord
+    narrative: []
+    intent: >-
+      Read .wai/lock.json through the files adapter; none when it does not exist. Parse it as JSON;
+      refuse, naming the file, when it does not parse or carries no stateId. Answer the fields
+      V6LockRecord models and ignore the rest.
+    calls:
+      - files_adapter.exists
+      - files_adapter.readText
+  - name: readExternalsLock
+    narrative: []
+    intent: >-
+      Read .wai/externals.lock.yaml through the files adapter; none when it does not exist. Parse
+      its `externals` map and optional `parent` entry; refuse, naming the file, when it does not
+      parse. Answer them as an InputsLock with an empty packs map.
+    calls:
+      - files_adapter.exists
+      - files_adapter.readText
+  - name: writeInputsLock
+    narrative: []
+    intent: >-
+      Serialize the lock as YAML (aliases and pack names sorted) and write .wai/inputs.lock.yaml
+      atomically through the files adapter; write nothing when it holds no external, no parent and
+      no pack.
+    calls:
+      - files_adapter.writeText
+  - name: removeFile
+    narrative: []
+    intent: >-
+      Remove the root-relative file through the files adapter when it exists, then remove
+      .wai/externals/ when it is left empty; answer whether the file existed.
+    calls:
+      - files_adapter.exists
+      - files_adapter.remove
+      - files_adapter.list
+detail: intent
+status: complete
+createdAt: '2026-11-20T01:23:29.052Z'
+updatedAt: '2026-11-20T01:23:29.560Z'

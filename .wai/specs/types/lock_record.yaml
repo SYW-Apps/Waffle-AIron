@@ -2,27 +2,29 @@ kind: entity
 id: lock_record
 name: LockRecord
 description: >-
-  The commit-scoped lock record (.wai/lock.json): the approval of ONE project's design under its
-  declared inputs. `stateId` is the gate identity the approval certifies (own tree, doctrine,
-  externals, adopted packs, `composition`, and each direct member's composition subject); `specs`
-  carries a digest per own spec file, so "which specs did the human sign off, and which have moved
-  since?" is answered from a COMMITTED file; `members` records each direct member's subject and
-  approval state as it stood when this project locked; `code` records the code-conformance results
-  beside the claim, with the analyzer that produced them. A lock writes nothing below its own
-  project: a member's approval is that member's own lock. Written with sorted keys, so a re-lock
-  diffs one line per spec actually re-approved rather than a rewritten blob. Versioned by `format`:
-  a record with no format is format 1 and still reads (its `children` pins included, in the v5
-  reading `wairon upgrade` binds); every record written from stage 5 on is format 2 and never
-  carries `children`.
+  The commit-scoped lock record (.wai/lock.json), format 4: the approval of ONE project's own design
+  and policy. `stateId` is the approval identity (approval_identity.compute): the project's own
+  design together with its policy (project type, design rule tuning, `composition`, `network` and
+  the packs it selects by name, declared version and scope). Nothing the project consumes is in it:
+  wairon's built-in rules (the release), a pack's resolved content, an external's contract and a
+  member's approval are BUILD INPUTS, recorded in .wai/inputs.lock.yaml and judged beside the
+  approval (ProjectApproval.inputs), so a release, a re-pin or a member's re-lock never re-opens it.
+  `specs` carries one design digest per own spec file, so "which specs did the human sign off, and
+  which have moved since?" is answered from a COMMITTED file; `parts` digests each half of the
+  identity on its own, so a verdict names the one that moved; `code` records the code-conformance
+  results beside the claim, with the analyzer that produced them. A lock writes nothing below or
+  about its members: a member's approval is that member's own record, read at its own root. Written
+  with sorted keys, so a re-lock diffs one line per spec actually re-approved. Only format 4 is
+  read: a record written by an earlier wairon major is refused by lock_store, naming `wairon
+  upgrade`, which rewrites it.
 subsystem: sdd_core
 fields:
   - name: stateId
     type: StateId
     description: >-
-      The gate identity this lock certifies, CAPTURED BEFORE the as-complete validation ran and
-      confirmed unchanged immediately before this record was written — so a lock never certifies
-      inputs that moved while it ran. It is also this project's composition subject as its parent
-      sees it.
+      The approval identity this lock certifies (algorithm `sha256+design+policy`), CAPTURED BEFORE
+      the as-complete validation ran and confirmed unchanged immediately before this record was
+      written — so a lock never certifies a design or policy that moved while it ran.
     optional: false
   - name: lockedAt
     type: string
@@ -37,16 +39,16 @@ fields:
   - name: validatorVersion
     type: string
     description: >-
-      wairon version that took the lock. Informational: it is not an input of the gate identity, and
-      the code analyzer's own version is recorded again under `code.analyzer`.
+      wairon version that took the lock. Informational only: the release is no input of the approval
+      identity, so a newer release never re-opens it; the code analyzer's own version is recorded
+      again under `code.analyzer`.
     optional: false
   - name: validationResult
     type: ValidationResult
     description: >-
       The DESIGN half of the as-complete validation captured at lock time
       (ValidationResult.designOnly): whether it was valid, and how many errors, warnings and notices
-      it reported. The code-conformance findings are counted under `code` instead. A format-1 record
-      counted both together, and a record written before notices existed carries no notice count.
+      it reported. The code-conformance findings are counted under `code` instead.
     optional: false
   - name: status
     type: string
@@ -63,19 +65,10 @@ fields:
   - name: specs
     type: map<string, string>
     description: >-
-      THE APPROVAL: spec path (relative to the project root, POSIX separators) → sha256 of that
-      file's content when approved. Absent on a record written before approval moved in here — such
-      a lock still proves the tree validated, but cannot say WHICH specs moved, only that the
-      whole-tree StateId did.
-    optional: true
-  - name: children
-    type: map<string, string>
-    description: >-
-      LEGACY (format 1): chained child mount id → that child's approved StateId, copied from the
-      child's record without checking that record still matched the child's tree. Read in the v5
-      reading `wairon upgrade` binds as the member pins (a child's StateId and a member's subject
-      share one rendering), never written from stage 5 on; `members` replaces it.
-    optional: true
+      THE APPROVAL: spec path (relative to the project root, POSIX separators; a part's under
+      `members/<alias>/<path inside the part>`) → sha256 of that spec's design view in canonical
+      form when approved (code linkage, readiness and timestamps out).
+    optional: false
   - name: projectId
     type: string
     description: >-
@@ -88,62 +81,40 @@ fields:
   - name: format
     type: int
     description: >-
-      The record format: 3 from the release in which code linkage left the approval (stateId under
-      the design gate algorithm, `specs` in the design reading), 2 from stage 5 on, absent means
-      format 1. A format-2 record stays valid as written: it is judged under its own algorithm
-      (StateId.asRecorded) and its own reading until it is re-locked or re-expressed.
-    optional: true
-  - name: members
-    type: map<string, MemberPin>
-    description: >-
-      Each DIRECT member this project declares, keyed by its alias → its composition subject and
-      approval state (approved | drifted | never) as they stood when this project locked. The
-      subjects are the same values the gate identity hashed, so a member re-approving moves this
-      project's gate identity and stales this lock; the states are recorded, never hashed. Present
-      (possibly empty) on every format-2 record.
-    optional: true
+      The record format: 4. A record with another format is never read as one (lock_store refuses
+      it, naming `wairon upgrade` for an earlier one).
+    optional: false
   - name: code
     type: CodeAnalysis
     description: >-
       The code-conformance results of the lock-time run, with the analyzer identity (validator
       version, code-conformance doctrine digest, weakest analysis grade) and the counts per severity
       — recorded BESIDE the approval, never part of what it certifies, and never a reason the lock
-      refused: code errors are recorded here and the lock proceeds (the lock prints "code: N errors
-      recorded beside the claim"). CI enforces code conformance (`wairon validate --ci` still fails
-      on code errors), not the lock. An analyzer upgrade adds evidence and never stales a lock. Its
-      `codes` list is left out. Absent on a format-1 record.
+      refused: code errors are recorded here and the lock proceeds. CI enforces code conformance
+      (`wairon validate --ci`), not the lock. Its `codes` list is left out.
     optional: true
-  - name: specsReading
-    type: SpecDigestReading?
+  - name: parts
+    type: map<string, string>
     description: >-
-      The reading `specs` was digested in: `design` on every record written from format 3 on (each
-      spec's design view — code linkage and timestamps out — in canonical form), absent on an
-      earlier record, whose digests are the files' raw content. A reader compares the tree in the
-      reading the record names, never in another.
-    optional: true
-  - name: reexpressed
-    type: LockReexpression?
+      The digest of each half of the certified approval identity, computed beside it
+      (StateId.parts): `design` (the own design), `rules` (project type and design rule tuning),
+      `composition`, `network` (absent when none is declared) and `selections` (the packs selected
+      by name, declared version and scope). What lets a later check name the part that moved. They
+      count only while they break down the stateId they sit beside (partsProblem); parts that do not
+      are ignored with a notice. Empty on a record `wairon upgrade` could not carry
+      (upgraded.carried false): nothing names a moved part, and the own specs that moved name the
+      change.
+    optional: false
+    previousNames:
+      - gateParts
+  - name: upgraded
+    type: LockUpgrade?
     description: >-
-      Present when a tool carried this record into the current reading and gate algorithm after
-      proving the design unchanged (doctor --fix), instead of a human re-approving it: who approved
-      and when stay the human's.
-    optional: true
-  - name: gateParts
-    type: map<string, string>?
-    description: >-
-      The digest of each input of the certified gate identity, as computed beside it
-      (StateId.parts): what lets a later check name the input that moved, and judge a change of the
-      wairon release alone by re-validation instead of by digest. They count only while they break
-      down the stateId they sit beside (partsProblem); parts that do not are ignored with a notice.
-      Absent on a record written before this release: such a record cannot prove the project's own
-      inputs (rule tuning, packs, network, pins) unchanged, so a later release never carries it over
-      — it is stale with one sentence until one `wairon lock` records them.
-    optional: true
-  - name: restamped
-    type: LockRestamp?
-    description: >-
-      Present when `wairon lock` refreshed the record's release stamp after the approved, unchanged
-      design re-validated clean under a newer release, instead of a human re-approving it.
+      Present when `wairon upgrade` rewrote this record from an earlier wairon major's format
+      instead of a human re-approving it: who approved and when stay the human's. Carried (the
+      current identity written) only when the upgrade proved the approved design and policy
+      unchanged; otherwise the old identity is kept, so the record reads stale until one `wairon
+      lock`.
     optional: true
 methods:
   - name: approvalStamp
@@ -155,46 +126,6 @@ methods:
       `undefined by unknown`. Pure.
     sourcePath: src/models/lock.ts
     symbol: approvalStamp
-  - name: movedGateParts
-    signature: 'movedGateParts(current: map<string, string>): list<string>?'
-    params:
-      - name: current
-        type: map<string, string>
-        description: The current identity's parts
-    returns: list<string>?
-    description: >-
-      The names of the gate parts that differ between this record's gateParts and `current` (an
-      input present on one side only counts as moved), sorted; null when the record carries no
-      gateParts. Pure.
-    sourcePath: src/models/lock.ts
-    symbol: movedGateParts
-  - name: approvalSubject
-    signature: 'approvalSubject(): string'
-    params: []
-    returns: string
-    description: >-
-      The composition subject this record's APPROVAL stands for, `<algorithm>:<digest>`: the subject
-      its restamp kept (restamped.subject) when the release stamp was refreshed without a
-      re-approval, else its own stateId. What a parent's gate identity and member pin read of this
-      project, so a restamp — which changes the stateId because the release is part of it — never
-      reads as the member re-approving. Pure.
-    sourcePath: src/models/lock.ts
-    symbol: approvalSubject
-  - name: releaseStampAgainst
-    signature: 'releaseStampAgainst(running: string): string'
-    params:
-      - name: running
-        type: string
-        description: The running wairon release
-    returns: string
-    description: >-
-      How this record's validatorVersion compares with the running release: `older`, `same`,
-      `newer`, or `invalid` when it is absent or not a wairon version (X.Y.Z with an optional
-      pre-release suffix). Only an older or same stamp can be a change of the release a
-      re-validation may judge; a newer stamp was written by a newer wairon, and an invalid one says
-      nothing. Pure.
-    sourcePath: src/models/lock.ts
-    symbol: releaseStampAgainst
   - name: partsProblem
     signature: 'partsProblem(current: StateId): string?'
     params:
@@ -203,29 +134,12 @@ methods:
         description: The gate identity as it stands, with its parts
     returns: string?
     description: >-
-      Why this record's gateParts do not break down the stateId they sit beside, or null when they
-      do or it carries none: a part every identity has is missing; the stateId equals the current
-      identity while a part differs from the current one; or, under the same algorithm, the stateId
-      differs while no part does. Parts that fail it are IGNORED by every verdict (with a notice) —
-      they can name no input and carry no approval over. Pure.
+      Why this record's `parts` do not break down the stateId they sit beside, or null when they do:
+      a part every identity has is missing; the stateId equals the current identity while a part
+      differs from the current one; or the stateId differs while no part does. Parts that fail it
+      are IGNORED by every verdict (with a notice) — they name no moved part. Pure.
     sourcePath: src/models/lock.ts
     symbol: gatePartsProblem
-  - name: stampProblem
-    signature: 'stampProblem(running: string): string?'
-    params:
-      - name: running
-        type: string
-        description: The running wairon release
-    returns: string?
-    description: >-
-      The clause every surface reports for a release stamp this wairon cannot stand behind, or null
-      when the stamp is a valid wairon version no newer than the running release: no stamp at all, a
-      stamp that is no wairon version ("banana"), or one newer than the running release ("9.9.9").
-      Reported whether or not the identity still matches — the identity decides the approval, the
-      stamp only says which release last verified it, so a stamp nobody can stand behind is named,
-      never kept silently — and `wairon lock` replaces it with the running release. Pure.
-    sourcePath: src/models/lock.ts
-    symbol: releaseStampProblem
   - name: missingTreeSentence
     signature: 'missingTreeSentence(): string?'
     returns: string?
@@ -237,26 +151,18 @@ methods:
       .wai/lock.json in the same change). Null when the record records no spec file. Pure.
     sourcePath: src/models/lock.ts
     symbol: missingTreeSentence
-  - name: carriedNotice
-    signature: 'carriedNotice(own: ProjectApproval?, running: string): string'
+  - name: movedParts
+    signature: 'movedParts(current: map<string, string>): list<string>'
     params:
-      - name: own
-        type: ProjectApproval?
-        description: The bound project's own approval entry
-      - name: running
-        type: string
-        description: The running wairon release
-    returns: string
+      - name: current
+        type: map<string, string>
+        description: The current identity's parts
+    returns: list<string>
     description: >-
-      The notice beside an approval an OLDER wairon release recorded while the running release
-      judges the design by the same rules — no release verdict, because the release gate part did
-      not move, so nothing was re-validated or restamped: `approved under wairon <old>; this release
-      (<running>) judges the design by the same rules, so the approval carries over as it is`. Said
-      once, at notice level, so a team that just upgraded reads which release took the record. Empty
-      when the stamp is not older than the running release, when the own approval is not holding, or
-      when a release verdict or a stamp problem already speaks for the release. Pure.
+      The names of the parts that differ between this record's `parts` and `current` (a part present
+      on one side only counts as moved), sorted. Pure.
     sourcePath: src/models/lock.ts
-    symbol: sameRulesNotice
+    symbol: movedParts
 componentClass: lock_store
 invariants:
   - id: single-record-per-project
@@ -266,4 +172,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-18T19:09:04.899Z'
+updatedAt: '2026-11-20T01:24:30.421Z'

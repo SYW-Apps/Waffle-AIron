@@ -18,7 +18,13 @@ fields:
     type: string
     description: 'How a changelog names the baseline: the last approval with its commit, or the ref asked for.'
     optional: false
+  - name: committedAt
+    type: datetime
+    description: >-
+      The commit's committer time: the moment a sibling member's approval is read as of when this
+      revision is a comparison's baseline.
+    optional: false
 methods: []
 sourcePath: src/core/external-producers.ts
 createdAt: '2026-10-07T10:52:48.831Z'
-updatedAt: '2026-10-07T10:52:49.414Z'
+updatedAt: '2026-11-20T00:07:15.705Z'

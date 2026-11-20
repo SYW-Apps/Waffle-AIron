@@ -30,19 +30,7 @@ methods:
       block headed "Component variants — reuse the shared approach", one line per component naming
       its variant, base, guidance, and same-variant siblings. Returns the empty string when nothing
       resolves, so an agent with no variant-tagged components carries no block at all.
-  - name: listProjectVariants
-    narrative: []
-    intent: >-
-      Reads only the project's .wai/variants/ files, parsed as loadProjectVariants parses them, and
-      returns their variants; a missing directory is an empty list.
-  - name: rebaseProjectVariants
-    narrative: []
-    intent: >-
-      For each project variant file, rewrites the base of every variant whose base is fromBase to
-      toBase and writes the file back with its other variants and fields unchanged; a file with no
-      such variant is not rewritten. Returns the ids rebased. A malformed file is skipped with a
-      diagnostic, as the loader skips it.
 detail: intent
 status: complete
 createdAt: '2026-07-15T12:24:24.647Z'
-updatedAt: '2026-09-15T18:07:29.715Z'
+updatedAt: '2026-11-20T01:28:09.575Z'

@@ -12,10 +12,10 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - upgrade_chain
-  - v5_to_v6_tree_step
   - upgrade_migration_adapter
   - installed_release_adapter
   - project_stamp_adapter
+  - v6_to_v7_tree_step
 status: complete
 createdAt: '2026-10-18T13:02:33.103Z'
-updatedAt: '2026-10-18T15:21:24.607Z'
+updatedAt: '2026-11-20T01:25:37.500Z'

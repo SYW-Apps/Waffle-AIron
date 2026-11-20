@@ -73,13 +73,6 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-  - name: consumedContractInputs
-    narrative:
-      - stepNumber: 1
-        description: Call consumedContractInputs on core portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: consumedContractInputs
   - name: settledSpecPaths
     narrative:
       - stepNumber: 1
@@ -168,20 +161,6 @@ methods:
         targetComponent: extension_portal
         targetMethod: packManifest
     detail: calls-only
-  - name: computeOwnStateId
-    narrative:
-      - stepNumber: 1
-        description: Forward to the approval portal's own-tree content identity
-        type: call
-        targetComponent: approval_portal
-        targetMethod: computeOwnStateId
-  - name: approvalRecord
-    narrative:
-      - stepNumber: 1
-        description: Forward to the approval portal's record read under the given root
-        type: call
-        targetComponent: approval_portal
-        targetMethod: approvalRecord
   - name: signatureFacts
     narrative:
       - stepNumber: 1
@@ -217,20 +196,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: retiredReachFacts
-  - name: computeOwnDesignIdAsRecorded
-    narrative:
-      - stepNumber: 1
-        description: Forward to the approval portal's own-design identity in the earlier reading
-        type: call
-        targetComponent: approval_portal
-        targetMethod: computeOwnDesignIdAsRecorded
-  - name: approvedStatuses
-    narrative:
-      - stepNumber: 1
-        description: Forward to the approval portal's status recovery
-        type: call
-        targetComponent: approval_portal
-        targetMethod: approvedStatuses
   - name: resolveChainingParent
     narrative:
       - stepNumber: 1
@@ -261,4 +226,4 @@ methods:
         targetMethod: loadGroupSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:34:17.125Z'
+updatedAt: '2026-11-19T21:56:29.609Z'

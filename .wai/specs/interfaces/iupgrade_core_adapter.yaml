@@ -5,54 +5,52 @@ description: >-
   root the caller bound. Every method forwards.
 component: upgrade_core_adapter
 methods:
-  - name: retireSpecialists
-    description: >-
-      Retype each Specialist as an Orchestrator and rebase its variants (with apply false, the plan
-      only).
-    signatureFrom: spec_maintenance_portal.retireSpecialists
-  - name: migrateReachability
-    description: Move the tree onto the reachability model.
-    signature: 'migrateReachability(apply: bool): ReachabilityMigrationPlan'
-    returns: ReachabilityMigrationPlan
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
   - name: findLegacySpecFiles
     description: The spec files still under their pre-dotted names.
     signatureFrom: spec_maintenance_portal.findLegacySpecFiles
-  - name: backfillChainedSubprojectConfigs
-    description: Write the project.yaml a chained subproject lacks.
-    signatureFrom: spec_maintenance_portal.backfillChainedSubprojectConfigs
-  - name: reexpressApproval
+  - name: computeApprovalId
     description: >-
-      Re-express a lock record of an older format in the current reading, keeping who approved it
-      and when.
-    signature: 'reexpressApproval(gate: StateId): LockRecord?'
-    returns: LockRecord?
-    params:
-      - name: gate
-        type: StateId
-        description: >-
-          The gate identity as it stands now, carrying asRecorded when the record on disk is a
-          format-2 one
-  - name: computeGateStateId
-    description: The gate identity the bound tree is judged under now.
-    signatureFrom: validator_portal.computeGateStateId
+      The approval identity (own design plus own policy) the bound tree is approved under now, with
+      its five parts: what a carried approval records
+    signatureFrom: validator_portal.computeApprovalId
+    previousNames:
+      - iupgrade_core_adapter.computeGateStateId
   - name: writeLockRecord
-    description: Write a re-expressed lock record back.
+    description: Write the format-4 lock record the v6-to-v7 step assembled onto the bound (rehearsal) root
     signatureFrom: approval_portal.writeLockRecord
-  - name: findChainingSubprojectsMissingConfig
-    description: The chained subprojects under a root that have specs but no project.yaml.
-    signatureFrom: spec_maintenance_portal.findChainingSubprojectsMissingConfig
-  - name: retireGateways
-    description: Merge each retired Gateway into the Portal it owned (with apply false, the plan only).
-    signature: 'retireGateways(apply: bool): GatewayRetirement'
-    returns: GatewayRetirement
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
+  - name: projectFamily
+    description: >-
+      Forward to spec_tree_portal.projectFamily: the project graph under the bound root, from which
+      the step lists the family's project roots (v6 and v7 spec forms are the same)
+    signatureFrom: spec_tree_portal.projectFamily
+    effect: read
+  - name: getLoaderIssues
+    description: >-
+      Forward to spec_tree_portal.getLoaderIssues: the loader's diagnostics for the bound tree,
+      where a retired wairon 5 form shows
+    signatureFrom: spec_tree_portal.getLoaderIssues
+    effect: read
+  - name: captureApprovedSpecs
+    description: >-
+      Forward to approval_portal.captureApprovedSpecs: one design digest per own spec of the bound
+      tree, what a v6 record's digests are compared with
+    signatureFrom: approval_portal.captureApprovedSpecs
+    effect: read
+  - name: resolvedPacks
+    description: >-
+      Forward to validator_portal.resolvedPacks: the selected packs as they resolve now, recorded in
+      the new inputs lock
+    signature: 'resolvedPacks(): map<string, LockedPack>'
+    returns: map<string, LockedPack>
+    params: []
+    effect: read
+  - name: loadProjectConfig
+    description: >-
+      Forward to project_config_portal.loadProjectConfig: the bound project's configuration, whose
+      external declarations tell a path producer (read live in v7, its v6 pin dropped) from a hosted
+      or git one
+    signatureFrom: project_config_portal.loadProjectConfig
+    effect: read
 status: draft
 createdAt: '2026-10-18T13:06:25.595Z'
-updatedAt: '2026-10-18T19:12:19.128Z'
+updatedAt: '2026-11-20T01:26:10.394Z'

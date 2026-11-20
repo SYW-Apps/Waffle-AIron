@@ -67,15 +67,21 @@ methods:
   - name: lastCommitOf
     description: >-
       The last commit of the work tree holding a directory that changed the file at the pathspec
-      (relative to the directory), or none when no commit did, the directory is in no work tree or
-      git is not installed. No network.
-    signature: 'lastCommitOf(directory: string, pathspec: string): string?'
+      (relative to the directory), committed at or before `until` when given, or none when no commit
+      did, the directory is in no work tree or git is not installed. No network.
+    signature: 'lastCommitOf(directory: string, pathspec: string, until?: datetime): string?'
     returns: string?
     params:
       - name: directory
         type: string
       - name: pathspec
         type: string
+      - name: until
+        type: datetime
+        description: >-
+          Only commits committed at or before this moment count: a sibling member's approval as it
+          stood when the bound project's baseline was committed
+        optional: true
     effect: io
   - name: commitOf
     description: >-
@@ -89,23 +95,19 @@ methods:
       - name: ref
         type: string
     effect: io
-  - name: commitIntroducing
+  - name: commitTime
     description: >-
-      The oldest commit of the work tree holding a directory whose change to the file at the
-      pathspec (relative to the directory) introduced the given text — the commit that first
-      recorded it (`git log -S`, oldest first) — or none when no commit did, the directory is in no
-      work tree or git is not installed. No network.
-    signature: 'commitIntroducing(directory: string, pathspec: string, text: string): string?'
-    returns: string?
+      The committer time of a commit in the work tree holding a directory, or none when the commit
+      is unknown there, the directory is in no work tree or git is not installed. No network.
+    signature: 'commitTime(directory: string, commit: string): datetime?'
+    returns: datetime?
     params:
       - name: directory
         type: string
-      - name: pathspec
+      - name: commit
         type: string
-      - name: text
-        type: string
-        description: The text the commit introduced (an approval's StateId digest)
+        description: The full commit
     effect: io
 status: complete
 createdAt: '2026-10-02T20:19:32.127Z'
-updatedAt: '2026-10-21T21:20:06.035Z'
+updatedAt: '2026-11-20T00:07:38.980Z'

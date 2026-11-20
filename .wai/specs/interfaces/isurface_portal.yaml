@@ -66,9 +66,10 @@ methods:
         type: string
   - name: pinExternals
     description: >-
-      Pin the bound project's declared externals (the named aliases, else all): snapshots under
-      .wai/externals/ and the lock at .wai/externals.lock.yaml. The caller must gate on reach
-      itself.
+      Pin the bound project's declared hosted and git externals (the named aliases, else all) from
+      each producer's approved state: snapshots under .wai/externals/ and the entries in
+      .wai/inputs.lock.yaml. A path producer is read live and never pinned. The caller must gate on
+      reach itself.
     signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
     returns: list<ExternalPin>
     params:
@@ -96,9 +97,9 @@ methods:
     params: []
   - name: listPinnedExternals
     description: >-
-      The bound project's declared externals, each with its lock entry and pinned snapshot, read
-      from its own .wai/externals files only — what the owner's gate judges a reference into another
-      project against. Pure 1:1 forward.
+      The bound project's declared hosted and git externals, each with its lock entry and pinned
+      snapshot, read from its own .wai files only: what the owner's gate judges a reference into
+      another project against. A path producer carries no entry. Pure 1:1 forward.
     signature: 'listPinnedExternals(): list<PinnedExternal>'
     returns: list<PinnedExternal>
     params: []
@@ -186,6 +187,18 @@ methods:
     returns: list<ExternalStatus>
     params: []
     effect: io
+  - name: lockedPacks
+    description: >-
+      The `packs` section of the bound project's inputs lock (surface_orchestrator.lockedPacks).
+      Pure 1:1 forward.
+    signatureFrom: surface_orchestrator.lockedPacks
+    effect: read
+  - name: recordPacks
+    description: >-
+      Record the packs as they resolved now in the bound project's inputs lock
+      (surface_orchestrator.recordPacks). Pure 1:1 forward.
+    signatureFrom: surface_orchestrator.recordPacks
+    effect: write
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-10-17T16:35:54.403Z'
+updatedAt: '2026-11-20T00:08:59.970Z'

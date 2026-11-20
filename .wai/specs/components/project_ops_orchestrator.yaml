@@ -19,6 +19,7 @@ dependsOn:
   - identity_orchestrator
   - exposure_policy_orchestrator
   - git_backing_orchestrator
+  - hosted_producers
 lint:
   allow:
     - code: REMOVABLE_FORWARDER
@@ -30,4 +31,4 @@ lint:
         per-entry-path translation goes here when it is needed.
 status: complete
 createdAt: '2026-07-16T15:29:55.392Z'
-updatedAt: '2026-10-16T17:24:46.477Z'
+updatedAt: '2026-11-20T01:02:39.737Z'

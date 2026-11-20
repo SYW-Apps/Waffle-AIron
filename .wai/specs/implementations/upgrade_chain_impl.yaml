@@ -1,9 +1,9 @@
 id: upgrade_chain_impl
 name: Upgrade Chain Implementation
 description: >-
-  src/upgrade/chain.ts: the fixed table of steps this release keeps — today one, 5 to 6 — and the
+  src/upgrade/chain.ts: the fixed table of steps this release keeps (today one, 6 to 7) and the
   arithmetic over it. The table is contiguous and ends at the running major; a test holds it to
-  that.
+  that. A wairon 5 tree is out of the window: wairon 6 upgrades it first.
 contract: iupgrade_chain
 sourcePath: src/upgrade/chain.ts
 methods:
@@ -37,7 +37,8 @@ methods:
       - stepNumber: 6
         description: >-
           Answer out_of_window, advising to install the last release of the major after the tree's,
-          run `wairon upgrade` there, then come back to this one
+          run `wairon upgrade` there, then come back to this one (for a wairon 5 tree: `npx wairon@6
+          upgrade`)
         type: return
         outcome: out_of_window
       - stepNumber: 7
@@ -61,4 +62,4 @@ methods:
         outcome: int
 status: draft
 createdAt: '2026-10-18T14:14:04.984Z'
-updatedAt: '2026-10-18T14:16:09.933Z'
+updatedAt: '2026-11-20T01:25:35.200Z'

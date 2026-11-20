@@ -23,6 +23,7 @@ dependsOn:
   - files_adapter
   - http_client_adapter
   - pack_registry_adapter
+  - surface_portal
 status: complete
 createdAt: '2026-07-14T20:08:56.448Z'
-updatedAt: '2026-11-06T23:42:24.267Z'
+updatedAt: '2026-11-20T00:21:06.072Z'

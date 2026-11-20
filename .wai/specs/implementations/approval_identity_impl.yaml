@@ -1,0 +1,111 @@
+id: approval_identity_impl
+name: Approval Identity Implementation
+description: >-
+  The pure approval identity computation in src/core/rules/approval-identity.ts: it projects the
+  project's policy onto its identity-bearing surface and digests it together with the project's own
+  design identity; it projects the code analyzer's doctrine onto a digest of its own; and it digests
+  each loaded pack's doctrine for the inputs lock. It reads nothing; the spec validator gathers
+  every input. Every sort compares by CODEPOINT, never by a locale-aware collation: collation is a
+  property of the machine's ICU build, and it already ordered a real pair of shipped codes the other
+  way round (EXCESSIVE_METHOD_PARAMS before EXCESSIVE_METHODS).
+contract: iapproval_identity
+sourcePath: src/core/rules/approval-identity.ts
+methods:
+  - name: compute
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the codes the built-in rules whose `judges` is code declare: the overrides of
+          those codes tune only findings the approval does not certify
+        type: local
+      - stepNumber: 2
+        description: >-
+          Take the policy from the gate config, each null when absent: the project type; the rule
+          config WITHOUT its code-conformance tuning (rules.conformance, and every
+          rules.sddRuleSeverity override of a code collected in step 1) — the design severity
+          overrides, complexity caps and design depth stay; the composition block; the network
+          declaration; and the pack selections projected by name, declared version (null when
+          absent) and scope, sorted by name, version and scope. A selection is what the project
+          chose; what it resolves to is a build input and is not read here
+        type: local
+      - stepNumber: 3
+        description: >-
+          Digest with sha256, in hex, the canonical form of {design: the own design identity's
+          digest, policy: {projectType, rules, composition, network when declared, selections}}:
+          object keys sorted recursively, serialized as JSON. The network key is LEFT OUT when the
+          project declares no network, never written as null
+        type: local
+      - stepNumber: 4
+        description: >-
+          Return the approval identity {algorithm: 'sha256+design+policy', digest}. The built-in
+          rules, the wairon version, the packs' content, the consumed contracts and the members are
+          not in it: a release, a pack update, a re-pin or a member's re-lock never re-opens an
+          approval
+        type: return
+        outcome: StateId (the approval identity)
+    symbol: computeApprovalIdentity
+  - name: analyzer
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Project the built-in rules whose `judges` is code onto their identity — name, codes with
+          default severities — with codepoint sorts
+        type: local
+      - stepNumber: 2
+        description: >-
+          Take the project's code-conformance tuning: gate.rules.conformance, and the
+          rules.sddRuleSeverity overrides of the codes the code-judging rules declare (sorted by
+          code); each null or empty when absent
+        type: local
+      - stepNumber: 3
+        description: >-
+          Digest with sha256, in hex, the canonical form of {rules: the projected code rules,
+          conformance: the conformance tuning, severities: the code-judging severity overrides}, and
+          return it
+        type: return
+        outcome: doctrine digest (hex)
+    symbol: analyzerDigest
+  - name: parts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Project the policy exactly as compute does, and split the payload into its halves: the own
+          design digest; the project type with the design rule config; the composition block; the
+          network declaration when one is declared; the pack selections. design, rules, composition
+          and network keep the projection the wairon 6 gate parts of the same names had, so an
+          upgrade compares them with a wairon 6 record's parts directly
+        type: local
+      - stepNumber: 2
+        description: 'Digest each half on its own: sha256 over its canonical form, in hex'
+        type: local
+      - stepNumber: 3
+        description: >-
+          Answer the digests keyed design, rules, composition, network (only when declared) and
+          selections
+        type: return
+        outcome: map<string, string>
+    symbol: approvalParts
+  - name: packContents
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each loaded pack, gather what it contributes to judging a design: its profiles and
+          languages, its patterns by id and version, its guarantee tokens, its assertions by
+          fullCode, and its rules by name, each with its codes and default severities — every list
+          codepoint-sorted. Leave out its skills and instructions (agent-facing prose that cannot
+          change a verdict) and its technology packages (they feed only code findings)
+        type: local
+      - stepNumber: 2
+        description: Digest each pack's projection with sha256, in hex, over its canonical form
+        type: local
+      - stepNumber: 3
+        description: Answer the digests keyed by pack name
+        type: return
+        outcome: map<string, string>
+    symbol: packContents
+detail: full
+previousIds:
+  - gate_identity_impl
+status: complete
+createdAt: '2026-09-15T17:55:53.605Z'
+updatedAt: '2026-11-19T21:53:24.646Z'

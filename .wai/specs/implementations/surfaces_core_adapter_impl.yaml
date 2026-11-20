@@ -164,6 +164,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadGroupSpecs
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: diffAgainstApproval
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-23T22:22:56.238Z'
+updatedAt: '2026-11-20T00:07:51.737Z'

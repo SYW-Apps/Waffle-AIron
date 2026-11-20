@@ -22,6 +22,23 @@ methods:
     signature: 'externalsStatus(): list<ExternalStatus>'
     returns: list<ExternalStatus>
     params: []
+  - name: pinExternals
+    description: >-
+      Forward to surface_portal.pinExternals against the currently bound project root: pin the named
+      hosted and git externals from their producers' approved states.
+    signatureFrom: surface_portal.pinExternals
+    effect: write
+  - name: recordPacks
+    description: >-
+      Forward to surface_portal.recordPacks against the currently bound project root: record the
+      packs as they resolve in its inputs lock.
+    signature: 'recordPacks(packs: map<string, LockedPack>): void'
+    returns: void
+    params:
+      - name: packs
+        type: map<string, LockedPack>
+        description: Pack name → its declared version, resolved version, source and content digest
+    effect: write
 status: complete
 createdAt: '2026-07-11T09:48:46.778Z'
-updatedAt: '2026-10-04T10:18:54.000Z'
+updatedAt: '2026-11-20T00:32:06.405Z'

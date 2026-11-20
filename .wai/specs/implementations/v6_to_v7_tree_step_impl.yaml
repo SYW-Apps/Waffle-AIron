@@ -1,0 +1,263 @@
+id: v6_to_v7_tree_step_impl
+name: v6 to v7 Tree Step Implementation
+description: >-
+  src/upgrade/steps/v6-to-v7/step.ts. The comparison that decides whether an approval is carried
+  runs in plan and again in write, on the same rehearsal content, so both answer alike.
+contract: iv6_to_v7_tree_step
+sourcePath: src/upgrade/steps/v6-to-v7/step.ts
+methods:
+  - name: familyRoots
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph under the root through the core
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: >-
+          Answer the root of every project in it, the top first (parts are left out: a part has no
+          lock of its own)
+        type: return
+        outcome: list<string>
+    detail: full
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Find spec files still under their wairon 5 names
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 2
+        description: >-
+          Read the loader's diagnostics, where a retired wairon 5 form (a Specialist or Gateway
+          stereotype, a listener mount) shows
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 3
+        description: >-
+          Does the tree still hold a wairon 5 form? An unstamped tree is read as wairon 6, so this
+          is where a wairon 5 tree is told apart
+        type: branch
+        condition: a legacy spec file name remains or the loader reports a retired wairon 5 form
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse: this tree was written by wairon 5, which this release no longer reads; upgrade it
+          with wairon 6 first (`npx wairon@6 upgrade`), then run `wairon upgrade` again
+        type: throw
+        error: written by wairon 5
+      - stepNumber: 5
+        label: record
+        description: Read the lock record as wairon 6 wrote it
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: readRecord
+      - stepNumber: 6
+        description: >-
+          Is there a record whose approval can be compared: a design reading of the specs and the
+          gate parts beside it?
+        type: branch
+        condition: a record exists, its specsReading is `design` and it carries gateParts
+        onFalseStep: 14
+      - stepNumber: 7
+        description: Capture one design digest per own spec of the tree now
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 8
+        description: Compute the approval identity now, with its parts
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: computeApprovalId
+      - stepNumber: 9
+        description: >-
+          Is the approval unchanged: every own spec's digest equal to the record's (no spec added or
+          removed), and the design, rules, composition and network parts equal to the record's gate
+          parts of the same names (the projection both majors share)?
+        type: branch
+        condition: the digests and the four shared parts all match
+        onFalseStep: 12
+      - stepNumber: 10
+        description: >-
+          Plan the record's rewrite: format <n> to 4, approval carried (the current identity and its
+          five parts written, upgraded {carried: true, compared: specs, design, rules, composition,
+          network}), lockedAt and lockedBy kept; not a design change
+        type: local
+      - stepNumber: 11
+        description: Go on with the inputs
+        type: jump
+        toStep: 15
+      - stepNumber: 12
+        label: not-carried
+        description: >-
+          Plan the record's rewrite without carrying it: format 4 with the old identity kept and
+          empty parts (upgraded {carried: false}), so it reads stale; report what moved (the own
+          specs added, changed or removed, and the parts that differ) and that one `wairon lock`
+          re-approves it
+        type: local
+      - stepNumber: 13
+        description: Go on with the inputs
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        label: not-comparable
+        description: >-
+          With no record: nothing to rewrite. With a record that cannot be compared (an older
+          content reading of the specs, or no gate parts): plan the same rewrite as one not carried,
+          reporting that its approval predates what wairon 6 recorded to prove it, and that one
+          `wairon lock` re-approves it
+        type: local
+      - stepNumber: 15
+        label: inputs
+        description: Read the v6 externals lock
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: readExternalsLock
+      - stepNumber: 16
+        description: >-
+          Read the project's configuration, whose external declarations tell a path producer (a
+          `../` or family external, read live in v7) from a hosted or git one
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 17
+        description: Resolve the selected packs as they load now
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: resolvedPacks
+      - stepNumber: 18
+        description: >-
+          Plan the inputs: .wai/externals.lock.yaml becomes .wai/inputs.lock.yaml, keeping each
+          hosted or git entry and a part's parent entry, dropping each path producer's entry with
+          its snapshot (each named: read live, never pinned), and recording the packs; not a design
+          change. A project with no externals lock and no pack writes none
+        type: local
+      - stepNumber: 19
+        description: 'Answer the plan: its changes in order, and what is reported for an author'
+        type: return
+        outcome: StepPlan
+    detail: full
+  - name: write
+    narrative:
+      - stepNumber: 1
+        description: Read the lock record as wairon 6 wrote it
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: readRecord
+      - stepNumber: 2
+        description: Is there a record to rewrite?
+        type: branch
+        condition: a record exists
+        onFalseStep: 7
+      - stepNumber: 3
+        description: Capture one design digest per own spec of the rehearsal tree
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 4
+        description: Compute the approval identity, with its parts
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: computeApprovalId
+      - stepNumber: 5
+        description: >-
+          Assemble the format-4 record exactly as plan decided: when comparable and unchanged,
+          stateId = the identity just computed and parts = its five parts; otherwise stateId = the
+          record's old identity and parts empty. Either way specs, lockedAt, lockedBy,
+          validatorVersion, validationResult, code, projectId, commitSha and compareUrl are kept,
+          status ready, and upgraded = {at, fromFormat, carried, compared}; member pins, children,
+          release stamps and re-expression traces are dropped
+        type: local
+      - stepNumber: 6
+        description: Write it onto the rehearsal root
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 7
+        label: inputs
+        description: Read the v6 externals lock
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: readExternalsLock
+      - stepNumber: 8
+        description: Read the project's external declarations
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 9
+        description: Resolve the selected packs as they load now
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: resolvedPacks
+      - stepNumber: 10
+        description: >-
+          Assemble the inputs lock: the hosted and git entries and a part's parent entry kept, each
+          path producer's entry dropped, the packs recorded
+        type: local
+      - stepNumber: 11
+        description: Write .wai/inputs.lock.yaml onto the rehearsal root
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: writeInputsLock
+      - stepNumber: 12
+        description: For the v6 externals lock and each dropped path producer's snapshot
+        type: loop
+        loopKind: forEach
+        over: .wai/externals.lock.yaml and the dropped snapshots
+        endStep: 13
+      - stepNumber: 13
+        description: Remove it from the rehearsal root
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: removeFile
+      - stepNumber: 14
+        description: Done
+        type: return
+        outcome: written
+    detail: full
+  - name: whatChanged
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Assemble the lines, most important first: the approval now covers the project's own design
+          and policy only, so a release, a re-pin or a member's re-lock never re-opens it;
+          .wai/inputs.lock.yaml replaces .wai/externals.lock.yaml and also records the packs; path
+          externals are read live and no longer pinned; a member's approval is its own lock, never
+          recorded by its parent; a record whose approval could not be proven unchanged needs one
+          `wairon lock`
+        type: local
+      - stepNumber: 2
+        description: Answer them
+        type: return
+        outcome: list<string>
+    detail: full
+  - name: unfinished
+    narrative:
+      - stepNumber: 1
+        description: For each root
+        type: loop
+        loopKind: forEach
+        over: the roots
+        endStep: 4
+      - stepNumber: 2
+        description: Read its lock record as wairon 6 would have written it
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: readRecord
+      - stepNumber: 3
+        description: Read its v6 externals lock, if one is left
+        type: call
+        targetComponent: v6_lock_file_adapter
+        targetMethod: readExternalsLock
+      - stepNumber: 4
+        description: Keep the root when its record's format is below 4 or an externals lock is left
+        type: local
+      - stepNumber: 5
+        description: Answer the kept roots
+        type: return
+        outcome: list<string>
+    detail: full
+status: complete
+createdAt: '2026-11-20T01:25:12.264Z'
+updatedAt: '2026-11-20T01:29:10.771Z'

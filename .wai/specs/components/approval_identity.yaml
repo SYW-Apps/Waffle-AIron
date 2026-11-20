@@ -1,0 +1,20 @@
+id: approval_identity
+name: Approval Identity
+description: >-
+  Computes the approval identity a lock records and every staleness check compares: ONE project's
+  own design identity together with its policy (project type, design rule tuning, composition,
+  network, pack selections). That is the whole of what a lock certifies. What the project consumes
+  is not in it — wairon's built-in rules, a pack's content, a consumed contract, a member's approval
+  — those are build inputs, judged beside the approval. It also digests the code analyzer's doctrine
+  (recorded beside the claim) and each loaded pack's doctrine (recorded in the inputs lock). Pure:
+  the caller gathers every input.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+previousIds:
+  - gate_identity
+status: complete
+createdAt: '2026-09-15T10:51:24.462Z'
+updatedAt: '2026-11-19T21:53:07.991Z'

@@ -1,0 +1,20 @@
+id: v6_to_v7_tree_step
+name: v6 to v7 Tree Step
+description: >-
+  The one kept step of the chain: moves a project from wairon 6's lock forms to wairon 7's, one
+  project at a time, planned and written onto the rehearsal root the orchestrator binds. Spec forms
+  are unchanged between the majors, so it rewrites the lock files only: the format-2/3 lock record
+  becomes format 4, carrying the approval only when the per-spec design digests and the design,
+  rules, composition and network parts prove it unchanged (otherwise it keeps its old identity and
+  reads stale until one re-lock); .wai/externals.lock.yaml becomes .wai/inputs.lock.yaml, dropping
+  the pins of path producers (read live in v7) and recording the packs as they resolve. A tree still
+  holding wairon 5 forms is refused, naming `npx wairon@6 upgrade`.
+subsystem: sdd_upgrade
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - upgrade_core_adapter
+  - v6_lock_file_adapter
+status: complete
+createdAt: '2026-11-20T01:24:34.528Z'
+updatedAt: '2026-11-20T01:24:35.033Z'
