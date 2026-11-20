@@ -2804,6 +2804,25 @@ export const ExternalLockEntrySchema = z.object({
 export type ExternalLockEntry = z.infer<typeof ExternalLockEntrySchema>;
 
 /**
+ * locked_pack — one selected pack as the inputs lock records it (keyed by pack
+ * name): what the selection resolved to when `wairon packs sync` or `wairon
+ * lock` last recorded it. A build input, never part of the approval.
+ *
+ * v7 wave 2: sdd_surfaces owns this type's persistence (InputsLock.packs); the
+ * validator only produces it (resolvedPacks) and compares it (inputs).
+ */
+export interface LockedPack {
+  /** The version the selection declares in .wai/project.yaml, as written. */
+  declared?: string;
+  /** The version the selection resolved to, from the pack's manifest. */
+  resolved?: string;
+  /** Where it was resolved from: the bundled path, the source URL, or `installed`. */
+  source?: string;
+  /** The pack's doctrine digest (approval_identity.packContents). */
+  digest: string;
+}
+
+/**
  * externals_lock — the content of .wai/externals.lock.yaml: one entry per
  * pinned producer, and — in a non-contained part's lock (stage 8) — its
  * parent, whose snapshot is a ParentExcerpt.

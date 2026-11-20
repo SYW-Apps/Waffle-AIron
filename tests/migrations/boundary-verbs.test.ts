@@ -13,7 +13,7 @@ import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as migrations from '../../src/migrations/index.js';
 import { runLock } from '../../src/commands/lock.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { readLockState } from '../../src/core/specs.js';
 import { diffAgainstApproval } from '../../src/core/approval.js';
 import { buildContractFamily, buildReferenceFamily, type ContractFamily, type ReferenceFamily } from '../helpers/reference-family.js';
@@ -79,7 +79,7 @@ function metaFamily(): MetaFamily {
   write(svc, '.wai/specs/pay/.index.yaml', { id: 'pay', name: 'pay', description: 'Takes payments.', parentSystem: 'Svc', publicInterfaces: [{ details: 'Payments', component: 'pay-portal' }], trustedLinks: [] });
   write(svc, '.wai/specs/pay/pay-portal/.index.yaml', { id: 'pay-portal', name: 'pay-portal', description: 'Takes payments.', subsystem: 'pay', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: [] });
   write(svc, '.wai/specs/settle/.index.yaml', { id: 'settle', name: 'settle', description: 'Settles.', parentSystem: 'Svc', publicInterfaces: [], trustedLinks: [] });
-  write(svc, '.wai/lock.json', JSON.stringify({ format: 3, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
+  write(svc, '.wai/lock.json', JSON.stringify({ format: 4, parts: {}, specs: {}, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
   write(svc, '.wai/context/wairon-guide.md', '# derived\n');
 
   config(sub, { id: 'sub', name: 'Sub' });
@@ -438,7 +438,7 @@ describe('externalize into a part — a storage move — agrees with lock and lo
   const lockTop = async (top: string): Promise<void> => {
     await at(top, async () => {
       invalidateSpecCache();
-      await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+      await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
     });
     invalidateSpecCache();
   };
@@ -456,7 +456,7 @@ describe('externalize into a part — a storage move — agrees with lock and lo
     expect(report.relock).toEqual([]);
     invalidateSpecCache();
     // lock-check's reading and lock's reading agree: approved, no spec changed — only moved.
-    expect(at(f.top, () => readLockState(computeGateStateId()).state)).toBe('locked');
+    expect(at(f.top, () => readLockState(computeApprovalId()).state)).toBe('locked');
     const diff = at(f.top, () => diffAgainstApproval())!;
     expect(diff.added.length + diff.changed.length + diff.removed.length).toBe(0);
     expect(diff.moved.length).toBeGreaterThan(0);

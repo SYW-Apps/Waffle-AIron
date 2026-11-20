@@ -12,7 +12,7 @@ import { adviseExternals, validateProject, type ValidationIssue } from '../../sr
 import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 import { buildContractFamily } from '../helpers/reference-family.js';
 import { compose } from '../../src/core/family-validation.js';
-import { computeGateStateId, validateFamily } from '../../src/core/validation.js';
+import { computeApprovalId, validateFamily } from '../../src/core/validation.js';
 import { runLock } from '../../src/commands/lock.js';
 import { remove } from '../../src/core/external-declarations.js';
 
@@ -283,7 +283,7 @@ describe('platform — an unpinned consumer of a producer that broke a used name
     roots.push(f.top);
     bind(f.billing);
     const gate = { valid: true, issues: [] } as never;
-    await expect(runLock({ yes: true }, gate, computeGateStateId())).rejects.toThrow(/never pinned — "ledger"/);
+    await expect(runLock({ yes: true }, gate, computeApprovalId())).rejects.toThrow(/never pinned — "ledger"/);
     expect(fs.existsSync(path.join(f.billing, '.wai', 'lock.json'))).toBe(false);
   });
 });

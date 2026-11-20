@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -17,16 +16,12 @@ import {
   readLockState,
   scanAllSpecs,
 } from '../../src/core/specs.js';
-import { computeOwnDesignStateId, computeOwnStateId, stateIdEquals } from '../../src/core/statehash.js';
-import { approvalVerdict, currentSpecDigests, diffAgainstApproval, reexpress } from '../../src/core/approval.js';
+import { computeOwnDesignStateId, computeStateId, stateIdEquals } from '../../src/core/statehash.js';
+import { approvalVerdict, diffAgainstApproval } from '../../src/core/approval.js';
 import { readLockRecord, writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
-import { computeGateStateId } from '../../src/core/validation.js';
-import { GATE_ALGORITHM } from '../../src/core/rules/gate-identity.js';
-
-/** The gate algorithm every format-2 lock was taken under (full content, code linkage in). */
-const CONTENT_GATE_ALGORITHM = 'sha256+content+doctrine+inputs+members';
+import { computeApprovalId } from '../../src/core/validation.js';
+import { APPROVAL_ALGORITHM } from '../../src/core/rules/approval-identity.js';
 import { checkApproval, runLock } from '../../src/commands/lock.js';
-import { reexpressLock } from '../helpers/reexpress-lock.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -103,7 +98,7 @@ function writeFormat2(root: string): LockRecord {
   setProjectRoot(root);
   // A placeholder under the previous algorithm, so the gate carries asRecorded.
   writeLockRecord({ stateId: { algorithm: CONTENT_GATE_ALGORITHM, digest: '0'.repeat(64) }, lockedAt: now, lockedBy: { id: 'x', source: 'git' }, validatorVersion: 't', validationResult: { valid: true, errors: 0, warnings: 0 }, status: 'ready' });
-  const gate = computeGateStateId();
+  const gate = computeApprovalId();
   expect(gate.asRecorded?.algorithm).toBe(CONTENT_GATE_ALGORITHM);
   const record: LockRecord = {
     format: 2,
@@ -134,14 +129,12 @@ afterEach(() => {
 });
 
 describe('state_hash.ownDesign — the design identity', () => {
-  it('code linkage and timestamps never move it, while they do move the full-content identity', () => {
+  it('code linkage and timestamps never move it', () => {
     root = project();
     const design = computeOwnDesignStateId();
-    const content = computeOwnStateId();
     expect(design.algorithm).toBe('sha256-design-2');
     resave(root, LINKAGE);
     expect(stateIdEquals(computeOwnDesignStateId(), design)).toBe(true);
-    expect(stateIdEquals(computeOwnStateId(), content)).toBe(false);
   });
 
   it('any change to what the design says moves it', () => {
@@ -154,40 +147,32 @@ describe('state_hash.ownDesign — the design identity', () => {
   it('is deterministic, and never equal to a content identity', () => {
     root = project();
     expect(computeOwnDesignStateId()).toEqual(computeOwnDesignStateId());
-    expect(stateIdEquals(computeOwnDesignStateId(), computeOwnStateId())).toBe(false);
+    expect(stateIdEquals(computeOwnDesignStateId(), computeStateId())).toBe(false);
   });
 });
 
-describe('the gate identity hashes the design identity', () => {
+describe('the approval identity hashes the design identity', () => {
   it('uses the design gate algorithm, and a linkage-only edit leaves it where it was', () => {
     root = project();
-    const gate = computeGateStateId();
-    expect(gate.algorithm).toBe(GATE_ALGORITHM);
-    expect(gate.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
-    expect(gate.asRecorded).toBeUndefined();
+    const gate = computeApprovalId();
+    expect(gate.algorithm).toBe(APPROVAL_ALGORITHM);
+    expect(gate.algorithm).toBe('sha256+design+policy');
     resave(root, LINKAGE);
-    expect(stateIdEquals(computeGateStateId(), gate)).toBe(true);
-  });
-
-  v5it('carries asRecorded only while the record on disk is a format-2 one', () => {
-    root = project();
-    writeFormat2(root);
-    expect(computeGateStateId().asRecorded).toBeDefined();
+    expect(stateIdEquals(computeApprovalId(), gate)).toBe(true);
   });
 });
 
-describe('lock format 3: a linkage-only edit no longer stales the lock, a design edit does', () => {
+describe('lock format 4: a linkage-only edit no longer stales the lock, a design edit does', () => {
   it('writes format 3 in the design reading, and adding sourcePaths keeps it locked with no spec changed', async () => {
     root = project();
-    const record = (await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId()))!;
-    expect(record.format).toBe(3);
-    expect(record.specsReading).toBe('design');
-    expect(record.stateId.algorithm).toBe(GATE_ALGORITHM);
-    expect(record.reexpressed).toBeUndefined();
+    const record = (await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId()))!;
+    expect(record.format).toBe(4);
+    expect(record.stateId.algorithm).toBe(APPROVAL_ALGORITHM);
+    expect(record.upgraded).toBeUndefined();
     expect(Object.keys(record.stateId)).toEqual(['algorithm', 'digest']);
 
     resave(root, LINKAGE);
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
+    expect(readLockState(computeApprovalId()).state).toBe('locked');
     expect(diffAgainstApproval()!.changed).toEqual([]);
     expect(approvalVerdict().text).toContain('no spec has changed since');
     expect(checkApproval(true).approved).toBe(true);
@@ -195,9 +180,9 @@ describe('lock format 3: a linkage-only edit no longer stales the lock, a design
 
   it('a design edit stales it and names the spec', async () => {
     root = project();
-    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
     resave(root, { description: 'a different design' });
-    expect(readLockState(computeGateStateId()).state).toBe('stale');
+    expect(readLockState(computeApprovalId()).state).toBe('stale');
     expect(diffAgainstApproval()!.changed).toHaveLength(1);
     expect(diffAgainstApproval()!.changed[0]).toContain('.implementation');
     expect(checkApproval(false).approved).toBe(false);
@@ -205,13 +190,13 @@ describe('lock format 3: a linkage-only edit no longer stales the lock, a design
 
   it('a key the schema does not read (a misplaced top-level symbol) moves neither reading — status and lock-check agree', async () => {
     root = project();
-    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
     const file = implFile(root);
     fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^contract: iworker$/m, 'contract: iworker\nsymbol: runWorker'));
     invalidateSpecCache();
     setProjectRoot(root);
     expect(fs.readFileSync(file, 'utf8')).toMatch(/^symbol: runWorker$/m);
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
+    expect(readLockState(computeApprovalId()).state).toBe('locked');
     expect(diffAgainstApproval()!.changed).toEqual([]);
     expect(approvalVerdict().text).toContain('no spec has changed since');
     expect(checkApproval(true).approved).toBe(true);
@@ -223,7 +208,7 @@ describe('lock format 3: a linkage-only edit no longer stales the lock, a design
     fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^contract: iworker$/m, 'contract: iworker\nsymbol: runWorker'));
     invalidateSpecCache();
     setProjectRoot(root);
-    const record = (await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId()))!;
+    const record = (await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId()))!;
     // The digest the earlier reading took: the file's own keys, the unknown one included.
     const key = Object.keys(record.specs!).find((k) => k.includes('worker_impl'))!;
     const raw = yaml.load(fs.readFileSync(file, 'utf8')) as object;
@@ -235,59 +220,10 @@ describe('lock format 3: a linkage-only edit no longer stales the lock, a design
 
   it('a change-and-revert (only the timestamp moved) is no drift', async () => {
     root = project();
-    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
     resave(root, { description: 'briefly different' });
     resave(root, { updatedAt: '2026-10-06T12:00:00.000Z' });
     expect(diffAgainstApproval()!.changed).toEqual([]);
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
-  });
-});
-
-describe('a format-2 lock after the upgrade', () => {
-  v5it('an unchanged design passes lock-check without a re-lock, with the doctor hint', () => {
-    root = project();
-    writeFormat2(root);
-    // Old code compared the record against the design gate only: stale.
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
-    const check = checkApproval(true);
-    expect(check.approved, check.message).toBe(true);
-    expect(check.message).toContain('wairon upgrade');
-    expect(approvalVerdict().text).toContain('no spec has changed since');
-  });
-
-  v5it('the upgrade re-expresses it: format 3, design reading, `reexpressed`, the approver unchanged', () => {
-    root = project();
-    const before = writeFormat2(root);
-    const carried = reexpressLock()!;
-    expect(carried).not.toBeNull();
-    const written = readLockRecord()!;
-    expect(written).toEqual(carried);
-    expect(written.format).toBe(3);
-    expect(written.specsReading).toBe('design');
-    expect(written.stateId.algorithm).toBe(GATE_ALGORITHM);
-    expect(written.lockedBy).toEqual(before.lockedBy);
-    expect(written.lockedAt).toBe(before.lockedAt);
-    expect(written.validatorVersion).toBe(before.validatorVersion);
-    expect(written.reexpressed).toMatchObject({ fromAlgorithm: CONTENT_GATE_ALGORITHM, fromReading: 'content', by: 'wairon upgrade' });
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
-    // Idempotent: nothing more to carry.
-    expect(reexpressLock()).toBeNull();
-    // From now on linkage never drifts it.
-    resave(root, LINKAGE);
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
-    expect(diffAgainstApproval()!.changed).toEqual([]);
-  });
-
-  v5it('a format-2 lock that already drifted (even by linkage alone) reads stale once and says one re-lock clears it', () => {
-    root = project();
-    writeFormat2(root);
-    resave(root, LINKAGE);
-    expect(readLockState(computeGateStateId()).state).toBe('stale');
-    expect(reexpress(computeGateStateId())).toBeNull();
-    expect(reexpressLock()).toBeNull();
-    const check = checkApproval(false);
-    expect(check.approved).toBe(false);
-    expect(check.message).toContain('format-2 lock');
-    expect(check.message).toContain('one `wairon lock` clears it for good');
+    expect(readLockState(computeApprovalId()).state).toBe('locked');
   });
 });

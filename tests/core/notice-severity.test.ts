@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { validateProject, validateAsComplete, computeGateStateId, type ValidationIssue } from '../../src/core/validation.js';
+import { validateProject, validateAsComplete, computeApprovalId, type ValidationIssue } from '../../src/core/validation.js';
 import { buildRuleContext } from '../../src/core/rules/index.js';
 import { validateComponentCandidate } from '../../src/core/rules/candidate.js';
 import { runLock } from '../../src/commands/lock.js';
@@ -220,7 +220,7 @@ describe('the lock record', () => {
     const rules = rulesOf({ MISSING_ENDPOINT: 'notice' });
     const gate = validateAsComplete({ rules });
     expect(gate.valid).toBe(true);
-    const record = await runLock({ yes: true }, gate, computeGateStateId());
+    const record = await runLock({ yes: true }, gate, computeApprovalId());
     expect(record).not.toBeNull();
     const warnings = gate.issues.filter((i) => i.severity === 'warning').length;
     expect(record!.validationResult).toEqual({ valid: true, errors: 0, warnings, notices: 1 });

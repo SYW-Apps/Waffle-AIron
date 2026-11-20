@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -13,19 +11,12 @@ import {
   invalidateSpecCache,
   readLockState,
 } from '../../src/core/specs.js';
-import { computeOwnDesignStateIdAsRecorded } from '../../src/core/statehash.js';
-import { currentSpecDigests, diffAgainstApproval, reexpress } from '../../src/core/approval.js';
+import { diffAgainstApproval } from '../../src/core/approval.js';
 import { readLockRecord, writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
-import { computeGateStateId } from '../../src/core/validation.js';
-import { GATE_ALGORITHM } from '../../src/core/rules/gate-identity.js';
-import { checkApproval, runLock } from '../../src/commands/lock.js';
-import { reexpressLock } from '../helpers/reexpress-lock.js';
-import { canonicalize } from '../../src/utils/canonical-json.js';
-import { parseYaml } from '../../src/utils/yaml.js';
-import {
-  componentDesignView, implementationDesignView, interfaceDesignView, subsystemDesignView,
-  type ComponentSpec, type ImplementationSpec, type InterfaceSpec, type SubsystemSpec,
-} from '../../src/models/index.js';
+import { computeApprovalId } from '../../src/core/validation.js';
+import { APPROVAL_ALGORITHM } from '../../src/core/rules/approval-identity.js';
+import { runLock } from '../../src/commands/lock.js';
+import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
 // Readiness leaves the approval: a spec's `status` (draft/design/complete)
@@ -42,8 +33,6 @@ vi.mock('inquirer', () => ({ default: { prompt: promptMock } }));
 
 const now = '2026-10-06T10:00:00.000Z';
 const later = '2026-10-06T11:00:00.000Z';
-const EARLIER_DESIGN_GATE = 'sha256+design+doctrine+inputs+members';
-const CONTENT_GATE = 'sha256+content+doctrine+inputs+members';
 
 function impl(over: Partial<ImplementationSpec> = {}): ImplementationSpec {
   return {
@@ -89,43 +78,6 @@ function resave(root: string, over: Partial<ImplementationSpec>): void {
   setProjectRoot(root);
 }
 
-/** One spec file's digest the way the EARLIER design reading took it: its design view with its status kept. */
-function earlierDigest(file: string): string {
-  const parsed = parseYaml(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
-  const view = 'contract' in parsed ? implementationDesignView(parsed)
-    : 'componentType' in parsed ? componentDesignView(parsed)
-      : 'parentSystem' in parsed ? subsystemDesignView(parsed)
-        : 'component' in parsed ? interfaceDesignView(parsed)
-          : parsed;
-  const kept = parsed.status === undefined ? view : { ...view, status: parsed.status };
-  return crypto.createHash('sha256').update(canonicalize(kept), 'utf8').digest('hex');
-}
-
-/** A format-3 record exactly as a release whose design view still carried status wrote it. */
-function writeEarlierFormat3(root: string): LockRecord {
-  setProjectRoot(root);
-  // A placeholder under the earlier algorithm, so the gate carries asRecorded.
-  writeLockRecord({ format: 3, specsReading: 'design', stateId: { algorithm: EARLIER_DESIGN_GATE, digest: '0'.repeat(64) }, lockedAt: now, lockedBy: { id: 'x', source: 'git' }, validatorVersion: 't', validationResult: { valid: true, errors: 0, warnings: 0 }, status: 'ready', specs: {} });
-  const gate = computeGateStateId();
-  expect(gate.asRecorded?.algorithm).toBe(EARLIER_DESIGN_GATE);
-  const specs: Record<string, string> = {};
-  for (const key of Object.keys(currentSpecDigests(root, 'design'))) specs[key] = earlierDigest(path.join(root, key));
-  const record: LockRecord = {
-    format: 3,
-    specsReading: 'design',
-    stateId: { algorithm: gate.asRecorded!.algorithm, digest: gate.asRecorded!.digest },
-    lockedAt: now,
-    lockedBy: { id: 'approver <a@example.com>', source: 'git' },
-    validatorVersion: '5.1.1-dev.106',
-    validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 },
-    status: 'ready',
-    specs,
-    members: {},
-  };
-  writeLockRecord(record);
-  return record;
-}
-
 let root: string;
 afterEach(() => {
   setProjectRoot(null);
@@ -136,90 +88,10 @@ afterEach(() => {
 describe('status is readiness, never design', () => {
   it('promoting a status under a current lock keeps it locked and moves no spec', async () => {
     root = project();
-    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
-    expect(readLockRecord()!.stateId.algorithm).toBe(GATE_ALGORITHM);
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
+    expect(readLockRecord()!.stateId.algorithm).toBe(APPROVAL_ALGORITHM);
     resave(root, { status: 'complete' });
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
+    expect(readLockState(computeApprovalId()).state).toBe('locked');
     expect(diffAgainstApproval()!.changed).toEqual([]);
-  });
-
-  v5it('a format-3 lock taken while status was in the view keeps passing when only a status moved', () => {
-    root = project();
-    writeEarlierFormat3(root);
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
-    resave(root, { status: 'complete' });
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
-    expect(diffAgainstApproval()!.changed).toEqual([]);
-    expect(checkApproval(true).approved).toBe(true);
-    // ...and a design edit still stales it, naming the spec.
-    resave(root, { status: 'complete', description: 'realizes the worker differently' });
-    expect(readLockState(computeGateStateId()).state).toBe('stale');
-    expect(diffAgainstApproval()!.changed).toEqual(['.wai/specs/dom/worker/.implementation.yaml']);
-  });
-
-  v5it('the earlier reading recomputes with the approved statuses put back', () => {
-    root = project();
-    writeEarlierFormat3(root);
-    const asRecorded = computeOwnDesignStateIdAsRecorded(new Map());
-    expect(asRecorded.algorithm).toBe('sha256-design');
-  });
-
-  v5it('the upgrade carries an earlier-reading lock into the current reading without a review', () => {
-    root = project();
-    const before = writeEarlierFormat3(root);
-    resave(root, { status: 'complete' });
-    const carried = reexpressLock()!;
-    expect(carried).not.toBeNull();
-    expect(carried.stateId.algorithm).toBe(GATE_ALGORITHM);
-    expect(carried.lockedBy).toEqual(before.lockedBy);
-    expect(carried.reexpressed).toMatchObject({ fromAlgorithm: EARLIER_DESIGN_GATE, fromReading: 'design' });
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
-  });
-});
-
-describe('an older lock over an untouched tree whose gate moved', () => {
-  /** A format-2 record whose per-spec digests match the tree, but whose identity was taken under another gate. */
-  function writeFormat2UnderOtherGate(): LockRecord {
-    const record: LockRecord = {
-      format: 2,
-      stateId: { algorithm: CONTENT_GATE, digest: 'f'.repeat(64) },
-      lockedAt: now,
-      lockedBy: { id: 'approver <a@example.com>', source: 'git' },
-      validatorVersion: '5.1.1-dev.102',
-      validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 },
-      status: 'ready',
-      specs: currentSpecDigests(root, 'content'),
-      members: {},
-    };
-    writeLockRecord(record);
-    return record;
-  }
-
-  v5it('lock-check names why a record from before gate parts is not carried over, never the design or code linkage (round 7)', () => {
-    root = project();
-    writeFormat2UnderOtherGate();
-    const check = checkApproval(false);
-    expect(check.approved).toBe(false);
-    // The record cannot prove the project's own inputs unchanged: stale with
-    // one sentence, never re-validated and never "every input is as approved".
-    expect(check.message).toContain('Approved under wairon 5.1.1-dev.102 before wairon recorded its inputs separately');
-    expect(check.message).not.toContain('every input the project decides');
-    expect(check.message).not.toContain('the design, or only code linkage');
-  });
-
-  v5it('the upgrade re-expresses its reading to format 3 and keeps the claim as certified', () => {
-    root = project();
-    const before = writeFormat2UnderOtherGate();
-    expect(reexpress(computeGateStateId())).not.toBeNull();
-    const carried = reexpressLock()!;
-    expect(carried.format).toBe(3);
-    expect(carried.specsReading).toBe('design');
-    expect(carried.stateId).toEqual(before.stateId);
-    expect(readLockRecord()!.format).toBe(3);
-    // Still stale — for the gate — and one lock clears it.
-    expect(readLockState(computeGateStateId()).state).toBe('stale');
-    expect(checkApproval(false).message).toContain('before wairon recorded its inputs separately');
-    // Idempotent.
-    expect(reexpressLock()).toBeNull();
   });
 });

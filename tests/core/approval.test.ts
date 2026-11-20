@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -20,7 +19,7 @@ import {
   type LockRecord,
 } from '../../src/core/lockfile.js';
 import { describeApprover, type ApproverIdentity, type ProjectApproval } from '../../src/models/lock.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -73,11 +72,10 @@ const TESTER: ApproverIdentity = { id: 'tester <t@example.com>', source: 'git' }
 /** What a lock writes: the record, carrying the approval. */
 function approve(
   who: ApproverIdentity = TESTER,
-  children: Record<string, string> = {},
   scope?: { paths: Set<string> },
 ): LockRecord {
   const record: LockRecord = {
-    stateId: computeGateStateId(),
+    stateId: computeApprovalId(),
     lockedAt: now,
     lockedBy: who,
     validatorVersion: 'test',
@@ -85,9 +83,7 @@ function approve(
     status: 'ready',
     specs: captureApprovedSpecs(undefined, scope),
     // captureApprovedSpecs answers the design reading (lock format 3).
-    specsReading: 'design',
-    format: 3,
-    children,
+    format: 4, parts: {},
   };
   writeLockRecord(record);
   return record;
@@ -96,15 +92,14 @@ function approve(
 /** Write a lock record into ANOTHER root (a chained child approving itself). */
 function approveAt(root: string, stateDigest = 'a'.repeat(64)): LockRecord {
   const record: LockRecord = {
-    format: 3,
-    stateId: { algorithm: 'sha256+content+doctrine+inputs', digest: stateDigest },
+    format: 4, parts: {},
+    stateId: { algorithm: 'sha256+design+policy', digest: stateDigest },
     lockedAt: now,
     lockedBy: { id: 'child <c@example.com>', source: 'git' },
     validatorVersion: 'test',
     validationResult: { valid: true, errors: 0, warnings: 0 },
     status: 'ready',
     specs: {},
-    specsReading: 'design',
   };
   fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
   fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify(record, null, 2));
@@ -272,23 +267,6 @@ describe('the approval', () => {
     }
   });
 
-  it('never WRITES the legacy `children` map — format 2 records `members` instead', () => {
-    root = project();
-    approve(TESTER, { billing: 'sha256:abc123' });
-
-    expect(approvalRecord()!.children).toBeUndefined();
-    expect(fs.readFileSync(path.join(root, '.wai', 'lock.json'), 'utf8')).not.toContain('"children"');
-    expect(diffSize(diffAgainstApproval()!)).toBe(0);
-  });
-
-  v5it('still READS a format-1 record\'s `children` (in the v5 reading)', () => {
-    root = project();
-    const legacy = approveAt(root);
-    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...legacy, format: undefined, specsReading: undefined, children: { billing: 'sha256:abc123' } }, null, 2));
-    expect(approvalRecord()!.children).toEqual({ billing: 'sha256:abc123' });
-    expect(approvalRecord()!.format).toBeUndefined();
-  });
-
   it('excludes a REAL chained child’s specs — a child edit must not dirty the parent', () => {
     // Regression. `snapshotSpecFiles` federates recursively, so the parent
     // approval captured every child spec file: approving the parent silently
@@ -341,18 +319,19 @@ describe('the approval', () => {
     expect(() => diffAgainstApproval()).toThrow(/cannot be read as an approval record/);
   });
 
-  it('treats a lock with no per-spec record as unapproved, without losing the lock', () => {
-    // Every lock written before approval moved in here. It still proves the
-    // tree validated, so the record must survive — but it cannot say which
-    // specs match, and inventing an answer would be worse than admitting it.
+  it('refuses a record that holds no per-spec map, naming it', () => {
     root = project();
     const record = approve();
-    delete record.specs;
-    writeLockRecord(record);
+    delete (record as { specs?: unknown }).specs;
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify(record));
+    expect(() => readLockRecord()).toThrow(/"specs" is not a map/);
+  });
 
-    expect(readLockRecord()).not.toBeNull();
-    expect(readLockRecord()!.stateId.digest).toBeTruthy();
-    expect(diffAgainstApproval()).toBeNull();
+  it('refuses an earlier record format, naming wairon upgrade', () => {
+    root = project();
+    const record = approve();
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...record, format: 3 }));
+    expect(() => readLockRecord()).toThrow(/wairon upgrade/);
   });
 
   it('deleting the lock record forgets the approval', () => {
@@ -403,49 +382,42 @@ describe('the approval', () => {
   // computed at each project's own root; core never computes a member's state.
   // -------------------------------------------------------------------------
 
-  const own = (over: Partial<ProjectApproval> = {}): ProjectApproval => ({ key: '', state: 'approved', ...over });
+  const own = (over: Partial<ProjectApproval> = {}): ProjectApproval => ({ key: '', state: 'approved', inputs: [], ...over });
   const member = (over: Partial<ProjectApproval> = {}): ProjectApproval => ({
-    key: 'billing', alias: 'billing', parent: '', state: 'approved', pinned: 'matches',
-    subject: pinOf({ algorithm: 'sha256+content+doctrine+inputs+members', digest: 'a'.repeat(64) }), ...over,
+    key: 'billing', alias: 'billing', parent: '', state: 'approved', inputs: [], ...over,
   });
 
-  it('a member whose pin MOVED is this project\'s drift, WITHOUT dirtying its own spec diff', () => {
+  it('a member that is drifted or never approved is the member\'s to lock, never this project\'s drift', () => {
     root = project();
     approve();
-    expect(approvalVerdict([own(), member()]).drifted).toBe(false);
-
-    const verdict = approvalVerdict([own({ state: 'drifted' }), member({ pinned: 'moved' })]);
-    expect(verdict.drifted).toBe(true);
-    // Round 11: "no spec has changed since" beside the drift, and "re-lock to approve them".
-    expect(verdict.text).toContain("none of this project's own specs has changed since; what moved is a member's approval.");
-    expect(verdict.text).toContain('Member pin moved since approval: billing was re-approved at its own root after this approval, which still pins its earlier approval. Run `wairon lock` here to pin the new one');
-    expect(verdict.text).not.toContain('no spec has changed since.');
-    expect(diffSize(diffAgainstApproval()!)).toBe(0);
-  });
-
-  it('names a member that is drifted or never approved, without calling it this project\'s drift', () => {
-    root = project();
-    approve();
-    const verdict = approvalVerdict([own(), member({ state: 'never', subject: undefined }), member({ key: 'claims', alias: 'claims', state: 'drifted', upgraded: true })]);
+    const verdict = approvalVerdict([own(), member({ state: 'never' }), member({ key: 'claims', alias: 'claims', state: 'drifted', partsMoved: ['design'] })]);
     expect(verdict.drifted).toBe(false);
     expect(verdict.text).toContain('billing (never)');
-    expect(verdict.text).toContain('claims (drifted, re-lock once)');
+    expect(verdict.text).toContain('claims (drifted: the design itself (its own specs) moved)');
   });
 
-  it('says plainly when this approval predates the stage-5 gate identity', () => {
+  it('names the policy parts that moved when no own spec did', () => {
     root = project();
     approve();
-    const verdict = approvalVerdict([own({ state: 'drifted', upgraded: true })]);
+    const verdict = approvalVerdict([own({ state: 'drifted', partsMoved: ['rules', 'selections'] })]);
     expect(verdict.drifted).toBe(true);
-    // No own spec moved: the cause named is the gate, never the design.
-    expect(verdict.text).toContain('what moved is the gate it was judged under');
-    expect(verdict.text).toContain('One `wairon lock` re-approves the unchanged design');
+    expect(verdict.text).toContain('no spec has changed since');
+    expect(verdict.text).toContain("the project's rule tuning or projectType and its pack selections");
+    expect(verdict.text).toContain('`wairon lock` re-approves the unchanged design');
+  });
+
+  it('says what the build inputs owe beside an approval that holds, never as drift', () => {
+    root = project();
+    approve();
+    const verdict = approvalVerdict([own({ inputs: [{ kind: 'unpinned', subject: 'billing', sentence: 'external "billing" is not pinned — run `wairon externals pin billing`' }] })]);
+    expect(verdict.drifted).toBe(false);
+    expect(verdict.text).toContain('The approval holds; the build inputs owe: external "billing" is not pinned');
   });
 
   it('only DIRECT members are this project\'s pins — a grandchild is its parent\'s', () => {
     root = project();
     approve();
-    const verdict = approvalVerdict([own(), member(), member({ key: 'billing::ledger', alias: 'ledger', parent: 'billing', pinned: 'moved', state: 'never' })]);
+    const verdict = approvalVerdict([own(), member(), member({ key: 'billing::ledger', alias: 'ledger', parent: 'billing', state: 'never' })]);
     expect(verdict.drifted).toBe(false);
     expect(verdict.text).not.toContain('ledger');
   });
@@ -517,43 +489,6 @@ describe('the verdict the lock gives on the tree', () => {
     expect(verdict.text).not.toMatch(/\(1 changed\)/);
     expect(verdict.text).toMatch(/worker/);
     expect(verdict.text).not.toContain('STALE');
-  });
-
-  v5it('does not say "changed since approval" beside an approval that holds: only what the approval leaves out moved', () => {
-    root = project();
-    const record = approve();
-    // A record read in the content reading (before lock format 3): its per-spec
-    // digests are the raw bytes, so a moved authoring status reads as a changed file.
-    const specs: Record<string, string> = {};
-    for (const rel of Object.keys(record.specs ?? {})) {
-      specs[rel] = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8').replace(/\r\n/g, '\n')).digest('hex');
-    }
-    delete (record as { specsReading?: unknown }).specsReading;
-    writeLockRecord({ ...record, specs, format: 2 });
-
-    updateSpec('component', 'worker', { status: 'complete' });
-    invalidateSpecCache();
-
-    const own = { key: '', state: 'approved' } as unknown as ProjectApproval;
-    const verdict = approvalVerdict([own]);
-    expect(verdict.text).not.toMatch(/changed since approval/);
-    expect(verdict.text).toContain('The approval still holds');
-    expect(verdict.text).toContain('authoring status');
-    expect(verdict.drifted).toBe(false);
-  });
-
-  it('names the LIMIT of a lock written before per-spec approval', () => {
-    root = project();
-    const record = approve();
-    delete (record as { specs?: unknown }).specs;
-    writeLockRecord(record);
-
-    const verdict = approvalVerdict();
-    // Such a record proves the tree validated, not which specs still match it.
-    // Saying so beats implying either answer — and it is not drift, because
-    // nothing here can tell whether anything moved.
-    expect(verdict.text).toContain('predates per-spec approval');
-    expect(verdict.drifted).toBe(false);
   });
 
   it('never lets a broken read break the report', () => {

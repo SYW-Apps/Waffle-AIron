@@ -10,7 +10,7 @@ import { executeApprovedLock, gateIdentity } from '../../src/server/admin.js';
 import { LockValidationError } from '../../src/server/errors.js';
 import { lockProject, decideRequest, executeApprovedRequest, getApprovalStatus, listPendingRequests, withdrawRequest } from '../../src/server/projectlifecycle.js';
 import * as hostCore from '../../src/server/adapters/core.js';
-import { computeGateStateId, validateAsComplete } from '../../src/server/adapters/validator.js';
+import { computeApprovalId, validateAsComplete } from '../../src/server/adapters/validator.js';
 import { registerProjectRecord } from '../../src/server/projects.js';
 import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
@@ -159,10 +159,10 @@ describe('hosted lock — format 2', () => {
     expect(record.validationResult).toMatchObject({ valid: true, errors: 0 });
     expect(record.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
     // What was written is what was returned, and it carries no `children`.
-    expect(readLockRecordAt(fam.top)).toMatchObject({ format: 3, stateId: record.stateId });
+    expect(readLockRecordAt(fam.top)).toMatchObject({ format: 4, parts: {}, stateId: record.stateId });
     expect(fs.readFileSync(lockFile(fam.top), 'utf8')).not.toContain('"children"');
     // The record certifies the tree as it stands: the hosted lock state reads locked.
-    expect(runWithProjectRoot(fam.top, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
+    expect(runWithProjectRoot(fam.top, () => hostCore.readLockState(computeApprovalId())).state).toBe('locked');
   });
 
   it('a member-scoped lock records the member at its own root and writes nothing at the parent', () => {

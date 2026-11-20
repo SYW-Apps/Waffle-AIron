@@ -123,7 +123,7 @@ describe('stage 6 — the membership verbs', () => {
     const f = family();
     const tools = path.join(f.top, 'tools');
     standalone(tools, 'Build Tools');
-    put(path.join(tools, '.wai', 'lock.json'), JSON.stringify({ format: 3, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: STAMP, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'tooling-kit' }));
+    put(path.join(tools, '.wai', 'lock.json'), JSON.stringify({ format: 4, parts: {}, specs: {}, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: STAMP, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'tooling-kit' }));
     const report = migrate(f.top, { verb: 'attach', alias: 'tools', path: 'tools' });
     expect(configOf(tools).id).toBe('tooling-kit');
     expect(report.relock).toEqual([path.resolve(tools)]);

@@ -52,7 +52,7 @@ interface CarriedRecord {
  * silently skipped.
  */
 function carriedRecord(): CarriedRecord | null {
-  const carried = core.reexpressApproval(core.computeGateStateId());
+  const carried = core.reexpressApproval(core.computeApprovalId());
   if (carried) return { record: carried, proven: true };
   const kept = files.keepStaleRecord(getProjectRoot());
   return kept ? { record: kept, proven: false } : null;

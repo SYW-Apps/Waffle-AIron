@@ -1,19 +1,16 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
-import { getProjectRoot, readsV5Forms } from '../utils/fs.js';
+import { getProjectRoot } from '../utils/fs.js';
 import { snapshotSpecFiles, graph, scanAllSpecs } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
-import { approvalStamp, describeGateParts, sameRulesNotice, type ProjectApproval, type SpecDigestReading } from '../models/lock.js';
-import { WAIRON_VERSION } from '../config/defaults.js';
+import { approvalStamp, describeApprovalParts, type ProjectApproval } from '../models/lock.js';
 import { parseYaml } from '../utils/yaml.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import {
   asSchemaReads, componentDesignView, implementationDesignView, interfaceDesignView, subsystemDesignView, typeDesignView,
-  type SpecStatus,
 } from '../models/specs.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import type { LockRecord } from './lockfile.js';
-import type { StateId } from './statehash.js';
 
 // ---------------------------------------------------------------------------
 // The approval — what the human last said yes to
@@ -43,10 +40,9 @@ import type { StateId } from './statehash.js';
 //     design.
 //  3. It is per PROJECT ROOT, because each `.wai` has its own lock — including
 //     every member. A parent approval never freezes a member's in-flight work;
-//     the parent records each direct member's composition subject instead
-//     (`members`, stage 5), the way a git submodule pins a commit — and a
-//     member's state and pin are the validator's to compute, since they need
-//     gate identities (validator_portal.familyApprovals).
+//     the parent records nothing about a member, and a member's state is the
+//     validator's to compute, since it needs an approval identity
+//     (validator_portal.familyApprovals).
 // ---------------------------------------------------------------------------
 
 export interface ApprovalDiff {
@@ -128,9 +124,6 @@ function designDigest(kind: LinkedKind | undefined, content: string): string {
   return out;
 }
 
-/** Every status a spec can be stored with: none, or one of the three. */
-const STATUS_CANDIDATES: ReadonlyArray<SpecStatus | undefined> = [undefined, 'draft', 'design', 'complete'];
-
 /**
  * A parsed spec file as the loader reads it — the keys its kind's schema reads,
  * none it drops — so a key that means nothing to the loaded tree (and so to the
@@ -168,42 +161,6 @@ function viewDigest(view: object): string {
   return crypto.createHash('sha256').update(canonicalize(view), 'utf8').digest('hex');
 }
 
-/**
- * The status a recorded design digest says a spec file was approved with: the
- * file's design view with each candidate status put back (none, draft, design,
- * complete) — the view the EARLIER design reading took, which still carried
- * status — digested and compared with the recorded digest; each in the
- * schema's reading of the keys and in the file's own, which a digest recorded
- * over a key the schema does not read was taken in. `null` for a spec
- * approved with no status stored; undefined when no candidate matches (the
- * spec moved in its design) or the file does not parse.
- */
-function statusApprovedIn(kind: LinkedKind | undefined, content: string, recorded: string): SpecStatus | null | undefined {
-  const parsed = parsedSpec(content);
-  if (!parsed) return undefined;
-  // Both readings of the keys: the schema's, and — for a digest recorded before
-  // the design reading dropped what the schema does not read — the file's own.
-  const views = [designViewOf(kind, schemaRead(kind, parsed)), designViewOf(kind, parsed)] as Record<string, unknown>[];
-  for (const view of views) {
-    for (const status of STATUS_CANDIDATES) {
-      const candidate = status === undefined ? view : { ...view, status };
-      if (viewDigest(candidate) === recorded) return status ?? null;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Whether a spec file as it stands still matches the design digest an
- * approval recorded for it: the same digest, or — for a digest taken while the
- * view still carried status — the same design under some status. Status is
- * readiness, not design, so a spec whose status alone moved still matches.
- */
-function designMatches(kind: LinkedKind | undefined, content: string, current: string, recorded: string): boolean {
-  // A digest taken while the view still carried status is a wairon 5 record's: matched in the v5 reading only.
-  return current === recorded || (readsV5Forms() && statusApprovedIn(kind, content, recorded) !== undefined);
-}
-
 /** Each scanned spec file of a linked kind, by its resolved path. */
 function linkedKindsByFile(): Map<string, LinkedKind> {
   const paths = scanAllSpecs().paths;
@@ -212,20 +169,6 @@ function linkedKindsByFile(): Map<string, LinkedKind> {
     for (const file of Object.values(paths[kind])) kinds.set(path.resolve(file), kind);
   }
   return kinds;
-}
-
-/** One spec file's digest in the named reading. */
-function digestIn(reading: SpecDigestReading, kind: LinkedKind | undefined, content: string): string {
-  return reading === 'design' ? designDigest(kind, content) : digest(content);
-}
-
-/**
- * The reading a record's `specs` were digested in: `design` when it names it,
- * else the raw content — a wairon 5 record's, read only in the v5 reading
- * (every record read anywhere else is format 3, in the design reading).
- */
-function readingOf(record: LockRecord | null): SpecDigestReading {
-  return record?.specsReading === 'design' || !readsV5Forms() ? 'design' : 'content';
 }
 
 /**
@@ -239,9 +182,9 @@ function readingOf(record: LockRecord | null): SpecDigestReading {
  * work the parent does not own — and every child edit would dirty the parent's
  * diff, which is exactly what the child PIN exists to replace.
  */
-export function currentSpecDigests(root: string = getProjectRoot(), reading: SpecDigestReading = 'design'): Record<string, string> {
+export function currentSpecDigests(root: string = getProjectRoot()): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const file of ownSpecFiles(root)) out[file.key] = digestIn(reading, file.kind, file.content);
+  for (const file of ownSpecFiles(root)) out[file.key] = designDigest(file.kind, file.content);
   return out;
 }
 
@@ -279,14 +222,14 @@ export function captureApprovedSpecs(
   root: string = getProjectRoot(),
   scope?: { paths: Set<string> },
 ): Record<string, string> {
-  const current = currentSpecDigests(root, 'design');
+  const current = currentSpecDigests(root);
   if (!scope) return current;
 
   // A scope names files by their path from the root; a part's file is approved
   // under its storage-independent key (stage 8).
   const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
   const keys = new Set([...scope.paths].map((rel) => approvalKeyIn(path.resolve(root, rel), root, parts)));
-  const previous = inDesignReading(readLockRecord(), root);
+  const previous = readLockRecord()?.specs ?? {};
   const specs: Record<string, string> = { ...previous };
   for (const rel of Object.keys(previous)) {
     if (keys.has(rel) && current[rel] === undefined) delete specs[rel];
@@ -295,25 +238,6 @@ export function captureApprovedSpecs(
     if (current[rel] !== undefined) specs[rel] = current[rel];
   }
   return specs;
-}
-
-/**
- * The previous approval's digests carried into the design reading for a
- * scoped re-lock: a design-reading record as it is; an earlier (content)
- * record's entry converted only where the file still matches it exactly —
- * then its design digest IS what was approved — and kept as written otherwise,
- * so a file that moved since keeps reading changed.
- */
-function inDesignReading(record: LockRecord | null, root: string): Record<string, string> {
-  const previous = record?.specs ?? {};
-  if (readingOf(record) === 'design') return previous;
-  const files = new Map(ownSpecFiles(root).map((f) => [f.key, f]));
-  const out: Record<string, string> = {};
-  for (const [key, approved] of Object.entries(previous)) {
-    const file = files.get(key);
-    out[key] = file && digest(file.content) === approved ? designDigest(file.kind, file.content) : approved;
-  }
-  return out;
 }
 
 /**
@@ -330,29 +254,17 @@ export function diffAgainstApproval(root: string = getProjectRoot()): ApprovalDi
   const approved = record?.specs ?? null;
   if (!approved) return null;
 
-  // Compared in the reading the record names — never one reading against the other.
-  const reading = readingOf(record);
-  const files = new Map(ownSpecFiles(root).map((f) => [f.key, f]));
-  const current: Record<string, string> = {};
-  for (const [key, file] of files) current[key] = digestIn(reading, file.kind, file.content);
+  // Compared as design digests: the one reading a format-4 record carries.
+  const current = currentSpecDigests(root);
   const added: string[] = [];
   const changed: string[] = [];
   const removed: string[] = [];
   const unchangedPaths: string[] = [];
 
-  // In the design reading a status that moved alone is no change: status is
-  // readiness, and a digest taken while the view still carried it is compared
-  // with every status a spec can have.
-  const same = (rel: string, before: string, now: string): boolean => {
-    if (before === now) return true;
-    if (reading !== 'design') return false;
-    const file = files.get(rel)!;
-    return designMatches(file.kind, file.content, now, before);
-  };
   for (const [rel, d] of Object.entries(current)) {
     const before = approved[rel];
     if (before === undefined) added.push(rel);
-    else if (!same(rel, before, d)) changed.push(rel);
+    else if (before !== d) changed.push(rel);
     else unchangedPaths.push(rel);
   }
   for (const rel of Object.keys(approved)) {
@@ -411,83 +323,6 @@ export function settledSpecPaths(root: string = getProjectRoot()): Set<string> |
   return diff ? new Set(diff.unchangedPaths) : null;
 }
 
-/** The command a re-expression names as its author: never a person. */
-export const REEXPRESSED_BY = 'wairon upgrade';
-
-/**
- * approval_comparison.reexpress — the record on file carried into the current
- * reading WITHOUT a new approval, when that is provably sound. (1) The
- * identity it certified still holds: a format-2 record, or one taken in the
- * earlier design reading (status still in the view), whose stateId equals
- * gate.asRecorded — that identity recomputed over the tree as it stands. Keeps
- * lockedAt, lockedBy, the validation and code results, the members' pins and
- * the provenance exactly; replaces stateId with the gate (asRecorded dropped),
- * specs with the current design-reading capture, and adds `reexpressed`. (2) A
- * format-2 record whose identity no longer holds but whose every own spec file
- * still matches its raw-content digest: only the gate it was judged under
- * moved, never the tree, so its reading is carried and its stateId stays the
- * identity it certified — the lock still reads stale, now for the stated
- * cause, until one `wairon lock`. Null when there is nothing to carry or it
- * cannot be proven. Writes nothing: the caller writes the answer.
- */
-export function reexpress(gate: StateId): LockRecord | null {
-  // Step 0: an older record exists only in the v5 reading; anywhere else there is nothing to carry.
-  if (!readsV5Forms()) return null;
-  // Step 1: the record of the bound project.
-  const record = readLockRecord();
-  if (!record) return null;
-  const fromReading = readingOf(record);
-  // Step 2: an earlier-reading record whose certified identity still holds.
-  const asRecorded = gate.asRecorded;
-  const holds = !!asRecorded && record.stateId.algorithm === asRecorded.algorithm && record.stateId.digest === asRecorded.digest;
-  const reexpressed = { at: new Date().toISOString(), fromAlgorithm: record.stateId.algorithm, fromReading, by: REEXPRESSED_BY };
-  if (holds) {
-    // Steps 3-5: the carried record — the approval stays the approver's.
-    return {
-      ...record,
-      stateId: { algorithm: gate.algorithm, digest: gate.digest },
-      specs: captureApprovedSpecs(),
-      specsReading: 'design',
-      format: 3,
-      reexpressed,
-    };
-  }
-  // Step 6: a format-2 record over a tree no file of which moved, not even in
-  // code linkage — only the gate it was judged under did.
-  if (fromReading !== 'content' || !record.specs) return null;
-  const diff = diffAgainstApproval();
-  if (!diff || diffSize(diff) > 0) return null;
-  // Steps 7-9: the reading carried, the claim kept as certified.
-  return { ...record, specs: captureApprovedSpecs(), specsReading: 'design', format: 3, reexpressed };
-}
-
-/**
- * approval_comparison.approvedStatuses — the status each own spec had when a
- * design-reading record was approved, keyed `<kind>:<id>`: a spec whose design
- * view WITH a candidate status digests to the recorded digest was approved
- * with that status (none reads as complete, as the loader parses it). A spec
- * matching no candidate moved in its design and is left out, as is every spec
- * of a record in another reading.
- */
-export function approvedStatuses(record: LockRecord, root: string = getProjectRoot()): Map<string, SpecStatus> {
-  const out = new Map<string, SpecStatus>();
-  if (!readsV5Forms() || record.specsReading !== 'design' || !record.specs) return out;
-  for (const file of ownSpecFiles(root)) {
-    const recorded = record.specs[file.key];
-    if (recorded === undefined || !file.kind) continue;
-    const approved = statusApprovedIn(file.kind, file.content, recorded);
-    if (approved === undefined) continue;
-    const id = parsedSpec(file.content)?.id;
-    if (typeof id === 'string') out.set(`${file.kind}:${id}`, approved ?? 'complete');
-  }
-  return out;
-}
-
-/** Render a StateId the way a member pin (a composition subject) stores it. */
-export function pinOf(stateId: StateId): string {
-  return `${stateId.algorithm}:${stateId.digest}`;
-}
-
 /**
  * What the lock says about the tree as it stands: the sentence to show, and
  * whether it is drift.
@@ -525,60 +360,40 @@ export interface ApprovalVerdict {
 export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict {
   const quiet = { text: '', drifted: false };
   try {
+    // Steps 1-3: the approval on record; a project never approved is silence, not drift.
     const approval = approvalRecord();
     if (!approval) return quiet;
+    // Step 4: who approved it and when.
     const stamp = approvalStamp(approval);
-
-    // What the pin tree says, when the caller passed one: an upgrade-only
-    // staleness of this project's own lock, direct members whose pin MOVED
-    // (this lock is stale until it re-locks) and direct members that are
-    // drifted or never approved (the member's to lock, named so this project
-    // knows before it locks).
+    // Step 5: the root's own entry, and the members that owe their own lock.
+    const own = (approvals ?? []).find((a) => a.key === '');
+    const notes = memberNotes(approvals ?? [], approval);
+    // Step 6: the tree against what was approved.
     const diff = diffAgainstApproval();
-    const notes = memberNotes(approvals ?? [], approval, diff);
-    const pinDrift = notes.drift;
-    const childNote = notes.text;
-
+    // Steps 7-8: a record that holds no per-spec digests cannot say which specs moved.
     if (!diff) {
-      // Locked, but by a record written before per-spec approval existed: it
-      // proves the tree validated, not which specs still match it. Say exactly
-      // that rather than implying either answer.
       return {
-        text: `\nApproved: ${stamp} — this lock predates per-spec approval, so `
-          + `drift is only visible at whole-tree level. Re-lock to record it.${childNote}\n`,
-        drifted: pinDrift,
+        text: `\nApproved: ${stamp} — this lock holds no per-spec approval, so `
+          + `drift is only visible at whole-tree level. Re-lock to record it.${notes}\n`,
+        drifted: own?.state === 'drifted',
       };
     }
-    // A format-2 lock that still holds: read in its original reading, and
-    // carried into the design reading by `wairon upgrade` without a review.
-    const own = (approvals ?? []).find((a) => a.key === '');
-    const carry = isContentReadingRecord(approval) && own?.state === 'approved' ? `\n${REEXPRESS_HINT}` : '';
+    // Step 9: the verdict.
+    const inputs = inputsLine(own);
     if (diffSize(diff) === 0) {
       // No own spec moved — but when the root's own entry is drifted, the
       // approval still owes something, and "no spec has changed" never stands
-      // alone: say what (the entry's own sentence), else that an input the
-      // gate identity covers moved. A moved member pin explains itself below.
-      const owes = own?.state === 'drifted' && !own.upgraded
-        ? (own.owed !== undefined
-          ? ` But the approval does not cover this project: ${own.owed}. \`wairon lock-check\` fails until it is cleared${/never pinned|beyond its pin/.test(own.owed) ? ' — pin first (`wairon externals pin`), then `wairon lock`' : /extension pack\(s\) selected/.test(own.owed) ? ' — make the pack load (install or vendor it, or drop the selection), then `wairon lock`' : ' — `wairon lock` re-approves the unchanged design'}.`
-          : own.release && !own.release.carried
-            ? (own.release.reason
-              ? ` But ${own.release.reason}`
-              : ` But it was approved under wairon ${own.release.from}, and the new release (${own.release.to}) finds ${own.release.count ?? 0} issue(s) in the approved design: ${(own.release.findings ?? []).join('; ')}. Resolve them, then \`wairon lock\`.`)
-            : pinDrift
-              ? ''
-              : own.inputsMoved && own.inputsMoved.length > 0
-                ? ` But what it was approved under did change: ${describeGateParts(own.inputsMoved)}. \`wairon lock\` re-approves the unchanged design under it.`
-                : ' But what it was approved under did change: an input the gate identity covers — the doctrine, the network declaration, a consumed contract\'s pin, `composition` or a member\'s approval. `wairon lock` re-approves the unchanged design.')
+      // alone: say what moved, else the entry's own sentence.
+      const owes = own?.state === 'drifted'
+        ? (own.partsMoved && own.partsMoved.length > 0
+          ? ` But what it was approved under did change: ${describeApprovalParts(own.partsMoved)}. \`wairon lock\` re-approves the unchanged design under it.`
+          : own.owed !== undefined
+            ? ` But the approval does not cover this project: ${own.owed}. \`wairon lock\` re-approves the unchanged design.`
+            : ' But the approval does not cover this project any more. `wairon lock` re-approves the unchanged design.')
         : '';
-      // An approval a change of the release carried over says so, once.
-      const released = own?.release?.carried
-        ? ` Approved under wairon ${own.release.from}, re-validated under ${own.release.to}: still approved (\`wairon lock\` refreshes the record's release stamp without a re-approval).`
-        : '';
-      const ignored = own?.partsIgnored !== undefined ? ` Notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them.` : '';
       return {
-        text: `\nApproved: ${stamp} — ${notes.pinsMoved ? 'none of this project\'s own specs has changed since; what moved is a member\'s approval.' : 'no spec has changed since.'}${released}${sameRulesNotice(approval, own, WAIRON_VERSION)}${owes}${ignored}${stampNotice(own)}${childNote}${carry}\n`,
-        drifted: pinDrift || own?.state === 'drifted',
+        text: `\nApproved: ${stamp} — no spec has changed since.${owes}${ignoredNotice(own)}${inputs}${notes}\n`,
+        drifted: own?.state === 'drifted',
       };
     }
 
@@ -602,33 +417,15 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       ? `${noun} ${parts[0].slice(String(diffSize(diff)).length + 1)} since approval`
       : `${noun} changed since approval (${parts.join(', ')})`;
 
-    // The approval's own verdict is the identity's, and it can hold while the
-    // bytes of some spec files differ: a record read in the content reading
-    // sees a moved authoring status or code linkage as a changed file, while
-    // the approval itself leaves both out. Said as that — never as "changed
-    // since approval" beside "approved", which reads as a contradiction.
-    if (own?.state === 'approved' && !pinDrift) {
-      return {
-        text: `\nThe approval still holds (${stamp}). ${noun} differ${n === 1 ? 's' : ''} in bytes from the approved ones, `
-          + 'but only in what the approval leaves out (authoring status, code linkage, timestamps) — nothing the design is judged on moved:\n'
-          + named.map((p) => `  ${p}`).join('\n')
-          + (rest > 0 ? `\n  … and ${rest} more — \`wairon status --all\` lists every one` : '')
-          + childNote
-          + carry
-          + '\n',
-        drifted: false,
-        moved: [...diff.changed.map((p) => `~ ${p}`), ...diff.added.map((p) => `+ ${p}`), ...diff.removed.map((p) => `- ${p}`)],
-      };
-    }
-
     return {
       text: `\n${headline} — approved ${stamp}:\n`
         + named.map((p) => `  ${p}`).join('\n')
         + (rest > 0 ? `\n  … and ${rest} more — \`wairon status --all\` lists every one` : '')
+        + (own?.partsMoved && own.partsMoved.length > 0 ? `\nThe approval policy also moved: ${describeApprovalParts(own.partsMoved)}.` : '')
         + (own?.owed !== undefined ? `\nThe approval also owes: ${own.owed}.` : '')
-        + (own?.stampProblem !== undefined ? `\n${stampNotice(own).trim()}` : '')
-        + childNote
-        + carry
+        + ignoredNotice(own)
+        + inputs
+        + notes
         + '\n',
       drifted: true,
       moved: [...diff.changed.map((p) => `~ ${p}`), ...diff.added.map((p) => `+ ${p}`), ...diff.removed.map((p) => `- ${p}`)],
@@ -641,95 +438,40 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
 /** How many moved specs the verdict names before it counts the rest. */
 const VERDICT_LIST_LIMIT = 40;
 
-/** The notice for a release stamp this wairon cannot stand behind; empty when there is none. */
-function stampNotice(own: ProjectApproval | undefined): string {
-  return own?.stampProblem !== undefined
-    ? ` Notice: ${own.stampProblem} — the identity alone decided this, and \`wairon lock\` replaces the stamp with this release.`
+/** The notice for parts that do not break down the record's identity; empty when there is none. */
+function ignoredNotice(own: ProjectApproval | undefined): string {
+  return own?.partsIgnored !== undefined
+    ? ` Notice: the record's parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them.`
     : '';
 }
 
 /**
- * Whether a record predates lock format 3: its per-spec digests are the raw
- * content (no design reading named), and its identity was taken with code
- * linkage in. A wairon 5 record: read in the v5 reading only, where it is
- * re-expressed; anywhere else no record is one.
+ * The line beside an approval that names what the build inputs owe: each
+ * debt's sentence with the command that clears it. Never drift, and never
+ * phrased as a change of the design.
  */
-export function isContentReadingRecord(record: LockRecord): boolean {
-  return readsV5Forms() && record.specsReading !== 'design';
+function inputsLine(own: ProjectApproval | undefined): string {
+  const debts = own?.inputs ?? [];
+  if (debts.length === 0) return '';
+  return `\nThe approval holds; the build inputs owe: ${debts.map((d) => d.sentence).join(' ')}`;
 }
 
-/** The hint beside a format-2 lock that still holds. */
-export const REEXPRESS_HINT =
-  'This approval predates lock format 3 and is read in its original reading; `wairon upgrade` carries it '
-  + 'into the design reading without a review (the approval stays the approver\'s), after which adding or moving '
-  + 'a sourcePath never drifts it.';
-
 /**
- * The note for a format-2 lock that no longer matches under its own algorithm:
- * something it covered moved — the design, or only code linkage, which that
- * record can no longer tell apart — so it takes one re-lock.
+ * The upgrade and member lines of the verdict, from the approvals: whether
+ * `wairon upgrade` carried the record over, and which direct members are
+ * drifted or never approved — each the member's to lock, named so this
+ * project knows, never this project's drift.
  */
-export const FORMAT2_STALE_NOTE =
-  'it was taken before code linkage (sourcePath, symbol, simPath and the like) left the approval, and something '
-  + 'it covered moved since — the design, or only code linkage, which this record can no longer tell apart. '
-  + 'One `wairon lock` clears it for good: from then on linkage never drifts the approval';
-
-/** The gate-identity upgrade note: the identity gained inputs, which says nothing about the design. */
-export const GATE_UPGRADE_NOTE =
-  'the gate identity gained inputs in this release (members\' composition subjects, `composition`; '
-  + 'code conformance moved beside the claim)';
-
-/**
- * The note for an approval no own spec file of which moved — not even in code
- * linkage — that still no longer matches: what moved is the gate the design
- * was judged under, never the tree, and the note says so instead of blaming
- * the design.
- */
-export const GATE_MOVED_NOTE =
-  'no own spec file changed since it was taken — not even its code linkage — so what moved is the gate it was '
-  + 'judged under: the design rules this wairon release judges by, or the project\'s rule tuning, `composition`, '
-  + 'network declaration, consumed contracts or a member\'s approval. One `wairon lock` re-approves the unchanged '
-  + 'design under the current gate';
-
-/**
- * The member and upgrade lines of the verdict, from the pin tree: whether this
- * project's own lock was taken under an earlier gate identity, which direct
- * members' pins moved, and which are drifted or never approved. `drift` is
- * this project's drift only: an upgrade or a moved pin — a member that is
- * merely unapproved is the member's to lock.
- */
-function memberNotes(approvals: ProjectApproval[], record?: LockRecord | null, diff?: ApprovalDiff | null): { text: string; drift: boolean; pinsMoved: boolean } {
-  const own = approvals.find((a) => a.key === '');
-  // A part has no approval of its own (stage 8): this project's is its approval.
+function memberNotes(approvals: ProjectApproval[], record: LockRecord): string {
+  // A part has no approval of its own: this project's is its approval.
   const direct = approvals.filter((a) => a.parent === '' && a.as !== 'part');
-  const moved = direct.filter((a) => a.pinned === 'moved');
   const unapproved = direct.filter((a) => a.state !== 'approved');
   const lines: string[] = [];
-  if (own?.upgraded) {
-    // Nothing in the tree moved: the cause is the gate, and saying "the design
-    // or only code linkage" would send the reader looking for an edit nobody made.
-    const by = record?.validatorVersion ? ` (taken by wairon ${record.validatorVersion})` : '';
-    lines.push(diff && diffSize(diff) === 0
-      ? `This approval no longer matches${by}: ${GATE_MOVED_NOTE}.`
-      : record && record.format === 2
-        ? `This approval no longer matches: ${FORMAT2_STALE_NOTE}.`
-        : `This approval was taken under an earlier gate identity — ${GATE_UPGRADE_NOTE}. Re-lock once.`);
-  }
-  if (moved.length) {
-    // Say what moved and why, never just "drifted": the member's own approver
-    // signed its new design off at its own root, and this approval still pins
-    // the earlier one — the fix is a lock here, not a design review here.
-    const names = moved.map((a) => a.alias ?? a.key).join(', ');
-    lines.push(moved.length === 1
-      ? `Member pin moved since approval: ${names} was re-approved at its own root after this approval, which still pins its earlier approval. Run \`wairon lock\` here to pin the new one (\`wairon validate\` first shows what ${names}'s change means for this project).`
-      : `Member pins moved since approval: ${names} were re-approved at their own roots after this approval, which still pins their earlier approvals. Run \`wairon lock\` here to pin the new ones (\`wairon validate\` first shows what their changes mean for this project).`);
+  if (record.upgraded) {
+    lines.push(`\`wairon upgrade\` carried this approval over from an earlier wairon major (lock format ${record.upgraded.fromFormat}) without a review${record.upgraded.carried ? '' : ' — it did not carry, so it reads stale until one `wairon lock`'}.`);
   }
   if (unapproved.length) {
-    lines.push(`Member(s) not approved at their own root: ${unapproved.map((a) => `${a.alias ?? a.key} (${a.state}${a.upgraded ? ', re-lock once' : ''})`).join(', ')}.`);
+    lines.push(`Member(s) not approved at their own root: ${unapproved.map((a) => `${a.alias ?? a.key} (${a.state}${a.partsMoved && a.partsMoved.length > 0 ? `: ${describeApprovalParts(a.partsMoved)} moved` : ''})`).join(', ')}.`);
   }
-  return {
-    text: lines.map((l) => `\n${l}`).join(''),
-    drift: !!own?.upgraded || moved.length > 0,
-    pinsMoved: moved.length > 0,
-  };
+  return lines.map((l) => `\n${l}`).join('');
 }

@@ -144,7 +144,7 @@ function git(dir: string, ...args: string[]): string {
 /** An approval record committed with the tree as it stands; `members` is what the record says of each member. */
 function approve(dir: string, digest: string, members?: Record<string, string>): void {
   const record = {
-    format: 3, stateId: { algorithm: 'sha256+design-2', digest }, specs: {},
+    format: 4, parts: {}, stateId: { algorithm: 'sha256+design-2', digest }, specs: {},
     ...(members ? { members: Object.fromEntries(Object.entries(members).map(([alias, d]) => [alias, { as: 'project', project: 'geo-sdk', subject: `sha256+design-2:${d}`, state: 'approved' }])) } : {}),
   };
   fs.writeFileSync(path.join(dir, '.wai', 'lock.json'), JSON.stringify(record, null, 2));

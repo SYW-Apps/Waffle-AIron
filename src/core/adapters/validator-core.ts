@@ -22,23 +22,11 @@ export {
   dryRunSerializeSpecs,
   loadProjectExtensions,
   loadProjectConfig,
-  // The bound project's OWN content identity (the gate identity's content
-  // half) and another root's lock record (a direct member's, for its
-  // composition subject; a member's parent's, for its pin).
-  computeOwnStateId,
-  // The bound project's OWN design identity — the gate identity's content
-  // half from lock format 3 on (computeOwnStateId is kept to judge a format-2
-  // lock under its own algorithm).
+  // The bound project's OWN design identity — the design half of the
+  // approval identity.
   computeOwnDesignId,
-  // The earlier design reading's identity and the statuses an approval
-  // recorded, to judge a lock taken in that reading as it was taken.
-  computeOwnDesignIdAsRecorded,
-  approvedStatuses,
-  approvalRecord,
-  // The own spec files that moved since the approval: what a record from
-  // before gate parts proves about its design (family_validator.releaseVerdict).
+  // The own spec files that moved since the approval.
   diffAgainstApproval,
-  consumedContractInputs,
   settledSpecPaths,
   readLockRecord,
   getLoaderIssues,

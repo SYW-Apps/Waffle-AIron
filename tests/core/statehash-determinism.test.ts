@@ -4,11 +4,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { compareOrdinal } from '../../src/utils/canonical-json.js';
-import { computeGateIdentity } from '../../src/core/rules/gate-identity.js';
-import { emptyExtensions } from '../../src/core/extensions.js';
+import { analyzerDigest } from '../../src/core/rules/approval-identity.js';
+import { createHash } from 'crypto';
+import { canonicalize } from '../../src/utils/canonical-json.js';
 import { computeStateId } from '../../src/core/statehash.js';
 import { invalidateSpecCache, loadComponentSpecs } from '../../src/core/specs.js';
-import type { StateId } from '../../src/core/statehash.js';
 import type { SddRule } from '../../src/core/rules/types.js';
 
 // ---------------------------------------------------------------------------
@@ -214,38 +214,31 @@ describe('content identity — the fixture pin', () => {
 const fixtureRule = (name: string, code: string): SddRule => ({
   name,
   description: `fixture rule ${name}`,
+  judges: 'code',
   codes: [{ code, defaultSeverity: 'error', summary: 'fixture code' }],
   check: () => { /* never run: only its identity is digested */ },
 });
 
-const CONTENT: StateId = { algorithm: 'sha256', digest: 'f'.repeat(64) };
-
-describe('gate identity — ordinal, not locale-aware', () => {
-  /**
-   * Generated from this exact input. Two rule names that differ only by hyphen
-   * versus underscore sort one way by codepoint and the other way under several
-   * collations, so this constant is what separates the two comparators: it is
-   * the ordinal order's digest, and a localeCompare sort of the same two rules
-   * produces a different one.
-   */
-  const PINNED_GATE_DIGEST = '42b178c4d1d94cea91fae60c14d9af4a86c1906d1242b3e2d71ce89de8eb764f';
-
+describe('analyzer digest — ordinal, not locale-aware', () => {
   const rules = [fixtureRule('zz-a', 'ZZ_DASH'), fixtureRule('zz_a', 'ZZ_UNDERSCORE')];
 
-  it('digests a hyphen/underscore rule pair in codepoint order', () => {
-    expect(computeGateIdentity(CONTENT, emptyExtensions(), rules, [], {}, {}).digest).toBe(PINNED_GATE_DIGEST);
-  });
-
   it('does not depend on the order the rules were registered in', () => {
-    const forward = computeGateIdentity(CONTENT, emptyExtensions(), rules, [], {}, {});
-    const backward = computeGateIdentity(CONTENT, emptyExtensions(), [...rules].reverse(), [], {}, {});
-    expect(backward.digest).toBe(forward.digest);
+    const forward = analyzerDigest(rules, {});
+    const backward = analyzerDigest([...rules].reverse(), {});
+    expect(backward).toBe(forward);
   });
 
-  it('does not depend on the order the consumed contract inputs were gathered in', () => {
-    const forward = computeGateIdentity(CONTENT, emptyExtensions(), rules, ['b-key', 'a_key'], {}, {});
-    const backward = computeGateIdentity(CONTENT, emptyExtensions(), rules, ['a_key', 'b-key'], {}, {});
-    expect(backward.digest).toBe(forward.digest);
+  it('sorts a hyphen/underscore rule pair by codepoint, never by collation', () => {
+    // "-" is U+002D, "_" is U+005F: the digest is that of the ordinal order.
+    const crypto = createHash('sha256').update(canonicalize({
+      rules: [
+        { name: 'zz-a', codes: [{ code: 'ZZ_DASH', severity: 'error' }] },
+        { name: 'zz_a', codes: [{ code: 'ZZ_UNDERSCORE', severity: 'error' }] },
+      ],
+      conformance: null,
+      severities: [],
+    })).digest('hex');
+    expect(analyzerDigest(rules, {})).toBe(crypto);
   });
 });
 

@@ -360,15 +360,6 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(at(f.root, () => listExternals())[0]).toMatchObject({ alias: 'ledger', sourceKind: 'path', audience: 'instance', lock: expect.objectContaining({ project: 'ledger' }) });
   });
 
-  v5it('the gate inputs cover the pinned externals and the lock, each key naming its kind', () => {
-    const f = family({ dispatchExternals: { billing: {} } });
-    const before = at(f.dispatch, () => consumedContractInputs());
-    at(f.dispatch, () => pinExternals());
-    const after = at(f.dispatch, () => consumedContractInputs());
-    expect(before).toEqual([]);
-    expect(after.map((k) => k.split(':')[0]).sort()).toEqual(['external', 'lock']);
-  });
-
   it('a malformed lock is refused naming the file, never read as empty', () => {
     const f = family();
     write(f.dispatch, '.wai/externals.lock.yaml', 'externals: [not, a, map]\n');

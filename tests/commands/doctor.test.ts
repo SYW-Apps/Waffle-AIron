@@ -18,7 +18,7 @@ import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
 import * as subsystemAdapter from '../../src/commands/adapters/core.js';
 import * as validateAdapter from '../../src/commands/validate.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { serializeHolder } from '../../src/utils/lock-holder.js';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ import { serializeHolder } from '../../src/utils/lock-holder.js';
 // check, Major check and Lock section route through the CLI core
 // adapter (cli_core_adapter: projectConfigExists, readLockState)
 // and the upgrade adapter (cli_upgrade_adapter: standing) and the CLI validator adapter (cli_validator_adapter:
-// validateProject, computeGateStateId), not a direct core import.
+// validateProject, computeApprovalId), not a direct core import.
 //
 // The report phase is exercised in-process (mocking the two adapter modules
 // as spies that still forward to the real implementation, so routing can be
@@ -49,7 +49,7 @@ vi.mock('../../src/commands/validate.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/commands/validate.js')>();
   return {
     ...actual,
-    computeGateStateId: vi.fn(actual.computeGateStateId),
+    computeApprovalId: vi.fn(actual.computeApprovalId),
     validateProject: vi.fn(actual.validateProject),
     validateFamily: vi.fn(actual.validateFamily),
   };
@@ -204,7 +204,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     expect(printed(logSpy)).not.toContain('Lock');
     logSpy.mockRestore();
 
-    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
@@ -226,7 +226,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     out = printed(logSpy);
     expect(out).toContain('stale');
 
-    expect(vi.mocked(validateAdapter.computeGateStateId)).toHaveBeenCalled();
+    expect(vi.mocked(validateAdapter.computeApprovalId)).toHaveBeenCalled();
     expect(vi.mocked(subsystemAdapter.readLockState)).toHaveBeenCalled();
   });
 

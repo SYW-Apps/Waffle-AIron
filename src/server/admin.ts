@@ -3,11 +3,11 @@ import type { DiagramFormat } from '../core/diagram.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
-import type { LockRecord, MemberPin } from '../core/lockfile.js';
+import type { LockRecord } from '../core/lockfile.js';
 import type { StateId } from '../core/statehash.js';
 import type { ValidationResult } from '../core/validation.js';
 import type { ProjectConfig } from '../models/project.js';
-import { designOnly, memberPinOf, type ApproverIdentity, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
+import { designOnly, type ApproverIdentity, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
 import { effectiveProjectId } from '../models/project.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
@@ -34,7 +34,7 @@ import {
 import * as hostCore from './adapters/core.js';
 import * as hostGit from './adapters/git.js';
 import * as hostProducer from './adapters/producer.js';
-import { validateAsComplete, computeGateStateId, familyApprovals, familyRelations } from './adapters/validator.js';
+import { validateAsComplete, computeApprovalId, familyApprovals, familyRelations } from './adapters/validator.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 // The secret store's write is reached through its module namespace: this module
@@ -346,7 +346,7 @@ function renderIdentity(stateId: StateId): string {
  */
 export function gateIdentity(cfg: HostConfig, projectId: string): string {
   const root = boundLifecycleRoot(cfg, projectId);
-  return runWithProjectRoot(root, () => renderIdentity(computeGateStateId()));
+  return runWithProjectRoot(root, () => renderIdentity(computeApprovalId()));
 }
 
 /**
@@ -402,7 +402,7 @@ export function executeApprovedLock(
     // latest. No-op for a native family.
     runWithProjectRoot(scope.repositoryRoot, () => hostGit.sync());
     // Capture what the record will certify before anything is judged.
-    const captured = computeGateStateId();
+    const captured = computeApprovalId();
     refuseUnrequestedDesign(captured, expected);
     const gate = validateAsComplete();
     const design = refuseDesignErrors(gate);
@@ -412,8 +412,8 @@ export function executeApprovedLock(
     const specs = hostCore.captureApprovedSpecs();
     // Did any input move while the lock ran? Then the validation just
     // performed does not describe what would be recorded.
-    refuseMovedInputs(captured, computeGateStateId());
-    const record = lockRecordOf(captured, approver, design, gate, config, specs, members);
+    refuseMovedInputs(captured, computeApprovalId());
+    const record = lockRecordOf(captured, approver, design, gate, config, specs);
     // Write the record BEFORE publishing, so the commit that ships the specs
     // also contains the approval that certifies them.
     hostCore.writeLockRecord(record);
@@ -443,8 +443,7 @@ function refuseUnapprovedMembers(required: boolean, members: ProjectApproval[]):
   // A PROJECT member only: a part's approval is this lock (stage 8).
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
   if (!required || unapproved.length === 0) return;
-  const named = unapproved.map((m) => `${m.alias ?? m.key} (${m.state}${
-    m.upgraded ? ' — approved under an earlier gate identity, re-lock it once' : ''})`);
+  const named = unapproved.map((m) => `${m.alias ?? m.key} (${m.state})`);
   throw new LockRefusedError(
     `composition.requireApprovedMembers: direct member(s) not approved — ${named.join(', ')}. `
       + 'Lock each at its own root first; a parent never approves below itself. Nothing was written.',
@@ -455,8 +454,8 @@ function refuseUnapprovedMembers(required: boolean, members: ProjectApproval[]):
 function refuseMovedInputs(captured: StateId, now: StateId): void {
   if (now.algorithm === captured.algorithm && now.digest === captured.digest) return;
   throw new LockRefusedError(
-    'The lock\'s inputs changed while it ran — a spec, the doctrine, an input, the composition block or a '
-      + 'member\'s approval moved between the validation and the write. Nothing was written; run the lock again.',
+    'The lock\'s inputs changed while it ran — a spec, the project\'s policy (rule tuning, the composition block, '
+      + 'the network declaration, pack selections) moved between the validation and the write. Nothing was written; run the lock again.',
   );
 }
 
@@ -468,15 +467,13 @@ function lockRecordOf(
   gate: ValidationResult,
   config: ProjectConfig | null,
   specs: LockRecord['specs'],
-  members: ProjectApproval[],
 ): LockRecord {
   const count = (severity: string): number => design.issues.filter((i) => i.severity === severity).length;
   // The bound tree's effective id, so a later id change is caught (PROJECT_ID_CHANGED).
   const projectId = config ? effectiveProjectId(config) : null;
   return {
-    // Format 3: the design gate algorithm, design-reading digests.
-    format: 3,
-    // The captured identity alone: asRecorded is a reading, never recorded.
+    // Format 4: the approval of the own design and policy.
+    format: 4,
     stateId: { algorithm: captured.algorithm, digest: captured.digest },
     lockedAt: new Date().toISOString(),
     lockedBy: approver,
@@ -485,20 +482,11 @@ function lockRecordOf(
     status: 'ready',
     ...(projectId !== null ? { projectId } : {}),
     specs,
-    specsReading: 'design',
-    // Each input of the certified identity on its own, exactly as the local
+    // Each half of the certified identity on its own, exactly as the local
     // lock records them: what lets a later check name the one that moved.
-    ...(captured.parts ? { gateParts: captured.parts } : {}),
-    members: memberPins(members),
+    parts: captured.parts ?? {},
     ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
   };
-}
-
-/** Each direct member's alias → a project member's {as: project, project, subject, state} or a part's {as: part, contentDigest, commit, state} (stage 8). */
-function memberPins(members: ProjectApproval[]): Record<string, MemberPin> {
-  const pins: Record<string, MemberPin> = {};
-  for (const m of members) pins[m.alias ?? m.key] = memberPinOf(m);
-  return pins;
 }
 
 /** The analysis as a lock records it: its codes list is noise the analyzer identity already pins. */

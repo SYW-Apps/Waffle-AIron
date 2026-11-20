@@ -225,8 +225,8 @@ describe('reachability migration — the plan', () => {
     expect(run?.reason).toContain('in-process migration.run');
   });
 
-  it('the spec maintenance portal forwards to the migration (the upgrade step reaches it through its own core adapter)', () => {
-    expect(corePortal.migrateReachability).toBe(migrate);
+  it('the migration is no longer published on the core portal: only the upgrade adapter reaches it', () => {
+    expect((corePortal as unknown as Record<string, unknown>).migrateReachability).toBeUndefined();
   });
 });
 

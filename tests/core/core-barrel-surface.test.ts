@@ -100,8 +100,6 @@ function typeMethodNames(): Set<string> {
 const DECLARED_TYPES = [
   'ComponentRename',
   'ForeignFieldRepair',
-  'GatewayMerge',
-  'GatewayRetirement',
   'GenerateOptions',
   'GenerateSummary',
   'InstalledPack',
@@ -116,7 +114,6 @@ const DECLARED_TYPES = [
   'PackScope',
   'SpecIndex',
   'SpecScanOptions',
-  'SpecialistRetirement',
   'StateId',
   'SyncResult',
   'TreeExportResult',

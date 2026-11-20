@@ -7,7 +7,7 @@ import * as yaml from 'js-yaml';
 import { runWithProjectBinding, setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { validateAsComplete, validateProject, computeGateStateId } from '../../src/core/validation.js';
+import { validateAsComplete, validateProject, computeApprovalId } from '../../src/core/validation.js';
 import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { runLock } from '../../src/commands/lock.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
@@ -46,7 +46,7 @@ async function lockAt(dir: string): Promise<string | undefined> {
   setProjectRoot(dir);
   const config = projectConfigRepositoryAt(dir).load();
   const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
-  return (await runLock({ yes: true }, gate, computeGateStateId()))?.projectId;
+  return (await runLock({ yes: true }, gate, computeApprovalId()))?.projectId;
 }
 
 /** Every text file under the family's .wai trees. */

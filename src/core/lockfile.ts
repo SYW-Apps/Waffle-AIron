@@ -1,12 +1,11 @@
 import { files } from '../io/index.js';
 import * as path from 'path';
-import { aiDir, aiDirAt, readsV5Forms, withLineEndings } from '../utils/fs.js';
+import { aiDir, aiDirAt, withLineEndings } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
 import { LockRecordUnreadableError } from '../utils/errors.js';
 // The approver is shared vocabulary, not this store's private shape: a command
 // that only wants to RENDER one must not have to reach a Store to do it.
-import type { ApproverIdentity, CodeAnalysis, LockReexpression, LockRestamp, ProjectApprovalState, SpecDigestReading } from '../models/lock.js';
-import type { MemberKind } from '../models/project.js';
+import type { ApproverIdentity, CodeAnalysis } from '../models/lock.js';
 
 // ---------------------------------------------------------------------------
 // Lock Registry (sdd_host / sdd_core)
@@ -22,116 +21,71 @@ import type { MemberKind } from '../models/project.js';
 // ---------------------------------------------------------------------------
 
 /**
- * member_pin — one direct member as a parent's lock recorded it: the member's
- * composition subject (the stateId its OWN lock record carries) and its
- * approval state when the parent locked. A record of the member owner's
- * decision, never of the member's specs; the parent never writes below itself.
+ * lock_upgrade — provenance on a lock record `wairon upgrade` rewrote from an
+ * earlier wairon major's format instead of a human re-approving it: who
+ * approved and when stay the human's. Carried (the current identity written)
+ * only when the upgrade proved the approved design and policy unchanged;
+ * otherwise the old identity is kept, so the record reads stale until one
+ * `wairon lock`.
  */
-export interface MemberPin {
-  /** The member's effective project id when the parent locked. */
-  project?: string;
-  /** The member's recorded gate identity, `<algorithm>:<digest>`; absent when it had no lock. */
-  subject?: string;
-  /** approved | drifted | never, as it stood when the parent locked (a part records approved). Recorded, never hashed. */
-  state: ProjectApprovalState;
-  /** part | project, as the member's content made it when the parent locked; absent in a record written before stage 8. */
-  as?: MemberKind;
-  /** The commit the member was read at when the parent locked. Provenance only: never read by a verdict. */
-  commit?: string;
-  /** Part only: its content digest (ScannedPart.contentDigest) when the parent locked. */
-  contentDigest?: string;
+export interface LockUpgrade {
+  /** ISO-8601 time the upgrade rewrote the record. */
+  at: string;
+  /** The record format it was rewritten from (2 or 3 for a wairon 6 record). */
+  fromFormat: number;
+  /** What the upgrade compared: `specs`, and the parts it matched (or, for a record not carried, what did not). */
+  compared: string[];
+  /** Whether the approval was carried: true writes the current identity and its parts. */
+  carried: boolean;
 }
 
 export interface LockRecord {
   /**
-   * The gate identity this lock certifies, captured BEFORE the as-complete
-   * validation ran and confirmed unchanged immediately before the record was
-   * written. Also this project's composition subject as its parent sees it.
+   * The approval identity this lock certifies (algorithm `sha256+design+policy`),
+   * captured BEFORE the as-complete validation ran and confirmed unchanged
+   * immediately before the record was written.
    */
   stateId: StateId;
   /** ISO-8601 lock timestamp. */
   lockedAt: string;
   /** The principal that authorized the lock (never a raw credential). */
   lockedBy: ApproverIdentity;
-  /** wairon version that produced the validation. */
+  /** wairon version that took the lock. Informational only: the release is no input of the approval. */
   validatorVersion: string;
   /**
    * The DESIGN half of the as-complete validation captured at lock time
-   * (ValidationResult.designOnly); the code half is counted under `code`. A
-   * format-1 record counted both together, and a record written before the
-   * notice severity existed carries no notice count.
+   * (ValidationResult.designOnly); the code half is counted under `code`.
    */
   validationResult: { valid: boolean; errors: number; warnings: number; notices?: number };
   /** Always 'ready'. The lock IS the human gate; there is no second state. */
   status: 'ready';
   /**
-   * THE APPROVAL: spec path (relative to the project root, POSIX separators) →
-   * sha256 of that file's content when it was approved. Sorted on write, so a
-   * re-lock shows one changed line per spec actually re-approved rather than a
-   * rewritten blob.
-   *
-   * Absent on a record written before approval moved in here — such a lock
-   * still proves the tree validated, but cannot say WHICH specs moved since,
-   * only that the whole-tree StateId did. Re-locking records it.
+   * THE APPROVAL: spec path (relative to the project root, POSIX separators; a
+   * part's under `members/<alias>/<path inside the part>`) → sha256 of that
+   * spec's design view in canonical form when approved. Sorted on write, so a
+   * re-lock shows one changed line per spec actually re-approved.
    */
-  specs?: Record<string, string>;
+  specs: Record<string, string>;
+  /** The record format: 4. Any other is refused by the lock store. */
+  format: number;
   /**
-   * LEGACY (format 1): chained child mount id → that child's approved StateId,
-   * copied without checking the child's lock still matched its tree. Read as
-   * the member pins in the v5 reading only (a format-1 record is refused
-   * anywhere else); never written from stage 5 on.
+   * The digest of each half of the certified approval identity (StateId.parts):
+   * design, rules, composition, network (when declared) and selections. Lets a
+   * later check name the part that moved. Empty on a record `wairon upgrade`
+   * could not carry.
    */
-  children?: Record<string, string>;
-  /**
-   * The record format: 3 from the release in which code linkage left the
-   * approval (stateId under the design gate algorithm, `specs` in the design
-   * reading), 2 from stage 5 on, absent means format 1. A format-1 or -2
-   * record was written by wairon 5: it is judged under its own algorithm
-   * (StateId.asRecorded) and its own reading in the v5 reading `wairon upgrade`
-   * binds, which re-expresses it; anywhere else it is refused.
-   */
-  format?: number;
-  /**
-   * The reading `specs` was digested in: `design` on every record written from
-   * format 3 on, absent on an earlier record (raw-content digests). A reader
-   * compares the tree in the reading the record names, never in another.
-   */
-  specsReading?: SpecDigestReading;
-  /**
-   * Present when a tool carried this record into the current reading and gate
-   * algorithm after proving the design unchanged (doctor --fix), instead of a
-   * human re-approving it.
-   */
-  reexpressed?: LockReexpression;
-  /**
-   * The digest of each input of the certified gate identity (StateId.parts):
-   * what lets a later check name the input that moved, and judge a change of
-   * the wairon release alone by re-validation instead of by digest. Absent on
-   * a record written before this release.
-   */
-  gateParts?: Record<string, string>;
-  /**
-   * Present when `wairon lock` refreshed the record's release stamp after the
-   * approved, unchanged design re-validated clean under a newer release.
-   */
-  restamped?: LockRestamp;
-  /**
-   * Each DIRECT member, keyed by alias → its composition subject and approval
-   * state as they stood when this project locked. Present (possibly empty) on
-   * every format-2 record.
-   */
-  members?: Record<string, MemberPin>;
+  parts: Record<string, string>;
+  /** Present when `wairon upgrade` rewrote this record from an earlier wairon major's format. */
+  upgraded?: LockUpgrade;
   /**
    * The code-conformance results of the lock-time run with the analyzer that
    * produced them — BESIDE the approval, never part of what it certifies.
-   * Absent on a format-1 record.
    */
   code?: CodeAnalysis;
   /**
    * The project's effective id when this lock was taken (a defaulted one
    * included). Validate reports PROJECT_ID_CHANGED when project.yaml later
-   * resolves to a different id. Absent on a record written before project ids
-   * existed, and when the project had no effective id to record.
+   * resolves to a different id.
    */
   projectId?: string;
   /** For git-backed projects: the pushed commit the PR is at. */
@@ -161,11 +115,11 @@ export function normalizeApprover(value: unknown): ApproverIdentity {
 }
 
 /**
- * The newest lock record format this release reads. A record naming a later
- * one was written by a newer wairon: its fields may mean things this release
- * cannot judge, so it is refused rather than read as something it is not.
+ * The lock record format this release reads and writes. A record naming a
+ * later one was written by a newer wairon, and an earlier one by an earlier
+ * wairon major: neither is read as something it is not.
  */
-const LOCK_FORMAT_CURRENT = 3;
+const LOCK_FORMAT_CURRENT = 4;
 
 /** Read the current project's lock record: null when ABSENT, LockRecordUnreadableError when present but unreadable. */
 export function readLockRecord(): LockRecord | null {
@@ -225,19 +179,23 @@ function parseLockRecord(text: string, file: string): LockRecord {
   }
   const stateId = record.stateId as Partial<StateId> | undefined;
   if (!stateId || typeof stateId !== 'object' || typeof stateId.algorithm !== 'string' || typeof stateId.digest !== 'string') {
-    throw new LockRecordUnreadableError(file, 'it records no gate identity ("stateId": {algorithm, digest}), so it is not a lock record');
+    throw new LockRecordUnreadableError(file, 'it records no approval identity ("stateId": {algorithm, digest}), so it is not a lock record');
   }
-  if (record.specs !== undefined && (record.specs === null || typeof record.specs !== 'object' || Array.isArray(record.specs)
-    || Object.values(record.specs).some((d) => typeof d !== 'string'))) {
-    throw new LockRecordUnreadableError(file, 'its "specs" is not a map of spec path to digest');
-  }
-  // A format-1 (no format) or format-2 record was written by wairon 5: read only in the v5 reading.
-  if (!readsV5Forms() && (record.format === undefined || record.format < LOCK_FORMAT_CURRENT)) {
+  // An earlier format was written by an earlier wairon major: `wairon upgrade` carries it into this release.
+  if (record.format === undefined || record.format < LOCK_FORMAT_CURRENT) {
     throw new LockRecordUnreadableError(
       file,
-      `it is lock record format ${record.format ?? 1}, written by wairon 5 (wairon 6 reads format ${LOCK_FORMAT_CURRENT})`,
-      'Run `wairon upgrade` to bring the project to this wairon; it carries the approval over without asking for a new one.',
+      `it is lock record format ${record.format ?? 1}, written by an earlier wairon major (this release reads format ${LOCK_FORMAT_CURRENT})`,
+      'Run `wairon upgrade` to bring the project to this wairon; it carries the approval over without asking for a new one when the approved design and policy are unchanged.',
     );
+  }
+  if (record.specs === undefined || record.specs === null || typeof record.specs !== 'object' || Array.isArray(record.specs)
+    || Object.values(record.specs).some((d) => typeof d !== 'string')) {
+    throw new LockRecordUnreadableError(file, 'its "specs" is not a map of spec path to digest');
+  }
+  if (record.parts === undefined || record.parts === null || typeof record.parts !== 'object' || Array.isArray(record.parts)
+    || Object.values(record.parts).some((d) => typeof d !== 'string')) {
+    throw new LockRecordUnreadableError(file, 'its "parts" is not a map of approval part to digest');
   }
   return normalizeRecord(record);
 }
@@ -297,7 +255,6 @@ function normalizeRecord(raw: unknown): LockRecord {
 
 /**
  * Persist the lock record atomically to .wai/lock.json (overwrites any prior).
- * A legacy `children` map is never written: `members` is recorded instead.
  */
 export function writeLockRecord(record: LockRecord): void {
   const p = lockPath();
@@ -309,8 +266,7 @@ export function writeLockRecord(record: LockRecord): void {
 }
 
 /**
- * Sort `specs` and `members` by key before serializing, and drop the legacy
- * `children`. JSON preserves object insertion order, so this is what makes a
+ * Sort `specs` and `parts` by key before serializing. JSON preserves object insertion order, so this is what makes a
  * re-lock's diff readable: the entries stay in the same place and only the
  * specs that actually changed move.
  */
@@ -321,12 +277,11 @@ function withSortedMaps(record: LockRecord): LockRecord {
     for (const k of Object.keys(m).sort()) out[k] = m[k];
     return out;
   };
-  const { children: _legacy, ...rest } = record;
-  const specs = sorted(rest.specs);
-  const members = sorted(rest.members);
+  const specs = sorted(record.specs);
+  const parts = sorted(record.parts);
   return {
-    ...rest,
+    ...record,
     ...(specs ? { specs } : {}),
-    ...(members ? { members } : {}),
+    ...(parts ? { parts } : {}),
   };
 }

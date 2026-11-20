@@ -9,10 +9,10 @@ import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecF
 import { declaredExternals, declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
-import { isCiDraftWaivable as waivable, missingTreeSentence, sameRulesNotice } from '../models/lock.js';
+import { isCiDraftWaivable as waivable, missingTreeSentence } from '../models/lock.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import {
-  validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals, familyRelations,
+  validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeApprovalId, familyApprovals, familyRelations,
   adviseExternals as adviseLive, adviseNetwork as adviseNetworkLive,
   type ValidationIssue, type ValidationResult, type ValidationOptions,
 } from '../core/validation.js';
@@ -31,7 +31,7 @@ import {
 // changes). Republished here as the adapter's forward to the validator portal;
 // `wairon lock` gates its dry-run on this and refuses to approve on errors.
 //
-// cli_validator_adapter.computeGateStateId — the gate identity a lock records
+// cli_validator_adapter.computeApprovalId — the gate identity a lock records
 // and every staleness check compares, republished as the adapter's forward to
 // the validator portal.
 //
@@ -48,7 +48,7 @@ import {
 // approval state and each member's, each computed at that project's own root),
 // republished as the adapter's forward to the validator portal: the local lock
 // asks with depth 1, `wairon status` for every level.
-export { validateAsComplete, computeGateStateId, familyApprovals };
+export { validateAsComplete, computeApprovalId, familyApprovals };
 // cli_validator_adapter.familyRelations — the bound family's relation health,
 // for `wairon diagram` to colour the canvas's consumption edges.
 export { familyRelations };
@@ -420,10 +420,10 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     // at the root, so a green member run is never read as a proven one.
     const parent = resolveChainingParent();
     if (parent) logger.info(chalk.gray(memberNetworkLine(parent.alias, parent.parentRoot, network.length > 0)));
-    // Step 12: the approval line, when the approval was taken under another
-    // release — the verdict lock-check exits on, never part of this decision.
-    const releaseLine = approvalReleaseLine();
-    if (releaseLine) logger.info(releaseLine);
+    // Step 12: what the build inputs owe beside the approval — the verdict
+    // lock-check exits on, never part of this decision.
+    const inputsLine = approvalInputsLine();
+    if (inputsLine) logger.info(inputsLine);
   }
 
   else {
@@ -509,36 +509,20 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
 }
 
 /**
- * The approval line `validate` prints when the bound project's approval was
- * taken under another wairon release: carried (re-validated clean: still
- * approved) or not (the new release's findings). Null otherwise, and when the
+ * The line `validate` prints when the bound project's build inputs owe
+ * something beside its approval (an external to pin, a pack to sync, a member
+ * to lock): each debt's sentence. Null when they owe nothing, and when the
  * approval cannot be read — `lock-check` and `status` own that refusal.
  */
-function approvalReleaseLine(): string | null {
+function approvalInputsLine(): string | null {
   let own;
   try {
     own = familyApprovals(0).find((a) => a.key === '');
   } catch {
     return null;
   }
-  const release = own?.release;
-  // A release stamp this wairon cannot stand behind is said here too: every surface names it.
-  const stamp = own?.stampProblem !== undefined
-    ? `Approval notice: ${own.stampProblem} — \`wairon lock\` replaces the stamp with this release.`
-    : null;
-  if (!release) {
-    if (stamp !== null) return chalk.blue(stamp);
-    // An approval an older release took, carried over with no rule moved: said once, as a notice.
-    let record;
-    try { record = readLockRecord(); } catch { record = null; }
-    const carried = record ? sameRulesNotice(record, own, WAIRON_VERSION).trim().replace(/^Notice: /, '') : '';
-    return carried ? chalk.blue(`Approval notice: ${carried}`) : null;
-  }
-  return release.carried
-    ? chalk.green(`Approval: approved under wairon ${release.from}, re-validated under ${release.to}: still approved. (\`wairon lock\` refreshes the record's release stamp without a re-approval.)`)
-    : release.reason
-      ? chalk.yellow(`Approval: ${release.reason} \`wairon lock-check\` fails until it is re-locked.`)
-      : chalk.yellow(`Approval: approved under wairon ${release.from}, and the new release (${release.to}) finds ${release.count ?? 0} issue(s) in the approved design — \`wairon lock-check\` fails until they are resolved and the design re-locked.`);
+  const debts = own?.inputs ?? [];
+  return debts.length > 0 ? chalk.yellow(`Build inputs owe: ${debts.map((d) => d.sentence).join('; ')}`) : null;
 }
 
 /**

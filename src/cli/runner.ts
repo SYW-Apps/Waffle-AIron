@@ -17,7 +17,7 @@ import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../uti
 import { runGenerate } from '../commands/generate.js';
 import { runLock as lockTree, checkApproval, holdsNoDesign, treeVerdict, NOTHING_TO_APPROVE } from '../commands/lock.js';
 import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
-import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
+import { runValidate, validateAsComplete, computeApprovalId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
 import { pathExists, readFileOrNull, writeFile, getProjectRoot, getProjectRootOverride, resolveProjectBinding, runWithProjectRoot } from '../utils/fs.js';
@@ -98,7 +98,7 @@ async function runLock(options: LockOptions): Promise<void> {
   }
 
   // Step 9: capture the identity the record will certify, before anything is judged.
-  const captured = computeGateStateId();
+  const captured = computeApprovalId();
 
   logger.info('Analyzing and validating specifications in-memory...');
   const dry = validateAsComplete({
@@ -156,9 +156,6 @@ async function runLock(options: LockOptions): Promise<void> {
   logger.info(before !== null && readFileOrNull(lockPath) === before
     ? `Lock record unchanged (.wai/lock.json left untouched by this run): stateId ${record.stateId.algorithm}:${record.stateId.digest} — approved ${record.lockedAt}.`
     : `Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
-  for (const [alias, pin] of Object.entries(record.members ?? {})) {
-    logger.info(`  member ${alias}: ${pin.state}${pin.subject ? ` (${pin.subject.slice(0, 26)}…)` : ''}`);
-  }
   // The code half was printed once, plainly, in the summary the lock showed
   // before it wrote (so an approval taken over failing code is never mistaken
   // for clean code); printing it again here only doubled the line.

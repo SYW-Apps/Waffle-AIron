@@ -21,7 +21,7 @@ import { runWithProjectRoot } from '../../utils/fs.js';
 // more than a name: the as-complete gate runs under the bound project's own
 // rule severities and projectType, read through the host core adapter.
 // ---------------------------------------------------------------------------
-export { computeGateStateId, builtinProfileIds, builtinProjectKinds } from '../../core/validation.js';
+export { computeApprovalId, builtinProfileIds, builtinProjectKinds } from '../../core/validation.js';
 // host_validator_adapter.familyApprovals — the bound tree's pin tree (its own
 // approval state and each member's, each at the member's own root). The hosted
 // lock asks with depth 1 for the direct members it records; the caller has

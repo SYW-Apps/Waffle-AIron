@@ -8,7 +8,7 @@ import { runInV5Reading, setProjectRoot } from '../../src/utils/fs.js';
 import { getLoaderIssues, invalidateSpecCache, loadComponentSpecs, loadInterfaceSpecs, loadSubsystemSpecs, loadSystemSpec } from '../../src/core/specs.js';
 import { readLockRecord, writeLockRecord } from '../../src/core/lockfile.js';
 import { currentSpecDigests } from '../../src/core/approval.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 
 // ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ function v5Project(): string {
       stateId: { algorithm: CONTENT_GATE_ALGORITHM, digest: '0'.repeat(64) }, lockedAt: now, lockedBy: { id: 'approver', source: 'git' },
       validatorVersion: '5.1.0', validationResult: { valid: true, errors: 0, warnings: 0 }, status: 'ready',
     });
-    const gate = computeGateStateId();
+    const gate = computeApprovalId();
     expect(gate.asRecorded?.algorithm).toBe(CONTENT_GATE_ALGORITHM);
     writeLockRecord({
       format: 2,
@@ -254,10 +254,10 @@ describe('wairon upgrade over a project in every v5 form', () => {
     setProjectRoot(root);
     invalidateSpecCache();
     const kept = readLockRecord()!;
-    expect(kept).toMatchObject({ format: 3, lockedAt: now, lockedBy: { id: 'qa-fixture', source: 'legacy' }, stateId: old.stateId, validatorVersion: '5.1.0' });
+    expect(kept).toMatchObject({ format: 4, parts: {}, lockedAt: now, lockedBy: { id: 'qa-fixture', source: 'legacy' }, stateId: old.stateId, validatorVersion: '5.1.0' });
     expect(kept.specs).toBeUndefined();
     expect(kept.reexpressed).toMatchObject({ fromAlgorithm: 'sha256', fromReading: 'content', by: 'wairon upgrade' });
-    expect(computeGateStateId().digest).not.toBe(old.stateId.digest);
+    expect(computeApprovalId().digest).not.toBe(old.stateId.digest);
   });
 
   it('plans no lock change for a project that holds no lock record', () => {

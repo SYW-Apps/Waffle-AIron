@@ -17,7 +17,7 @@ import { createProject, executeApprovedLock } from '../../src/server/admin.js';
 import { LockValidationError } from '../../src/server/errors.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
 import * as hostCore from '../../src/server/adapters/core.js';
-import { computeGateStateId } from '../../src/server/adapters/validator.js';
+import { computeApprovalId } from '../../src/server/adapters/validator.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
@@ -455,7 +455,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     const memberLock = path.join(root, 'packages', 'billing', '.wai', 'lock.json');
     fs.writeFileSync(memberLock, JSON.stringify({ ...billing, stateId: { ...billing.stateId, digest: 'f'.repeat(64) } }));
     invalidateSpecCache();
-    expect(runWithProjectRoot(root, () => computeGateStateId())).not.toEqual(parent.stateId);
+    expect(runWithProjectRoot(root, () => computeApprovalId())).not.toEqual(parent.stateId);
   });
 
   it('a hosted lock records the approval and writes NOTHING into the spec tree', () => {
@@ -505,7 +505,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     // The record carries the validator's gate identity, the one every staleness
     // check later compares against.
     expect(lock!.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
-    const { algorithm, digest } = runWithProjectRoot(root, () => computeGateStateId());
+    const { algorithm, digest } = runWithProjectRoot(root, () => computeApprovalId());
     expect(lock!.stateId).toEqual({ algorithm, digest });
     // Hosted creation declared the hosted project id as the project's id, and
     // the lock records the id it approved.
@@ -554,7 +554,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
 
     // Locking the PARENT leaves the child unlocked — the trees are independent.
     lockProject(cfg, MASTER, 'confine-promo');
-    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('unlocked');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeApprovalId())).state).toBe('unlocked');
 
     // Lock the child: its own record appears and the parent's is untouched.
     const locked = lockProject(cfg, MASTER, 'billing');
@@ -562,7 +562,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(locked.summary).toContain('Locked project "billing"');
     expect(readLock(child).status).toBe('ready');
     expect(readLock(parent).status).toBe('ready');
-    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeApprovalId())).state).toBe('locked');
 
     // Drift in the CHILD tree makes the CHILD's lock stale.
     fs.writeFileSync(
@@ -570,7 +570,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
       fs.readFileSync(path.join(child, '.wai', 'specs', '.index.yaml'), 'utf8').replace(/vision:.*/, 'vision: drifted'),
     );
     invalidateSpecCache();
-    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('stale');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeApprovalId())).state).toBe('stale');
   });
 
   it('an unknown record FAILS LOUDLY — an internal subsystem is no record, and nothing acts on the parent', () => {
@@ -746,7 +746,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     // … the decidedBy is caller-derived (never the client-supplied value) …
     expect(decided.decidedBy?.userId).toBe('u-ad');
     // … and the lock actually happened: the project's own record reads ready.
-    expect(runWithProjectRoot(existingProjectRoot(dataDir, 'auto-lock')!, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
+    expect(runWithProjectRoot(existingProjectRoot(dataDir, 'auto-lock')!, () => hostCore.readLockState(computeApprovalId())).state).toBe('locked');
     expect(queryAuditEvents(dataDir, { action: 'approval.decided' })[0].level).toBe('security');
   });
 

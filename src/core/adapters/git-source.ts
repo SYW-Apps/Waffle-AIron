@@ -193,26 +193,28 @@ export function repositoryRoot(directory: string): string | null {
 /**
  * igit_source_adapter.lastCommitOf — the last commit of the work tree holding
  * a directory that changed the file at `pathspec` (relative to the
- * directory), or null when none did, the directory is in no work tree or git
- * is not installed. No network.
+ * directory), committed at or before `until` when given, or null when none
+ * did, the directory is in no work tree or git is not installed. No network.
  */
-export function lastCommitOf(directory: string, pathspec: string): string | null {
+export function lastCommitOf(directory: string, pathspec: string, until?: Date): string | null {
   try {
-    return git(['log', '-1', '--format=%H', '--', pathspec], directory).trim() || null;
+    // Second precision, as git records committer times: a commit at the very moment named still counts.
+    const bound = until ? [`--until=${until.toISOString().replace(/\.\d{3}Z$/, 'Z')}`] : [];
+    return git(['log', '-1', '--format=%H', ...bound, '--', pathspec], directory).trim() || null;
   } catch {
     return null;
   }
 }
 
 /**
- * igit_source_adapter.commitIntroducing — the oldest commit of the work tree
- * holding a directory whose change to the file at `pathspec` (relative to the
- * directory) introduced `text`: the commit that first recorded it. Null when
- * none did, the directory is in no work tree or git is not installed. No network.
+ * igit_source_adapter.commitTime — the committer time of a commit in the work
+ * tree holding a directory, or null when the commit is unknown there, the
+ * directory is in no work tree or git is not installed. No network.
  */
-export function commitIntroducing(directory: string, pathspec: string, text: string): string | null {
+export function commitTime(directory: string, commit: string): Date | null {
   try {
-    return git(['log', '--reverse', '--format=%H', `-S${text}`, '--', pathspec], directory).split(/\r?\n/).find((l) => l.trim() !== '')?.trim() ?? null;
+    const at = new Date(git(['show', '-s', '--format=%cI', commit], directory).trim());
+    return Number.isNaN(at.getTime()) ? null : at;
   } catch {
     return null;
   }

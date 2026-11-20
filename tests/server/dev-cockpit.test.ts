@@ -15,7 +15,7 @@ import { invalidateSpecCache, saveSystemSpec, saveSpec, saveComponentSpec } from
 import { captureApprovedSpecs } from '../../src/core/approval.js';
 import { writeLockRecord } from '../../src/core/lockfile.js';
 import type { LockRecord } from '../../src/core/lockfile.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { requestReview } from '../../src/core/index.js';
 import { channelsForWebMutation } from '../../src/server/realtime.js';
 import type { HostConfig } from '../../src/server/types.js';
@@ -58,15 +58,14 @@ function writeLock(root: string): void {
   runWithProjectRoot(root, () => {
     invalidateSpecCache();
     const record: LockRecord = {
-      stateId: computeGateStateId(),
+      stateId: computeApprovalId(),
       lockedAt: '2026-09-12T08:00:00Z',
       lockedBy: { id: 'locker <l@example.com>', source: 'git' },
       validatorVersion: 'test',
       validationResult: { valid: true, errors: 0, warnings: 0 },
       status: 'ready',
       specs: captureApprovedSpecs(),
-      specsReading: 'design',
-      format: 3,
+      format: 4, parts: {},
       children: {},
     };
     writeLockRecord(record);

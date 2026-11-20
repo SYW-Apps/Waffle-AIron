@@ -7,7 +7,6 @@ import { invalidateSpecCache, loadSystemSpec, readProjectSystem, updateSpec } fr
 import { getExternalsStatus, pinExternals } from '../../src/core/surfaces.js';
 import { adviseExternals } from '../../src/core/validation.js';
 import { relationHealth } from '../../src/models/index.js';
-import { sameRulesNotice } from '../../src/models/lock.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness';
 import { projectYaml } from '../helpers/conformance-r6-trees';
 
@@ -173,22 +172,6 @@ describe('3. a change report echoes what the write stores (lib-and-app R11-9)', 
     expect(JSON.stringify(added.changes)).not.toContain('geo-sdk::');
     const stored = fs.readFileSync(path.join(app, '.wai', 'specs', 'components', fs.readdirSync(path.join(app, '.wai', 'specs', 'components'))[0]), 'utf8');
     expect(stored).toContain('geo::distance');
-  });
-});
-
-describe('4. the upgrade carry-over is said once, as a notice (lib-and-app R11-1)', () => {
-  const holding = { state: 'approved' as const };
-  it('an older release\'s record under the same rules: one notice naming both releases', () => {
-    const notice = sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, holding, '5.1.1-dev.115');
-    expect(notice).toBe(' Notice: approved under wairon 5.1.1-dev.114; this release (5.1.1-dev.115) judges the design by the same rules, so the approval carries over as it is.');
-  });
-  it('silent for the same release, a newer stamp, a release verdict, a stamp problem or an approval not holding', () => {
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.115' }, holding, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.116' }, holding, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, { ...holding, release: { from: '5.1.1-dev.114', to: '5.1.1-dev.115', carried: true } } as never, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, { ...holding, stampProblem: 'x' }, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, { state: 'drifted' }, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, undefined, '5.1.1-dev.115')).toBe('');
   });
 });
 

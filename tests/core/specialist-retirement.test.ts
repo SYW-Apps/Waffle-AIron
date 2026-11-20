@@ -260,10 +260,8 @@ describe('retireSpecialists', () => {
     expect(retireSpecialists(false)).toEqual({ retyped: [], rebasedVariants: [], applied: false });
   });
 
-  it('is published on the core portal', () => {
-    fixture();
-    const plan = retireSpecialists(false);
-    expect(corePortal.retireSpecialists(false)).toEqual(plan);
+  it('is no longer published on the core portal: only the upgrade adapter reaches it', () => {
+    expect((corePortal as unknown as Record<string, unknown>).retireSpecialists).toBeUndefined();
     expect(typeof corePortal.renameComponent).toBe('function');
   });
 });

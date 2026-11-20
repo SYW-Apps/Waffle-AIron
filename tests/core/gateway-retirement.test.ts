@@ -129,12 +129,6 @@ describe('retireGateways', () => {
     expect(runInV5Reading(() => retireGateways(false))).toEqual({ merged: [], refused: [], applied: false });
   });
 
-  it('is forwarded 1:1 by the core barrel', () => {
-    edge();
-    const plan = runInV5Reading(() => retireGateways(false));
-    expect(runInV5Reading(() => corePortal.retireGateways(false))).toEqual(plan);
-  });
-
   it('keeps the Portal\'s dependencies and does not duplicate a member it already depends on', () => {
     edge({ portal: { dependsOn: ['rate-limiter', 'app-orch'] } });
     runInV5Reading(() => retireGateways(true));

@@ -11,7 +11,7 @@ import { setProjectRoot, runWithProjectBinding, runWithProjectRoot } from '../..
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { surfaceRepository } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
-import { validateProject, validateFamily, validateAsComplete, computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
+import { validateProject, validateFamily, validateAsComplete, computeApprovalId, type ValidationResult } from '../../src/core/validation.js';
 import { ChainingMigrationRefusedError } from '../../src/utils/errors.js';
 import { plan, isEmpty, blocked } from '../../src/migrations/chaining-migration.js';
 import { apply } from '../helpers/chaining-transaction.js';
@@ -280,7 +280,7 @@ describe('stage 2c — the chaining migration', () => {
   it('a locked member keeps the id its lock approved (id-locked), and re-locking afterwards succeeds', async () => {
     const f = family();
     // Billing was locked while its id was defaulted to its name slug.
-    const locked = await at(f.billing, () => runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId()));
+    const locked = await at(f.billing, () => runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId()));
     expect(locked?.projectId).toBe('billing-service');
 
     const planned = at(f.root, () => plan());
@@ -295,7 +295,7 @@ describe('stage 2c — the chaining migration', () => {
     // No deadlock: the id the lock approved is the id declared, so the gate lets the human re-lock.
     const gate = at(f.billing, () => validateAsComplete());
     expect(codesOf(gate, 'PROJECT_ID_CHANGED')).toEqual([]);
-    const relocked = await at(f.billing, () => runLock({ yes: true }, gate, computeGateStateId()));
+    const relocked = await at(f.billing, () => runLock({ yes: true }, gate, computeApprovalId()));
     expect(relocked?.projectId).toBe('billing-service');
     expect(codesOf(at(f.root, () => validateProject()), 'PROJECT_ID_CHANGED', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
   });

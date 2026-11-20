@@ -4,21 +4,20 @@ import * as path from 'path';
 import * as os from 'os';
 import { computeStateId, stateIdEquals } from '../../src/core/statehash.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId, resolvedPacks } from '../../src/core/validation.js';
 import { SDD_RULES } from '../../src/core/rules/repository.js';
 
 // ---------------------------------------------------------------------------
-// The GATE StateId — doctrine coverage for the commit-scoped lock.
+// The APPROVAL StateId — what it covers of the governing doctrine.
 //
-// A lock asserts "these specs pass THIS gate", and the pack set IS part of the
-// gate. Before doctrine was covered, you could lock a tree validated under one
-// rule set, swap the packs, and still promote: the spec digest never moved, so
-// the promote-time re-check saw no change. That is the same stale-approval hole
-// the commit-scoped lock exists to close, entering through doctrine.
+// A lock approves the project's own design and its policy: the packs it
+// SELECTS (name, declared version), never what they resolve to. A pack's
+// content is a build input, recorded by digest in the inputs lock
+// (resolvedPacks), judged beside the approval and never part of it.
 //
-// Two identities therefore coexist, and this file guards both directions:
+// Two identities coexist, and this file guards both directions:
 //   computeStateId     — spec content only (surface snapshot stamps)
-//   computeGateStateId — spec content + governing doctrine (lock / promote)
+//   computeApprovalId — own design + policy (lock / promote)
 // ---------------------------------------------------------------------------
 
 function createTempProject(opts: { projectType?: string; rules?: Record<string, unknown> } = {}) {
@@ -84,27 +83,16 @@ profiles:
         reason: not expressible here
 `;
 
-describe('gate StateId vs content StateId', () => {
+describe('approval StateId vs content StateId', () => {
   it('never compare equal — the algorithm marker separates the two flavours', () => {
     const proj = createTempProject();
     proj.activate();
     try {
       const content = computeStateId();
-      const gate = computeGateStateId();
+      const gate = computeApprovalId();
       expect(content.algorithm).toBe('sha256');
-      expect(gate.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
+      expect(gate.algorithm).toBe('sha256+design+policy');
       expect(stateIdEquals(content, gate)).toBe(false);
-    } finally { proj.cleanup(); }
-  });
-
-  it('a lock record written BEFORE doctrine coverage reads as stale, not as valid', () => {
-    const proj = createTempProject();
-    proj.activate();
-    try {
-      // Exactly what a pre-upgrade lock record carries: the content flavour.
-      const legacyLockStateId = computeStateId();
-      // The promote-time re-check now recomputes the gate flavour.
-      expect(stateIdEquals(computeGateStateId(), legacyLockStateId)).toBe(false);
     } finally { proj.cleanup(); }
   });
 
@@ -113,66 +101,48 @@ describe('gate StateId vs content StateId', () => {
     proj.activate();
     try {
       const contentBefore = computeStateId();
-      const gateBefore = computeGateStateId();
+      const gateBefore = computeApprovalId();
       proj.editSpec();
       expect(stateIdEquals(computeStateId(), contentBefore)).toBe(false);
-      expect(stateIdEquals(computeGateStateId(), gateBefore)).toBe(false);
+      expect(stateIdEquals(computeApprovalId(), gateBefore)).toBe(false);
     } finally { proj.cleanup(); }
   });
 });
 
-describe('doctrine changes invalidate a lock', () => {
-  it('adding a governing pack shifts the gate StateId but NOT the content StateId', () => {
+describe('pack selections move the approval, pack content moves only its recorded digest', () => {
+  it('selecting a pack shifts the approval StateId but NOT the content StateId', () => {
     const proj = createTempProject();
     proj.activate();
     try {
       const contentBefore = computeStateId();
-      const gateBefore = computeGateStateId();
+      const gateBefore = computeApprovalId();
 
       proj.writePack('.wai/packs/doctrine.yaml', PACK_V1);
       proj.writeConfig(['.wai/packs/doctrine.yaml']);
 
-      expect(stateIdEquals(computeGateStateId(), gateBefore)).toBe(false);
-      // The contracts did not change, so vendored surface snapshots must not go stale.
+      expect(stateIdEquals(computeApprovalId(), gateBefore)).toBe(false);
       expect(stateIdEquals(computeStateId(), contentBefore)).toBe(true);
     } finally { proj.cleanup(); }
   });
 
-  it('a pack VERSION bump shifts the gate StateId', () => {
+  it('a pack VERSION bump, a profile edit and an assertion never move the approval; each moves the pack digest', () => {
     const proj = createTempProject();
     proj.activate();
     try {
       proj.writePack('.wai/packs/doctrine.yaml', PACK_V1);
       proj.writeConfig(['.wai/packs/doctrine.yaml']);
-      const before = computeGateStateId();
+      const before = computeApprovalId();
+      const digest = (): string => resolvedPacks()['doctrine-pack'].digest;
+      const d0 = digest();
 
       proj.writePack('.wai/packs/doctrine.yaml', PACK_V1.replace('version: 1.0.0', 'version: 1.1.0'));
-      expect(stateIdEquals(computeGateStateId(), before)).toBe(false);
-    } finally { proj.cleanup(); }
-  });
+      expect(stateIdEquals(computeApprovalId(), before)).toBe(true);
+      expect(resolvedPacks()['doctrine-pack'].resolved).toBe('1.1.0');
 
-  it('changing a profile\'s doctrine shifts the gate StateId even at the same version', () => {
-    const proj = createTempProject();
-    proj.activate();
-    try {
-      proj.writePack('.wai/packs/doctrine.yaml', PACK_V1);
-      proj.writeConfig(['.wai/packs/doctrine.yaml']);
-      const before = computeGateStateId();
-
-      // Same name, same version, different rules — an in-place edit of a local
-      // YAML pack, which is exactly the case a name@version pin cannot catch.
       proj.writePack('.wai/packs/doctrine.yaml', PACK_V1.replace('types: [Actor]', 'types: [Actor, Supervisor]'));
-      expect(stateIdEquals(computeGateStateId(), before)).toBe(false);
-    } finally { proj.cleanup(); }
-  });
-
-  it('a declarative assertion shifts the gate StateId', () => {
-    const proj = createTempProject();
-    proj.activate();
-    try {
-      proj.writePack('.wai/packs/doctrine.yaml', PACK_V1);
-      proj.writeConfig(['.wai/packs/doctrine.yaml']);
-      const before = computeGateStateId();
+      expect(stateIdEquals(computeApprovalId(), before)).toBe(true);
+      const d1 = digest();
+      expect(d1).not.toBe(d0);
 
       proj.writePack('.wai/packs/doctrine.yaml', `${PACK_V1}assertions:
   - kind: forbid-edge
@@ -181,20 +151,30 @@ describe('doctrine changes invalidate a lock', () => {
     from: { componentType: [Portal] }
     to: { componentType: [Store] }
 `);
-      expect(stateIdEquals(computeGateStateId(), before)).toBe(false);
+      expect(stateIdEquals(computeApprovalId(), before)).toBe(true);
+      expect(digest()).not.toBe(d0);
     } finally { proj.cleanup(); }
   });
 
-  it('removing a governing pack shifts the gate StateId', () => {
+  it('removing a pack selection shifts the approval StateId', () => {
     const proj = createTempProject();
     proj.activate();
     try {
       proj.writePack('.wai/packs/doctrine.yaml', PACK_V1);
       proj.writeConfig(['.wai/packs/doctrine.yaml']);
-      const withPack = computeGateStateId();
+      const withPack = computeApprovalId();
 
       proj.writeConfig([]);
-      expect(stateIdEquals(computeGateStateId(), withPack)).toBe(false);
+      expect(stateIdEquals(computeApprovalId(), withPack)).toBe(false);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a selection that does not load is left out of resolvedPacks', () => {
+    const proj = createTempProject();
+    proj.activate();
+    try {
+      proj.writeConfig(['.wai/packs/missing.yaml']);
+      expect(resolvedPacks()).toEqual({});
     } finally { proj.cleanup(); }
   });
 });
@@ -206,12 +186,12 @@ describe('agent-facing prose does NOT invalidate a lock', () => {
     try {
       proj.writePack('.wai/packs/doctrine.yaml', `${PACK_V1}instructions: Original guidance for the agent.\n`);
       proj.writeConfig(['.wai/packs/doctrine.yaml']);
-      const before = computeGateStateId();
+      const before = computeApprovalId();
 
       // Instructions cannot change a conformance verdict; if they fed the digest,
       // every documentation tweak would invalidate every lock.
       proj.writePack('.wai/packs/doctrine.yaml', `${PACK_V1}instructions: Completely rewritten guidance, much longer than before.\n`);
-      expect(stateIdEquals(computeGateStateId(), before)).toBe(true);
+      expect(stateIdEquals(computeApprovalId(), before)).toBe(true);
     } finally { proj.cleanup(); }
   });
 
@@ -221,14 +201,14 @@ describe('agent-facing prose does NOT invalidate a lock', () => {
     try {
       proj.writePack('.wai/packs/doctrine.yaml', PACK_V1);
       proj.writeConfig(['.wai/packs/doctrine.yaml']);
-      const before = computeGateStateId();
+      const before = computeApprovalId();
 
       proj.writePack('.wai/packs/doctrine.yaml', `${PACK_V1}skills:
   - id: implementer
     source: skills/implementer/SKILL.md
     targets: [claude]
 `);
-      expect(stateIdEquals(computeGateStateId(), before)).toBe(true);
+      expect(stateIdEquals(computeApprovalId(), before)).toBe(true);
     } finally { proj.cleanup(); }
   });
 });
@@ -244,15 +224,12 @@ describe('agent-facing prose does NOT invalidate a lock', () => {
 // the doctrine family outright, and `rules` carries severity overrides.
 // ---------------------------------------------------------------------------
 
-describe('the gate identity covers the rule set and the governing config', () => {
-  it('a change to the BUILTIN rule registry invalidates locks', () => {
+describe('the approval identity covers the governing config, never the rule set', () => {
+  it('a change to the BUILTIN rule registry never invalidates a lock: the release is no input', () => {
     const proj = createTempProject();
     proj.activate();
     try {
-      const before = computeGateStateId();
-
-      // Simulate a release that adds a rule. Restored in `finally`, so no other
-      // test observes the mutation.
+      const before = computeApprovalId();
       SDD_RULES.push({
         name: 'a-newly-shipped-rule',
         description: 'added by a hypothetical release',
@@ -260,38 +237,34 @@ describe('the gate identity covers the rule set and the governing config', () =>
         check: () => { /* identity only — never run here */ },
       });
       try {
-        expect(stateIdEquals(computeGateStateId(), before)).toBe(false);
+        expect(stateIdEquals(computeApprovalId(), before)).toBe(true);
       } finally {
         SDD_RULES.pop();
       }
-
-      // Removing it again restores the identity: the gate is unchanged, so a lock
-      // taken before the hypothetical release is valid again.
-      expect(stateIdEquals(computeGateStateId(), before)).toBe(true);
     } finally { proj.cleanup(); }
   });
 
-  it('the wairon VERSION alone does not invalidate — only the rules do', () => {
+  it('the wairon VERSION alone does not invalidate', () => {
     const proj = createTempProject();
     proj.activate();
     try {
       // Nothing about the registry or config changed between these two calls, which
       // is the situation a patch release leaves behind. Locks must survive it.
-      expect(stateIdEquals(computeGateStateId(), computeGateStateId())).toBe(true);
+      expect(stateIdEquals(computeApprovalId(), computeApprovalId())).toBe(true);
     } finally { proj.cleanup(); }
   });
 
   it('switching the governing projectType invalidates locks', () => {
     const a = createTempProject({ projectType: 'backend' });
     a.activate();
-    const backend = computeGateStateId();
+    const backend = computeApprovalId();
     a.cleanup();
 
     const b = createTempProject({ projectType: 'frontend-reactive' });
     b.activate();
     try {
       // Same (empty) tree, different governing doctrine family.
-      expect(stateIdEquals(computeGateStateId(), backend)).toBe(false);
+      expect(stateIdEquals(computeApprovalId(), backend)).toBe(false);
     } finally { b.cleanup(); }
   });
 
@@ -299,13 +272,13 @@ describe('the gate identity covers the rule set and the governing config', () =>
     const proj = createTempProject();
     proj.activate();
     try {
-      const gateBefore = computeGateStateId();
+      const gateBefore = computeApprovalId();
       const contentBefore = computeStateId();
 
       proj.writeConfig([], { rules: { sddRuleSeverity: { UNKNOWN_PROFILE: 'off' } } });
 
       // Turning a rule off IS a change of gate.
-      expect(stateIdEquals(computeGateStateId(), gateBefore)).toBe(false);
+      expect(stateIdEquals(computeApprovalId(), gateBefore)).toBe(false);
       // But no contract moved, so vendored surface snapshots must not go stale.
       expect(stateIdEquals(computeStateId(), contentBefore)).toBe(true);
     } finally { proj.cleanup(); }

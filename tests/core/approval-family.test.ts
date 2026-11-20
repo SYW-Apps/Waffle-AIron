@@ -1,13 +1,12 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { invalidateSpecCache, readLockState, lockUpgraded } from '../../src/core/specs.js';
-import { computeGateStateId, validateAsComplete, familyApprovals, validateFamily } from '../../src/core/validation.js';
+import { invalidateSpecCache, readLockState } from '../../src/core/specs.js';
+import { computeApprovalId, validateAsComplete, familyApprovals, validateFamily } from '../../src/core/validation.js';
 import { readLockRecord, readLockRecordAt, writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
 import { getStatusReport } from '../../src/core/status.js';
 import { composeAgentBrief, resolveAgentTopology } from '../../src/core/agent_resolver.js';
@@ -50,7 +49,7 @@ function bind(dir: string): void {
 async function lockAt(dir: string, options: LockOptions = { yes: true }): Promise<LockRecord | null> {
   bind(dir);
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  const captured = computeGateStateId();
+  const captured = computeApprovalId();
   const config = projectConfigRepositoryAt(dir).load();
   const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
   expect(designOnly(gate).issues.filter((i) => i.severity === 'error')).toEqual([]);
@@ -87,35 +86,30 @@ async function lockAll(f: ApprovalFamily): Promise<void> {
   await lockAt(f.top);
 }
 
-describe('stage 5 — the lock record, format 2', () => {
-  it('records format 2: members (subject + state), code beside the claim, the design half, and never children', async () => {
+describe('the lock record, format 4', () => {
+  it('records format 4: parts and code beside the claim, the design half, and no member', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.leaf);
     await lockAt(fam.mid);
     const record = (await lockAt(fam.top))!;
 
-    expect(record.format).toBe(3);
-    expect(record.children).toBeUndefined();
-    const mid = readLockRecordAt(fam.mid)!;
-    expect(record.members).toEqual({
-      mid: { as: 'project', project: 'mid', subject: `${mid.stateId.algorithm}:${mid.stateId.digest}`, state: 'approved' },
-      sib: { as: 'project', project: 'sib', state: 'never' },
-    });
-    // The code half is recorded beside the claim, with the analyzer that took it.
+    expect(record.format).toBe(4);
+    expect((record as unknown as { members?: unknown }).members).toBeUndefined();
+    expect(Object.keys(record.parts).sort()).toEqual(['composition', 'design', 'rules', 'selections']);
     expect(record.code).toBeDefined();
     expect(record.code!.analyzer.validatorVersion).toBeTruthy();
     expect(record.code!.analyzer.doctrineDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(record.code!.analyzer.grade).toBe('none');
     expect(record.code!.codes).toBeUndefined();
     expect(record.validationResult.valid).toBe(true);
-    expect(record.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
-    expect(fs.readFileSync(path.join(fam.top, '.wai', 'lock.json'), 'utf8')).not.toContain('"children"');
+    expect(record.stateId.algorithm).toBe('sha256+design+policy');
+    expect(fs.readFileSync(path.join(fam.top, '.wai', 'lock.json'), 'utf8')).not.toContain('"members"');
   });
 
   it('code findings never refuse the lock: they are counted under `code`, and validationResult holds the design half', async () => {
     fam = buildApprovalFamily();
     bind(fam.sib);
-    const captured = computeGateStateId();
+    const captured = computeApprovalId();
     const config = projectConfigRepositoryAt(fam.sib).load();
     const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
     // A code finding in the as-complete run: one issue under a code the analyzer declares.
@@ -154,70 +148,52 @@ describe('property: parent-lock-writes-nothing-below', () => {
   }, 180_000);
 });
 
-describe('property: pin-chain (restated)', () => {
-  it('a change two levels down reaches the top only after the middle re-locks; until then the middle shows as drifted', async () => {
+describe('property: a member re-locking never moves its parent', () => {
+  it('a change two levels down moves only that project; every lock above it stays as it was', async () => {
     fam = buildApprovalFamily();
     await lockAll(fam);
     const topLock = readLockRecordAt(fam.top)!;
     let tree = approvalsAt(fam.top);
     expect(tree.map((a) => [a.key, a.state])).toEqual([['', 'approved'], ['mid', 'approved'], ['leaf', 'approved'], ['sib', 'approved']]);
 
-    // A design edit at the leaf: the leaf drifts, and nothing above moves —
-    // the middle's identity carries the leaf's RECORDED subject.
+    // A design edit at the leaf: the leaf drifts, and nothing above moves.
     fam.touch(fam.leaf, 'edited');
     tree = approvalsAt(fam.top);
     expect(entry(tree, 'leaf')!.state).toBe('drifted');
+    expect(entry(tree, 'leaf')!.partsMoved).toContain('design');
     expect(entry(tree, 'mid')!.state).toBe('approved');
     expect(entry(tree, '')!.state).toBe('approved');
 
-    // The leaf re-locks: its subject moves, so the middle's identity moves —
-    // the middle is drifted, with the leaf's pin moved; the top still approved.
+    // The leaf re-locks, then the middle: no approval above ever moves.
     await lockAt(fam.leaf);
-    tree = approvalsAt(fam.top);
-    expect(entry(tree, 'leaf')).toMatchObject({ state: 'approved', pinned: 'moved' });
-    expect(entry(tree, 'mid')).toMatchObject({ state: 'drifted', pinned: 'matches' });
-    expect(entry(tree, '')!.state).toBe('approved');
-    bind(fam.top);
-    const { algorithm, digest } = computeGateStateId();
-    expect({ algorithm, digest }).toEqual(topLock.stateId);
-
-    // The middle re-locks: now the top's identity moves and the top is stale.
     await lockAt(fam.mid);
     tree = approvalsAt(fam.top);
-    expect(entry(tree, 'mid')).toMatchObject({ state: 'approved', pinned: 'moved' });
-    expect(entry(tree, '')!.state).toBe('drifted');
+    expect(tree.every((a) => a.state === 'approved')).toBe(true);
     bind(fam.top);
-    expect(computeGateStateId()).not.toEqual(topLock.stateId);
-
-    await lockAt(fam.top);
-    expect(approvalsAt(fam.top).every((a) => a.state === 'approved' && (a.key === '' || a.pinned === 'matches'))).toBe(true);
+    const { algorithm, digest } = computeApprovalId();
+    expect({ algorithm, digest }).toEqual(topLock.stateId);
   });
 });
 
 describe('property: require-refuses', () => {
-  it('with composition.requireApprovedMembers, the lock refuses, names each direct member and its state, and writes nothing', async () => {
+  it('with composition.requireApprovedMembers, a member that is not approved is an input debt of the parent, never its drift', async () => {
     fam = buildApprovalFamily();
     fam.setComposition(['requireApprovedMembers: true']);
     await lockAt(fam.leaf);
     await lockAt(fam.mid);
     fam.touch(fam.mid, 'edited after its lock');
-
-    await expect(lockAt(fam.top)).rejects.toThrow(/requireApprovedMembers.*mid \(drifted\).*sib \(never\)/);
-    expect(fs.existsSync(path.join(fam.top, '.wai', 'lock.json'))).toBe(false);
-
-    // A grandchild is covered through its parent's subject, never judged directly.
-    await lockAt(fam.mid);
-    await lockAt(fam.sib);
-    fam.touch(fam.leaf, 'drifted grandchild');
-    const record = (await lockAt(fam.top))!;
-    expect(record.members).toMatchObject({ mid: { state: 'approved' }, sib: { state: 'approved' } });
+    const tree = approvalsAt(fam.top, 1);
+    const own = entry(tree, '')!;
+    expect(own.inputs.map((d) => [d.kind, d.subject])).toEqual([['member', 'mid'], ['member', 'sib']]);
+    expect(own.inputs[0].sentence).toContain('member "mid" is drifted');
+    expect(own.inputs[1].sentence).toContain('member "sib" is never approved');
   });
 
-  it('without the flag the lock proceeds and records each member\'s state', async () => {
+  it('without the flag a member is no debt, and the family run keeps its state as warnings', async () => {
     fam = buildApprovalFamily();
     const record = (await lockAt(fam.top))!;
-    expect(record.members).toEqual({ mid: { as: 'project', project: 'mid', state: 'never' }, sib: { as: 'project', project: 'sib', state: 'never' } });
-    // …and the family run keeps them as warnings.
+    expect((record as unknown as { members?: unknown }).members).toBeUndefined();
+    expect(entry(approvalsAt(fam.top, 1), '')!.inputs).toEqual([]);
     bind(fam.top);
     const run = validateFamily({ family: true });
     expect(run.issues.filter((i) => i.code === 'MEMBER_UNAPPROVED').map((i) => [i.project, i.severity]))
@@ -228,10 +204,10 @@ describe('property: require-refuses', () => {
     fam = buildApprovalFamily();
     await lockAt(fam.top);
     bind(fam.top);
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
+    expect(readLockState(computeApprovalId()).state).toBe('locked');
     fam.setComposition(['requireApprovedMembers: true']);
     bind(fam.top);
-    expect(readLockState(computeGateStateId()).state).toBe('stale');
+    expect(readLockState(computeApprovalId()).state).toBe('stale');
   });
 });
 
@@ -239,7 +215,7 @@ describe('property: inputs-captured-before-validation', () => {
   it('a spec written between the capture and the write refuses the lock and writes nothing', async () => {
     fam = buildApprovalFamily();
     bind(fam.top);
-    const captured = computeGateStateId();
+    const captured = computeApprovalId();
     const config = projectConfigRepositoryAt(fam.top).load();
     const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
     fam.touch(fam.top, 'written while the lock ran');
@@ -250,17 +226,18 @@ describe('property: inputs-captured-before-validation', () => {
     expect(fs.existsSync(path.join(fam.top, '.wai', 'lock.json'))).toBe(false);
   });
 
-  it('a member re-approving between the capture and the write refuses too', async () => {
+  it('a member re-approving between the capture and the write moves nothing: the lock proceeds', async () => {
     fam = buildApprovalFamily();
     bind(fam.top);
-    const captured = computeGateStateId();
+    const captured = computeApprovalId();
     const config = projectConfigRepositoryAt(fam.top).load();
     const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
     await lockAt(fam.sib);
     bind(fam.top);
 
-    await expect(runLock({ yes: true }, gate, captured)).rejects.toThrow(/inputs changed while it ran/);
-    expect(readLockRecordAt(fam.top)).toBeNull();
+    const record = (await runLock({ yes: true }, gate, captured))!;
+    expect(record.stateId).toEqual({ algorithm: captured.algorithm, digest: captured.digest });
+    expect(readLockRecordAt(fam.top)).not.toBeNull();
   });
 });
 
@@ -275,14 +252,14 @@ describe('property: analyzer-upgrade-keeps-approval', () => {
     await lockAt(fam.sib);
     appendRules(fam.sib, ['sddRuleSeverity:', '    UNREALIZED_METHOD: \'off\'', 'conformance:', '    sourceRoots: [src]']);
     bind(fam.sib);
-    expect(readLockState(computeGateStateId()).state).toBe('locked');
+    expect(readLockState(computeApprovalId()).state).toBe('locked');
 
     appendRules(fam.top, ['sddRuleSeverity:', '    UNKNOWN_PROFILE: \'off\'']);
     await lockAt(fam.top);
     fs.writeFileSync(path.join(fam.top, '.wai', 'project.yaml'),
       fs.readFileSync(path.join(fam.top, '.wai', 'project.yaml'), 'utf8').replace("UNKNOWN_PROFILE: 'off'", "UNKNOWN_PROFILE: 'warning'"));
     bind(fam.top);
-    expect(readLockState(computeGateStateId()).state).toBe('stale');
+    expect(readLockState(computeApprovalId()).state).toBe('stale');
   });
 
   it('the analyzer identity recorded beside the claim moves with the code tuning', async () => {
@@ -296,7 +273,7 @@ describe('property: analyzer-upgrade-keeps-approval', () => {
 });
 
 describe('property: status-agrees', () => {
-  it('a member\'s state and subject read the same from the parent and from the member\'s own root', async () => {
+  it('a member\'s state and parts read the same from the parent and from the member\'s own root', async () => {
     fam = buildApprovalFamily();
     await lockAll(fam);
     fam.touch(fam.leaf, 'edited');
@@ -304,21 +281,21 @@ describe('property: status-agrees', () => {
     const fromTop = approvalsAt(fam.top);
     const fromMid = approvalsAt(fam.mid);
     const fromLeaf = approvalsAt(fam.leaf);
-    const strip = (a: ProjectApproval | undefined) => a && { state: a.state, subject: a.subject, upgraded: a.upgraded };
+    const strip = (a: ProjectApproval | undefined) => a && { state: a.state, partsMoved: a.partsMoved, inputs: a.inputs };
     expect(strip(entry(fromTop, 'mid'))).toEqual(strip(entry(fromMid, '')));
     expect(strip(entry(fromTop, 'leaf'))).toEqual(strip(entry(fromMid, 'leaf')));
     expect(strip(entry(fromTop, 'leaf'))).toEqual(strip(entry(fromLeaf, '')));
     expect(entry(fromTop, 'leaf')!.state).toBe('drifted');
   });
 
-  it('status prints each member\'s state and pin, and ends with the root\'s own state', async () => {
+  it('status prints each member\'s own state, and ends with the root\'s own state', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.mid);
     const approvals = approvalsAt(fam.top);
     const report = getStatusReport({ approvals });
-    expect(report.text).toMatch(/\[Project\] mid \(mid\) \[approved · not pinned\]/);
-    expect(report.text).toMatch(/\[Project\] sib \(sib\) \[never approved · not pinned\]/);
-    expect(report.text).toMatch(/\[Project\] leaf \(leaf\) \[never approved · recorded unapproved\]/);
+    expect(report.text).toMatch(/\[Project\] mid \(mid\) \[approved\]/);
+    expect(report.text).toMatch(/\[Project\] sib \(sib\) \[never approved\]/);
+    expect(report.text).toMatch(/\[Project\] leaf \(leaf\) \[never approved\]/);
     expect(report.text.trimEnd().split('\n').pop()).toBe('Approval: this project is never approved (`wairon lock` approves the design)');
   });
 });
@@ -368,103 +345,6 @@ describe('property: brief-through-mount and context-proportional', () => {
   });
 });
 
-describe('format 1: read as legacy, reported as upgraded', () => {
-  /** Write a pre-stage-5 record at a root: the old marker, the legacy children. */
-  function writeFormat1(dir: string, digest: string, children?: Record<string, string>): void {
-    bind(dir);
-    const record = readLockRecord()!;
-    const legacy = { ...record, stateId: { algorithm: 'sha256+content+doctrine+inputs', digest } } as LockRecord;
-    delete (legacy as Partial<LockRecord>).format;
-    delete (legacy as Partial<LockRecord>).members;
-    delete (legacy as Partial<LockRecord>).code;
-    fs.writeFileSync(path.join(dir, '.wai', 'lock.json'), JSON.stringify({ ...legacy, ...(children ? { children } : {}) }, null, 2));
-  }
-
-  v5it('a format-1 lock reads stale and upgraded, and lock-check says why without calling the design moved', async () => {
-    fam = buildApprovalFamily();
-    await lockAt(fam.sib);
-    writeFormat1(fam.sib, 'a'.repeat(64));
-    bind(fam.sib);
-    const lock = readLockState(computeGateStateId());
-    expect(lock.state).toBe('stale');
-    expect(lockUpgraded(lock)).toBe(true);
-
-    const check = checkApproval(false);
-    expect(check.state).toBe('stale');
-    expect(check.approved).toBe(false);
-    // Nothing in the tree moved: the cause stated is the gate, never the design.
-    expect(check.message).toContain('taken by wairon ');
-    expect(check.message).toContain('what moved is the gate it was judged under');
-    expect(check.message).not.toMatch(/stage \d/);
-    expect(check.message).toContain('re-approves the unchanged design');
-
-    fam.touch(fam.sib, 'edited');
-    bind(fam.sib);
-    expect(checkApproval(false).message).toContain('1 own spec file(s) changed since the approval (`wairon status` names them).');
-  });
-
-  v5it('a content change is plain stale, not upgraded', async () => {
-    fam = buildApprovalFamily();
-    await lockAt(fam.sib);
-    fam.touch(fam.sib, 'edited');
-    bind(fam.sib);
-    const lock = readLockState(computeGateStateId());
-    expect(lock.state).toBe('stale');
-    expect(lockUpgraded(lock)).toBe(false);
-  });
-
-  v5it('lock-check at a parent names the direct member whose approval moved, and an own edit by its count', async () => {
-    fam = buildApprovalFamily();
-    await lockAll(fam);
-    fam.touch(fam.mid, 'edited');
-    await lockAt(fam.mid);
-    bind(fam.top);
-    const check = checkApproval(false);
-    expect(check.state).toBe('stale');
-    // Only the member's own approval moved: expected, and the verdict says exactly what is needed.
-    expect(check.message).toContain('re-approved at their own roots since this project\'s approval was taken: mid.');
-    expect(check.message).toContain('No own spec file changed.');
-    expect(check.message).toContain('run `wairon lock` here to pin');
-    expect(check.message).not.toContain('sib');
-
-    fam.touch(fam.sib, 'edited');
-    bind(fam.sib);
-    expect(checkApproval(false).message).toContain('What moved: 1 own spec file(s) changed since the approval (`wairon status` names them).');
-  });
-
-  v5it('the pin tree marks a format-1 member upgraded and reads its parent\'s legacy `children` as the pin', async () => {
-    fam = buildApprovalFamily();
-    await lockAt(fam.sib);
-    await lockAt(fam.mid);
-    await lockAt(fam.top);
-    writeFormat1(fam.sib, 'b'.repeat(64));
-    // The parent's format-1 record pinned sib at exactly that subject.
-    writeFormat1(fam.top, 'c'.repeat(64), { sib: `sha256+content+doctrine+inputs:${'b'.repeat(64)}` });
-
-    const tree = approvalsAt(fam.top);
-    expect(entry(tree, 'sib')).toMatchObject({ state: 'drifted', upgraded: true, pinned: 'matches' });
-    expect(entry(tree, 'mid')).toMatchObject({ pinned: 'unpinned' });
-    expect(entry(tree, '')).toMatchObject({ state: 'drifted', upgraded: true });
-
-    bind(fam.top);
-    const run = validateFamily({ family: true });
-    const drifted = run.issues.find((i) => i.code === 'MEMBER_DRIFTED' && i.project === 'sib')!;
-    expect(drifted.message).toContain('earlier gate identity');
-    expect(drifted.message).toContain('Re-lock it once');
-  });
-
-  v5it('a lock written now is format 2 and never re-writes a legacy record\'s children', async () => {
-    fam = buildApprovalFamily();
-    await lockAt(fam.top);
-    writeFormat1(fam.top, 'c'.repeat(64), { mid: 'sha256+content+doctrine+inputs:x' });
-    const record = (await lockAt(fam.top))!;
-    expect(record.format).toBe(3);
-    expect(readLockRecordAt(fam.top)!.children).toBeUndefined();
-    writeLockRecord({ ...record, children: { mid: 'x' } });
-    expect(readLockRecordAt(fam.top)!.children).toBeUndefined();
-  });
-});
-
 describe('gate truth — the root lock-check judges every member project, and plain lock-check says what it guarantees', () => {
   it('refuses at every strictness while a member (at any depth) carries spec changes nobody approved', async () => {
     fam = buildApprovalFamily();
@@ -480,22 +360,6 @@ describe('gate truth — the root lock-check judges every member project, and pl
       expect(check.message).toContain('leaf (changed since its own approval');
       expect(check.message).toContain("This project's own approval still covers its design.");
     }
-  });
-
-  it('beside a dirty member, names what this approval no longer covers — a member pin that moved — never "stale too"', async () => {
-    fam = buildApprovalFamily();
-    await lockAll(fam);
-    // The member re-approved at its own root, then edited again: this
-    // project's own specs never moved, only its pin of the member did.
-    fam.touch(fam.sib, 'edited');
-    await lockAt(fam.sib);
-    fam.touch(fam.sib, 'edited again');
-    bind(fam.top);
-    const check = checkApproval(false);
-    expect(check.approved).toBe(false);
-    expect(check.message).toContain('carry spec changes nobody approved');
-    expect(check.message).not.toContain('stale too');
-    expect(check.message).toContain("None of this project's own specs changed, but its approval does not cover it either: a member's approval moved since it was taken (this approval still pins sib at an earlier approval) — run `wairon lock` here after the member(s).");
   });
 
   it('never calls the family approved while a member was never approved: --strict refuses, plain passes naming it NOT gated', async () => {
@@ -526,20 +390,19 @@ describe('gate truth — the root lock-check judges every member project, and pl
     expect(checkApproval(true).approved).toBe(false);
   });
 
-  it('a member re-approval names only the stale pin; an own edit beside it is plain stale', async () => {
+  it('a member re-approval never makes this approval stale; an own edit beside it is plain stale', async () => {
     fam = buildApprovalFamily();
     await lockAll(fam);
     fam.touch(fam.sib, 'edited');
     await lockAt(fam.sib);
     bind(fam.top);
-    const repin = checkApproval(false);
-    expect(repin.approved).toBe(false);
-    expect(repin.message).toContain('re-approved at their own roots since this project\'s approval was taken: sib.');
-    // An own edit too: the verdict no longer claims only the pin moved.
+    expect(checkApproval(false).approved).toBe(true);
+    // An own edit: the verdict names it, and no member.
     fam.touch(fam.top, 'edited');
     bind(fam.top);
-    const both = checkApproval(false);
-    expect(both.message).toContain('What moved: 1 own spec file(s) changed since the approval (`wairon status` names them); direct member(s): sib (its approval moved since this one was taken)');
+    const stale = checkApproval(false);
+    expect(stale.approved).toBe(false);
+    expect(stale.message).toContain('What moved: 1 own spec file(s) changed since the approval (`wairon status` names them)');
   });
 });
 

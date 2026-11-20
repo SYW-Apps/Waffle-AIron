@@ -7,13 +7,10 @@ import {
   loadImplementationSpecs,
   loadTypeSpecs,
   graph,
-  scanAllSpecs,
 } from './specs.js';
-import * as path from 'path';
-import { getProjectRoot } from '../utils/fs.js';
 import {
   componentDesignView, implementationDesignView, interfaceDesignView, subsystemDesignView, typeDesignView,
-  type ImplementationSpec, type SpecStatus,
+  type ImplementationSpec,
 } from '../models/specs.js';
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 
@@ -28,28 +25,20 @@ import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 // before they are digested so the filesystem's directory order stays out of it.
 //
 // Two readings: the whole scan (computeStateId — the snapshot and archive
-// stamps) and the bound project's OWN specs alone (computeOwnStateId — the
-// content half of the gate identity a lock records). The gate identity itself
-// is the validator's to compute (src/core/rules/gate-identity.ts), since the
-// doctrine it covers is the validator's rule set.
+// stamps) and the bound project's OWN design (computeOwnDesignStateId — the
+// design half of the approval identity a lock records). The approval identity
+// itself is the validator's to compute (src/core/rules/approval-identity.ts),
+// since the policy it covers is the validator's to project.
 // ---------------------------------------------------------------------------
 
 export interface StateId {
   algorithm: string;
   digest: string;
   /**
-   * On a gate identity only: the same gate identity computed under the
-   * algorithm the bound project's lock record was taken with, when that is an
-   * earlier algorithm this release can still recompute (the full-content
-   * format-2 one, or the earlier design reading that still carried status). Present only while the record on disk carries it, so such a
-   * lock is judged exactly as it was taken. Never recorded: a lock writes
-   * algorithm and digest alone.
-   */
-  asRecorded?: StateId;
-  /**
-   * On a gate identity only: the digest of each input it covers, taken on its
-   * own (gate_identity.parts). Never part of the digest; a lock records them
-   * as gateParts, so a later check can name the input that moved.
+   * On an approval identity only: the digest of each half it covers, taken on
+   * its own (approval_identity.parts): design, rules, composition, network
+   * (when declared) and selections. Never part of the digest; a lock records
+   * them as `parts`, so a later check can say WHICH half moved.
    */
   parts?: Record<string, string>;
 }
@@ -64,13 +53,6 @@ export const CONTENT_ALGORITHM = 'sha256';
  * equal.
  */
 export const DESIGN_ALGORITHM = 'sha256-design-2';
-
-/**
- * The marker of the EARLIER design reading, whose view still carried each
- * spec's status: what every format-3 lock written before readiness left the
- * approval was taken under. Recomputed, never written (ownDesignAsRecorded).
- */
-export const EARLIER_DESIGN_ALGORITHM = 'sha256-design';
 
 /** How each kind of spec is read into a digest — as loaded, or through a projection. */
 interface TreeReading {
@@ -134,48 +116,24 @@ function ownedByRoot(): (id: string) => boolean {
 /**
  * Deterministic CONTENT StateId over the current (request-scoped) project's
  * spec tree, every member the scan follows included. The snapshot and archive
- * stamps; never the gate identity since stage 5.
+ * stamps; never the approval identity.
  */
 export function computeStateId(): StateId {
   return digestTree(() => true);
 }
 
 /**
- * state_hash.ownTree — the content identity of the bound project's OWN specs:
- * the specs the scan keys under the bound root (owner key empty), never a
- * member's. A member's specs reach the gate identity only as the member's
- * composition subject; hashing them here too would re-couple a parent's
- * approval to every member edit. Same ordering, canonical form and algorithm
- * marker as computeStateId, so for a project with no members the two agree.
- */
-export function computeOwnStateId(): StateId {
-  const family = graph();
-  const owners = family.owners;
-  // Stage 8: a part's specs are the project's own, digested as stored in the
-  // part — its implementations' file paths from the part's root — so moving
-  // the part's storage leaves the identity unchanged (storage-is-orthogonal).
-  const parts = family.nodes.find((n) => n.namespace === '')?.parts ?? [];
-  const files = scanAllSpecs().paths.implementation;
-  const root = getProjectRoot();
-  const asStored = (impl: ImplementationSpec): ImplementationSpec => {
-    const file = files[impl.id];
-    const part = file === undefined ? undefined : parts.find((p) => p.directory !== undefined && isInside(p.directory, file));
-    return part?.directory !== undefined ? fromPartRoot(impl, root, part.directory) : impl;
-  };
-  return digestTree((id) => (owners.get(id) ?? '') === '', { implementation: asStored });
-}
-
-/**
  * state_hash.ownDesign — the DESIGN identity of the bound project's own specs:
- * exactly ownTree's selection, storage-independence and ordering, but each
- * spec digested in its design view — an implementation, a type, a component,
- * a subsystem and a contract through their type's designView (code linkage,
- * readiness and timestamps out), every other kind with its timestamps out
- * (canonicalize drops them). A part's implementation needs no re-expression
- * from the part's root: the paths are linkage, and the view leaves them out.
- * Algorithm marker `sha256-design-2`, so it never compares equal to a content
- * identity or to the earlier design reading. The content half of the gate
- * identity from lock format 3 on.
+ * the specs the scan keys under the bound root (a part's included, a project
+ * member's never), each digested in its design view — an implementation, a
+ * type, a component, a subsystem and a contract through their type's
+ * designView (code linkage, readiness and timestamps out), every other kind
+ * with its timestamps out (canonicalize drops them) — in stable order and
+ * canonical form. A part's implementation needs no re-expression from the
+ * part's root: the paths are linkage, and the view leaves them out, so moving
+ * a part leaves the identity unchanged. Algorithm marker `sha256-design-2`,
+ * so it never compares equal to a content identity. The design half of the
+ * approval identity.
  */
 export function computeOwnDesignStateId(): StateId {
   return digestTree(ownedByRoot(), {
@@ -186,55 +144,6 @@ export function computeOwnDesignStateId(): StateId {
     interface: interfaceDesignView,
     algorithm: DESIGN_ALGORITHM,
   });
-}
-
-/** The key a spec's approved status is recorded under: `<kind>:<id>`. */
-function approvedStatusKey(kind: string, id: string): string {
-  return `${kind}:${id}`;
-}
-
-/**
- * state_hash.ownDesignAsRecorded — the own design identity in the EARLIER
- * reading (`sha256-design`), whose view still carried each spec's status: the
- * design view as ownDesign takes it with the status put back — the one
- * approvedStatus names for `<kind>:<id>` (the status the approval recorded),
- * else the status the spec has now. So a lock taken in that reading is
- * recomputed exactly as it was taken, and a tree in which nothing but a status
- * moved still matches it.
- */
-export function computeOwnDesignStateIdAsRecorded(approvedStatus: ReadonlyMap<string, SpecStatus>): StateId {
-  const withStatus = (kind: string, view: <T extends object>(spec: T) => T) => <T extends object>(spec: T): T => {
-    const status = (spec as { status?: unknown }).status;
-    if (status === undefined) return view(spec);
-    const id = (spec as { id?: unknown }).id;
-    const approved = typeof id === 'string' ? approvedStatus.get(approvedStatusKey(kind, id)) : undefined;
-    return { ...view(spec), status: approved ?? status } as T;
-  };
-  return digestTree(ownedByRoot(), {
-    implementation: withStatus('implementation', implementationDesignView) as (impl: ImplementationSpec) => ImplementationSpec,
-    component: withStatus('component', componentDesignView),
-    type: withStatus('type', typeDesignView),
-    subsystem: withStatus('subsystem', subsystemDesignView),
-    interface: withStatus('interface', interfaceDesignView),
-    algorithm: EARLIER_DESIGN_ALGORITHM,
-  });
-}
-
-/** Whether a file lies inside a directory. */
-function isInside(dir: string, file: string): boolean {
-  const rel = path.relative(dir, file);
-  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
-}
-
-/** An implementation's file paths re-expressed from the project root to its part's root, as the part's file stores them. */
-function fromPartRoot(impl: ImplementationSpec, root: string, partDir: string): ImplementationSpec {
-  const from = (p: string): string => (path.isAbsolute(p) ? p : path.relative(partDir, path.resolve(root, p)).split(path.sep).join('/'));
-  return {
-    ...impl,
-    ...(impl.sourcePath ? { sourcePath: from(impl.sourcePath) } : {}),
-    ...(impl.simPath ? { simPath: from(impl.simPath) } : {}),
-    methods: impl.methods.map((m) => (m.sourcePath ? { ...m, sourcePath: from(m.sourcePath) } : m)),
-  };
 }
 
 /** True when two StateIds are the same identity: same algorithm, same digest. */

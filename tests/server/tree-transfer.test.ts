@@ -181,7 +181,7 @@ describe('hosted spec-tree transfer', () => {
     createPlacedProject(cfg, MASTER, 'approved');
     const sourceRoot = seedTree('source', 'Source System');
     // The source tree carries an approval record, as a committed tree does.
-    const record = JSON.stringify({ format: 3, stateId: { algorithm: 'a', digest: 'd' }, lockedAt: '2026-01-01T00:00:00.000Z', status: 'ready' });
+    const record = JSON.stringify({ format: 4, parts: {}, stateId: { algorithm: 'a', digest: 'd' }, lockedAt: '2026-01-01T00:00:00.000Z', status: 'ready' });
     fs.writeFileSync(path.join(sourceRoot, '.wai', 'lock.json'), record);
     allow(dataDir, 'u-admin', 'project:read', 'project', 'source');
     allow(dataDir, 'u-admin', 'project:admin', 'project', 'plain');

@@ -6,7 +6,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, loadSubsystemSpec } from '../../src/core/specs.js';
 import { validateProject, validateFamily, type ValidationIssue } from '../../src/core/validation.js';
 import { pinExternals, getExternalsStatus } from '../../src/core/surfaces.js';
-import { createMember, advanceMember, listDirectChainedSubprojects, findChainingSubprojectsMissingConfig, resolveAgentTopology } from '../../src/core/index.js';
+import { createMember, advanceMember, listDirectChainedSubprojects, resolveAgentTopology } from '../../src/core/index.js';
 import { buildCanvasModel } from '../../src/core/canvas.js';
 import { getStatusReport } from '../../src/core/status.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
@@ -431,7 +431,6 @@ describe('stage 8 — overview follows composition: parts are the parent\'s subs
     expect(agents.some((a) => a.tags.includes('delegate'))).toBe(false);
     expect(agents.find((a) => a.id === 'system-architect')?.dependencies).toContain('scheduling-owner');
     expect(listDirectChainedSubprojects(root)).toEqual([]);
-    expect(findChainingSubprojectsMissingConfig(root)).toEqual([]);
     expect(fs.existsSync(path.join(part, '.wai', 'project.yaml'))).toBe(false);
   });
 });

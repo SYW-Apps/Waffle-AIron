@@ -2008,7 +2008,7 @@ export function diff(against?: string): SurfaceDiff {
     // `../` sibling is no part of the revision's tree, and read live it would
     // compare a member's change since with nothing, or an unchanged member
     // with its types unexpanded (round 10: every verb naming one "changed").
-    const members = membersAsRecordedIn(revision.directory);
+    const members = membersAsRecordedIn(revision.directory, revision.committedAt);
     baseline = runWithProjectRoot(revision.directory, () => withForeignTypes(projectOwnSurface('project', true), foreignSurfaces(members)));
     carriedEmpty = new Set(runWithProjectRoot(revision.directory, () => entriesPublishingNothing()));
     label = revision.label;
@@ -2026,14 +2026,17 @@ export function diff(against?: string): SurfaceDiff {
  * Step 6 of diff: each live member of the bound project, by alias, as the
  * baseline knew it: a member stored inside the bound project's tree as that
  * tree holds it at the revision (`recordedIn`); a member stored outside it (a
- * `../` sibling, which the revision's tree does not hold) as the approval
- * that tree's lock records for it — its own last committed approval when the
- * lock records none — or live when no revision of it can be read.
+ * `../` sibling, which the revision's tree does not hold) as its own last
+ * committed approval stood when the revision was committed (`asOf`), or live
+ * when no revision of it can be read.
+ *
+ * v7 wave 2: sdd_surfaces owns this read; the call passes the baseline's commit
+ * time to memberRevisions, which no longer reads a lock for member records.
  */
-function membersAsRecordedIn(recordedIn: string): Map<string, SurfaceSnapshot> {
+function membersAsRecordedIn(recordedIn: string, asOf: Date): Map<string, SurfaceSnapshot> {
   const out = new Map<string, SurfaceSnapshot>();
   const bound = path.resolve(getProjectRoot());
-  for (const member of memberRevisions(recordedIn)) {
+  for (const member of memberRevisions(asOf)) {
     const inside = path.relative(bound, member.root);
     const contained = inside !== '' && !inside.startsWith('..') && !path.isAbsolute(inside);
     const surface = contained

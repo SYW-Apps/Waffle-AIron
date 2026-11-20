@@ -19,14 +19,9 @@ import {
   dryRunSerializeSpecs,
   loadProjectExtensions,
   loadProjectConfig,
-  computeOwnStateId,
   computeOwnDesignId,
-  computeOwnDesignIdAsRecorded,
-  approvedStatuses,
-  consumedContractInputs,
   settledSpecPaths,
   readLockRecord,
-  approvalRecord,
   loadProjectVariants,
   resolveSubsystemExports,
   resolveProjectExports,
@@ -67,12 +62,11 @@ import * as referenceFinder from './lookup/reference-finder.js';
 import type { LookupSearchResult, LookupReferencesResult } from '../models/lookup.js';
 import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ExtensionPack } from './extensions.js';
-import { analyzerDigest, computeGateIdentity, gateParts, type GateConfig } from './rules/gate-identity.js';
+import { analyzerDigest, approvalParts, computeApprovalIdentity, packContents, type GateConfig } from './rules/approval-identity.js';
 import { BUILTIN_PROFILES, PROJECT_KINDS, judgesCode, type IssueSeverity, type RuleContext } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import type { AnalysisGradeLabel, CodeAnalysis, ProjectApproval } from '../models/lock.js';
-import { approvalSubject } from '../models/lock.js';
-import type { ProjectRelations } from '../models/specs.js';
+import type { LockedPack, ProjectRelations } from '../models/specs.js';
 import { pathKey, type CodeModel, type SourceFileFacts } from '../models/code-model.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
@@ -129,7 +123,7 @@ import {
   findTestsReferencing as findTestsUnderRoots,
   type TestsToRevisit,
 } from './source-analysis.js';
-import { getProjectRoot, pathExists, readsV5Forms } from '../utils/fs.js';
+import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { aiPathsAt } from '../config/paths.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import {
@@ -1361,23 +1355,6 @@ function settledStatusBearing(loaded: {
  * exactly the silent degradation this wrapper previously suffered from.
  */
 /**
- * ispec_validator.validateDesign — the owner's gate at each spec's AUTHORED
- * status (never as-complete), its result carrying `analysis` — the code half
- * summarised with the analyzer that took it, as validateAsComplete's does — so
- * validation_result.designOnly keeps the design half. What a change of the
- * wairon release is judged by (family_validator.releaseVerdict).
- */
-export function validateDesign(options?: ValidationOptions): ValidationResult {
-  // Step 1: the owner's gate, each spec at its authored status.
-  const { result, codeModel } = runOwnersGate({ ...(options ?? {}), treatAllAsComplete: false });
-  // Step 2: the code half summarised with the analyzer that took it.
-  const sequence = ruleSequence();
-  const doctrineDigest = analyzerDigest(sequence, { rules: options?.rules ?? projectRules() });
-  // Step 3.
-  return { ...result, validatorVersion: WAIRON_VERSION, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
-}
-
-/**
  * validator_portal.validateAsComplete — the as-complete gate, answered by the
  * validation memo from the last identical as-complete run while nothing it
  * reads has changed, otherwise run fresh.
@@ -1516,27 +1493,24 @@ export function builtinProjectKinds(): string[] {
 }
 
 /**
- * The gate identity a lock records and every staleness check compares
- * (ispec_validator/ivalidator_portal.computeGateStateId): the project's OWN
- * DESIGN identity (code linkage and timestamps out), the design doctrine, its own consumed contract inputs, its
- * `composition`, and each direct member's composition subject — read from the
- * member's own lock record, never recomputed and never its specs. So a
- * parent's identity costs its own tree plus one lock file per direct member,
- * and a lock taken at a member's own root and one taken inside its family
- * record the same identity. The validator computes it because the doctrine it
- * covers is the validator's own rule set; core only compares a lock against
- * the identity its caller passes (readLockState).
+ * The approval identity a lock records and every staleness check compares
+ * (ispec_validator/ivalidator_portal.computeApprovalId): the project's OWN
+ * DESIGN identity (code linkage, readiness and timestamps out) together with
+ * its policy — project type, design rule tuning, `composition`, network and
+ * pack selections — and each half of it digested on its own as `parts`.
+ * Every input is the bound project's own: never an ancestor's state, never a
+ * member's, never anything it consumes. The validator computes it because the
+ * policy it projects is the validator's to read; core only compares a lock
+ * against the identity its caller passes (readLockState).
  */
-export function computeGateStateId(): StateId {
-  // The whole scan, so the graph names every direct member whatever an earlier
-  // caller narrowed it to.
+export function computeApprovalId(): StateId {
+  // Step 1: the whole scan, so the identity reads one consistent tree.
   scanAllSpecs();
-  const content = computeOwnDesignId();
-  const extensions = loadProjectExtensions();
-  // The project's governing configuration decides verdicts too: which profile
-  // applies, how it tuned the rules, and what it requires of its members. A
-  // configuration that fails its schema contributes nothing, and the tree
-  // identity still stands on its own.
+  // Step 2: the own design identity, a member's specs never in it.
+  const design = computeOwnDesignId();
+  // Steps 3-4: the project's configuration is its policy. A configuration
+  // that fails its schema contributes nothing, and the design identity still
+  // stands on its own.
   let gate: GateConfig = {};
   try {
     const config = loadProjectConfig();
@@ -1547,82 +1521,71 @@ export function computeGateStateId(): StateId {
         composition: config.composition ?? null,
         // Only when declared: an undeclared network leaves the digest as it was.
         ...(config.network ? { network: config.network } : {}),
+        selections: packSelectionsOf(config),
       };
     }
   } catch { /* a configuration that fails its schema: an empty gate config */ }
-  const inputs = consumedContractInputs();
-  const members = directMemberSubjects();
-  // The built-in rules only: pack rules enter the identity through the extensions.
+  // Steps 5-6: the built-in rules are read only to tell the code-judging severity overrides apart.
   registerBuiltinRules();
   const builtin = ruleSequence();
-  const current: StateId = {
-    ...computeGateIdentity(content, extensions, builtin, inputs, gate, members),
-    // Step 13: each input on its own, which the lock records as gateParts.
-    parts: gateParts(content, extensions, builtin, inputs, gate, members),
+  // Steps 7-9: the identity, and each half of it on its own.
+  return {
+    ...computeApprovalIdentity(design, builtin, gate),
+    parts: approvalParts(design, builtin, gate),
   };
-  // Steps 13-16: a lock taken under the previous, full-content gate algorithm
-  // (format 2) is judged as it was taken — the same inputs, its own content
-  // reading — so an upgrade never forces a re-lock of an unchanged design.
-  // Only a record under another algorithm can be one; the recomputation (whose
-  // marker gate_identity sets from the full-content identity it is handed)
-  // decides whether it IS the previous algorithm.
-  const record = approvalRecord(getProjectRoot());
-  if (!record?.stateId || record.stateId.algorithm === current.algorithm) return current;
-  // A record under another algorithm was written by wairon 5: judged as it was taken in the v5 reading only.
-  if (!readsV5Forms()) return current;
-  const asRecorded = computeGateIdentity(computeOwnStateId(), extensions, builtin, inputs, gate, members);
-  if (record.stateId.algorithm === asRecorded.algorithm) return { ...current, asRecorded };
-  // Steps 18-21: a lock taken in the earlier design reading (status still in
-  // the view) is judged as it was taken too, each spec's status put back as
-  // the approval recorded it — so a tree in which nothing but a status moved
-  // still matches it.
-  const asApproved = computeGateIdentity(
-    computeOwnDesignIdAsRecorded(approvedStatuses(record)), extensions, builtin, inputs, gate, members,
-  );
-  return record.stateId.algorithm === asApproved.algorithm ? { ...current, asRecorded: asApproved } : current;
 }
 
-/** The subject recorded for a member with no lock (or no project on disk). */
-const NEVER_SUBJECT = 'never';
+/** A configuration's pack selections as the policy states them: name, declared version, scope. */
+function packSelectionsOf(config: NonNullable<ReturnType<typeof loadProjectConfig>>): NonNullable<GateConfig['selections']> {
+  return (config.extensions?.packs ?? []).map((entry) => ({
+    // A path reference names its pack by the file's stem, as declaredPackNames reads it.
+    name: typeof entry === 'string' ? entry.split(/[\\/]/).pop()!.replace(/\.(ya?ml|cjs|js)$/i, '') : entry.name,
+    ...(typeof entry === 'object' && entry.version !== undefined ? { version: entry.version } : {}),
+    scope: 'project',
+  }));
+}
 
 /**
- * Steps 6-9 of computeGateStateId: each member the bound root declares
- * DIRECTLY → the stateId its own lock record carries (`<algorithm>:<digest>`),
- * or `never`. Recorded, not recomputed: the member's live edits are the
- * member's to re-approve. Deeper members reach the identity through their
- * parent's subject.
+ * ispec_validator/ivalidator_portal.resolvedPacks — the bound project's
+ * selected extension packs as they resolve now, keyed by pack name: each
+ * selection's declared version, the version its manifest resolved to, where it
+ * resolved from, and its doctrine digest (approval_identity.packContents).
+ * What `wairon lock` and `wairon packs sync` record in the inputs lock; a
+ * selection that does not load is left out (it is an input debt, never a
+ * recorded pack). Writes nothing.
  */
-function directMemberSubjects(): Record<string, string> {
-  const family = projectFamily();
-  const subjects: Record<string, string> = {};
-  for (const node of family.nodes) {
-    if (node.parent !== '' || node.mountAlias === undefined) continue;
-    const record = approvalRecord(node.directory);
-    subjects[node.mountAlias] = record ? approvalSubject(record) : NEVER_SUBJECT;
+export function resolvedPacks(): Record<string, LockedPack> {
+  // Step 1: the project's own pack selections.
+  const config = loadProjectConfig();
+  const selected = (config?.extensions?.packs ?? []).map((entry) => (typeof entry === 'object' ? entry : undefined));
+  // Step 2: the packs those selections name, as loaded.
+  const extensions = loadProjectExtensions();
+  // Step 3: each loaded pack's doctrine digest.
+  const digests = packContents(extensions);
+  // Step 4: one LockedPack per selection that loaded.
+  const out: Record<string, LockedPack> = {};
+  for (const pack of extensions.packs) {
+    const digest = digests[pack.name];
+    if (digest === undefined) continue;
+    const selection = selected.find((s) => s?.name === pack.name);
+    out[pack.name] = {
+      ...(selection?.version !== undefined ? { declared: selection.version } : {}),
+      ...(pack.version !== undefined ? { resolved: pack.version } : {}),
+      // The selection's recorded source, else the bundled path, else the install location's kind.
+      source: selection?.source ?? (pack.ref.replace(/\\/g, '/').includes('/.wai/packs/') ? pack.ref : 'installed'),
+      digest,
+    };
   }
-  // Stage 8: each referenced project member (a git source), at the root the
-  // scan located — the fetch cache at its pinned commit. A `../` sibling is a
-  // node above (round 8), under the same alias. A hosted one is located by the
-  // hosting server alone, so it does not enter an identity that must read the
-  // same everywhere.
-  for (const external of family.nodes.find((n) => n.namespace === '')?.externals ?? []) {
-    if (external.role !== 'member' || external.sourceKind === 'hosted') continue;
-    const record = external.directory ? approvalRecord(external.directory) : null;
-    subjects[external.alias] = record ? approvalSubject(record) : NEVER_SUBJECT;
-  }
-  // A declared member with no project on disk carries no decision at all.
-  for (const problem of family.problems) {
-    if (problem.kind === 'member-absent' && problem.projects[0] === '' && problem.id) subjects[problem.id] = NEVER_SUBJECT;
-  }
-  return subjects;
+  // Step 5.
+  return out;
 }
 
 /**
- * ivalidator_portal.familyApprovals — the bound project's pin tree: its own
- * approval state and each member's within `depth` levels, each computed at the
- * member's own root, with each member's subject and how its parent pinned it.
- * The one source the lock workflow, `wairon status` and sdd_get_status read,
- * so they cannot disagree. Writes nothing; a hosted caller gates on reach
+ * ivalidator_portal.familyApprovals — the bound project's approvals: its own
+ * approval state and inputs, and each member's within `depth` levels, each
+ * computed at that member's own root. The one source the lock workflow,
+ * `wairon status`, `wairon lock-check` and sdd_get_status read, so they
+ * cannot disagree. Writes nothing; a hosted caller gates on reach
  * itself before asking about a family.
  */
 export function familyApprovals(depth?: number): ProjectApproval[] {

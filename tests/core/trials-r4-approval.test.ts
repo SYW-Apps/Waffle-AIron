@@ -10,7 +10,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, loadTypeSpecs } from '../../src/core/specs.js';
 import { pinExternals, getExternalsStatus, unrecordedUses } from '../../src/core/surfaces.js';
 import { remove } from '../../src/core/external-declarations.js';
-import { validateProject, validateFamily, computeGateStateId, familyApprovals, implementsProblem } from '../../src/core/validation.js';
+import { validateProject, validateFamily, computeApprovalId, familyApprovals, implementsProblem } from '../../src/core/validation.js';
 import { runLock, checkApproval } from '../../src/commands/lock.js';
 import { approvalVerdict, captureApprovedSpecs } from '../../src/core/approval.js';
 import { writeLockRecord } from '../../src/core/lockfile.js';
@@ -127,10 +127,10 @@ function tileStudio(o: { usesGeo?: boolean; implementsRef?: string } = {}): Fixt
 /** Write an approval of the tree as it stands — what an earlier release's `wairon lock` recorded. */
 function approveAsIs(projectId: string): void {
   writeLockRecord({
-    stateId: (() => { const s = computeGateStateId(); return { algorithm: s.algorithm, digest: s.digest }; })(),
+    stateId: (() => { const s = computeApprovalId(); return { algorithm: s.algorithm, digest: s.digest }; })(),
     lockedAt: TS, lockedBy: { name: 'trial', source: 'git' }, validatorVersion: 'test', status: 'ready',
     validationResult: { errors: 0, warnings: 0, notices: 0 }, projectId,
-    specs: captureApprovedSpecs(), specsReading: 'design', format: 3,
+    specs: captureApprovedSpecs(), specsReading: 'design', format: 4, parts: {},
   } as never);
 }
 
@@ -225,20 +225,19 @@ describe('3 — uses a pin does not record', () => {
 
   it('`wairon lock` refuses it as it refuses a never-pinned external, writing nothing', async () => {
     const { studio } = pairWithZeroUsePin();
-    await expect(runLock({ yes: true }, { valid: true, issues: [] } as never, computeGateStateId())).rejects.toThrow(/used beyond their pin — "geo": tile-key, tile-library\.tileFor/);
+    await expect(runLock({ yes: true }, { valid: true, issues: [] } as never, computeApprovalId())).rejects.toThrow(/used beyond their pin — "geo": tile-key, tile-library\.tileFor/);
     expect(fs.existsSync(path.join(studio, '.wai', 'lock.json'))).toBe(false);
   });
 
-  it('an approval taken over it (an earlier release) fails lock-check and reads drifted, with the same reason', () => {
+  it('an approval taken over it holds, and the build inputs owe the re-pin: lock-check fails with that debt', () => {
     pairWithZeroUsePin();
     approveAsIs('studio');
     const own = familyApprovals().find((a) => a.key === '')!;
-    expect(own.state).toBe('drifted');
-    expect(own.owed).toContain('external "geo" is used beyond its pin: tile-key, tile-library.tileFor');
+    expect(own.state).toBe('approved');
+    expect(own.inputs).toEqual([expect.objectContaining({ kind: 'unrecorded', subject: 'geo', detail: ['tile-key', 'tile-library.tileFor'] })]);
     const check = checkApproval(false);
-    // Round 4: "✔ The design in this tree is the approved design".
     expect(check.approved).toBe(false);
-    expect(check.message).toContain('pin first (`wairon externals pin`), then run `wairon lock`');
+    expect(check.message).toContain('external "geo" is used beyond its pin: tile-key, tile-library.tileFor');
   });
 });
 

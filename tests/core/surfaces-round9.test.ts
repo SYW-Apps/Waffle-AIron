@@ -387,7 +387,7 @@ function git(dir: string, ...args: string[]): string {
 
 /** An approval record the member commits: what its lock's stateId digest is. */
 function approve(dir: string, digest: string, message: string): void {
-  fs.writeFileSync(path.join(dir, '.wai', 'lock.json'), JSON.stringify({ format: 3, stateId: { algorithm: 'sha256+design-2', digest } }, null, 2));
+  fs.writeFileSync(path.join(dir, '.wai', 'lock.json'), JSON.stringify({ format: 4, parts: {}, specs: {}, stateId: { algorithm: 'sha256+design-2', digest } }, null, 2));
   git(dir, 'add', '-A');
   git(dir, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', message);
 }
@@ -426,18 +426,6 @@ describe('2b. a verb removed from a sibling member reaches the consumer\'s bindi
     bind(app);
     const drift = validateProject().issues.filter((i) => i.code === 'BINDING_DRIFT');
     expect(drift.map((i) => i.message)).toEqual([expect.stringContaining('"vincenty_distance" was removed from geo::distance (the member\'s approved design held it)')]);
-  });
-
-  it('judged against the approval the CONSUMER\'s lock records — even after the member re-approved without it', () => {
-    const { app } = approvedThenDropped(true);
-    // The consumer's approval recorded the member at v1.
-    fs.writeFileSync(path.join(app, '.wai', 'lock.json'), JSON.stringify({ format: 3, stateId: { algorithm: 'sha256+design-2', digest: 'c'.repeat(64) }, specs: {}, members: { geo: { as: 'project', project: 'geo-sdk', subject: `sha256+design-2:${A}`, state: 'approved' } } }));
-    bind(app);
-    expect(validateProject().issues.filter((i) => i.code === 'BINDING_DRIFT').map((i) => i.message)).toEqual([expect.stringContaining('"vincenty_distance" was removed from geo::distance')]);
-    // Re-approved by the consumer at v2: the member's design it approved no longer holds it.
-    fs.writeFileSync(path.join(app, '.wai', 'lock.json'), JSON.stringify({ format: 3, stateId: { algorithm: 'sha256+design-2', digest: 'c'.repeat(64) }, specs: {}, members: { geo: { as: 'project', project: 'geo-sdk', subject: `sha256+design-2:${B}`, state: 'approved' } } }));
-    bind(app);
-    expect(validateProject().issues.filter((i) => i.code === 'BINDING_DRIFT')).toEqual([]);
   });
 });
 

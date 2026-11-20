@@ -284,7 +284,7 @@ methods:
         description: Return the approval identity with its parts
         type: return
         outcome: StateId (the approval identity)
-    symbol: computeGateStateId
+    symbol: computeApprovalId
   - name: findTestsReferencing
     narrative:
       - stepNumber: 1
@@ -901,4 +901,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-20T01:30:41.903Z'
+updatedAt: '2026-11-20T12:52:01.382Z'

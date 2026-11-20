@@ -270,7 +270,7 @@ describe('the deprecated reference forms do not bind outside the fence', () => {
   });
 });
 
-describe('a lock record wairon 5 wrote is refused outside the fence', () => {
+describe('a lock record an earlier wairon major wrote is refused, naming the way forward', () => {
   const writeLock = (root: string, extra: Record<string, unknown>): void => {
     fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({
       stateId: { algorithm: 'sha256', digest: '0'.repeat(64) }, lockedAt: now, lockedBy: { id: 'a', source: 'git' },
@@ -278,25 +278,26 @@ describe('a lock record wairon 5 wrote is refused outside the fence', () => {
     }));
   };
 
-  for (const [label, extra, format] of [['1 (no format)', {}, 1], ['2', { format: 2, members: {} }, 2]] as const) {
-    it(`format ${label}: named, with the way forward, and read in the v5 reading`, () => {
+  for (const [label, extra, format] of [['1 (no format)', {}, 1], ['2', { format: 2, members: {} }, 2], ['3', { format: 3, specs: {} }, 3]] as const) {
+    it(`format ${label}: named, with the way forward, in every reading`, () => {
       const root = project();
       writeLock(root, extra);
-      let thrown: unknown;
-      try { readLockRecord(); } catch (e) { thrown = e; }
-      expect(thrown).toBeInstanceOf(LockRecordUnreadableError);
-      const message = (thrown as Error).message;
-      expect(message).toContain(`it is lock record format ${format}, written by wairon 5 (wairon 6 reads format 3)`);
-      expect(message).toContain('Run `wairon upgrade`');
-      expect(message).not.toContain('delete it and run');
-      expect(runInV5Reading(() => readLockRecord())).toMatchObject({ validatorVersion: '5.1.0' });
+      for (const read of [() => readLockRecord(), () => runInV5Reading(() => readLockRecord())]) {
+        let thrown: unknown;
+        try { read(); } catch (e) { thrown = e; }
+        expect(thrown).toBeInstanceOf(LockRecordUnreadableError);
+        const message = (thrown as Error).message;
+        expect(message).toContain(`it is lock record format ${format}, written by an earlier wairon major (this release reads format 4)`);
+        expect(message).toContain('wairon upgrade');
+        expect(message).not.toContain('delete it and run');
+      }
     });
   }
 
-  it('format 3 reads outside the fence', () => {
+  it('format 4 reads', () => {
     const root = project();
-    writeLock(root, { format: 3, specsReading: 'design', specs: {} });
-    expect(readLockRecord()).toMatchObject({ format: 3 });
+    writeLock(root, { format: 4, parts: {}, specs: {} });
+    expect(readLockRecord()).toMatchObject({ format: 4 });
   });
 });
 

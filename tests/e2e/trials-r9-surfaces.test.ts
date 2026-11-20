@@ -50,7 +50,7 @@ function git(dir: string, ...args: string[]): void {
 
 /** An approval record committed with the tree as it stands: what the member's last approval is. */
 function commitApproval(dir: string, digest: string): void {
-  writeFile(dir, '.wai/lock.json', JSON.stringify({ format: 3, stateId: { algorithm: 'sha256+design-2', digest } }, null, 2));
+  writeFile(dir, '.wai/lock.json', JSON.stringify({ format: 4, parts: {}, stateId: { algorithm: 'sha256+design-2', digest } }, null, 2));
   git(dir, 'add', '-A');
   git(dir, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'approved');
 }
@@ -214,7 +214,7 @@ describe('3. surface diff names a gateway verb whose local record embeds a renam
       subsystems: [{ id: 'money', description: 'Money.', publicInterfaces: [{ typeDef: 'money' }] }],
       types: [{ id: 'money', kind: 'value-object', subsystem: 'money', name: 'Money', description: 'An amount.', fields: [{ name: 'amountMinor', type: 'int' }, { name: 'currency', type: 'string' }] }],
     }, projectYaml('contracts'));
-    writeFile(shop, '.wai/lock.json', JSON.stringify({ format: 3, stateId: { algorithm: 'sha256+design-2', digest: 'c'.repeat(64) } }));
+    writeFile(shop, '.wai/lock.json', JSON.stringify({ format: 4, parts: {}, stateId: { algorithm: 'sha256+design-2', digest: 'c'.repeat(64) } }));
     gitInit(shop);
     const rel = specFile(contracts, 'types', 'money');
     writeFile(contracts, rel, readFile(contracts, rel).replace('name: currency\n', 'name: currencyCode\n    previousNames:\n      - currency\n'));
