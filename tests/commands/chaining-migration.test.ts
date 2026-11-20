@@ -190,10 +190,11 @@ describe('stage 2c — the chaining migration', () => {
       ['dispatch-service::route-planner-impl', 'narrative', 'super::billing::invoice-portal', 'billing::invoice-portal'],
     ]);
     expect(dispatch.externals).toEqual([
-      { alias: 'billing', project: 'billing', producer: 'billing-service', reason: 'reference' },
-      { alias: 'fleetworks', project: 'fleetworks', producer: '', reason: 'reference' },
+      { alias: 'billing', project: 'billing', producer: 'billing-service', sourcePath: '../billing', reason: 'reference' },
+      { alias: 'fleetworks', project: 'fleetworks', producer: '', sourcePath: '../..', reason: 'reference' },
     ]);
-    expect(dispatch.pins).toEqual(['billing', 'fleetworks']);
+    // A sibling project in a folder is a path external: read live, never pinned.
+    expect(dispatch.pins).toEqual([]);
     expect(isEmpty(fromRoot)).toBe(false);
     expect(blocked(fromRoot)).toBe(false);
   });
@@ -237,12 +238,10 @@ describe('stage 2c — the chaining migration', () => {
     const report = at(f.root, () => apply(plan()));
     const after = at(f.root, () => validateProject());
     expect(codesOf(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXPORT_INVALID')).toEqual([]);
-    // From the child: its references are declared and exported; with nothing above its root read and no pin, they stay unavailable — never a pass.
+    // From the child: its references are declared with their source path and exported; each producer is read live from its folder, so nothing is unavailable.
     const fromChild = at(f.dispatch, () => validateProject());
     expect(codesOf(fromChild, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
-    expect(codesOf(fromChild, 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([
-      'EXTERNAL_CHECK_UNAVAILABLE @iroute-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner-impl',
-    ]);
+    expect(codesOf(fromChild, 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
     // Written in order: ids, L0 specs, externals; the producers' and the consumer's locks are stale.
     const rel = report.written.map((w) => path.relative(f.root, w).split(path.sep).join('/'));
     expect(rel).toEqual([
@@ -349,8 +348,8 @@ describe('stage 2c — the chaining migration', () => {
     const pinned = ['FleetWorks', 'FleetWorks::dispatch', 'FleetWorks::operations'].map(pin);
     const planned = at(f.root, () => plan());
     const billing = planned.projects.find((p) => p.project === 'billing-service')!;
-    expect(billing.externals).toEqual([{ alias: 'fleetworks', project: 'fleetworks', producer: '', reason: 'legacy-pin' }]);
-    expect(billing.pins).toEqual(['fleetworks']);
+    expect(billing.externals).toEqual([{ alias: 'fleetworks', project: 'fleetworks', producer: '', sourcePath: '../..', reason: 'legacy-pin' }]);
+    expect(billing.pins).toEqual([]);
     expect(billing.supersededPins).toEqual(['FleetWorks', 'FleetWorks::dispatch', 'FleetWorks::operations']);
     at(f.root, () => apply(planned));
     for (const file of pinned) expect(fs.existsSync(file)).toBe(false);

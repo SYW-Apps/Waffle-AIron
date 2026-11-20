@@ -248,6 +248,8 @@ export interface ScannedProjectRoot {
   mountAlias?: string;
   /** How the parent declares it; absent for the bound root. */
   mountForm?: MountForm;
+  /** True when the parent declares it under `externals` with a path source: a live scan node judged for validity, never a member. */
+  pathExternal?: true;
   /** The legacy L1 mount subsystem as the parent wrote it; null for a members-declared root and the bound root. */
   legacyMount: SubsystemSpec | null;
   /** What its parent's declaration says the member is (the `members` description, or a legacy mount's). */
@@ -652,6 +654,8 @@ interface MemberDeclarationRead {
   legacyFile?: string;
   /** Why the declaration is not followed. */
   problem?: string;
+  /** True for a path external read live as a scan node: judged for validity, never a member. */
+  pathExternal?: boolean;
 }
 
 /** A project's configuration read through that root's binding; null when it has none or it fails its schema. */
@@ -3537,6 +3541,7 @@ export class SpecWorkspace {
       namespace: key,
       ...(parent ? { parent: parent.record.namespace } : {}),
       ...(member ? { mountAlias: member.alias, mountForm: member.form } : {}),
+      ...(member?.pathExternal ? { pathExternal: true as const } : {}),
       legacyMount: member?.legacyMount ?? null,
       ...(member?.description !== undefined ? { memberDescription: member.description } : {}),
       directory: path.resolve(dir),
@@ -3640,7 +3645,7 @@ export class SpecWorkspace {
       const dir = path.resolve(raw.dir, decl.sourcePath);
       const key = chainDirKey(dir);
       if (raws.some((r) => chainDirKey(r.dir) === key) || !ioFiles.exists(dir)) continue;
-      out.push({ alias: decl.alias, path: decl.sourcePath, form: 'members', storage: 'path', source: { path: decl.sourcePath }, use: decl.use, kind: 'project' });
+      out.push({ alias: decl.alias, path: decl.sourcePath, form: 'members', storage: 'path', source: { path: decl.sourcePath }, use: decl.use, kind: 'project', pathExternal: true });
     }
     return out;
   }

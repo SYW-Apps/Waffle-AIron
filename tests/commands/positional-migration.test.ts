@@ -123,12 +123,12 @@ describe('stage 4 — the positional migration', () => {
       'app|shared|waffler-error|declared-producer|export:false|external:false|app::screen-state type WafflerError',
       'app|ui|banner-style|only-match|export:true|external:true|app::screen-state type BannerStyle',
     ]);
-    // ui gains the export the import names; app declares ui and pins both its externals — shared never was.
+    // ui gains the export the import names; app declares ui with its source path. Neither external is pinned: a sibling project in a folder is read live.
     const ui = planned.projects.find((p) => p.project === 'ui')!;
     expect(ui.exports.map((e) => `${e.typeDef}|${e.publicName}|${e.reason}|${e.consumers.join(',')}`)).toEqual(['banner-style|banner-style|positional|app']);
     const app = planned.projects.find((p) => p.project === 'app')!;
     expect(app.externals.map((e) => `${e.alias}|${e.reason}`)).toEqual(['ui|positional']);
-    expect(app.pins).toEqual(['shared', 'ui']);
+    expect(app.pins).toEqual([]);
     // The top's own id used as a prefix is rewritten to the bare local id.
     expect(planned.rewrites.map((r) => [r.project, r.specId, r.form, r.from, r.to])).toEqual([['', 'ledger-line', 'self-prefix', 'vocab.report', 'report']]);
     // What no rule decides is reported, never guessed.
@@ -228,7 +228,7 @@ describe('stage 4 — the positional migration', () => {
     expect(rel.filter((w) => /externals(\/|\.lock)/.test(w))).toEqual([]);
     // The named imports, where each consumer declares its producer.
     expect(configOf(f.top).members).toMatchObject({ shared: { source: 'shared', use: ['index-value'] } });
-    expect(configOf(f.app).externals).toEqual({ shared: { use: ['waffler-error'] }, ui: { use: ['banner-style'] } });
+    expect(configOf(f.app).externals).toEqual({ shared: { use: ['waffler-error'] }, ui: { source: { path: '../ui' }, use: ['banner-style'] } });
     // ui exports what app imports; app reads it live.
     const uiL0 = yaml.load(fs.readFileSync(path.join(f.ui, '.wai', 'specs', '.index.yaml'), 'utf8')) as { publicInterfaces: { typeDef?: string }[] };
     expect(uiL0.publicInterfaces.map((e) => e.typeDef)).toContain('banner-style');

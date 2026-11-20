@@ -1,13 +1,7 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-
-vi.mock('../../src/config/defaults.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/config/defaults.js')>()),
-  WAIRON_VERSION: '7.0.0-dev.1',
-  WAIRON_MAJOR: 7,
-}));
 
 import * as upgrade from '../../src/upgrade/index.js';
 import { read } from '../../src/upgrade/adapters/stamp.js';
@@ -173,6 +167,39 @@ describe('wairon upgrade — a tree holding no v6 lock form', () => {
     expect(report.stamped).toEqual([root]);
     expect(report.relock).toEqual([]);
     expect(read(root)).toBe(7);
+  });
+
+  it('converts the externals lock a part holds, with its declaring project, and gives the part no lock record', () => {
+    const root = tempRoot('wairon-upg-partlock-');
+    roots.push(root);
+    writeProject(root, 'host', { members: { media: 'services/media' } });
+    const part = path.join(root, 'services', 'media');
+    writeYamlFile(path.join(part, '.wai', 'specs', 'media', '.index.yaml'), {
+      id: 'media', name: 'media', description: 'the media part', parentSystem: 'host', publicInterfaces: [], trustedLinks: [],
+      status: 'complete', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
+    });
+    writeYamlFile(path.join(part, '.wai', 'externals.lock.yaml'), {
+      externals: {}, parent: { project: 'host', snapshot: '.wai/externals/host.yaml', digest: 'sha256:host', used: {}, role: 'parent' },
+    });
+    writeYamlFile(path.join(part, '.wai', 'externals', 'host.yaml'), { project: 'host' });
+
+    // The family's roots are the project and its part.
+    expect(upgrade.plan(root).steps.map((s) => s.project).sort()).toEqual([root, part].sort());
+    const plan = upgrade.plan(root);
+    expect(plan.refusal).toBeUndefined();
+    // Each change is named relative to the root it was made under: the project's stamp, and the part's lock conversion.
+    expect(plan.changes.map((c) => c.path).sort()).toEqual(['.wai/externals.lock.yaml', '.wai/inputs.lock.yaml', '.wai/project.yaml']);
+    const report = upgrade.apply(plan);
+    expect(report.committed).toBe(true);
+    expect(fs.existsSync(path.join(part, '.wai', 'externals.lock.yaml'))).toBe(false);
+    const inputs = fs.readFileSync(path.join(part, '.wai', 'inputs.lock.yaml'), 'utf8');
+    expect(inputs).toContain('parent:');
+    expect(inputs).toContain('project: host');
+    // A part has no lock record of its own, and no stamp.
+    expect(fs.existsSync(path.join(part, '.wai', 'lock.json'))).toBe(false);
+    expect(fs.existsSync(path.join(part, '.wai', 'project.yaml'))).toBe(false);
+    // Finished: the next plan finds nothing left.
+    expect(upgrade.plan(root).steps).toEqual([]);
   });
 
   it('stamps the project and leaves a part (no project.yaml of its own) unstamped', () => {

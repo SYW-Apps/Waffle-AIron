@@ -149,7 +149,7 @@ describe('member-is-a-project', () => {
     });
     expect(projectRepositoryScope(dataDir, 'platform')!.pathspecs).toEqual(['.wai/']);
     // Its own lock: written at its own root, nothing at its parent's.
-    const lock = executeApprovedLock(cfg, 'payments', { id: 'u-approver', source: 'hosted' });
+    const lock = executeApprovedLock(cfg, 'payments', { id: 'u-approver', source: 'hosted' }).record;
     expect(lock.projectId).toBe('payments');
     expect(fs.existsSync(path.join(fam.payments, '.wai', 'lock.json'))).toBe(true);
     expect(fs.existsSync(path.join(fam.billing, '.wai', 'lock.json'))).toBe(false);

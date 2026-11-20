@@ -1,12 +1,6 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-
-vi.mock('../../src/config/defaults.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/config/defaults.js')>()),
-  WAIRON_VERSION: '7.0.0-dev.1',
-  WAIRON_MAJOR: 7,
-}));
 
 import * as upgrade from '../../src/upgrade/index.js';
 import { read } from '../../src/upgrade/adapters/stamp.js';

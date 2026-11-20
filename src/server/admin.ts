@@ -3,7 +3,6 @@ import type { DiagramFormat } from '../core/diagram.js';
 import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 
 import type { LockRecord } from '../core/lockfile.js';
-import type { ApproverIdentity } from '../models/lock.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { placeProject, listOrganizationUnits } from './organization.js';
@@ -48,6 +47,7 @@ import type {
   DisplayRole,
   RepositoryScope,
 } from './types.js';
+import { approver } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Admin Orchestrator (sdd_host)
@@ -259,28 +259,9 @@ export function lockProject(cfg: HostConfig, credential: string | null, project:
         + 'a writer requests the lock with sdd_host_lock_project, for someone else to approve',
     );
   }
-  return hostedLock.execute(cfg, project, hostedApprover(principal.subject));
-}
-
-/**
- * The hosted caller as the identity a lock records.
- *
- * This is the one surface where wairon actually AUTHENTICATED who is approving —
- * the instance issued the credential and resolved it to a subject — so the
- * record says so (`source: 'hosted'`) rather than settling for the self-declared
- * git or machine identity a local lock has to use. It previously wrote the
- * constant 'admin:master' and threw the real identity away.
- *
- * No subject means the bootstrap master credential: a real actor, but an
- * instance-wide one belonging to no user, and named as exactly that.
- */
-export function hostedApprover(subject?: PrincipalSubject): ApproverIdentity {
-  if (!subject) return { id: 'master', name: 'instance master credential', source: 'hosted' };
-  return {
-    id: subject.userId,
-    ...(subject.displayName ? { name: subject.displayName } : {}),
-    source: 'hosted',
-  };
+  // No subject is the bootstrap master credential: an instance-wide actor belonging to no user.
+  const who = principal.subject ? approver(principal.subject) : { id: 'master', name: 'instance master credential', source: 'hosted' as const };
+  return hostedLock.execute(cfg, project, who).record;
 }
 
 /**

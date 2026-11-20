@@ -11,7 +11,6 @@ import {
 } from './approvals.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { hostedApprover } from './admin.js';
 import * as hostedLock from './hosted-lock.js';
 import type { ApproverIdentity } from '../models/lock.js';
 import type { LockRecord } from '../core/lockfile.js';
@@ -19,7 +18,7 @@ import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { impactHeadline } from '../models/pack-impact.js';
 import { isValidProjectId, invalidProjectIdProblem, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds, resolveFamilyReach } from './authorization.js';
-import { describeDecision } from './types.js';
+import { describeDecision, approver } from './types.js';
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -316,6 +315,11 @@ export function initializeProject(
   }
 }
 
+/** The identity a lock records: the subject's own approver, or the instance master credential when the credential resolved no subject. */
+function approverOf(subject?: PrincipalSubject): ApproverIdentity {
+  return subject ? approver(subject) : { id: 'master', name: 'instance master credential', source: 'hosted' as const };
+}
+
 /**
  * Project lock — the project's approval. A caller whose approval:decide over
  * the project's OWN record is yes locks directly via the admin plane's
@@ -335,8 +339,8 @@ export function lockProject(
     action: 'project:lock',
     verb: 'Lock',
     noun: 'lock',
-    execute: (approver) => {
-      const lock = hostedLock.execute(cfg, projectId, approver);
+    execute: (who) => {
+      const lock = hostedLock.execute(cfg, projectId, who).record;
       return {
         status: 'completed',
         action: 'project:lock',
@@ -378,7 +382,7 @@ function lifecycleAction(
     action: 'project:lock';
     verb: string;
     noun: string;
-    execute: (approver: ApproverIdentity) => ProjectActionOutcome;
+    execute: (who: ApproverIdentity) => ProjectActionOutcome;
   },
 ): ProjectActionOutcome {
   const principal = requirePrincipal(cfg, credential);
@@ -389,7 +393,7 @@ function lifecycleAction(
   const decide = authorize(cfg.dataDir, principal, APPROVAL_DECIDE_CAPABILITY, 'project', projectId);
   if (decide.value === 'yes') {
     // Steps 4-6: the pre-authorized entries validate existence themselves (Unknown project).
-    const outcome = opts.execute(hostedApprover(principal.subject));
+    const outcome = opts.execute(approverOf(principal.subject));
     tryAppendAudit(
       cfg,
       buildAuditEvent(principal, 'lifecycle.completed', 'security', {
@@ -734,7 +738,7 @@ function lockAsRequested(cfg: HostConfig, req: ApprovalRequest, target: string):
     // The DECIDER is the approver: in the approval path the requester did not
     // have the authority, and the decision is what conferred it. The requester
     // is not lost — the ApprovalRequest and the audit event both carry them.
-    return hostedLock.execute(cfg, target, hostedApprover(req.decidedBy), req.approvalId);
+    return hostedLock.execute(cfg, target, approverOf(req.decidedBy), req.approvalId).record;
   } catch (err) {
     const moved = designMovedSince(err);
     if (!moved) throw err;

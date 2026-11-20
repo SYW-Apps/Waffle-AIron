@@ -63,6 +63,7 @@ function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
       ...(root.parent !== undefined ? { parent: root.parent } : {}),
       ...(root.mountAlias !== undefined ? { mountAlias: root.mountAlias } : {}),
       ...(root.mountForm !== undefined ? { mountForm: root.mountForm } : {}),
+      ...(root.pathExternal ? { pathExternal: true as const } : {}),
       legacyMount: root.legacyMount,
       ...(root.memberDescription !== undefined ? { memberDescription: root.memberDescription } : {}),
       hasSystem: root.system !== null,

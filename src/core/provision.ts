@@ -1281,7 +1281,11 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   declareCrossingEntries(inside, outside, parentId || parentName, result);
   recordCrossingTopics(inside, outside, parentId || parentName, result);
   // Step 10 (declare): the new project declares the parent as its external when it references it.
-  if (crossing.out.length > 0 || qualified.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, {}));
+  // It is a path external, written with its source path: read live from the parent's folder, never pinned.
+  const parentRoot = getProjectRoot();
+  if (crossing.out.length > 0 || qualified.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) {
+    runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, { source: { path: toPosixPath(path.relative(dir, parentRoot)) || '.' } }));
+  }
   // Step 10 (siblings): each other project the moved specs name through the parent's members or externals, declared too.
   declareSiblings(family, inside, dir, alias, result);
   // Step 11: the parent's re-exports of the part's subsystems re-export the member.

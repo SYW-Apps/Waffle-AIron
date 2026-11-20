@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { devCommandsFor } from '../../src/commands/host.js';
 import { buildProgram } from '../../src/cli/program.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // The commands `wairon dev` hands its server: the CLI's own, with what they
@@ -41,7 +42,7 @@ describe('wairon dev family commands (sdd_cli)', () => {
   const project = (): void => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-devfamily-'));
     fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
+    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), stampedProjectYaml({
       schemaVersion: '1.0.0', name: 'family-sys', projectType: 'backend',
       targets: [], rules: {}, createdAt: '2026-11-10T00:00:00Z', updatedAt: '2026-11-10T00:00:00Z',
     }));

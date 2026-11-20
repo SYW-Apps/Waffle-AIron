@@ -278,8 +278,8 @@ interface NarrowExport {
 /**
  * Step 5: every public name a family project reaches in the member that the
  * member exports below the instance audience, with its users. Outside the
- * family, a pin taken by path sees instance and above, so each such use would
- * stop resolving.
+ * family, an external read by path or hosted id sees instance and above, so each
+ * such use would stop resolving.
  */
 function familyOnlyUses(family: ProjectFamily, member: ProjectNode, table: ResolvedExportTable): NarrowExport[] {
   const floor = SURFACE_AUDIENCES.indexOf('instance');
@@ -299,7 +299,7 @@ function familyOnlyUses(family: ProjectFamily, member: ProjectNode, table: Resol
 /** Without --widen: one audience-too-narrow per export, naming every project that uses it — widening is a design decision, never a silent side effect. */
 function refuseNarrow(plan: MigrationPlan, member: ProjectNode, narrow: NarrowExport[]): void {
   for (const e of narrow) {
-    refuse(plan, 'audience-too-narrow', member.namespace, `${label(member.namespace)} exports "${e.name}" to audience "${e.audience}" only, and ${e.users.map(label).join(', ')} use${e.users.length === 1 ? 's' : ''} it — outside the family a pin sees "instance" and above, so the use would stop resolving; it needs audience "instance" (detach --widen widens exactly the used exports)`);
+    refuse(plan, 'audience-too-narrow', member.namespace, `${label(member.namespace)} exports "${e.name}" to audience "${e.audience}" only, and ${e.users.map(label).join(', ')} use${e.users.length === 1 ? 's' : ''} it — outside the family an external sees "instance" and above, so the use would stop resolving; it needs audience "instance" (detach --widen widens exactly the used exports)`);
   }
 }
 
@@ -364,7 +364,8 @@ function detachEdits(
   if (relocation) {
     edit(plan, member.namespace, 'move', `${member.directory} moved to ${relocation.to} (its own isolated root), its own members with it`, { root: member.directory, call: 'move', args: [relocation.to] });
   }
-  edit(plan, bound, 'pin', `pin ${alias} (the detached project's surface, read last)`, { root: boundDir, call: 'pinExternals', args: [[alias]] });
+  // A hosted external (a relocation) is pinned when owed; a path external is read live and never pinned.
+  if (relocation) edit(plan, bound, 'pin', `pin ${alias} (the detached project's surface, read last)`, { root: boundDir, call: 'pinExternals', args: [[alias]] });
   plan.notes.push(`Consumers outside the family are not affected: they already name ${member.id ?? alias} by ${relocation ? 'hosted record id' : 'path'}, or not at all.`);
 }
 
@@ -446,7 +447,9 @@ function adoptEdits(plan: MigrationPlan, family: ProjectFamily, bound: string, a
   }
   // Step 7: the edits.
   const key = id ?? alias;
-  edit(plan, bound, 'pin', `pin ${alias} removed (the family supplies it now)`, { root: boundDir, call: 'unpin', args: [alias] });
+  // Only a git or hosted external holds a pin to drop; a path external is read live.
+  const written = externalSourceOf(external);
+  if (written?.git !== undefined || written?.hosted !== undefined) edit(plan, bound, 'pin', `pin ${alias} removed (the family supplies it now)`, { root: boundDir, call: 'unpin', args: [alias] });
   edit(plan, bound, 'external', `externals: ${alias} removed`, { root: boundDir, call: 'removeExternal', args: [alias] });
   const declaration = {
     source: posix(path.relative(boundDir, at)),

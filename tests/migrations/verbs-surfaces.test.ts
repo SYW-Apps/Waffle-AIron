@@ -148,7 +148,7 @@ describe('stage 6 — the verbs as MCP tools (dryRun)', () => {
     expect(dry.isError ?? false, textOf(dry)).toBe(false);
     const planned = JSON.parse(textOf(dry));
     expect(planned).toMatchObject({ dryRun: true, applied: false, plan: { verb: 'detach', refusals: [] } });
-    expect(planned.plan.edits.map((e: { kind: string }) => e.kind)).toEqual(['member', 'external', 'external', 'pin']);
+    expect(planned.plan.edits.map((e: { kind: string }) => e.kind)).toEqual(['member', 'external', 'external']);
     expect(dry.structuredContent).toEqual(planned);
     expect(dirHash(f.top)).toEqual(before);
 

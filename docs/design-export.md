@@ -149,7 +149,7 @@ the resolved L0 export table, as `design_export_entry` rows.
 | `alias` | The alias the project uses for the dependency. It is the prefix of every `alias::publicName` that points into it. |
 | `projectId` | The dependency's project id. |
 | `role` | `member` for a project this one contains (an in-tree subdirectory member, a sibling or git member, a legacy mount). `external` for a declared external. A part is not a dependency: its subsystems are this project's own. |
-| `digest` | The content digest pinned in `.wai/externals.lock.yaml`, when the dependency is pinned. It is absent when it is not pinned, or when the lock cannot be read. |
+| `digest` | The content digest pinned in `.wai/inputs.lock.yaml`, when the dependency is pinned. It is absent when it is not pinned, or when the lock cannot be read. |
 | `uses` | The public names this project's references reach in the dependency, sorted. |
 
 ### `subsystems` (`design_subsystem`)

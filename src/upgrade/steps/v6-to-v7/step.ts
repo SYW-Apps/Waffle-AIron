@@ -35,12 +35,20 @@ const FORMAT = 4;
 const LOCK_CHANGE = 'lock.json';
 const INPUTS_CHANGE = '.wai/externals.lock.yaml becomes .wai/inputs.lock.yaml';
 
-/** iv6_to_v7_tree_step.familyRoots — the project roots of the family under a root, the top first (parts are left out: a part has no lock of its own). */
+/**
+ * iv6_to_v7_tree_step.familyRoots — the roots of the family under a root, the top first: every project and every
+ * part. A part is included: its own externals.lock.yaml and parent entry are converted with the rest, and its specs
+ * are copied into the rehearsal with its declaring project. A part has no lock record of its own.
+ */
 export function familyRoots(root: string): string[] {
-  // Step 1: the project graph under the root, through the core.
+  // Step 1: the project graph under the root, through the core, parts included.
   const family = runWithProjectRoot(root, () => core.projectFamily());
-  // Step 2.
-  return family.nodes.map((n) => n.directory);
+  // Step 2: each project's root, then the root of each of its parts that is stored in reach (a git or hosted part is read from a cache).
+  const roots = family.nodes.flatMap((n) => [
+    n.directory,
+    ...n.parts.filter((p) => p.directory !== undefined && p.storage !== 'git' && p.storage !== 'hosted').map((p) => p.directory!),
+  ]);
+  return [...new Set(roots)];
 }
 
 /** What the comparison of a v6 record with the tree decided. */

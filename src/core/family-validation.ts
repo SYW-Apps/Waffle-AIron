@@ -190,6 +190,14 @@ function depthOf(family: ProjectFamily, node: ProjectNode): number {
   return depth;
 }
 
+/** Whether the node is a path external, or was read below one: a live node of the scan, never a member. */
+function underPathExternal(family: ProjectFamily, node: ProjectNode): boolean {
+  for (let at: ProjectNode | null = node; at; at = at.parent === undefined ? null : familyNode(family, at.parent)) {
+    if (at.pathExternal !== undefined) return true;
+  }
+  return false;
+}
+
 /** One selected project, and the subsystem scope its own gate runs with. */
 interface Selected {
   node: ProjectNode;
@@ -1089,9 +1097,11 @@ export function projectApprovals(depth?: number): ProjectApproval[] {
   const ceiling: Ceiling = { topRoot: root, narrowed: true };
   // Step 2: the projects to answer for, and the ones judged only for a requiring project's debts.
   const limit = depth ?? Infinity;
-  const selected = family.nodes.filter((n) => depthOf(family, n) <= limit);
+  // A path external (and anything read below it) is a live node judged for validity only: never a member, never answered here.
+  const members = family.nodes.filter((n) => !underPathExternal(family, n));
+  const selected = members.filter((n) => depthOf(family, n) <= limit);
   const requiring = selected.filter((n) => within(n.directory, ceiling, () => configOrNull()?.composition?.requireApprovedMembers === true));
-  const extra = family.nodes.filter((n) => !selected.includes(n) && requiring.some((r) => n.parent === r.namespace));
+  const extra = members.filter((n) => !selected.includes(n) && requiring.some((r) => n.parent === r.namespace));
   const walk = [...selected, ...extra];
   // A declared member with no project on disk: never, bound to nothing. Answered for
   // any project in the walk (a requiring parent counts it a debt), reported within `depth`.
@@ -1237,7 +1247,7 @@ function containedRelations(answered: ExternalStatus[]): ExternalStatus[] {
   // Step 8: its own graph — the references it writes into its own members.
   const own = projectFamily();
   const consumed = own.nodes
-    .filter((n) => n.parent === '' && n.mountAlias !== undefined && !answered.some((s) => s.alias === n.mountAlias))
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined && n.pathExternal === undefined && !answered.some((s) => s.alias === n.mountAlias))
     .map((child) => ({
       child,
       refs: own.authoredReferences.filter((r) => (own.owners.get(r.specId) ?? '') === '' && r.producer === child.namespace && r.binding !== 'local'),

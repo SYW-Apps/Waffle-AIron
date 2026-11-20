@@ -1,4 +1,5 @@
 import type { LockRecord } from '../core/lockfile.js';
+import type { ApproverIdentity } from '../models/lock.js';
 import type { FindingsState } from '../core/canvas.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
@@ -383,6 +384,19 @@ export interface PrincipalSubject {
   displayName?: string;
   /** Verified email address when available. */
   email?: string;
+}
+
+/**
+ * principal_subject.approver — the approver identity a hosted lock records for this subject: its user
+ * id and display name, source hosted. A credential that resolved no subject (the bootstrap master
+ * credential) has none: its caller records the instance master credential instead. Pure.
+ */
+export function approver(subject: PrincipalSubject): ApproverIdentity {
+  return {
+    id: subject.userId,
+    ...(subject.displayName ? { name: subject.displayName } : {}),
+    source: 'hosted',
+  };
 }
 
 /** The authenticated caller identity and authorized scope. Transient (never

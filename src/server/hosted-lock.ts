@@ -6,7 +6,7 @@ import type { StateId } from '../core/statehash.js';
 import type { ValidationResult } from '../core/validation.js';
 import type { ProjectConfig } from '../models/project.js';
 import type { ExternalPin } from '../models/specs.js';
-import { designOnly, type ApproverIdentity, type CodeAnalysis, type ProjectApproval } from '../models/lock.js';
+import { designOnly, type ApproverIdentity, type CodeAnalysis, type InputDebt, type ProjectApproval } from '../models/lock.js';
 import { effectiveProjectId } from '../models/project.js';
 import { existingProjectRoot, projectRepositoryScope } from './projects.js';
 import * as hostCore from './adapters/core.js';
@@ -55,6 +55,20 @@ export class RequestedDesignMovedError extends LockRefusedError {
   }
 }
 
+/**
+ * hosted_lock_outcome — what a hosted lock answers: the persisted record, the outcome of each pin the
+ * lock took of an owed external (a refused one included) and the input debts that remain after it.
+ * Inputs never block the approval; the debts are reported beside it.
+ */
+export interface HostedLockOutcome {
+  /** The persisted format-4 record, with commitSha and compareUrl when the lock was published. */
+  record: LockRecord;
+  /** One outcome per owed git or hosted external the lock tried to pin; empty when none was owed. */
+  pins: ExternalPin[];
+  /** The build input debts that remain after the lock; empty when none. */
+  debts: InputDebt[];
+}
+
 /** An approval identity rendered the way requests store it. */
 function renderIdentity(stateId: StateId): string {
   return `${stateId.algorithm}:${stateId.digest}`;
@@ -96,7 +110,7 @@ export function execute(
   projectId: string,
   approver: ApproverIdentity,
   expected?: string,
-): LockRecord {
+): HostedLockOutcome {
   // Step 1: the family repository scope, and the project's own root to bind.
   const scope = repositoryScopeOf(cfg, projectId);
   const root = boundLifecycleRoot(cfg, projectId);
@@ -111,7 +125,7 @@ export function execute(
     const members = approvals.filter((a) => a.parent === '');
     // Step 4: refresh what the build owes BEFORE anything is judged.
     const owed = (own?.inputs ?? []).filter((d) => d.kind === 'unpinned' || d.kind === 'unrecorded').map((d) => d.subject);
-    refreshInputs([...new Set(owed)]);
+    const pins = refreshInputs([...new Set(owed)]);
     // Step 5: capture what the record will certify before anything is judged.
     const captured = computeApprovalId();
     // Steps 6-7.
@@ -133,9 +147,14 @@ export function execute(
     // Step 19: write the record BEFORE publishing, so the commit that ships the
     // specs also contains the approval that certifies them.
     hostCore.writeLockRecord(record);
-    // Steps 20-25.
-    return publishLock(record, scope);
+    // Steps 20-25: the published record, the pin outcomes and the input debts that remain.
+    return { record: publishLock(record, scope), pins, debts: remainingDebts() };
   });
+}
+
+/** The input debts of the bound project's own entry after the lock. */
+function remainingDebts(): InputDebt[] {
+  return familyApprovals(0).find((a) => a.key === '')?.inputs ?? [];
 }
 
 /**

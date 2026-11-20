@@ -468,7 +468,7 @@ export function memberRevisions(asOf?: Date): MemberRevision[] {
   const out: MemberRevision[] = [];
   // Steps 4-9: each live member.
   for (const node of family.nodes) {
-    if (node.parent !== own.namespace || node === own || node.mountAlias === undefined) continue;
+    if (node.parent !== own.namespace || node === own || node.mountAlias === undefined || node.pathExternal !== undefined) continue;
     const alias = node.mountAlias;
     const usage = exportUsage(own.namespace, node.namespace);
     const entry: MemberRevision = { alias, project: node.id ?? node.namespace, root: node.directory, usage };

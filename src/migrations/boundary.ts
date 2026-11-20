@@ -5,7 +5,7 @@ import * as surfaces from './adapters/surfaces.js';
 // family_file_adapter: where a path lands and whether a project is there — a planner touches no file itself.
 import * as files from './family-files.js';
 import { getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
-import { memberLocationOf, parseMemberSource, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
+import { declaredExternals, memberLocationOf, parseMemberSource, type InternalizeDestination, type ProjectConfig } from '../models/project.js';
 import { familyNode, keyIn, type AuthoredReference, type ProjectFamily, type ProjectNode, type ReferenceEdit } from '../models/project-family.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SystemSpec } from '../models/specs.js';
 import type { InternalizeResult, PromoteResult } from '../core/index.js';
@@ -55,6 +55,20 @@ function configAt(dir: string): ProjectConfig | null {
       return null;
     }
   });
+}
+
+/** The aliases (of those named, or of every external when none is) a project declares from a git or hosted source: the only externals that hold a pin. A path external is read live and never pinned. */
+function pinnableExternals(config: ProjectConfig | null, aliases?: string[]): string[] {
+  if (config === null) return [];
+  return declaredExternals(config)
+    .filter((e) => !e.problem && (e.sourceGit !== undefined || e.sourceHosted !== undefined) && (aliases === undefined || aliases.includes(e.alias)))
+    .map((e) => e.alias);
+}
+
+/** The pin of a git or hosted external a created project declares, planned only when the bound project declares one it could carry. */
+function planOwedPins(plan: MigrationPlan, project: string, root: string, bound: ProjectConfig | null): void {
+  if (pinnableExternals(bound).length === 0) return;
+  edit(plan, project, 'pin', `pin the git or hosted externals the new project declares (a path external is read live and never pinned)`, { root, call: 'pinExternals', args: [[]] });
 }
 
 /** The positions a reference may stand at, by the kinds of spec that hold them. */
@@ -109,7 +123,7 @@ export function planInternalize(family: ProjectFamily, bound: string, request: M
   // Steps 5-7: the destination's exports completed with every public name a consumer uses.
   const exports = completedExports(plan, family, bound, member, consumers);
   if (plan.refusals.length > 0) return plan;
-  // Step 8: the externals the bound project carries (to pin there).
+  // Step 8: the externals the bound project carries.
   const carried = carriedExternals(family, bound, member);
   // Step 9: the edits.
   const destination: InternalizeDestination = { ...(request.destination ?? { home: '' }), exports };
@@ -139,7 +153,7 @@ function planPartInternalize(plan: MigrationPlan, family: ProjectFamily, bound: 
  * planInternalize for a PROJECT stored in a `../` sibling checkout (stage 8):
  * planDemote's refusals, notes and named export removals, then the core's
  * internalize — which demotes it in place and moves the part it became in —
- * and the bound project's pin of it removed, all in the one transaction.
+ * all in the one transaction. A member is never pinned, so nothing is unpinned.
  */
 function planSiblingInternalize(plan: MigrationPlan, family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan {
   const demoted = planDemote(family, bound, { ...request, verb: 'demote' });
@@ -151,8 +165,6 @@ function planSiblingInternalize(plan: MigrationPlan, family: ProjectFamily, boun
   for (const e of demoted.edits.filter((x) => x.kind === 'export')) plan.edits.push(e);
   edit(plan, bound, 'move', `internalize ${alias}: demoted in place, then its subsystems moved into ${label(bound)}'s own specs folder`,
     { root: node.directory, call: 'internalizeMember', args: [alias, request.destination ?? { home: '' }] });
-  // A pin an earlier release took of the sibling (it was judged against one then) goes with it.
-  edit(plan, bound, 'pin', `pin ${alias} removed`, { root: node.directory, call: 'unpin', args: [alias] });
   plan.edits.push({ project: alias, kind: 'delete', detail: `${alias}'s L0, lock, pins and derived outputs end with its boundary, and its folder's .wai with the move: deleted, each listed` });
   return plan;
 }
@@ -228,7 +240,7 @@ function completedExports(plan: MigrationPlan, family: ProjectFamily, bound: str
   return [...names].filter((n) => memberTable.entries.some((e) => e.publicName === n)).sort();
 }
 
-/** Step 8: the member's externals other than the bound project, that the bound project will declare and pin. */
+/** Step 8: the member's externals other than the bound project, that the bound project will declare — and pin, when they are git or hosted. */
 function carriedExternals(family: ProjectFamily, bound: string, member: ProjectNode): string[] {
   const boundNode = familyNode(family, bound)!;
   const boundConfig = configAt(boundNode.directory);
@@ -243,19 +255,18 @@ function internalizeEdits(
   consumers: Consumer[], destination: InternalizeDestination, carried: string[],
 ): void {
   const boundNode = familyNode(family, bound)!;
-  const repinned: Consumer[] = [];
+  const repointed: Consumer[] = [];
   for (const c of consumers) {
     const own = [...c.node.aliases].find(([, key]) => key === bound)?.[0];
     if (own !== undefined) respellConsumer(plan, family, c, own);
-    else repinned.push(repointConsumer(plan, c, boundNode));
+    else repointed.push(repointConsumer(plan, c, boundNode));
   }
   edit(plan, bound, 'move', `internalize ${alias}: its subsystems into ${label(bound)}${destination.home ? `, its L0 vision to ${destination.home}` : ''}${destination.exports?.length ? `, exporting ${destination.exports.join(', ')}` : ''}${destination.packs ? `, its packs ${destination.packs === 'adopt' ? 'adopted' : 'dropped'}` : ''}`,
     { root: boundNode.directory, call: 'internalizeMember', args: [alias, destination] });
-  for (const c of repinned) {
-    edit(plan, c.node.namespace, 'pin', `pin ${c.alias} taken again against ${boundNode.id ?? 'the top project'}`, { root: c.node.directory, call: 'pinExternals', args: [[c.alias]] });
-    loopClosed(plan, family, bound, member, c);
-  }
-  if (carried.length > 0) edit(plan, bound, 'pin', `pin ${carried.join(', ')} (externals carried from ${alias})`, { root: boundNode.directory, call: 'pinExternals', args: [carried] });
+  for (const c of repointed) loopClosed(plan, family, bound, member, c);
+  // Only a carried git or hosted external is pinned (a path external is read live).
+  const owed = pinnableExternals(configAt(member.directory), carried);
+  if (owed.length > 0) edit(plan, bound, 'pin', `pin ${owed.join(', ')} (externals carried from ${alias})`, { root: boundNode.directory, call: 'pinExternals', args: [owed] });
   plan.edits.push({ project: member.namespace, kind: 'delete', detail: `${alias}'s lock, pins and derived outputs have no home: deleted, each listed` });
   plan.notes.push(`Consumers outside the family that name "${member.id ?? alias}" by path are not found: each must repoint its own external at ${boundNode.id ?? 'this project'}.`);
   if (member.id !== undefined && core.approvalRecord(member.directory)) plan.notes.push(`${label(member.namespace)}'s approval ends with it: its lock is deleted, and ${label(bound)} is re-locked instead.`);
@@ -274,7 +285,7 @@ function loopClosed(plan: MigrationPlan, family: ProjectFamily, bound: string, m
   plan.notes.push(`${label(c.node.namespace)} is re-pointed at ${label(bound)}, which uses it (${named}${uses.length > 3 ? ', …' : ''}): the two projects depend on each other in a loop after the internalize — PROJECT_DEPENDENCY_CYCLE. To keep them apart, move what ${label(c.node.namespace)} uses of "${member.mountAlias ?? member.namespace}" into ${label(c.node.namespace)} itself, or demote ${label(c.node.namespace)} into a part of ${label(bound)} first.`);
 }
 
-/** A consumer that already names the bound project: its references respelled to that alias, the member's `use` merged, the member external and pin removed. */
+/** A consumer that already names the bound project: its references respelled to that alias, the member's `use` merged, the member external removed. */
 function respellConsumer(plan: MigrationPlan, family: ProjectFamily, c: Consumer, own: string): void {
   const seen = new Set<string>();
   for (const ref of family.authoredReferences) {
@@ -288,17 +299,15 @@ function respellConsumer(plan: MigrationPlan, family: ProjectFamily, c: Consumer
   }
   const use = c.node.imports.find((i) => i.alias === c.alias)?.use ?? [];
   if (use.length > 0) edit(plan, c.node.namespace, 'external', `${own}.use gains ${use.join(', ')} (from ${c.alias})`, { root: c.node.directory, call: 'importNames', args: [own, use] });
-  edit(plan, c.node.namespace, 'pin', `pin ${c.alias} removed`, { root: c.node.directory, call: 'unpin', args: [c.alias] });
   edit(plan, c.node.namespace, 'external', `externals: ${c.alias} removed (${own} supplies it now)`, { root: c.node.directory, call: 'removeExternal', args: [c.alias] });
 }
 
-/** Any other consumer: its external repointed at the bound project's id (a source path re-expressed), re-pinned last. */
+/** Any other consumer: its external repointed at the bound project's id (a source path re-expressed; read live, so never pinned). */
 function repointConsumer(plan: MigrationPlan, c: Consumer, boundNode: ProjectNode): Consumer {
   const declared = ownGet(configAt(c.node.directory)?.externals, c.alias);
   const project = boundNode.id !== undefined && boundNode.id !== c.alias ? boundNode.id : null;
   const source = declared?.source ? { path: posix(path.relative(c.node.directory, boundNode.directory)) } : null;
   edit(plan, c.node.namespace, 'external', `externals: ${c.alias} names ${boundNode.id ?? 'the top project'}${source ? ` at ${source.path}` : ''}`, { root: c.node.directory, call: 'repointExternal', args: [c.alias, project, source] });
-  plan.notes.push(`${label(c.node.namespace)}'s pin of "${c.alias}" is taken again against ${boundNode.id ?? 'the top project'}: the producer changed, so its lock reads drifted until it is re-locked.`);
   return c;
 }
 
@@ -353,10 +362,10 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   // Step 8: every other family project's names still resolve.
   checkSiblings(plan, family, bound, id, subKey, table);
   if (plan.refusals.length > 0) return plan;
-  // Step 9: the core's externalize as a project, and the new member's pins.
+  // Step 9: the core's externalize as a project; the new member's external for the bound project is a path external, never pinned.
   edit(plan, bound, 'move', `externalize ${id} as a project: its specs into a member at ${posix(path.relative(node.directory, dir!))}, declared as "${id}", then promoted`, { root: node.directory, call: 'externalizeSubsystem', args: [id, posix(path.relative(node.directory, dir!)), 'project'] });
-  edit(plan, id, 'pin', `pin the new member's externals (its external for ${node.id ?? 'this project'}, when its specs reference it)`, { root: dir!, call: 'pinExternals', args: [[]] });
-  repinIntactConsumers(plan, family, bound, [dir!]);
+  planOwedPins(plan, id, dir!, config);
+  noteBrokenConsumers(plan, family, bound, [dir!]);
   plan.notes.push('Source code is not moved: move the subsystem\'s code into the member yourself.');
   // Step 10.
   return plan;
@@ -522,11 +531,11 @@ export function planPromote(family: ProjectFamily, bound: string, request: Migra
   }
   // Steps 4-5.
   if (plan.refusals.length > 0) return plan;
-  // Step 6: the core's promote, then the pins on both sides.
+  // Step 6: the core's promote, then the pins owed by a git or hosted external it declares.
   edit(plan, bound, 'promote', `promote ${alias}: its project content created in place (id ${newId}, an L0 exporting what ${label(bound)} uses of it), references across the new boundary respelled`,
     { root: node.directory, call: 'promoteMember', args: [alias, newId] });
-  edit(plan, newId, 'pin', `pin the new project's external for ${node.id ?? 'this project'} (when its specs reference it)`, { root: part.directory!, call: 'pinExternals', args: [[]] });
-  repinIntactConsumers(plan, family, bound, [part.directory!]);
+  planOwedPins(plan, newId, part.directory!, config);
+  noteBrokenConsumers(plan, family, bound, [part.directory!]);
   plan.notes.push(`"${newId}" has no lock yet: lock it at its own root (\`wairon lock\`) once it validates.`);
   // Step 7.
   return plan;
@@ -573,7 +582,7 @@ export function planDemote(family: ProjectFamily, bound: string, request: Migrat
   void (dir !== undefined ? configAt(dir) : null);
   // Steps 4-5.
   if (plan.refusals.length > 0) return plan;
-  // Step 6: the core's demote, and the bound project's pin of it removed.
+  // Step 6: the core's demote (a member is never pinned, so nothing of it is unpinned).
   const destination: InternalizeDestination = request.destination ?? { home: '' };
   edit(plan, bound, 'demote', `demote ${alias}: its project content removed in place${destination.home ? `, its L0 vision to ${destination.home}` : ''}${destination.packs ? `, its packs ${destination.packs === 'adopt' ? 'adopted' : 'dropped'}` : ''}; references across the old boundary become local ids`,
     { root: node.directory, call: 'demoteMember', args: [alias, destination] });
@@ -583,7 +592,6 @@ export function planDemote(family: ProjectFamily, bound: string, request: Migrat
       plan.edits.push({ project: bound, kind: 'export', detail: `${label(bound)}'s L0 export ${name} removed: only "${alias}" used it, and a part has no boundary to export across` });
     }
   }
-  edit(plan, bound, 'pin', `pin ${alias} removed (a part is not pinned: its specs are ${label(bound)}'s own)`, { root: node.directory, call: 'unpin', args: [alias] });
   plan.edits.push({ project: member?.namespace ?? alias, kind: 'delete', detail: `${alias}'s L0, lock, pins and derived outputs end with its boundary: deleted, each listed` });
   if (dir !== undefined && core.approvalRecord(dir)) plan.notes.push(`"${alias}"'s own approval ends with it: its lock is deleted, and ${label(bound)} is re-locked instead.`);
   // Step 7.
@@ -604,11 +612,11 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
     }
     // Step 4: the core's internalize — a core refusal propagates; what it could not carry is named in the plan.
     for (const e of planned.filter((x) => x.write.call === 'internalizeMember')) recordFolded(plan, e.project, writeOne(rehearsal, e.write));
-    // Steps 5-7: each consumer that names the bound project — `use` merged, pin and external removed.
-    for (const e of planned.filter((x) => ['importNames', 'unpin', 'removeExternal'].includes(x.write.call))) writeOne(rehearsal, e.write);
+    // Steps 5-7: each consumer that names the bound project — `use` merged, external removed.
+    for (const e of planned.filter((x) => ['importNames', 'removeExternal'].includes(x.write.call))) writeOne(rehearsal, e.write);
     // Step 8: each other consumer repointed.
     for (const e of planned.filter((x) => x.write.call === 'repointExternal')) writeOne(rehearsal, e.write);
-    // Step 9: last, the pins.
+    // Step 9: last, the pins that are owed (a git or hosted external only).
     for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
     // Step 10.
     return;
@@ -617,7 +625,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   if (plan.request.verb === 'externalize') {
     // Step 12: the core's externalize — into a part, or as a project; a core refusal propagates.
     for (const e of planned.filter((x) => x.write.call === 'externalizeSubsystem')) recordCrossing(plan, e.project, e.write.args[0] as string, writeOne(rehearsal, e.write));
-    // Step 13: the new project's pin (a part needs none).
+    // Step 13: the pin of a git or hosted external the new project declares (a part needs none).
     for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
     // Step 14.
     return;
@@ -626,7 +634,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
   if (plan.request.verb === 'promote') {
     // Step 16: the core's promote — a core refusal propagates.
     for (const e of planned.filter((x) => x.write.call === 'promoteMember')) recordCrossing(plan, e.project, (e.write.args[1] as string | undefined) ?? (e.write.args[0] as string), writeOne(rehearsal, e.write));
-    // Step 17: the pins LAST, on both sides.
+    // Step 17: the pins LAST, only what is owed.
     for (const e of planned.filter((x) => x.write.call === 'pinExternals')) writeOne(rehearsal, e.write);
     // Step 18.
     return;
@@ -637,9 +645,7 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
     for (const line of demoted?.consumersRestored ?? []) plan.edits.push({ project: e.project, kind: 'reference', detail: `consumers across the old boundary restored: ${line}` });
     recordFolded(plan, e.project, demoted);
   }
-  // Step 20: the bound project's pin of the member removed.
-  for (const e of planned.filter((x) => x.write.call === 'unpin')) writeOne(rehearsal, e.write);
-  // Step 21: the caller's binding is back.
+  // Step 19: the caller's binding is back.
 }
 
 /** The planned reference edits grouped per spec, in plan order. */
@@ -653,14 +659,12 @@ function referencesBySpec(planned: (PlannedEdit & { write: PlannedWrite })[]): M
 }
 
 /**
- * Each family project OTHER than the bound one and the project the verb
- * creates that pins the bound project: a pin whose every use is unchanged now
- * is taken again after the verb (the names it uses only move location, which a
- * re-pin alone answers — none changed at signature level); one already broken
- * is left as it is, with a note, so a migration never launders a real
- * incompatibility.
+ * Each family project OTHER than the bound one and the project the verb creates that consumes the
+ * bound project: a use that stays valid needs nothing after the verb (the names it uses only move
+ * location, and a path external is read live); one already broken is left as it is, with a note, so
+ * a migration never launders a real incompatibility.
  */
-function repinIntactConsumers(plan: MigrationPlan, family: ProjectFamily, bound: string, created: string[]): void {
+function noteBrokenConsumers(plan: MigrationPlan, family: ProjectFamily, bound: string, created: string[]): void {
   const boundNode = familyNode(family, bound)!;
   const skip = new Set([boundNode.directory, ...created].map((d) => path.resolve(d)));
   for (const node of family.nodes) {
@@ -673,14 +677,11 @@ function repinIntactConsumers(plan: MigrationPlan, family: ProjectFamily, bound:
     }
     for (const status of statuses) {
       const producer = node.aliases.get(status.alias);
-      const pinsBound = producer !== undefined ? producer === bound : boundNode.id !== undefined && status.project === boundNode.id;
-      if (!status.pinned || status.outOfReach || !pinsBound) continue;
+      const consumesBound = producer !== undefined ? producer === bound : boundNode.id !== undefined && status.project === boundNode.id;
+      if (!consumesBound || status.outOfReach) continue;
       const broken = status.uses.filter((u) => u.state === 'changed' || u.state === 'removed');
-      if (broken.length > 0) {
-        plan.notes.push(`${label(node.namespace)}'s pin of "${status.alias}" is already incompatible (${broken.map((u) => u.publicName ?? u.member ?? '?').join(', ')}): not re-pinned — adapt its uses, then run \`wairon externals pin ${status.alias}\` there.`);
-        continue;
-      }
-      edit(plan, node.namespace, 'pin', `pin ${status.alias} taken again: the names it uses of ${label(bound)} only move with the boundary`, { root: node.directory, call: 'pinExternals', args: [[status.alias]] });
+      if (broken.length === 0) continue;
+      plan.notes.push(`${label(node.namespace)}'s use of "${status.alias}" is already incompatible (${broken.map((u) => u.publicName ?? u.member ?? '?').join(', ')}): left as it is — adapt its uses.`);
     }
   }
 }
@@ -709,7 +710,7 @@ function recordCrossing(plan: MigrationPlan, bound: string, member: string, resu
   // The topics it now separates from their pair: the family run pairs them, the new project's own gate alone does not.
   const topics = crossed.topicsCrossing ?? [];
   if (topics.length > 0) {
-    plan.notes.push(`${topics.length} topic(s) now cross the boundary to "${member}"; the family run (\`wairon validate\` at ${label(bound)}) pairs them, while "${member}" validated alone reports them:`);
+    plan.notes.push(`${topics.length} topic(s) now cross the boundary to "${member}"; the family run (\`wairon validate\` at ${label(bound)}) pairs them; "${member}" validated alone pairs them only through an external that reads the other side live:`);
     for (const line of topics) plan.notes.push(`  ${line}`);
   }
 }
@@ -736,7 +737,6 @@ function writeOne(rehearsal: Rehearsal, w: PlannedWrite): unknown {
       case 'promoteMember': return core.promoteMember(args[0], args[1]);
       case 'demoteMember': return core.demoteMember(args[0], args[1]);
       case 'importNames': return core.importNames(args[0], args[1]);
-      case 'unpin': return surfaces.unpin(args[0]);
       case 'removeExternal': return core.removeExternal(args[0]);
       case 'repointExternal': return core.repointExternal(args[0], args[1], args[2]);
       case 'pinExternals': return surfaces.pinExternals((args[0] as string[]).length > 0 ? args[0] : undefined);

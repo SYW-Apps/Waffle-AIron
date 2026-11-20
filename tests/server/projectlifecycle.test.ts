@@ -17,7 +17,7 @@ import { createProject } from '../../src/server/admin.js';
 import * as hostedLock from '../../src/server/hosted-lock.js';
 
 /** The hosted lock of a project's own record. */
-const executeApprovedLock = (c: HostConfig, id: string, approver: ApproverIdentity): LockRecord => hostedLock.execute(c, id, approver);
+const executeApprovedLock = (c: HostConfig, id: string, approver: ApproverIdentity): LockRecord => hostedLock.execute(c, id, approver).record;
 import { LockValidationError } from '../../src/server/errors.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
 import * as hostCore from '../../src/server/adapters/core.js';

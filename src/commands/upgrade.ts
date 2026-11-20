@@ -4,7 +4,7 @@ import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { lastSeenVersion, setLastSeenVersion } from '../config/userconfig.js';
 import { files } from '../io/index.js';
 import * as path from 'path';
-import { getProjectRootOverride, resolveProjectBinding } from '../utils/fs.js';
+import { getProjectRootOverride, getRequestProjectRoot, resolveProjectBinding } from '../utils/fs.js';
 import { isSilent, logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
 import { isNewerVersion } from '../utils/version.js';
@@ -57,7 +57,7 @@ function isInteractive(): boolean {
 
 /** The bound project's root: an explicit override, else the binding rule from the cwd. */
 function boundRoot(): string | null {
-  return getProjectRootOverride() ?? resolveProjectBinding(process.cwd())?.root ?? null;
+  return getRequestProjectRoot() ?? getProjectRootOverride() ?? resolveProjectBinding(process.cwd())?.root ?? null;
 }
 
 /** Whether the root holds a project.yaml (under .wai, or the legacy .wairon) for a stamp to be read from. */

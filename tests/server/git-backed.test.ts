@@ -317,7 +317,7 @@ describe('git-backed projects (sdd_git)', () => {
     invalidateSpecCache();
 
     const headBefore = git(['rev-parse', 'wairon/work'], root);
-    const rec = hostedLock.execute(cfg, 'billing', TEST_APPROVER);
+    const rec = hostedLock.execute(cfg, 'billing', TEST_APPROVER).record;
 
     // The member froze at its own root and its lock reached the remote.
     expect(rec.status).toBe('ready');

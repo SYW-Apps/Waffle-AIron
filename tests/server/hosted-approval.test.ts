@@ -79,7 +79,7 @@ afterEach(() => {
 });
 
 /** The hosted lock of a project's own record, and the identity a lock of it would certify now. */
-const executeApprovedLock = (c: HostConfig, id: string, approver: ApproverIdentity, expected?: string): LockRecord => hostedLock.execute(c, id, approver, expected);
+const executeApprovedLock = (c: HostConfig, id: string, approver: ApproverIdentity, expected?: string): LockRecord => hostedLock.execute(c, id, approver, expected).record;
 const gateIdentity = (c: HostConfig, id: string): string => hostedLock.identity(c, id);
 
 const lockFile = (dir: string): string => path.join(dir, '.wai', 'lock.json');
@@ -173,6 +173,17 @@ describe('hosted lock — format 4', () => {
     expect(readLockRecordAt(fam.leaf)).toMatchObject({ stateId: leaf.stateId });
     expect(fs.existsSync(lockFile(fam.mid))).toBe(false);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
+  });
+});
+
+describe('hosted lock — what it answers', () => {
+  it('answers the persisted record, the pin outcomes of the refresh and the input debts that remain', () => {
+    const outcome = hostedLock.execute(cfg, 'leaf', APPROVER);
+    expect(outcome.record.format).toBe(4);
+    expect(outcome.record.lockedBy).toEqual(APPROVER);
+    // Nothing was owed: no pin was taken, and nothing remains owed.
+    expect(outcome.pins).toEqual([]);
+    expect(outcome.debts).toEqual([]);
   });
 });
 

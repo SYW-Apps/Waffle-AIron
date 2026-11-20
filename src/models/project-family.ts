@@ -176,6 +176,8 @@ export interface ProjectNode {
   mountAlias?: string;
   /** How the parent declares it; absent for the bound root. */
   mountForm?: MountForm;
+  /** True for a path external (`../x` under `externals`): a live node judged for validity only, never a member. */
+  pathExternal?: true;
   /** The legacy L1 mount subsystem as its parent wrote it; null otherwise. */
   legacyMount: SubsystemSpec | null;
   /** What the parent's declaration says the member is (the `members` description, or a legacy mount's); shown on its canvas node. */
