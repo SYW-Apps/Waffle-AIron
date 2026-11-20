@@ -11,7 +11,7 @@ import { invalidateSpecCache, loadTypeSpecs } from '../../src/core/specs.js';
 import { pinExternals, getExternalsStatus, unrecordedUses } from '../../src/core/surfaces.js';
 import { remove } from '../../src/core/external-declarations.js';
 import { validateProject, validateFamily, computeApprovalId, familyApprovals, implementsProblem } from '../../src/core/validation.js';
-import { runLock, checkApproval } from '../../src/commands/lock.js';
+import { checkApproval, refreshInputs } from '../../src/commands/lock.js';
 import { approvalVerdict, captureApprovedSpecs } from '../../src/core/approval.js';
 import { writeLockRecord } from '../../src/core/lockfile.js';
 import { updateSpecGated } from '../../src/core/authoring.js';
@@ -239,10 +239,13 @@ describe('3 — uses a pin does not record', () => {
     expect(unrecordedUses()).toEqual({ geo: ['tile-key', 'tile-library.tileFor'] });
   });
 
-  it('`wairon lock` refuses it as it refuses a never-pinned external, writing nothing', async () => {
-    const { studio } = pairWithZeroUsePin();
-    await expect(runLock({ yes: true }, { valid: true, issues: [] } as never, computeApprovalId())).rejects.toThrow(/used beyond their pin — "geo": tile-key, tile-library\.tileFor/);
-    expect(fs.existsSync(path.join(studio, '.wai', 'lock.json'))).toBe(false);
+  it('`wairon lock` re-pins exactly the owed external before it approves, from its producer\'s approved state', () => {
+    pairWithZeroUsePin();
+    const refreshed = refreshInputs();
+    expect(refreshed.pins).toEqual([expect.objectContaining({ alias: 'geo', outcome: 'pinned' })]);
+    expect(unrecordedUses()).toEqual({});
+    // Nothing is owed any more: a second refresh advances no pin.
+    expect(refreshInputs().pins).toEqual([]);
   });
 
   it('an approval taken over it holds, and the build inputs owe the re-pin: lock-check fails with that debt', () => {

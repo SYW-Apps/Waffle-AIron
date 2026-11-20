@@ -196,7 +196,7 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: computeApprovalId
-    symbol: computeGateStateId
+    symbol: computeApprovalId
   - name: validateFamily
     narrative:
       - stepNumber: 1
@@ -236,4 +236,4 @@ methods:
     symbol: adviseNetwork
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T00:21:54.352Z'
+updatedAt: '2026-11-20T18:44:21.385Z'

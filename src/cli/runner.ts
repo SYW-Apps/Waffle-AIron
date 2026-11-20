@@ -15,8 +15,8 @@ import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../uti
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
 import { runGenerate } from '../commands/generate.js';
-import { runLock as lockTree, checkApproval, holdsNoDesign, treeVerdict, NOTHING_TO_APPROVE } from '../commands/lock.js';
-import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
+import { runLock as lockTree, refreshInputs, checkApproval, holdsNoDesign, treeVerdict, NOTHING_TO_APPROVE } from '../commands/lock.js';
+import type { LockOptions, LockCheckOptions, InputsRefresh } from '../commands/lock.js';
 import { runValidate, validateAsComplete, computeApprovalId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
@@ -58,6 +58,18 @@ import {
 // lock
 // ---------------------------------------------------------------------------
 
+/** Print what the lock refreshed in the inputs lock: each pin outcome and the packs section. */
+function reportInputs(refresh: InputsRefresh): void {
+  for (const pin of refresh.pins) {
+    if (pin.outcome === 'pinned') {
+      logger.info(`Pinned the external "${pin.alias}" from its producer's approved state (.wai/inputs.lock.yaml).`);
+    } else if (pin.outcome !== 'unchanged') {
+      logger.warn(`The external "${pin.alias}" was not pinned (${pin.outcome}${pin.detail ? `: ${pin.detail}` : ''}); it stays owed, and \`wairon lock-check\` refuses it until it is pinned.`);
+    }
+  }
+  if (refresh.packsRecorded) logger.info('Recorded the selected packs in .wai/inputs.lock.yaml.');
+}
+
 // cli_runner.runLock — the local `wairon lock` workflow: CAPTURE the gate
 // identity before anything is judged, gate on the DESIGN half of the
 // as-complete dry-run validation (an invalid design is never approved), lock
@@ -97,7 +109,12 @@ async function runLock(options: LockOptions): Promise<void> {
     return;
   }
 
-  // Step 9: capture the identity the record will certify, before anything is judged.
+  // Step 9: refresh the owed build inputs BEFORE anything is judged, so the gate
+  // validates against the inputs being recorded. A refused pin never stops the
+  // lock: inputs are not the approval, and lock-check refuses what stays owed.
+  reportInputs(refreshInputs());
+
+  // Step 10: capture the identity the record will certify, before anything is judged.
   const captured = computeApprovalId();
 
   logger.info('Analyzing and validating specifications in-memory...');

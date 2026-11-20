@@ -61,7 +61,7 @@ describe('the build inputs owe beside the approval', () => {
     const debts = own().inputs;
     expect(debts).toHaveLength(1);
     expect(debts[0]).toMatchObject({ kind: 'pack', subject: 'input-pack' });
-    expect(debts[0].sentence).toContain('wairon packs sync');
+    expect(debts[0].sentence).toContain('wairon pack sync');
     expect(own().state).toBe('never');
   });
 

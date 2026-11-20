@@ -1550,7 +1550,7 @@ function packSelectionsOf(config: NonNullable<ReturnType<typeof loadProjectConfi
  * selected extension packs as they resolve now, keyed by pack name: each
  * selection's declared version, the version its manifest resolved to, where it
  * resolved from, and its doctrine digest (approval_identity.packContents).
- * What `wairon lock` and `wairon packs sync` record in the inputs lock; a
+ * What `wairon lock` and `wairon pack sync` record in the inputs lock; a
  * selection that does not load is left out (it is an input debt, never a
  * recorded pack). Writes nothing.
  */

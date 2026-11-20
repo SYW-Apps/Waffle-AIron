@@ -185,7 +185,7 @@ export function approvalParts(design: StateId, builtinRules: SddRule[], gate: Ga
  * profiles, languages, patterns, guarantees, assertions and rules (each rule
  * by name with its codes and default severities), every list codepoint-sorted.
  * Agent-facing prose (skills, instructions, practices) and technology
- * packages are left out. What `wairon packs sync` and `wairon lock` record in
+ * packages are left out. What `wairon pack sync` and `wairon lock` record in
  * the inputs lock, and what the build compares against it.
  *
  * The loader merges profiles, languages, guarantee tokens and pack rules across

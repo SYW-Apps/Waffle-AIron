@@ -2805,7 +2805,7 @@ export type ExternalLockEntry = z.infer<typeof ExternalLockEntrySchema>;
 
 /**
  * locked_pack — one selected pack as the inputs lock records it (keyed by pack
- * name): what the selection resolved to when `wairon packs sync` or `wairon
+ * name): what the selection resolved to when `wairon pack sync` or `wairon
  * lock` last recorded it. A build input, never part of the approval: when the
  * pack loaded now digests differently, the build owes a sync (InputDebtKind
  * pack), and the approval holds.

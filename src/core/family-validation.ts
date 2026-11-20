@@ -1052,9 +1052,9 @@ export function projectInputs(members: ProjectApproval[]): InputDebt[] {
       }
       const entry = ownGet(recorded, name);
       if (entry === undefined) {
-        debts.push({ kind: 'pack', subject: name, sentence: `pack "${name}" is not recorded in the inputs lock — run \`wairon packs sync\`` });
+        debts.push({ kind: 'pack', subject: name, sentence: `pack "${name}" is not recorded in the inputs lock — run \`wairon pack sync\`` });
       } else if (entry.digest !== digest) {
-        debts.push({ kind: 'pack', subject: name, sentence: `pack "${name}" changed since it was recorded — run \`wairon packs sync\`` });
+        debts.push({ kind: 'pack', subject: name, sentence: `pack "${name}" changed since it was recorded — run \`wairon pack sync\`` });
       }
     }
   }

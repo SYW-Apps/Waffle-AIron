@@ -29,10 +29,13 @@ import {
 } from '../core/index.js';
 import { effectiveProjectId, projectIdentity } from '../models/project.js';
 import { approvalKeyIn } from '../models/project-family.js';
-import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { getProjectRoot, pathExists, readFileOrNull } from '../utils/fs.js';
 import { AI_PATHS } from '../config/paths.js';
 import { LockRecordUnreadableError, WaironError } from '../utils/errors.js';
-import { computeApprovalId, familyApprovals, unpinnedExternals, unrecordedExternalUses, validateProject, type ValidationResult } from '../core/validation.js';
+import { computeApprovalId, familyApprovals, resolvedPacks, unpinnedExternals, unrecordedExternalUses, validateProject, type ValidationResult } from '../core/validation.js';
+// The inputs lock is written through the surface portal: pins and recorded packs.
+import { pinExternals, recordPacks } from '../core/surface-portal.js';
+import type { ExternalPin } from '../models/specs.js';
 import {
   approvalStamp, describeApprover, describeApprovalParts, designOnly, ciBlockingIssues, gatePartsProblem, missingTreeSentence, movedParts,
   type CodeAnalysis, type ProjectApproval,
@@ -187,7 +190,16 @@ export function checkApproval(strict: boolean): ApprovalCheck {
   const tree = treeVerdict(strict);
   if (tree) return tree;
 
-  const lock = readLockState(computeApprovalId());
+  // Steps 4-7: a record an older wairon major wrote is refused at every strictness, naming `wairon upgrade`.
+  let lock: ReturnType<typeof readLockState>;
+  try {
+    lock = readLockState(computeApprovalId());
+  } catch (e) {
+    if (e instanceof LockRecordUnreadableError && e.reason.includes('earlier wairon major')) {
+      return { state: 'stale', approved: false, message: e.message };
+    }
+    throw e;
+  }
   const record = lock.record;
 
   // Step 6: every member PROJECT's own approval, at every depth (a part's
@@ -733,10 +745,44 @@ function ownInputLines(previous: LockRecord | null, captured: StateId): string[]
   return lines;
 }
 
+/** What `wairon lock` refreshed in the inputs lock before it approved (inputs_refresh). */
+export interface InputsRefresh {
+  /** One outcome per owed external the lock tried to pin; empty when none was owed. */
+  pins: ExternalPin[];
+  /** Whether the inputs lock's packs section changed. */
+  packsRecorded: boolean;
+}
+
+/**
+ * cli_lock_adapter.refreshInputs — refresh what the build owes before a lock
+ * approves: pin each owed external (never pinned, or used beyond its pin) from
+ * its producer's approved state, and record the selected packs as they resolve
+ * now. An up-to-date pin is never advanced; a refused pin is an outcome to
+ * report, never a stop. Writes .wai/inputs.lock.yaml and its snapshots only.
+ */
+export function refreshInputs(): InputsRefresh {
+  // Step 1: the declared externals the inputs lock holds no entry for.
+  const unpinned = unpinnedExternals();
+  // Step 2: the uses of pinned externals their pins do not record.
+  const beyond = Object.keys(unrecordedExternalUses());
+  // Steps 3-4: pin exactly the owed aliases; every other pin stays as it is.
+  const owed = [...new Set([...unpinned, ...beyond])];
+  const pins = owed.length > 0 ? pinExternals(owed) : [];
+  // Step 5: the selected packs as they load now.
+  const packs = resolvedPacks();
+  // Step 6: recorded (a no-op when the section already says exactly this).
+  const file = path.join(getProjectRoot(), '.wai', 'inputs.lock.yaml');
+  const before = readFileOrNull(file);
+  recordPacks(packs);
+  // Step 7: the section moved exactly when the file did.
+  return { pins, packsRecorded: readFileOrNull(file) !== before };
+}
+
 /**
  * cli_lock_adapter.assertApprovable — refuse, writing nothing, what no lock
  * may approve: a project requiring approved members with a member project not
- * approved, an external never pinned, or a use its pin does not record.
+ * approved, or a pending lock request made on another branch (unless forced).
+ * Inputs are not refused here: the lock refreshes the owed ones first.
  */
 export function assertApprovable(members: ProjectApproval[], force?: boolean): void {
   const config = loadProjectConfig();
@@ -746,25 +792,6 @@ export function assertApprovable(members: ProjectApproval[], force?: boolean): v
     throw new LockRefusedError(
       `composition.requireApprovedMembers: direct member(s) not approved — ${unapproved.map(describeMemberState).join(', ')}. `
         + 'Lock each at its own root first (`wairon lock` there); a parent never approves below itself. Nothing was written.',
-    );
-  }
-  // An external declared but never pinned is never a pass, so it is never
-  // approved: nothing records what this design is judged against.
-  const unpinned = unpinnedExternals();
-  if (unpinned.length > 0) {
-    throw new LockRefusedError(
-      `declared external(s) never pinned — ${unpinned.map((a) => `"${a}"`).join(', ')}: nothing records what this design is judged against, `
-        + `so a producer that broke it could not be told. Pin first (\`wairon externals pin ${unpinned.join(' ')}\`), then lock. Nothing was written.`,
-    );
-  }
-  // A use its pin does not record is judged against nothing, exactly as a
-  // never-pinned external is: refused the same way.
-  const unrecorded = Object.entries(unrecordedExternalUses());
-  if (unrecorded.length > 0) {
-    throw new LockRefusedError(
-      `external(s) used beyond their pin — ${unrecorded.map(([alias, uses]) => `"${alias}": ${uses.join(', ')}`).join('; ')} (used now, but not in the lock): `
-        + 'nothing records what these uses are judged against, so a producer that broke one could not be told. '
-        + `Re-pin first (\`wairon externals pin ${unrecorded.map(([alias]) => alias).join(' ')}\`), then lock. Nothing was written.`,
     );
   }
   // A pending lock request made on another branch asks to approve a design this checkout does not have.
@@ -782,7 +809,7 @@ export function assertApprovable(members: ProjectApproval[], force?: boolean): v
  * cli_lock_adapter.lockTree — record this project's approval: summarize,
  * honour composition.requireApprovedMembers, confirm with the human (skipped
  * under --yes), re-confirm the identity the caller captured BEFORE validating,
- * and write a format-2 record. Writes one file, this project's .wai/lock.json,
+ * and write a format-4 record. Writes one file, this project's .wai/lock.json,
  * and never `children`, never anything in the spec tree or below the project.
  * Returns the written record, or null when the human declined.
  *

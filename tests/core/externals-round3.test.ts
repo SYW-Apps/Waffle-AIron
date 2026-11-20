@@ -14,7 +14,7 @@ import { buildContractFamily } from '../helpers/reference-family.js';
 import { approveAt, bareFrom, isolateGlobals, pushChange } from '../helpers/stage8-family.js';
 import { compose } from '../../src/core/family-validation.js';
 import { computeApprovalId, unpinnedExternals, validateFamily } from '../../src/core/validation.js';
-import { runLock } from '../../src/commands/lock.js';
+import { refreshInputs } from '../../src/commands/lock.js';
 import { remove } from '../../src/core/external-declarations.js';
 
 // ---------------------------------------------------------------------------
@@ -304,12 +304,11 @@ describe('platform — an unpinned consumer of a producer that broke a used name
     expect(compose('billing').findings.map((i) => [i.code, i.severity])).toContainEqual(['EXTERNAL_INCOMPATIBLE', 'error']);
   });
 
-  it('`wairon lock` in a consumer of a never-pinned git external refuses; a sibling declared by id is read live and owes no pin', async () => {
+  it('`wairon lock` in a consumer of a never-pinned git external pins it first; a sibling declared by id is read live and owes no pin', () => {
     const served = pair({}, true);
     bind(served.studio);
-    const gate = { valid: true, issues: [] } as never;
-    await expect(runLock({ yes: true }, gate, computeApprovalId())).rejects.toThrow(/never pinned — "geo"/);
-    expect(fs.existsSync(path.join(served.studio, '.wai', 'lock.json'))).toBe(false);
+    expect(unpinnedExternals()).toEqual(['geo']);
+    expect(refreshInputs().pins).toEqual([expect.objectContaining({ alias: 'geo' })]);
     // The same use of a sibling family project (an external found by its id) is read live: nothing to pin.
     const f = buildContractFamily();
     roots.push(f.top);
