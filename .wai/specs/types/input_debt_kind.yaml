@@ -21,11 +21,11 @@ values:
   - name: pack
     description: >-
       A selected pack whose resolved content no longer matches the digest the inputs lock records
-      for it (or that has no entry there). Cleared by `wairon packs sync`.
+      for it (or that has no entry there). Cleared by `wairon pack sync`.
   - name: member
     description: >-
       A direct member project whose own lock does not hold (drifted or never approved), counted only
       when the project sets composition.requireApprovedMembers. Cleared by locking the member at its
       own root.
 createdAt: '2026-11-19T20:29:25.667Z'
-updatedAt: '2026-11-19T20:29:26.152Z'
+updatedAt: '2026-11-20T14:17:56.563Z'

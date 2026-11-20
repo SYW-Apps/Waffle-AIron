@@ -3,7 +3,7 @@ id: locked_pack
 name: LockedPack
 description: >-
   One selected pack as the inputs lock records it (InputsLock.packs, keyed by pack name): what the
-  selection resolved to when `wairon packs sync` or `wairon lock` last recorded it. A build input,
+  selection resolved to when `wairon pack sync` or `wairon lock` last recorded it. A build input,
   never part of the approval: when the pack loaded now digests differently, the build owes a sync
   (InputDebtKind pack), and the approval holds.
 subsystem: sdd_surfaces
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-11-19T21:54:22.613Z'
-updatedAt: '2026-11-19T21:54:23.079Z'
+updatedAt: '2026-11-20T14:17:54.012Z'

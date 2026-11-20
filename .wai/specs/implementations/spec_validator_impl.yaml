@@ -81,8 +81,9 @@ methods:
       - stepNumber: 10
         description: >-
           Read the bound project's pinned externals via the surfaces adapter, identical to
-          validateProject — the lock gate judges cross-project references against the pins alone,
-          never an ancestor
+          validateProject — the lock gate judges a reference into a hosted or git project against
+          its pin alone, and one into a path producer against that producer's live export table in
+          the scan, never an ancestor
         type: call
         targetComponent: validator_surfaces_adapter
         targetMethod: listPinnedExternals
@@ -311,8 +312,9 @@ methods:
       - stepNumber: 1
         description: >-
           Set the loader's recursion depth through the core adapter: the scan reads the bound
-          project and the members it contains, because the project's own references into a contained
-          member are judged against that member's L0 table. Nothing above the bound root is read
+          project, the members it contains and its path producers (`../` sibling checkouts declared
+          as externals, read live like a sibling member), because the project's own references into
+          them are judged against their live L0 tables. Nothing else above the bound root is read
         type: call
         targetComponent: validator_core_adapter
         targetMethod: scanAllSpecs
@@ -461,9 +463,10 @@ methods:
         description: >-
           Read the bound project's pinned externals via the surfaces adapter: each declared hosted
           or git alias with its lock entry and the snapshot it names, from the project's own
-          .wai/inputs.lock.yaml and .wai/externals/ only. A reference into a project outside the
-          scan is judged against these and nothing else: the producer is never read here, so the
-          verdict is the same with or without the family on disk
+          .wai/inputs.lock.yaml and .wai/externals/ only. A reference into a hosted or git project
+          is judged against its pin alone: that producer is never read here. A reference into a path
+          producer lands on that producer's live export table in the scan (project-family); a path
+          producer whose folder is missing is unavailable (EXTERNAL_CHECK_UNAVAILABLE), never a pass
         type: call
         targetComponent: validator_surfaces_adapter
         targetMethod: listPinnedExternals
@@ -615,16 +618,16 @@ methods:
       - stepNumber: 43
         label: project-family
         description: >-
-          Read the project graph of this scan through the core adapter: the bound project and the
-          members it contains, the owner of every spec, the cross-project references with how the
-          scan bound each (local, exported, unexported, undeclared, outside, unresolved), and the
-          identity problems. It is the bound project's own graph from every root: nothing above the
-          bound root is in it
+          Read the project graph of this scan through the core adapter: the bound project, the
+          members it contains and its path producers, the owner of every spec, the cross-project
+          references with how the scan bound each (local, exported, unexported, undeclared, outside,
+          unresolved), and the identity problems. It is the bound project's own graph from every
+          root: nothing above the bound root is in it but its path producers
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
       - stepNumber: 44
-        description: For each contained member
+        description: For each contained member or path producer
         type: loop
         loopKind: forEach
         over: the graph's nodes other than the bound root
@@ -901,4 +904,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-20T12:52:01.382Z'
+updatedAt: '2026-11-20T14:17:13.311Z'

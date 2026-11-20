@@ -469,7 +469,7 @@ methods:
         over: >-
           the graph's direct project members that are contained or `../` siblings (never a part, a
           git or a hosted one)
-        endStep: 9
+        endStep: 10
       - stepNumber: 5
         description: Map the bound project's references into it onto its public names
         type: call
@@ -498,17 +498,24 @@ methods:
         targetComponent: git_source_adapter
         targetMethod: fetch
       - stepNumber: 9
+        description: >-
+          The commit's committer time, the revision's committedAt; skipped when no commit was found
+          or the member is in no work tree
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: commitTime
+      - stepNumber: 10
         label: recorded
         description: >-
-          Record the member: alias, project id, root, usage and the revision (its directory, commit
-          and label: the member's own last approval); a git failure leaves the revision out, never
-          fails the read
+          Record the member: alias, project id, root, usage and the revision (its directory, commit,
+          committer time and label: the member's own last approval); a git failure leaves the
+          revision out, never fails the read
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Answer one entry per live member, in declaration order
         type: return
         outcome: list<member_revision>
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-11-20T00:07:33.475Z'
+updatedAt: '2026-11-20T14:17:28.166Z'

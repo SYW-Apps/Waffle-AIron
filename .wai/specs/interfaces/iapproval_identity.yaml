@@ -84,7 +84,7 @@ methods:
       rule by name with its codes and default severities), projected with compute's discipline
       (codepoint sort, canonical JSON, sha256 in hex). Agent-facing prose (skills, instructions) and
       technology packages are left out, so a documentation edit inside a pack never owes a sync.
-      What `wairon packs sync` and `wairon lock` record in the inputs lock, and what the build
+      What `wairon pack sync` and `wairon lock` record in the inputs lock, and what the build
       compares against it (InputDebtKind pack). Pure.
     signature: 'packContents(doctrine: LoadedExtensions): map<string, string>'
     returns: map<string, string>
@@ -98,4 +98,4 @@ previousIds:
   - igate_identity
 status: complete
 createdAt: '2026-09-15T10:53:01.174Z'
-updatedAt: '2026-11-19T21:53:03.275Z'
+updatedAt: '2026-11-20T14:17:46.719Z'

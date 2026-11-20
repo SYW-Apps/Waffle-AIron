@@ -28,7 +28,7 @@ fields:
   - name: packs
     type: map<string, LockedPack>
     description: >-
-      Pack name → how it resolved at the last `wairon packs sync` or `wairon lock`: the declared
+      Pack name → how it resolved at the last `wairon pack sync` or `wairon lock`: the declared
       version, the resolved version, the source and the content digest
       (approval_identity.packContents). Empty when the project selects no pack. A selected pack with
       no entry, or whose digest differs, is an input debt (InputDebt kind pack).
@@ -38,4 +38,4 @@ sourcePath: src/models/specs.ts
 previousIds:
   - externals_lock
 createdAt: '2026-09-26T17:46:59.348Z'
-updatedAt: '2026-11-20T00:05:33.091Z'
+updatedAt: '2026-11-20T14:17:53.453Z'

@@ -300,7 +300,7 @@ methods:
   - name: lockedPacks
     description: >-
       The `packs` section of the bound project's inputs lock: each extension pack as it resolved at
-      the last `wairon packs sync` or `wairon lock`. Empty when no lock was written.
+      the last `wairon pack sync` or `wairon lock`. Empty when no lock was written.
     signature: 'lockedPacks(): map<string, LockedPack>'
     returns: map<string, LockedPack>
     params: []
@@ -309,7 +309,7 @@ methods:
     description: >-
       Replace the `packs` section of the bound project's inputs lock with the packs as they resolved
       now, keeping its externals and parent as they are. Writes nothing when the section already
-      says exactly this. Called by `wairon packs sync` and `wairon lock`; never moves the approval.
+      says exactly this. Called by `wairon pack sync` and `wairon lock`; never moves the approval.
     signature: 'recordPacks(packs: map<string, LockedPack>): void'
     returns: void
     params:
@@ -340,4 +340,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-11-20T01:30:36.138Z'
+updatedAt: '2026-11-20T14:17:51.757Z'

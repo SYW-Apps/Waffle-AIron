@@ -451,7 +451,7 @@ methods:
       is `pack`; and, when the project sets composition.requireApprovedMembers, each direct member
       project in `members` whose state is not approved is `member`. A path external (`../x`) is read
       live and never owes a pin. Each debt carries the one sentence a verdict quotes, with the
-      command that clears it (`wairon externals pin <alias>`, `wairon packs sync`, the member's own
+      command that clears it (`wairon externals pin <alias>`, `wairon pack sync`, the member's own
       `wairon lock`). Empty when the inputs hold. Writes nothing.
     signature: 'inputs(members: list<ProjectApproval>): list<InputDebt>'
     returns: list<InputDebt>
@@ -464,4 +464,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-11-19T21:55:16.956Z'
+updatedAt: '2026-11-20T14:17:49.382Z'
