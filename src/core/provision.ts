@@ -2123,8 +2123,6 @@ const MEMBER_WAI_GROUPS: ReadonlyMap<string, string> = new Map([
   ['project.yaml', 'project.yaml'],
   ['lock.json', 'lock'],
   ['inputs.lock.yaml', 'pins and snapshots'],
-  // v7 wave 2: the pins file is still externals.lock.yaml until sdd_surfaces writes inputs.lock.yaml.
-  ['externals.lock.yaml', 'pins and snapshots'],
   ['externals', 'pins and snapshots'],
   ['surfaces', 'legacy surfaces'],
   ['agents', 'derived outputs'],

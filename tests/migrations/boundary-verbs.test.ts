@@ -38,7 +38,7 @@ const dump = (spec: Record<string, unknown>): string => yaml.dump({ schemaVersio
 const write = (root: string, rel: string, value: Record<string, unknown> | string): void => put(path.join(root, ...rel.split('/')), typeof value === 'string' ? value : dump(value));
 const configOf = (dir: string): Record<string, unknown> => readYamlFile(path.join(dir, '.wai', 'project.yaml')) as Record<string, unknown>;
 const pinsOf = (dir: string): string[] => {
-  const file = path.join(dir, '.wai', 'externals.lock.yaml');
+  const file = path.join(dir, '.wai', 'inputs.lock.yaml');
   return fs.existsSync(file) ? Object.keys((readYamlFile(file) as { externals?: Record<string, unknown> }).externals ?? {}) : [];
 };
 
@@ -146,7 +146,7 @@ describe('stage 6 — internalize: where each piece of the member goes (the desi
       'L0 (its pieces placed): .wai/specs/.index.yaml',
       'derived outputs: .wai/context/wairon-guide.md',
       'lock: .wai/lock.json',
-      'pins and snapshots: .wai/externals.lock.yaml',
+      'pins and snapshots: .wai/inputs.lock.yaml',
       'pins and snapshots: .wai/externals/crm.yaml',
       'pins and snapshots: .wai/externals/hub.yaml',
       'project.yaml: .wai/project.yaml',
@@ -182,7 +182,7 @@ describe('stage 6 — internalize: where each piece of the member goes (the desi
     const report = migrate(f.top, { verb: 'internalize', alias: 'svc', destination: { home: 'pay', packs: 'adopt' } });
     expect(report.applied).toBe(true);
     const deletes = report.plan.changes.filter((c) => c.action === 'delete' && path.resolve(c.project) === path.resolve(f.svc)).map((c) => c.path);
-    expect(deletes).toEqual(expect.arrayContaining(['.wai/project.yaml', '.wai/lock.json', '.wai/externals.lock.yaml', '.wai/externals/crm.yaml', '.wai/context/wairon-guide.md']));
+    expect(deletes).toEqual(expect.arrayContaining(['.wai/project.yaml', '.wai/lock.json', '.wai/inputs.lock.yaml', '.wai/externals/crm.yaml', '.wai/context/wairon-guide.md']));
     expect(pinsOf(f.top)).toEqual(['crm']);
     expect(fs.existsSync(path.join(f.svc, '.wai'))).toBe(false);
     // The member's approval ends with it: not listed to re-lock; the parent has no lock.

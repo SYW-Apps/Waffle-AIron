@@ -38,7 +38,7 @@ function pinned(): PathExternalPair {
   return p;
 }
 
-const lockText = (p: PathExternalPair): string => fs.readFileSync(path.join(p.billing, '.wai', 'externals.lock.yaml'), 'utf8');
+const lockText = (p: PathExternalPair): string => fs.readFileSync(path.join(p.billing, '.wai', 'inputs.lock.yaml'), 'utf8');
 const narrativeFile = (p: PathExternalPair): string => path.join(p.billing, '.wai', 'specs', 'invoicing', 'invoice-poster', '.implementation.yaml');
 
 describe('a pin over a rename', () => {

@@ -46,7 +46,7 @@ function configYaml(id: string, extra: Record<string, unknown> = {}): string {
 
 /** (Re)write a project's .wai from a fixture tree, keeping its lock record and pins. */
 function writeProject(dir: string, id: string, tree: FixtureTree, extra: Record<string, unknown> = {}): void {
-  const keep = ['lock.json', 'externals.lock.yaml', 'externals'];
+  const keep = ['lock.json', 'inputs.lock.yaml', 'externals'];
   const stash = path.join(dir, '.wai-keep');
   const saved: string[] = [];
   for (const name of keep) {

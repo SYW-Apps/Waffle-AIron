@@ -11,7 +11,7 @@ import { relationHealth, type ExternalAddition, type ExternalConsumer, type Exte
 // add <alias> [<source>] — declare one external in .wai/project.yaml, checked
 //                against the producer it reaches and pinned by default
 // pin [alias…] — pin the named declared externals, else all, into
-//                .wai/externals/ and .wai/externals.lock.yaml; exit 1 when an
+//                .wai/externals/ and .wai/inputs.lock.yaml; exit 1 when an
 //                alias could not be pinned
 // status       — each external's pin compared with its live producer at
 //                signature level: the opt-in live gate (exit 1 incompatible,

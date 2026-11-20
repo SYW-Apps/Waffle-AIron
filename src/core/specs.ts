@@ -691,7 +691,7 @@ function projectContentAt(dir: string): boolean {
  */
 function pinnedAsMember(dir: string, alias: string): boolean {
   try {
-    const lock = readYamlFile(path.join(aiPathsAt(dir).root(), 'externals.lock.yaml')) as { externals?: Record<string, { role?: string }> } | null;
+    const lock = readYamlFile(path.join(aiPathsAt(dir).root(), 'inputs.lock.yaml')) as { externals?: Record<string, { role?: string }> } | null;
     return ownGet(lock?.externals, alias)?.role === 'member';
   } catch {
     return false;

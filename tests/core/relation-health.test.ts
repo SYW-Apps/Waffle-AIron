@@ -83,7 +83,7 @@ describe('family_validator.relations — a referenced project member', () => {
     const base = tempDir(cleanups, 'wairon-rh-git-');
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     const shop = path.join(base, 'shop');
     writeShop(shop, { members: { ledger: `${repo.url}#${repo.commit}` } });
     bind(shop);

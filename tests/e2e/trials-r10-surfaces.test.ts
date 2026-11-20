@@ -91,7 +91,7 @@ async function pinnedPair(name: string): Promise<{ producer: string; consumer: s
   const consumer = writeProject(path.join(folder, 'consumer'), reminders(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { path: '../producer' }, use: ['habit_portal'] } } }));
   const pin = await sb.run(['externals', 'pin'], consumer);
   expect(pin.code, transcript(pin)).toBe(0);
-  expect(readFile(consumer, '.wai/externals.lock.yaml')).toMatch(/habit_portal: \{\}/);
+  expect(readFile(consumer, '.wai/inputs.lock.yaml')).toMatch(/habit_portal: \{\}/);
   return { producer, consumer };
 }
 

@@ -889,7 +889,7 @@ function pin(p: ProjectMigration, log: WriteLog): void {
   for (const pinned of surfaces.pinExternals(p.pins)) {
     if (pinned.outcome !== 'pinned') continue;
     if (pinned.snapshot) log.file(path.resolve(p.directory, pinned.snapshot));
-    log.file(path.join(p.directory, '.wai', 'externals.lock.yaml'));
+    log.file(path.join(p.directory, '.wai', 'inputs.lock.yaml'));
     log.stale(p.directory);
   }
 }

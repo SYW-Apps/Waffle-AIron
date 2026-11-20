@@ -185,7 +185,7 @@ function storageOf(storage: string, directory: string | undefined, commit: strin
 /** A part's pin of its parent, as its own lock records it: the excerpt's short digest, or never pinned. */
 function parentPinState(parent: string): string {
   try {
-    const lock = readYamlFile(fromProjectRoot('.wai', 'externals.lock.yaml')) as { parent?: { project?: string; digest?: string } } | null;
+    const lock = readYamlFile(fromProjectRoot('.wai', 'inputs.lock.yaml')) as { parent?: { project?: string; digest?: string } } | null;
     const entry = lock?.parent;
     if (entry?.project === parent && entry.digest) return `(pinned ${entry.digest.replace(/^sha256:/, '').slice(0, 12)}; \`wairon validate\` here judges this part against the pin)`;
   } catch { /* an unreadable lock reads as never pinned */ }

@@ -33,7 +33,7 @@ import { at, dirHash, familyFindings, familyLines, migrate, newFindings, pinAt, 
 const configOf = (dir: string): Record<string, unknown> => readYamlFile(path.join(dir, '.wai', 'project.yaml')) as Record<string, unknown>;
 /** A project's pinned externals, alias → {project, digest}. */
 const pinsOf = (dir: string): Record<string, { project: string; digest: string }> => {
-  const file = path.join(dir, '.wai', 'externals.lock.yaml');
+  const file = path.join(dir, '.wai', 'inputs.lock.yaml');
   const lock = fs.existsSync(file) ? (readYamlFile(file) as { externals?: Record<string, { project: string; digest: string }> }) : {};
   return Object.fromEntries(Object.entries(lock.externals ?? {}).map(([a, e]) => [a, { project: e.project, digest: e.digest }]));
 };

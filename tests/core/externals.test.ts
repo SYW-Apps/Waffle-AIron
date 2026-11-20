@@ -271,9 +271,9 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(Object.keys(lock.externals.billing.used)).toEqual(['invoicing']);
     expect(Object.keys(lock.externals.billing.used.invoicing)).toEqual(['issueInvoice']);
     // A re-pin of an unchanged producer rewrites nothing.
-    const before = fs.statSync(path.join(f.dispatch, '.wai', 'externals.lock.yaml')).mtimeMs;
+    const before = fs.statSync(path.join(f.dispatch, '.wai', 'inputs.lock.yaml')).mtimeMs;
     expect(at(f.dispatch, () => pinExternals())[0].outcome).toBe('unchanged');
-    expect(fs.statSync(path.join(f.dispatch, '.wai', 'externals.lock.yaml')).mtimeMs).toBe(before);
+    expect(fs.statSync(path.join(f.dispatch, '.wai', 'inputs.lock.yaml')).mtimeMs).toBe(before);
   });
 
   v5it('property: stale-only-when-used-changes — an unused member drifts, a used one goes stale', () => {
@@ -310,7 +310,7 @@ describe('stage 2b — the project graph and declared externals', () => {
   it('an undeclared alias is refused before anything is written; pruning drops what is no longer declared', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     expect(() => at(f.dispatch, () => pinExternals(['ledger']))).toThrow(UnknownExternalAliasError);
-    expect(fs.existsSync(path.join(f.dispatch, '.wai', 'externals.lock.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(f.dispatch, '.wai', 'inputs.lock.yaml'))).toBe(false);
     at(f.dispatch, () => pinExternals());
     write(f.root, 'packages/dispatch/.wai/project.yaml', projectYaml('dispatch', 'Dispatch Service'));
     expect(at(f.dispatch, () => pinExternals())).toEqual([]);
@@ -362,7 +362,7 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   it('a malformed lock is refused naming the file, never read as empty', () => {
     const f = family();
-    write(f.dispatch, '.wai/externals.lock.yaml', 'externals: [not, a, map]\n');
+    write(f.dispatch, '.wai/inputs.lock.yaml', 'externals: [not, a, map]\n');
     expect(() => at(f.dispatch, () => externalsFileAdapter.readLock())).toThrow(/externals\.lock\.yaml/);
   });
 

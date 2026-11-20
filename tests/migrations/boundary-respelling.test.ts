@@ -200,7 +200,7 @@ describe('promote, externalize --as project and rename-alias respell every refer
     expect(JSON.stringify(readYamlFile(specs(part, 'billing', '.index.yaml')))).not.toContain('consumers');
     expect(JSON.stringify(readYamlFile(specs(root, 'orders', '.index.yaml')))).not.toContain('consumers');
     // The pin the promote took records what the new project uses.
-    const lock = readYamlFile(path.join(part, '.wai', 'externals.lock.yaml')) as { externals: Record<string, { used: Record<string, unknown> }> };
+    const lock = readYamlFile(path.join(part, '.wai', 'inputs.lock.yaml')) as { externals: Record<string, { used: Record<string, unknown> }> };
     expect(Object.keys(lock.externals.shop.used).sort()).toEqual(['money', 'order', 'order_id', 'orders_portal']);
     // Family-consistent: no new error.
     expect(newFindings(before, errorsOf(root))).toEqual([]);

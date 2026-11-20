@@ -75,7 +75,7 @@ describe('the design export across project boundaries', () => {
 
   it('carries the digest the externals lock pins for a dependency, and none for one never pinned', () => {
     family = buildReferenceFamily();
-    writeYamlFile(path.join(family.core, '.wai', 'externals.lock.yaml'), {
+    writeYamlFile(path.join(family.core, '.wai', 'inputs.lock.yaml'), {
       externals: { shared: { project: 'shared', snapshot: '.wai/externals/shared.yaml', digest: 'sha256:abc123', used: {} } },
     });
     const d = exportAt(family.core);
@@ -85,7 +85,7 @@ describe('the design export across project boundaries', () => {
 
   it('leaves the digests out when the lock cannot be read', () => {
     family = buildReferenceFamily();
-    fs.writeFileSync(path.join(family.core, '.wai', 'externals.lock.yaml'), 'externals: [not, a, map]\n');
+    fs.writeFileSync(path.join(family.core, '.wai', 'inputs.lock.yaml'), 'externals: [not, a, map]\n');
     const d = exportAt(family.core);
     expect(d.dependencies.every((x) => x.digest === undefined)).toBe(true);
   });

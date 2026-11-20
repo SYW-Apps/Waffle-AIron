@@ -315,11 +315,11 @@ describe('platform — a dead re-export is flagged at the producer', () => {
 });
 
 describe('solo — removing the last external leaves no empty lock behind', () => {
-  it('`externals remove` of the only external deletes .wai/externals.lock.yaml', () => {
+  it('`externals remove` of the only external deletes .wai/inputs.lock.yaml', () => {
     const p = pair();
     bind(p.studio);
     pinExternals();
-    const lockFile = path.join(p.studio, '.wai', 'externals.lock.yaml');
+    const lockFile = path.join(p.studio, '.wai', 'inputs.lock.yaml');
     expect(fs.existsSync(lockFile)).toBe(true);
     expect(remove('geo')).toMatchObject({ removed: true, unpinned: true });
     expect(fs.existsSync(lockFile)).toBe(false);

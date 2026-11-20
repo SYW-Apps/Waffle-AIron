@@ -61,14 +61,14 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     const base = tempDir(cleanups, 'wairon-refgit-');
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     const shop = path.join(base, 'shop');
     writeShop(shop, { members: { ledger: `${repo.url}#${repo.commit}` } });
     bind(shop);
     // Pinned as a member, at the declared commit, with the used method recorded.
     const [pin] = pinExternals();
     expect(pin).toMatchObject({ alias: 'ledger', outcome: 'pinned', usedNames: 1 });
-    const lock = yaml.load(fs.readFileSync(path.join(shop, '.wai', 'externals.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
+    const lock = yaml.load(fs.readFileSync(path.join(shop, '.wai', 'inputs.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
     expect(lock.externals.ledger).toMatchObject({ role: 'member', commit: repo.commit, used: { 'ledger-portal': { post: expect.stringMatching(/^sha256:/) } } });
     bind(shop);
     expect(externalCodes(validateProject({}).issues)).toEqual([]);
@@ -97,7 +97,7 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     const base = tempDir(cleanups, 'wairon-refgitx-');
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     const shop = path.join(base, 'shop');
     writeShop(shop, { externals: { ledger: { source: { git: repo.url } } } });
     bind(shop);
@@ -160,7 +160,7 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     const base = tempDir(cleanups, 'wairon-refoff-');
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     const shop = path.join(base, 'shop');
     writeShop(shop, { members: { ledger: `${repo.url}#${repo.commit}` } });
     bind(shop);

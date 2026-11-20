@@ -193,7 +193,7 @@ describe('5. a git member exported too narrowly is refused at add, and named at 
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
     stage8System(work, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: 'project' }]);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     return { url: repo.url, commit: repo.commit, base };
   }
 

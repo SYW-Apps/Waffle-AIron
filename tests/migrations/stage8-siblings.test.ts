@@ -219,7 +219,7 @@ describe('stage 8 — a pin records a commit only across repositories', () => {
     git(mono, 'add', '-A');
     git(mono, 'commit', '-q', '-m', 'mono');
     at(path.join(mono, 'shop'), () => pinExternals());
-    const monoLock = yaml.load(fs.readFileSync(path.join(mono, 'shop', '.wai', 'externals.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
+    const monoLock = yaml.load(fs.readFileSync(path.join(mono, 'shop', '.wai', 'inputs.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
     expect(monoLock.externals.ledger.commit).toBeUndefined();
     // Two repositories side by side.
     writeLedger(path.join(base, 'ledger'));
@@ -230,7 +230,7 @@ describe('stage 8 — a pin records a commit only across repositories', () => {
     writeShop(path.join(base, 'shop'), { externals: { ledger: { source: { path: '../ledger' } } } });
     git(path.join(base, 'shop'), 'init', '-q');
     at(path.join(base, 'shop'), () => pinExternals());
-    const lock = yaml.load(fs.readFileSync(path.join(base, 'shop', '.wai', 'externals.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
+    const lock = yaml.load(fs.readFileSync(path.join(base, 'shop', '.wai', 'inputs.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
     expect(lock.externals.ledger.commit).toBe(head);
   });
 });

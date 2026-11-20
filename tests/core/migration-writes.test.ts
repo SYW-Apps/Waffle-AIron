@@ -22,7 +22,7 @@ import { dirHash, pinAt } from '../helpers/family-verbs.js';
 
 const configText = (dir: string): string => fs.readFileSync(path.join(dir, '.wai', 'project.yaml'), 'utf8');
 const lockOf = (dir: string): Record<string, { project: string; digest: string; snapshot: string }> =>
-  (readYamlFile(path.join(dir, '.wai', 'externals.lock.yaml')) as { externals: Record<string, { project: string; digest: string; snapshot: string }> }).externals;
+  (readYamlFile(path.join(dir, '.wai', 'inputs.lock.yaml')) as { externals: Record<string, { project: string; digest: string; snapshot: string }> }).externals;
 
 describe('stage 6 — the verbs\' writes, one at a time', () => {
   const made: ContractFamily[] = [];
@@ -156,7 +156,7 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
       expect(unpin('books')).toBe(false);
     });
     // The last entry gone, the lock file goes with it.
-    expect(fs.existsSync(path.join(f.billing, '.wai', 'externals.lock.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(f.billing, '.wai', 'inputs.lock.yaml'))).toBe(false);
     expect(fs.existsSync(path.join(f.billing, '.wai', 'externals', 'books.yaml'))).toBe(false);
   });
 

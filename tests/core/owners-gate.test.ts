@@ -207,7 +207,7 @@ describe('canonical digests', () => {
     bind(f.app);
     pinExternals();
     const file = path.join(f.app, '.wai', 'externals', 'shared.yaml');
-    const lockFile = path.join(f.app, '.wai', 'externals.lock.yaml');
+    const lockFile = path.join(f.app, '.wai', 'inputs.lock.yaml');
     const snapshotBytes = fs.readFileSync(file);
     const lockBytes = fs.readFileSync(lockFile);
     // The producer names its own type through its own id instead of bare.

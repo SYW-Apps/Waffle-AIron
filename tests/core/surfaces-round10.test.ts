@@ -79,7 +79,7 @@ describe('1. a contract used as a whole: every method it holds is compared live 
     bind(consumer);
     expect(pinExternals().map((p) => p.outcome)).toEqual(['pinned']);
     // The lock records the contract as a whole: no member named.
-    expect(readYamlFile<{ externals: Record<string, { used: Record<string, Record<string, string>> }> }>(path.join(consumer, '.wai', 'externals.lock.yaml')).externals.legacy.used).toEqual({ habit_portal: {} });
+    expect(readYamlFile<{ externals: Record<string, { used: Record<string, Record<string, string>> }> }>(path.join(consumer, '.wai', 'inputs.lock.yaml')).externals.legacy.used).toEqual({ habit_portal: {} });
     return { producer, consumer };
   }
 

@@ -141,11 +141,11 @@ describe('stage 3 — the position migration over the reference family', () => {
       // Pins LAST (stage 4): the external the migration declares, and core's
       // `shared` and shared's `core`, declared before it ran and never pinned.
       'core/.wai/externals/shared.yaml',
-      'core/.wai/externals.lock.yaml',
+      'core/.wai/inputs.lock.yaml',
       'core/transpiler/.wai/externals/core.yaml',
-      'core/transpiler/.wai/externals.lock.yaml',
+      'core/transpiler/.wai/inputs.lock.yaml',
       'shared/.wai/externals/core.yaml',
-      'shared/.wai/externals.lock.yaml',
+      'shared/.wai/inputs.lock.yaml',
     ]);
     for (const root of [f.top, f.core, f.transpiler, f.shared]) {
       const after = at(root, () => validateProject());

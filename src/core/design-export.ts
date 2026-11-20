@@ -42,7 +42,7 @@ import {
   type DesignTypeGroup,
   type DesignTypeRef,
   type ExternalBinding,
-  type ExternalsLock,
+  type InputsLock,
   type GroupSpec,
   type ImplementationSpec,
   type ProjectFamily,
@@ -72,7 +72,7 @@ import {
   computeStateId,
   projectFamily,
 } from './adapters/surfaces-core.js';
-// externals_repository: the pinned digest of each dependency (the externals lock).
+// externals_repository: the pinned digest of each dependency (the inputs lock).
 import { externalsRepository } from './externals.js';
 import { ownGet } from '../utils/own.js';
 
@@ -271,7 +271,7 @@ function projectSection(system: SystemSpec, table: ResolvedExport[], keys: KeyTa
 }
 
 /** Step 23: one externals binding as a DesignDependency, with the digest its lock entry pins. */
-function dependency(binding: ExternalBinding, lock: ExternalsLock | null, used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency {
+function dependency(binding: ExternalBinding, lock: InputsLock | null, used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency {
   const alias = binding.external.alias;
   const digest = ownGet(lock?.externals, alias)?.digest;
   return {
@@ -284,7 +284,7 @@ function dependency(binding: ExternalBinding, lock: ExternalsLock | null, used: 
 }
 
 /** Step 23: one direct project member not among the externals, as a DesignDependency (role member). */
-function memberDependency(member: MemberPublicNames, lock: ExternalsLock | null, used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency {
+function memberDependency(member: MemberPublicNames, lock: InputsLock | null, used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency {
   const digest = ownGet(lock?.externals, member.alias)?.digest;
   return {
     alias: member.alias,
@@ -560,8 +560,8 @@ function projectIdOf(system: SystemSpec): string {
   }
 }
 
-/** The externals lock, for each dependency's pinned digest; one that is absent or cannot be read pins nothing. */
-function readLockOrNull(): ExternalsLock | null {
+/** The inputs lock, for each dependency's pinned digest; one that is absent or cannot be read pins nothing. */
+function readLockOrNull(): InputsLock | null {
   try {
     return externalsRepository.readLock();
   } catch {
@@ -573,7 +573,7 @@ function readLockOrNull(): ExternalsLock | null {
 function composeDependencies(
   bindings: ExternalBinding[],
   members: MemberPublicNames[],
-  lock: ExternalsLock | null,
+  lock: InputsLock | null,
   used: ReadonlyMap<string, ReadonlySet<string>>,
 ): DesignDependency[] {
   const externalAliases = new Set(bindings.map((b) => b.external.alias));

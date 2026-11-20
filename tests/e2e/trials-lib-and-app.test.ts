@@ -156,7 +156,7 @@ function tileStudio(o: StudioOptions = {}): FixtureTree {
 /** (Re)write a project's .wai from a fixture tree, keeping everything else in the folder. */
 function writeProject(dir: string, id: string, tree: FixtureTree, extra: Record<string, unknown> = {}): void {
   // Keep the pin and the lock record across a producer/consumer rewrite.
-  const keep = ['lock.json', 'externals.lock.yaml', 'externals'];
+  const keep = ['lock.json', 'inputs.lock.yaml', 'externals'];
   const saved = new Map<string, string>();
   const stash = path.join(dir, '.wai-keep');
   for (const name of keep) {
@@ -345,7 +345,7 @@ describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R
   });
 
   it('`externals use --add/--remove` edits the imports without a hand edit and without touching the pin (R2-23)', async () => {
-    const pinBefore = readFile(p.studio, '.wai/externals.lock.yaml');
+    const pinBefore = readFile(p.studio, '.wai/inputs.lock.yaml');
     const dry = await sb.run(['externals', 'use', 'geo', '--add', 'tile-key', '--dry-run'], p.studio);
     expect(dry.code, transcript(dry)).toBe(0);
     expect(dry.stdout).toMatch(/Dry run: geo\.use would be \[tile-key\] \(\+ tile-key\)\. Nothing was written\./);
@@ -363,7 +363,7 @@ describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R
     const rm = await sb.run(['externals', 'use', 'geo', '--remove', 'tile-key'], p.studio);
     expect(rm.code, transcript(rm)).toBe(0);
     expect(rm.stdout).toMatch(/\(- tile-key\)/);
-    expect(readFile(p.studio, '.wai/externals.lock.yaml')).toBe(pinBefore);
+    expect(readFile(p.studio, '.wai/inputs.lock.yaml')).toBe(pinBefore);
   });
 
   it('removing one of two externals keeps the pin file (control); removing the last deletes it (round-3 leftover `externals: {}`)', async () => {
@@ -382,7 +382,7 @@ describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R
     const rmGeo = await sb.run(['externals', 'remove', 'geo'], p.studio);
     expect(rmGeo.code, transcript(rmGeo)).toBe(0);
     expect(rmGeo.stdout).toMatch(/Removed geo: its declaration and its pin/);
-    const lockFile = path.join(p.studio, '.wai', 'externals.lock.yaml');
+    const lockFile = path.join(p.studio, '.wai', 'inputs.lock.yaml');
     expect(fs.existsSync(lockFile)).toBe(true);
     const left = yaml.load(fs.readFileSync(lockFile, 'utf8')) as { externals: Record<string, unknown> };
     expect(Object.keys(left.externals)).toEqual(['atlas']);
@@ -390,7 +390,7 @@ describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R
 
     const rmAtlas = await sb.run(['externals', 'remove', 'atlas'], p.studio);
     expect(rmAtlas.code, transcript(rmAtlas)).toBe(0);
-    // Round 3: `.wai/externals.lock.yaml` was left behind holding `externals: {}`.
+    // Round 3: `.wai/inputs.lock.yaml` was left behind holding `externals: {}`.
     expect(fs.existsSync(lockFile)).toBe(false);
     const list = await sb.run(['externals', 'list'], p.studio);
     expect(list.code, transcript(list)).toBe(0);
@@ -410,7 +410,7 @@ describe('journey: an implemented (role implement) contract is pinned per method
   });
 
   it('the pin records a digest for each implemented method — not `tile-source: {}` (R3-20)', () => {
-    const lock = yaml.load(readFile(p.studio, '.wai/externals.lock.yaml')) as {
+    const lock = yaml.load(readFile(p.studio, '.wai/inputs.lock.yaml')) as {
       externals: { geo: { used: Record<string, Record<string, string>> } };
     };
     expect(Object.keys(lock.externals.geo.used['tile-source'])).toEqual(['load_tile']);

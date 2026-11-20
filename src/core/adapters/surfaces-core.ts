@@ -47,4 +47,7 @@ export {
   approvedRevision,
   // A live member's tree at the approval it is judged against: what its consumer's relation and binding compare with.
   memberRevisions,
+  // What differs between a project's tree and its own approval on record: read with a
+  // producer's root, whether its design is approved as it stands (a pin requires it).
+  diffAgainstApproval,
 } from '../index.js';

@@ -249,7 +249,7 @@ describe('stage 2c — the chaining migration', () => {
       'packages/dispatch/.wai/specs: interface iroute-planner', 'packages/dispatch/.wai/specs: component route-planner',
       'packages/dispatch/.wai/specs: implementation route-planner-impl',
       // Pins LAST, projected from the final spelling (stage 4).
-      'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/externals.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
+      'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/inputs.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
     ]);
     // A raw position is rewritten too: the parameter type and the display signature beside it.
     const contract = fs.readFileSync(path.join(f.dispatch, '.wai', 'specs', 'interfaces', 'iroute-planner.yaml'), 'utf8');

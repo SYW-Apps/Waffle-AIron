@@ -535,8 +535,7 @@ export function unpinned(): string[] {
   const config = configOrNull();
   const pinnable = new Set<string>();
   if (config) {
-    // v7 wave 2: a source-less external (a family producer) stays pinnable until sdd_surfaces settles how it is read.
-    for (const e of declaredExternals(config)) if (e.sourcePath === undefined) pinnable.add(e.alias);
+    for (const e of declaredExternals(config)) if (e.sourceHosted !== undefined || e.sourceGit !== undefined) pinnable.add(e.alias);
     for (const m of declaredMembers(config)) if (m.storage === 'hosted' || m.storage === 'git') pinnable.add(m.alias);
   }
   // Steps 2-3: every pinnable alias without a lock entry.

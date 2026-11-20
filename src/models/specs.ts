@@ -2783,7 +2783,7 @@ export const SurfaceSnapshotSchema = z.object({
 export type SurfaceSnapshot = z.infer<typeof SurfaceSnapshotSchema>;
 
 // ---------------------------------------------------------------------------
-// Pinned externals (.wai/externals.lock.yaml + .wai/externals/<alias>.yaml)
+// Build inputs (.wai/inputs.lock.yaml + .wai/externals/<alias>.yaml)
 // ---------------------------------------------------------------------------
 
 /**
@@ -2806,32 +2806,37 @@ export type ExternalLockEntry = z.infer<typeof ExternalLockEntrySchema>;
 /**
  * locked_pack — one selected pack as the inputs lock records it (keyed by pack
  * name): what the selection resolved to when `wairon packs sync` or `wairon
- * lock` last recorded it. A build input, never part of the approval.
- *
- * v7 wave 2: sdd_surfaces owns this type's persistence (InputsLock.packs); the
- * validator only produces it (resolvedPacks) and compares it (inputs).
+ * lock` last recorded it. A build input, never part of the approval: when the
+ * pack loaded now digests differently, the build owes a sync (InputDebtKind
+ * pack), and the approval holds.
  */
-export interface LockedPack {
+export const LockedPackSchema = z.object({
   /** The version the selection declares in .wai/project.yaml, as written. */
-  declared?: string;
+  declared: z.string().optional(),
   /** The version the selection resolved to, from the pack's manifest. */
-  resolved?: string;
+  resolved: z.string().optional(),
   /** Where it was resolved from: the bundled path, the source URL, or `installed`. */
-  source?: string;
+  source: z.string().optional(),
   /** The pack's doctrine digest (approval_identity.packContents). */
-  digest: string;
-}
+  digest: z.string(),
+});
+export type LockedPack = z.infer<typeof LockedPackSchema>;
 
 /**
- * externals_lock — the content of .wai/externals.lock.yaml: one entry per
- * pinned producer, and — in a non-contained part's lock (stage 8) — its
- * parent, whose snapshot is a ParentExcerpt.
+ * inputs_lock — the content of .wai/inputs.lock.yaml: the project's build
+ * inputs from outside its own files, recorded mechanically and judged beside
+ * the approval, never part of it. `externals` holds one entry per pinned
+ * producer (a hosted or git external, a referenced git or hosted member); a
+ * path producer is read live and has no entry. `parent` holds a
+ * non-contained part's pinned parent excerpt. `packs` records each extension
+ * pack as resolved.
  */
-export const ExternalsLockSchema = z.object({
+export const InputsLockSchema = z.object({
   externals: z.record(z.string(), ExternalLockEntrySchema).default({}),
   parent: ExternalLockEntrySchema.optional(),
+  packs: z.record(z.string(), LockedPackSchema).default({}),
 });
-export type ExternalsLock = z.infer<typeof ExternalsLockSchema>;
+export type InputsLock = z.infer<typeof InputsLockSchema>;
 
 /**
  * parent_excerpt — the pinned slice of a parent that a part opened alone is
@@ -2877,7 +2882,7 @@ export interface PinnedParent {
 /**
  * pinned_external — one declared external as the owner's gate judges against
  * it: its lock entry and the snapshot that entry names, read from the bound
- * project's own .wai/externals.lock.yaml and .wai/externals/ and nothing else.
+ * project's own .wai/inputs.lock.yaml and .wai/externals/ and nothing else.
  * The producer is never read.
  */
 export interface PinnedExternal {
@@ -2909,6 +2914,18 @@ export interface ExternalPin {
   unexported: import('./project-family.js').CrossProjectReference[];
   /** Why an alias was unresolved or unreachable, or which used members could not be pinned. */
   detail?: string;
+}
+
+/**
+ * producer_pin — what pinning one hosted or git producer from its approved
+ * state did: the outcome reported for the alias and, when it pinned, the lock
+ * entry that replaces the previous one. No entry means the previous pin stays.
+ */
+export interface ProducerPin {
+  /** The outcome for the alias, as pinExternals reports it. */
+  pin: ExternalPin;
+  /** The new lock entry; absent when the pin was refused or the producer was unreachable. */
+  entry?: ExternalLockEntry;
 }
 
 /**

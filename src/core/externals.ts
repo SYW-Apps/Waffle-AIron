@@ -4,18 +4,18 @@ import { getProjectRoot, withLineEndings } from '../utils/fs.js';
 import { readYamlFile, serializeYaml } from '../utils/yaml.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import {
-  ExternalsLockSchema,
+  InputsLockSchema,
   ParentExcerptSchema,
   SurfaceSnapshotSchema,
-  type ExternalsLock,
+  type InputsLock,
   type ParentExcerpt,
   type SurfaceSnapshot,
 } from '../models/index.js';
 import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
-// The project's pinned externals (sdd_surfaces): the lock at
-// .wai/externals.lock.yaml and the snapshots it names under
+// The project's build inputs (sdd_surfaces): the inputs lock at
+// .wai/inputs.lock.yaml and the snapshots it names under
 // .wai/externals/<alias>.yaml — one aggregate, as a lockfile and the contracts
 // it digests are one, apart from the legacy .wai/surfaces snapshots the
 // surface repository holds.
@@ -27,8 +27,13 @@ import { ownGet } from '../utils/own.js';
 //   externals_repository    — the facade consumers use, forwarding 1:1.
 // ---------------------------------------------------------------------------
 
-/** The externals lock's path at a project root. */
+/** The inputs lock's path at a project root. */
 function lockPath(root: string): string {
+  return path.join(root, '.wai', 'inputs.lock.yaml');
+}
+
+/** The v6 pins file's path at a project root: never read, only refused. */
+function legacyLockPath(root: string): string {
   return path.join(root, '.wai', 'externals.lock.yaml');
 }
 
@@ -45,19 +50,21 @@ function writeAtomically(file: string, text: string): void {
   files.rename(tmp, file);
 }
 
-/** The lock with its aliases sorted, so a re-pin of the same set writes the same bytes; a part's parent entry kept. */
-function sortedLock(lock: ExternalsLock): ExternalsLock {
-  const externals: ExternalsLock['externals'] = {};
+/** The lock with its aliases and pack names sorted, so a re-pin of the same set writes the same bytes; a part's parent entry kept. */
+function sortedLock(lock: InputsLock): InputsLock {
+  const externals: InputsLock['externals'] = {};
   for (const alias of Object.keys(lock.externals).sort()) externals[alias] = ownGet(lock.externals, alias)!;
-  return { externals, ...(lock.parent !== undefined ? { parent: lock.parent } : {}) };
+  const packs: InputsLock['packs'] = {};
+  for (const name of Object.keys(lock.packs ?? {}).sort()) packs[name] = ownGet(lock.packs, name)!;
+  return { externals, ...(lock.parent !== undefined ? { parent: lock.parent } : {}), packs };
 }
 
 // ── externals_file_adapter ──────────────────────────────────────────────────
 
 /** iexternals_file_adapter. */
 export interface ExternalsFileAdapter {
-  readLock(): ExternalsLock | null;
-  writeLock(lock: ExternalsLock): void;
+  readLock(): InputsLock | null;
+  writeLock(lock: InputsLock): void;
   readSnapshot(alias: string): SurfaceSnapshot | null;
   writeSnapshot(alias: string, snapshot: SurfaceSnapshot): void;
   deleteSnapshot(alias: string): boolean;
@@ -69,25 +76,30 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
   readLock() {
     // Null when absent; a lock that fails to parse or fails the schema is
     // refused naming the file — read as empty, it would silently unpin everything.
-    const file = lockPath(getProjectRoot());
+    // A leftover v6 pins file is refused whether or not the new file exists.
+    const root = getProjectRoot();
+    if (files.exists(legacyLockPath(root))) {
+      throw new Error(`The pins file ${legacyLockPath(root)} was written by an older wairon: run \`wairon upgrade\` to move it to .wai/inputs.lock.yaml.`);
+    }
+    const file = lockPath(root);
     if (!files.exists(file)) return null;
     let raw: unknown;
     try {
       raw = readYamlFile(file);
     } catch (e) {
-      throw new Error(`The externals lock ${file} is not valid YAML: ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(`The inputs lock ${file} is not valid YAML: ${e instanceof Error ? e.message : String(e)}`);
     }
-    const parsed = ExternalsLockSchema.safeParse(raw ?? {});
+    const parsed = InputsLockSchema.safeParse(raw ?? {});
     if (!parsed.success) {
-      throw new Error(`The externals lock ${file} does not match its schema: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+      throw new Error(`The inputs lock ${file} does not match its schema: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
     }
     return parsed.data;
   },
   writeLock(lock) {
     const file = lockPath(getProjectRoot());
-    // A lock with no entry left goes with its last entry, as the externals
-    // directory goes with its last snapshot: `externals: {}` pins nothing.
-    if (Object.keys(lock.externals).length === 0 && lock.parent === undefined) {
+    // A lock with no entry left (no external, no parent, no pack) goes with
+    // its last entry, as the externals directory goes with its last snapshot.
+    if (Object.keys(lock.externals).length === 0 && lock.parent === undefined && Object.keys(lock.packs ?? {}).length === 0) {
       if (files.exists(file)) files.removeFile(file);
       return;
     }
@@ -136,8 +148,8 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
 
 /** ipinned_externals_store — read-through: each method is one file operation. */
 export interface PinnedExternalsStore {
-  readLock(): ExternalsLock | null;
-  writeLock(lock: ExternalsLock): void;
+  readLock(): InputsLock | null;
+  writeLock(lock: InputsLock): void;
   readSnapshot(alias: string): SurfaceSnapshot | null;
   writeSnapshot(alias: string, snapshot: SurfaceSnapshot): void;
   removeSnapshot(alias: string): boolean;
@@ -174,8 +186,8 @@ export const pinnedExternalsStore: PinnedExternalsStore = {
 
 /** iexternals_repository — the facade: each method one call to the store. */
 export interface ExternalsRepository {
-  readLock(): ExternalsLock | null;
-  saveLock(lock: ExternalsLock): void;
+  readLock(): InputsLock | null;
+  saveLock(lock: InputsLock): void;
   readSnapshot(alias: string): SurfaceSnapshot | null;
   saveSnapshot(alias: string, snapshot: SurfaceSnapshot): void;
   removeSnapshot(alias: string): boolean;
@@ -218,7 +230,7 @@ export const externalsRepository: ExternalsRepository = {
 /** isurface_orchestrator.renamePin — carry the bound project's pin of one external to a new alias or producer id, digest unchanged. */
 export function renamePin(alias: string, newAlias: string, project: string): boolean {
   // Step 1: the current lock (none yet reads as empty).
-  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  const lock: InputsLock = externalsRepository.readLock() ?? { externals: {}, packs: {} };
   const entry = ownGet(lock.externals, alias);
   // Steps 2-3: nothing to carry.
   if (entry === undefined || (alias === newAlias && entry.project === project)) return false;

@@ -112,7 +112,7 @@ function dispatchFiles(o: FleetOptions): Record<string, string> {
       dependsOn: [o.plannerDependsOn ?? 'billing::invoicing'],
     }),
     ...(o.dispatchPin ? {
-      [`${base}/externals.lock.yaml`]: yaml.dump({ externals: { billing: { project: 'billing', snapshot: '.wai/externals/billing.yaml', digest: 'sha256:pinned', used: {} } } }),
+      [`${base}/inputs.lock.yaml`]: yaml.dump({ externals: { billing: { project: 'billing', snapshot: '.wai/externals/billing.yaml', digest: 'sha256:pinned', used: {} } } }),
       [`${base}/externals/billing.yaml`]: yaml.dump({
         projectName: 'BillingService', projectId: 'billing', origin: 'generated', generatedAt: TS, types: [],
         interfaces: [{
