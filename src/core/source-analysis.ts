@@ -85,6 +85,8 @@ interface LanguagePatterns {
   imports: RegExp[];
   /** Line prefix that marks a declaration as exported (coarse). */
   exportMarkers: RegExp[];
+  /** Its string and character literal forms (STRING_FORMS), read past by the comment scan. */
+  strings?: StringForm[];
 }
 
 const C_FAMILY_COMMENTS = { lineComments: ['//'], blockComments: [['/*', '*/']] as [string, string][] };
@@ -201,21 +203,128 @@ const PATTERN_ANALYSIS_MAX_BYTES = 1_000_000;
 const IDENTIFIER_RE = /[A-Za-z_$][\w$]*/g;
 const STRING_RE = /'([^'\\\n]*(?:\\.[^'\\\n]*)*)'|"([^"\\\n]*(?:\\.[^"\\\n]*)*)"|`([^`\\]*(?:\\.[^`\\]*)*)`/g;
 
-function stripComments(text: string, patterns: LanguagePatterns): string {
-  let out = text;
-  for (const [open, close] of patterns.blockComments) {
-    const re = new RegExp(`${escapeRe(open)}[\\s\\S]*?${escapeRe(close)}`, 'g');
-    out = out.replace(re, ' ');
+/**
+ * How a language spells its string and character literals, for the comment
+ * scan: a comment opener inside a literal is text, and a block-comment opener
+ * inside a line comment is part of that comment.
+ *
+ * - `quoted`: from `quote` to the next unescaped `quote` (`escape: false` for
+ *   a raw form such as Go's backtick string), on one line unless `multiline`.
+ * - `char`: a character literal, read only in its strict short form ('a',
+ *   '\n', '\u{1F600}'), so a Rust lifetime ('a) is never read as one.
+ * - `rust-raw`: r"…", r#"…"#, br"…".
+ * - `verbatim`: C#'s @"…" ("" is the quote inside).
+ */
+type StringForm =
+  | { kind: 'quoted'; quote: string; escape: boolean; multiline?: boolean }
+  | { kind: 'char' }
+  | { kind: 'rust-raw' }
+  | { kind: 'verbatim' };
+
+const DQ: StringForm = { kind: 'quoted', quote: '"', escape: true };
+const SQ: StringForm = { kind: 'quoted', quote: "'", escape: true };
+const CHAR: StringForm = { kind: 'char' };
+const TRIPLE: StringForm = { kind: 'quoted', quote: '"""', escape: true, multiline: true };
+
+/** The literal forms of each pattern-table language; one absent from here scans comments only. */
+const STRING_FORMS: Record<string, StringForm[]> = {
+  typescript: [DQ, SQ, { kind: 'quoted', quote: '`', escape: true, multiline: true }],
+  javascript: [DQ, SQ, { kind: 'quoted', quote: '`', escape: true, multiline: true }],
+  python: [DQ, SQ],
+  rust: [{ kind: 'rust-raw' }, DQ, CHAR],
+  go: [DQ, { kind: 'quoted', quote: '`', escape: false, multiline: true }, CHAR],
+  csharp: [TRIPLE, { kind: 'verbatim' }, DQ, CHAR],
+  java: [TRIPLE, DQ, CHAR],
+  kotlin: [TRIPLE, DQ, CHAR],
+  swift: [TRIPLE, DQ],
+  c: [DQ, CHAR],
+  cpp: [DQ, CHAR],
+  php: [DQ, SQ],
+  ruby: [DQ, SQ],
+};
+
+for (const [language, table] of Object.entries(LANGUAGE_PATTERNS)) table.strings ??= STRING_FORMS[language];
+
+const CHAR_LITERAL_RE = /'(?:\\(?:x[0-9A-Fa-f]{2}|u\{[0-9A-Fa-f]{1,6}\}|u[0-9A-Fa-f]{4}|[^\n])|[^\\'\n])'/y;
+const RUST_RAW_RE = /b?r(#*)"/y;
+
+/** The index just past the literal that starts at `i`, or -1 when none of `forms` starts there. */
+function literalEnd(text: string, i: number, forms: StringForm[]): number {
+  const prev = i > 0 ? text[i - 1] : '';
+  for (const form of forms) {
+    if (form.kind === 'char') {
+      if (text[i] !== "'") continue;
+      CHAR_LITERAL_RE.lastIndex = i;
+      const m = CHAR_LITERAL_RE.exec(text);
+      if (m) return i + m[0].length;
+      continue;
+    }
+    if (form.kind === 'rust-raw') {
+      if ((text[i] !== 'r' && text[i] !== 'b') || /[\w$]/.test(prev)) continue;
+      RUST_RAW_RE.lastIndex = i;
+      const m = RUST_RAW_RE.exec(text);
+      if (!m) continue;
+      const close = `"${m[1]}`;
+      const end = text.indexOf(close, i + m[0].length);
+      return end < 0 ? text.length : end + close.length;
+    }
+    if (form.kind === 'verbatim') {
+      if (!text.startsWith('@"', i)) continue;
+      let j = i + 2;
+      for (;;) {
+        const q = text.indexOf('"', j);
+        if (q < 0) return text.length;
+        if (text[q + 1] === '"') { j = q + 2; continue; }
+        return q + 1;
+      }
+    }
+    if (form.kind === 'quoted') {
+      if (!text.startsWith(form.quote, i)) continue;
+      let j = i + form.quote.length;
+      while (j < text.length) {
+        if (form.escape && text[j] === '\\') { j += 2; continue; }
+        if (text.startsWith(form.quote, j)) return j + form.quote.length;
+        if (text[j] === '\n' && !form.multiline) return j;
+        j++;
+      }
+      return text.length;
+    }
   }
-  if (patterns.lineComments.length > 0) {
-    const re = new RegExp(`(?:${patterns.lineComments.map(escapeRe).join('|')})[^\n]*`, 'g');
-    out = out.replace(re, '');
-  }
-  return out;
+  return -1;
 }
 
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * The source with its comments removed and its literals kept, read left to
+ * right as the compiler reads it: whichever of a line comment, a block comment
+ * or a literal opens first owns the text up to its end. A block comment
+ * becomes one space, a line comment nothing (its newline stays).
+ */
+function stripComments(text: string, patterns: LanguagePatterns): string {
+  const forms = patterns.strings ?? [];
+  const blocks = [...patterns.blockComments].sort((a, b) => b[0].length - a[0].length);
+  let out = '';
+  let start = 0;
+  let i = 0;
+  while (i < text.length) {
+    const block = blocks.find(([open]) => text.startsWith(open, i));
+    if (block) {
+      out += text.slice(start, i) + ' ';
+      const end = text.indexOf(block[1], i + block[0].length);
+      i = end < 0 ? text.length : end + block[1].length;
+      start = i;
+      continue;
+    }
+    if (patterns.lineComments.some((open) => text.startsWith(open, i))) {
+      out += text.slice(start, i);
+      const end = text.indexOf('\n', i);
+      i = end < 0 ? text.length : end;
+      start = i;
+      continue;
+    }
+    const literal = forms.length > 0 ? literalEnd(text, i, forms) : -1;
+    i = literal > i ? literal : i + 1;
+  }
+  return out + text.slice(start);
 }
 
 /**
