@@ -148,12 +148,10 @@ const binding = (verb: string, latField: string): string => [
   '',
 ].join('\n');
 
-describe('r6 (lib-and-app R6-21): a binding module is compared with the pin', () => {
-  it('rename in the producer → re-pin → the consumer\'s binding is BINDING_DRIFT naming the rename to follow; following it is clean', async () => {
+describe('r6 (lib-and-app R6-21): a binding module is compared with the producer', () => {
+  it('rename in the producer (read live, no pin) → the consumer\'s binding is BINDING_DRIFT naming the rename to follow; following it is clean', async () => {
     const geo = sb.materialize('geo1', geoKit());
     const rp = legPlanner(1, binding('haversine', 'lat'));
-    const pinned = await sb.run(['externals', 'pin'], rp);
-    expect(pinned.code, transcript(pinned)).toBe(0);
     const before = await sb.run(['validate'], rp);
     expect(countCode(before.all, 'BINDING_DRIFT'), transcript(before)).toBe(0);
     expect(countCode(before.all, 'BINDING_UNREAD'), transcript(before)).toBe(0);
@@ -163,8 +161,6 @@ describe('r6 (lib-and-app R6-21): a binding module is compared with the pin', ()
     expect(verb.code, transcript(verb)).toBe(0);
     const field = await sb.run(['type', 'rename-field', 'coordinate', 'lat', 'latitude'], geo);
     expect(field.code, transcript(field)).toBe(0);
-    const repin = await sb.run(['externals', 'pin', 'geo'], rp);
-    expect(repin.code, transcript(repin)).toBe(0);
 
     const after = await sb.run(['validate'], rp);
     expect(countCode(after.all, 'BINDING_DRIFT'), transcript(after)).toBe(2);
@@ -179,16 +175,14 @@ describe('r6 (lib-and-app R6-21): a binding module is compared with the pin', ()
     expect(countCode(followed.all, 'BINDING_DRIFT'), transcript(followed)).toBe(0);
   });
 
-  it('control — a binding matching the pin draws nothing; a binding not written yet is a notice, never a failure', async () => {
+  it('control — a binding matching the producer draws nothing; a binding not written yet is a notice, never a failure', async () => {
     sb.materialize('geo2', geoKit());
     const rp = legPlanner(2, binding('haversine', 'lat'));
-    expect((await sb.run(['externals', 'pin'], rp)).code).toBe(0);
     const clean = await sb.run(['validate'], rp);
     expect(countCode(clean.all, 'BINDING_DRIFT'), transcript(clean)).toBe(0);
 
     sb.materialize('geo3', geoKit());
     const planned = legPlanner(3, binding('haversine', 'lat'));
-    expect((await sb.run(['externals', 'pin'], planned)).code).toBe(0);
     const fs = await import('fs');
     fs.rmSync(`${planned}/src/geo-binding.ts`);
     const r = await sb.run(['validate'], planned);

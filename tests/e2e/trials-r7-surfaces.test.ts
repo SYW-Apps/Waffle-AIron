@@ -4,7 +4,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import * as yaml from 'js-yaml';
 import type { FixtureTree } from '../rules-matrix/harness';
-import { createTrialSandbox, countCode, gitInit, readFile, transcript, writeFile, type TrialSandbox } from './trials-helpers';
+import { createTrialSandbox, countCode, gitInit, readFile, serveGitProducer, transcript, writeFile, type TrialSandbox } from './trials-helpers';
 import { round7 } from '../rules-matrix/families/conformance-binding.fixtures';
 import { geoKit, projectYaml } from '../helpers/conformance-r6-trees';
 
@@ -155,7 +155,9 @@ describe('3. the consumer\'s own API reshaped by a re-pin is a change of its own
     const geo = path.join(folder, 'geo');
     const planner = path.join(folder, 'route-planner');
     writeProject(geo, geoKit(), projectYaml('geo-kit'));
-    writeProject(planner, routeApi(), projectYaml('route-planner', { externals: { geo: { source: { path: '../geo' } } } }));
+    // wairon 7 pins only hosted and git sources (a `../` sibling is read live), so GeoKit is served over git.
+    const served = await serveGitProducer(sb.run, folder, geo);
+    writeProject(planner, routeApi(), projectYaml('route-planner', { externals: { geo: { project: 'geo-kit', source: { git: served.source } } } }));
     const pin = await sb.run(['externals', 'pin', 'geo'], planner);
     expect(pin.code, transcript(pin)).toBe(0);
     const lock = await sb.run(['lock', '--yes'], planner);
@@ -163,9 +165,10 @@ describe('3. the consumer\'s own API reshaped by a re-pin is a change of its own
     gitInit(planner);
     const quiet = await sb.run(['surface', 'diff', '--json'], planner);
     expect((JSON.parse(quiet.stdout) as { changes: unknown[] }).changes, transcript(quiet)).toEqual([]);
-    // GeoKit renames the coordinate's `lat`; the planner re-pins.
+    // GeoKit renames the coordinate's `lat` and releases it; the planner re-pins.
     const rename = await sb.run(['type', 'rename-field', 'coordinate', 'lat', 'latitude'], geo);
     expect(rename.code, transcript(rename)).toBe(0);
+    await served.publish();
     const repin = await sb.run(['externals', 'pin', 'geo'], planner);
     expect(repin.code, transcript(repin)).toBe(0);
     const diff = await sb.run(['surface', 'diff', '--json'], planner);

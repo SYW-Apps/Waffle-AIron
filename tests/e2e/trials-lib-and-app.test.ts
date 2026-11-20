@@ -3,6 +3,7 @@ import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { execFileSync } from 'child_process';
 import {
   createTrialSandbox,
   transcript,
@@ -74,7 +75,7 @@ function geoKit(o: GeoOptions = {}): FixtureTree {
       id: 'tiling', description: 'Tile arithmetic.',
       publicInterfaces: [
         { component: 'tile-library', details: 'The crate\'s tile API.' },
-        { component: 'tile-source-port', details: 'Where tiles load from.', role: 'implement' },
+        { component: 'tile-source-port', details: 'Where tiles load from.', role: 'implement', shared: true },
         { typeDef: 'tile-key', details: 'A tile key.' },
       ],
     }],
@@ -201,7 +202,38 @@ function pair(name: string, geo: GeoOptions = {}, studio: StudioOptions = {}): {
   return { geo: geoDir, studio: studioDir, folder };
 }
 
+/**
+ * Serve a producer as a git external: approve it (a git producer is read at its
+ * APPROVED state, so it must be locked and committed), clone it bare and return
+ * the `file://` source with the commit pinned. wairon 7 pins only hosted and
+ * git sources; a `../` sibling is read live and never pinned.
+ */
+async function gitSource(folder: string, dir: string): Promise<string> {
+  const lock = await sb.run(['lock', '--yes'], dir);
+  expect(lock.code, transcript(lock)).toBe(0);
+  gitInit(dir);
+  const bare = path.join(folder, `${path.basename(dir)}.git`);
+  execFileSync('git', ['clone', '-q', '--bare', dir, bare], { stdio: 'ignore' });
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir }).toString().trim();
+  return `file:///${bare.split(path.sep).join('/')}#${commit}`;
+}
+
 // ---------------------------------------------------------------------------
+
+describe('journey: a live producer never moves the consumer\'s approval (wairon 7)', () => {
+  it('a compatible producer change followed through signatureFrom leaves the consumer approved', async () => {
+    const p = pair('approval-holds');
+    const add = await sb.run(['externals', 'add', 'geo', '../geo'], p.studio);
+    expect(add.code, transcript(add)).toBe(0);
+    const lock = await sb.run(['lock', '--yes'], p.studio);
+    expect(lock.code, transcript(lock)).toBe(0);
+    // Only the producer moves: the implemented method's return type, which the consumer takes through signatureFrom.
+    writeProject(p.geo, 'geo', geoKit({ sourceReturns: 'string' }));
+    const lc = await sb.run(['lock-check'], p.studio);
+    expect(lc.code, transcript(lc)).toBe(0);
+    expect(lc.all).toMatch(/is the approved design/);
+  });
+});
 
 describe('journey: a library called directly — InProcess, no client Adapter, judged by abi and effect', () => {
   let p: ReturnType<typeof pair>;
@@ -249,7 +281,7 @@ describe('journey: a library called directly — InProcess, no client Adapter, j
   });
 });
 
-describe('journey: the producer adds abi after the consumer pinned — drifted, and the re-pin refreshes the snapshot (round-2 R2-26/R2-30 BLOCKER)', () => {
+describe('journey: the producer adds abi after the consumer declared it — read live, nothing to re-pin (round-2 R2-26/R2-30 BLOCKER, wairon 7)', () => {
   let p: ReturnType<typeof pair>;
 
   beforeAll(async () => {
@@ -264,34 +296,29 @@ describe('journey: the producer adds abi after the consumer pinned — drifted, 
     expect(countCode(v.all, 'LANGUAGE_BRIDGE_MISSING')).toBe(1);
   });
 
-  it('the producer declares abi: status says drifted and names the stale fact — never "ok" (R2-26)', async () => {
+  it('the producer declares abi: the sibling is read live, so status is ok at once — never a stale "ok" nor a pin to refresh (R2-26)', async () => {
     writeProject(p.geo, 'geo', geoKit({ abi: true }));
     const s = await sb.run(['externals', 'status'], p.studio);
     expect(s.code, transcript(s)).toBe(0);
-    expect(s.stdout).toMatch(/geo → geo: path, pinned, reachable, drifted/);
-    expect(s.stdout).toMatch(/pinned snapshot is stale: abi of tile-library/);
-    expect(s.stdout).not.toMatch(/reachable, ok/);
-    const v = await sb.run(['validate'], p.studio);
-    expect(v.code, transcript(v)).toBe(1);
-    expect(v.all).toMatch(/\[EXTERNAL_DRIFTED\]/);
-    expect(v.all).toMatch(/abi of tile-library/);
+    expect(s.stdout).toMatch(/geo → geo: family, not pinned, reachable, ok/);
+    expect(s.stdout).not.toMatch(/drifted|stale/);
   });
 
-  it('the re-pin writes the new abi into the snapshot and the bridge error goes away (R2-30)', async () => {
-    const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
-    expect(pin.code, transcript(pin)).toBe(0);
-    expect(readFile(p.studio, '.wai/externals/geo.yaml')).toMatch(/abi: c/);
+  it('the bridge error goes away with no re-pin, and a pin of a path external writes nothing (R2-30)', async () => {
     const v = await sb.run(['validate', '--ci'], p.studio);
     expect(v.code, transcript(v)).toBe(0);
     expect(v.all).not.toMatch(/LANGUAGE_BRIDGE_MISSING|EXTERNAL_DRIFTED/);
-    const s = await sb.run(['externals', 'status'], p.studio);
-    expect(s.code, transcript(s)).toBe(0);
-    expect(s.stdout).toMatch(/reachable, ok/);
+    const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
+    expect(pin.code, transcript(pin)).toBe(0);
+    expect(pin.stdout).toMatch(/geo → geo: unchanged — read live, never pinned/);
+    expect(fs.existsSync(path.join(p.studio, '.wai', 'inputs.lock.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(p.studio, '.wai', 'externals'))).toBe(false);
   });
 });
 
 describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R2-23/R2-29, round-3 leftover lock file)', () => {
   let p: ReturnType<typeof pair>;
+  const lockFile = (): string => path.join(p.studio, '.wai', 'inputs.lock.yaml');
 
   beforeAll(() => {
     p = pair('declare');
@@ -325,27 +352,38 @@ describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R
     expect(declaredExternals(p.studio)).toBeUndefined();
   });
 
-  it('a declared but unpinned external is "not compared" — exit 2, never a pass (R2-29)', async () => {
-    const add = await sb.run(['externals', 'add', 'geo', '../geo', '--no-pin'], p.studio);
-    expect(add.code, transcript(add)).toBe(0);
+  it('a path external whose folder is missing is "not compared" — exit 2, never a pass (R2-29)', async () => {
+    const add = await sb.run(['externals', 'add', 'geo', '../nowhere'], p.studio);
+    expect(add.code, transcript(add)).toBe(2);
     expect(add.stdout).toMatch(/Declared geo → geo/);
     const s = await sb.run(['externals', 'status'], p.studio);
     expect(s.code, transcript(s)).toBe(2);
-    expect(s.stdout).toMatch(/geo → geo: path, not pinned, reachable, not compared/);
+    expect(s.stdout).toMatch(/geo → geo: path, not pinned, unreachable, not compared/);
+    expect(s.stdout).toMatch(/EXTERNAL_CHECK_UNAVAILABLE/);
+    // Drop the declaration again: the journeys below declare the real sibling.
+    const rm = await sb.run(['externals', 'remove', 'geo'], p.studio);
+    expect(rm.code, transcript(rm)).toBe(0);
+    expect(declaredExternals(p.studio)).toBeUndefined();
   });
 
-  it('pin, then status ok with exit 0 and one line per used member', async () => {
+  it('declared, a sibling is read live: status ok with exit 0 and one line per used member, and nothing is pinned', async () => {
+    const add = await sb.run(['externals', 'add', 'geo', '../geo'], p.studio);
+    expect(add.code, transcript(add)).toBe(0);
+    expect(add.stdout).toMatch(/Declared geo → geo/);
+    expect(add.stdout).toMatch(/geo → geo: unchanged — read live, never pinned/);
     const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
     expect(pin.code, transcript(pin)).toBe(0);
-    expect(pin.stdout).toMatch(/geo → geo: pinned 2 used name\(s\), sha256:/);
+    expect(pin.stdout).toMatch(/geo → geo: unchanged — read live, never pinned/);
     const s = await sb.run(['externals', 'status'], p.studio);
     expect(s.code, transcript(s)).toBe(0);
-    expect(s.stdout).toMatch(/geo → geo: path, pinned, reachable, ok/);
+    expect(s.stdout).toMatch(/geo → geo: family, not pinned, reachable, ok/);
     expect(s.stdout).toMatch(/tile-library\.tile_for: unchanged/);
+    expect(s.stdout).toMatch(/tile-source\.load_tile: unchanged/);
+    expect(fs.existsSync(lockFile())).toBe(false);
+    expect(fs.existsSync(path.join(p.studio, '.wai', 'externals'))).toBe(false);
   });
 
-  it('`externals use --add/--remove` edits the imports without a hand edit and without touching the pin (R2-23)', async () => {
-    const pinBefore = readFile(p.studio, '.wai/inputs.lock.yaml');
+  it('`externals use --add/--remove` edits the imports without a hand edit and writes no pin (R2-23)', async () => {
     const dry = await sb.run(['externals', 'use', 'geo', '--add', 'tile-key', '--dry-run'], p.studio);
     expect(dry.code, transcript(dry)).toBe(0);
     expect(dry.stdout).toMatch(/Dry run: geo\.use would be \[tile-key\] \(\+ tile-key\)\. Nothing was written\./);
@@ -363,10 +401,10 @@ describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R
     const rm = await sb.run(['externals', 'use', 'geo', '--remove', 'tile-key'], p.studio);
     expect(rm.code, transcript(rm)).toBe(0);
     expect(rm.stdout).toMatch(/\(- tile-key\)/);
-    expect(readFile(p.studio, '.wai/inputs.lock.yaml')).toBe(pinBefore);
+    expect(fs.existsSync(lockFile())).toBe(false);
   });
 
-  it('removing one of two externals keeps the pin file (control); removing the last deletes it (round-3 leftover `externals: {}`)', async () => {
+  it('removing a path external drops its declaration and leaves no lock file behind (round-3 leftover `externals: {}`)', async () => {
     const addAtlas = await sb.run(['externals', 'add', 'atlas', '../atlas'], p.studio);
     expect(addAtlas.code, transcript(addAtlas)).toBe(0);
 
@@ -381,24 +419,52 @@ describe('journey: externals add / use / status / remove by hand (round-2 R2-4/R
 
     const rmGeo = await sb.run(['externals', 'remove', 'geo'], p.studio);
     expect(rmGeo.code, transcript(rmGeo)).toBe(0);
-    expect(rmGeo.stdout).toMatch(/Removed geo: its declaration and its pin/);
-    const lockFile = path.join(p.studio, '.wai', 'inputs.lock.yaml');
-    expect(fs.existsSync(lockFile)).toBe(true);
-    const left = yaml.load(fs.readFileSync(lockFile, 'utf8')) as { externals: Record<string, unknown> };
-    expect(Object.keys(left.externals)).toEqual(['atlas']);
-    expect(fs.existsSync(path.join(p.studio, '.wai', 'externals', 'geo.yaml'))).toBe(false);
+    expect(rmGeo.stdout).toMatch(/Removed geo: its declaration\./);
+    expect(Object.keys(declaredExternals(p.studio)!)).toEqual(['atlas']);
 
     const rmAtlas = await sb.run(['externals', 'remove', 'atlas'], p.studio);
     expect(rmAtlas.code, transcript(rmAtlas)).toBe(0);
     // Round 3: `.wai/inputs.lock.yaml` was left behind holding `externals: {}`.
-    expect(fs.existsSync(lockFile)).toBe(false);
+    expect(fs.existsSync(lockFile())).toBe(false);
     const list = await sb.run(['externals', 'list'], p.studio);
     expect(list.code, transcript(list)).toBe(0);
     expect(list.all).toMatch(/declares no externals/);
   });
+
+  it('a git external IS pinned: removing one of two keeps the inputs lock (control); removing the last deletes it', async () => {
+    const g = pair('declare-git');
+    const atlas = path.join(g.folder, 'atlas');
+    fs.mkdirSync(atlas, { recursive: true });
+    writeProject(atlas, 'atlas', geoKit());
+    const geoSource = await gitSource(g.folder, g.geo);
+    const atlasSource = await gitSource(g.folder, atlas);
+    const lockPath = path.join(g.studio, '.wai', 'inputs.lock.yaml');
+
+    const addGeo = await sb.run(['externals', 'add', 'geo', geoSource], g.studio);
+    expect(addGeo.code, transcript(addGeo)).toBe(0);
+    expect(addGeo.stdout).toMatch(/geo → geo: pinned 2 used name\(s\), sha256:/);
+    const addAtlas = await sb.run(['externals', 'add', 'atlas', atlasSource], g.studio);
+    expect(addAtlas.code, transcript(addAtlas)).toBe(0);
+    expect(fs.existsSync(lockPath)).toBe(true);
+
+    const s = await sb.run(['externals', 'status'], g.studio);
+    expect(s.code, transcript(s)).toBe(0);
+    expect(s.stdout).toMatch(/geo → geo: git, pinned, reachable, ok/);
+
+    const rmGeo = await sb.run(['externals', 'remove', 'geo'], g.studio);
+    expect(rmGeo.code, transcript(rmGeo)).toBe(0);
+    expect(rmGeo.stdout).toMatch(/Removed geo: its declaration and its pin/);
+    const left = yaml.load(fs.readFileSync(lockPath, 'utf8')) as { externals: Record<string, unknown> };
+    expect(Object.keys(left.externals)).toEqual(['atlas']);
+    expect(fs.existsSync(path.join(g.studio, '.wai', 'externals', 'geo.yaml'))).toBe(false);
+
+    const rmAtlas = await sb.run(['externals', 'remove', 'atlas'], g.studio);
+    expect(rmAtlas.code, transcript(rmAtlas)).toBe(0);
+    expect(fs.existsSync(lockPath)).toBe(false);
+  });
 });
 
-describe('journey: an implemented (role implement) contract is pinned per method and its rename is followed (round-3 R3-20/R3-35/R3-37/R3-42 MAJOR)', () => {
+describe('journey: an implemented (role implement) contract — pinned per method for a git producer, its rename followed live for a sibling (round-3 R3-20/R3-35/R3-37/R3-42 MAJOR)', () => {
   let p: ReturnType<typeof pair>;
 
   beforeAll(async () => {
@@ -409,43 +475,49 @@ describe('journey: an implemented (role implement) contract is pinned per method
     expect(lock.code, transcript(lock)).toBe(0);
   });
 
-  it('the pin records a digest for each implemented method — not `tile-source: {}` (R3-20)', () => {
-    const lock = yaml.load(readFile(p.studio, '.wai/inputs.lock.yaml')) as {
+  it('a git pin records a digest for each implemented method — not `tile-source: {}` (R3-20)', async () => {
+    const g = pair('implements-git');
+    const source = await gitSource(g.folder, g.geo);
+    const add = await sb.run(['externals', 'add', 'geo', source], g.studio);
+    expect(add.code, transcript(add)).toBe(0);
+    const lock = yaml.load(readFile(g.studio, '.wai/inputs.lock.yaml')) as {
       externals: { geo: { used: Record<string, Record<string, string>> } };
     };
     expect(Object.keys(lock.externals.geo.used['tile-source'])).toEqual(['load_tile']);
     expect(lock.externals.geo.used['tile-source'].load_tile).toMatch(/^sha256:/);
   });
 
-  it('a traced producer rename of the implemented method reads "renamed to" live, while the approval holds (R3-35)', async () => {
+  it('a traced producer rename of the implemented method reads "renamed to" live and fails the consumer, which names the new name (R3-35)', async () => {
     writeProject(p.geo, 'geo', geoKit({ sourceMethod: 'fetch_tile', formerSource: ['itile_source_port.load_tile'] }));
     const s = await sb.run(['externals', 'status'], p.studio);
     expect(s.code, transcript(s)).toBe(1);
-    expect(s.stdout).toMatch(/geo → geo: path, pinned, reachable, incompatible/);
+    expect(s.stdout).toMatch(/geo → geo: family, not pinned, reachable, incompatible/);
     expect(s.stdout).toMatch(/tile-source\.load_tile: renamed to tile-source\.fetch_tile .*follow the rename/);
     expect(s.stdout).toMatch(/tile-library\.tile_for: unchanged/);
 
-    // Live drift is advisory: validate names it but the pin gates (no new error), and the approval stays green.
+    // wairon 7: a dependency INVALID for the consumer's uses fails the consumer's build, named from the live producer.
     const v = await sb.run(['validate'], p.studio);
-    expect(v.code, transcript(v)).toBe(0);
+    expect(v.code, transcript(v)).toBe(1);
+    expect(v.all).toMatch(/\[IMPLEMENTS_MISMATCH\] .*"fetch_tile".*renamed from "load_tile" \(the producer's rename trace\)/);
     expect(v.all).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\] .*"tile-source\.load_tile" renamed to "tile-source\.fetch_tile", per the producer's rename trace\. Used by "itile_cache"/);
+    // The approval is the consumer's own design, which did not move: approved but failing on a dependency.
     const lc = await sb.run(['lock-check'], p.studio);
     expect(lc.code, transcript(lc)).toBe(0);
+    const ci = await sb.run(['validate', '--ci'], p.studio);
+    expect(ci.code, transcript(ci)).toBe(1);
   });
 
-  it('a re-pin over the rename is refused naming the new name (exit 1), and validate names the rename live (R3-37, R3-42)', async () => {
+  it('there is no pin to re-pin over the rename: the pin writes nothing and validate still names the rename (R3-37, R3-42)', async () => {
     const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
-    expect(pin.code, transcript(pin)).toBe(1);
-    expect(pin.stdout).toMatch(/refused/);
-    expect(pin.stdout).toMatch(/"tile-source\.load_tile" \(renamed to "tile-source\.fetch_tile"\), .*follow it in the uses first/);
+    expect(pin.code, transcript(pin)).toBe(0);
+    expect(pin.stdout).toMatch(/read live, never pinned/);
+    expect(fs.existsSync(path.join(p.studio, '.wai', 'inputs.lock.yaml'))).toBe(false);
     const v = await sb.run(['validate'], p.studio);
     expect(v.all).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\] .*fetch_tile/);
   });
 
-  it('following the rename and re-pinning clears the tree and the live gate', async () => {
+  it('following the rename clears the tree and the live gate', async () => {
     writeProject(p.studio, 'studio', tileStudio({ sourceMethod: 'fetch_tile' }), { externals: declaredExternals(p.studio) });
-    const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
-    expect(pin.code, transcript(pin)).toBe(0);
     const s = await sb.run(['externals', 'status'], p.studio);
     expect(s.code, transcript(s)).toBe(0);
     expect(s.stdout).toMatch(/tile-source\.fetch_tile: unchanged/);
@@ -453,70 +525,83 @@ describe('journey: an implemented (role implement) contract is pinned per method
     expect(v.code, transcript(v)).toBe(0);
   });
 
-  it('a signature change of the implemented method reads "changed" (exit 1)', async () => {
+  it('a signature change of the implemented method is followed live through signatureFrom: nothing is stale, nothing to re-pin', async () => {
     writeProject(p.geo, 'geo', geoKit({ sourceMethod: 'fetch_tile', formerSource: ['itile_source_port.load_tile'], sourceReturns: 'string' }));
     const s = await sb.run(['externals', 'status'], p.studio);
-    expect(s.code, transcript(s)).toBe(1);
-    expect(s.stdout).toMatch(/tile-source\.fetch_tile: changed/);
+    expect(s.code, transcript(s)).toBe(0);
+    expect(s.stdout).toMatch(/geo → geo: family, not pinned, reachable, ok/);
+    expect(s.stdout).toMatch(/tile-source.fetch_tile: unchanged/);
+    expect(s.stdout).not.toMatch(/stale|drifted/);
+    const v = await sb.run(['validate', '--ci'], p.studio);
+    expect(v.code, transcript(v)).toBe(0);
   });
 });
 
-describe('journey: an unpinned external is never approved (EXTERNAL_UNPINNED + lock refusal), and a re-pin moves the approval', () => {
+describe('journey: an unpinned git external is owed by the build, and `wairon lock` pins it from the producer\'s approved state (wairon 7)', () => {
   let p: ReturnType<typeof pair>;
 
   beforeAll(async () => {
-    p = pair('unpinned', {}, { implementsSource: false });
-    const add = await sb.run(['externals', 'add', 'geo', '../geo', '--no-pin'], p.studio);
+    // The consumer implements the producer's extension point: the pin the lock writes
+    // reshapes its design reading, so the identity it captures must read the tree after the pin.
+    p = pair('unpinned');
+    const source = await gitSource(p.folder, p.geo);
+    const add = await sb.run(['externals', 'add', 'geo', source, '--no-pin'], p.studio);
     expect(add.code, transcript(add)).toBe(0);
   });
 
-  it('the composed gate fails with EXTERNAL_UNPINNED for a used, never-pinned external', async () => {
+  it('status says "not compared" (exit 2), and the composed gate fails with EXTERNAL_UNPINNED for a used, never-pinned external', async () => {
+    const s = await sb.run(['externals', 'status'], p.studio);
+    expect(s.code, transcript(s)).toBe(2);
+    expect(s.stdout).toMatch(/geo → geo: git, not pinned, reachable, not compared/);
     const v = await sb.run(['validate', '--family'], p.studio);
     expect(v.code, transcript(v)).toBe(1);
     expect(v.all).toMatch(/\[EXTERNAL_UNPINNED\] .*which was never pinned/);
-    expect(v.all).toMatch(/`wairon lock` refuses until it is/);
+    expect(v.all).toMatch(/Build inputs owe: external "geo" is not pinned/);
   });
 
-  it('`wairon lock` refuses and writes nothing', async () => {
+  it('`wairon lock` pins the owed input from the producer\'s approved state and approves', async () => {
     const lock = await sb.run(['lock', '--yes'], p.studio);
-    expect(lock.code, transcript(lock)).not.toBe(0);
-    expect(lock.all).toMatch(/declared external\(s\) never pinned — "geo"/);
-    expect(lock.all).toMatch(/Pin first \(`wairon externals pin geo`\), then lock\. Nothing was written\./);
-    expect(fs.existsSync(path.join(p.studio, '.wai', 'lock.json'))).toBe(false);
-  });
-
-  it('pinned, it locks; the approval holds while the producer drifts live', async () => {
-    const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
-    expect(pin.code, transcript(pin)).toBe(0);
+    expect(lock.all).toMatch(/Pinned the external "geo" from its producer's approved state/);
+    expect(lock.code, transcript(lock)).toBe(0);
+    expect(fs.existsSync(path.join(p.studio, '.wai', 'inputs.lock.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(p.studio, '.wai', 'lock.json'))).toBe(true);
     const fam = await sb.run(['validate', '--family'], p.studio);
     expect(fam.all).not.toMatch(/EXTERNAL_UNPINNED/);
+    const ok = await sb.run(['lock-check', '--strict'], p.studio);
+    expect(ok.code, transcript(ok)).toBe(0);
+    expect(ok.all).toMatch(/is the approved design/);
+  });
+
+  it('the lock never advances an up-to-date pin: a second lock changes nothing, and the pin is read as it was', async () => {
+    const before = readFile(p.studio, '.wai/inputs.lock.yaml');
+    const lock = await sb.run(['lock', '--yes'], p.studio);
+    expect(lock.code, transcript(lock)).toBe(0);
+    expect(lock.all).not.toMatch(/Pinned the external/);
+    expect(readFile(p.studio, '.wai/inputs.lock.yaml')).toBe(before);
+    const s = await sb.run(['externals', 'status'], p.studio);
+    expect(s.code, transcript(s)).toBe(0);
+    expect(s.stdout).toMatch(/geo → geo: git, pinned, reachable, ok/);
+  });
+});
+
+describe('journey: a valid but unapproved sibling never blocks the consumer; the approval holds while it changes live (wairon 7)', () => {
+  it('a producer release that changes nothing this project uses leaves status ok and the approval standing', async () => {
+    const p = pair('live-sibling', {}, { implementsSource: false });
+    const add = await sb.run(['externals', 'add', 'geo', '../geo'], p.studio);
+    expect(add.code, transcript(add)).toBe(0);
     const lock = await sb.run(['lock', '--yes'], p.studio);
     expect(lock.code, transcript(lock)).toBe(0);
     expect((await sb.run(['lock-check', '--strict'], p.studio)).code).toBe(0);
 
-    // A producer release that changes nothing this project uses: drifted, advisory, approval unchanged.
+    // The producer was never approved, and then it changes: valid, unapproved, live — never a block.
     writeProject(p.geo, 'geo', geoKit({ extraVerb: true }));
     const s = await sb.run(['externals', 'status'], p.studio);
     expect(s.code, transcript(s)).toBe(0);
-    expect(s.stdout).toMatch(/reachable, drifted/);
+    expect(s.stdout).toMatch(/geo → geo: family, not pinned, reachable, ok/);
     const lc = await sb.run(['lock-check'], p.studio);
     expect(lc.code, transcript(lc)).toBe(0);
-  });
-
-  it('the re-pin is what moves the approval: lock-check 1 naming an input → lock → 0', async () => {
-    const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
-    expect(pin.code, transcript(pin)).toBe(0);
-    const stale = await sb.run(['lock-check'], p.studio);
-    expect(stale.code, transcript(stale)).toBe(1);
-    // The same words the lock prints for it: a consumed contract's pin.
-    expect(stale.all).toMatch(/what changed is a consumed contract's pin/); // round 6: the input that moved is named
-    const lock = await sb.run(['lock', '--yes'], p.studio);
-    expect(lock.code, transcript(lock)).toBe(0);
-    // Round 3 (solo-app): the lock opened with a bare "Nothing has changed since the last approval" here.
-    expect(lock.all).not.toMatch(/Nothing has changed since the last approval —/);
-    const ok = await sb.run(['lock-check', '--strict'], p.studio);
-    expect(ok.code, transcript(ok)).toBe(0);
-    expect(ok.all).toMatch(/is the approved design/);
+    const v = await sb.run(['validate', '--ci'], p.studio);
+    expect(v.code, transcript(v)).toBe(0);
   });
 });
 

@@ -198,7 +198,7 @@ describe('4. binding modules (tinkerer MAJOR 5, platform)', () => {
     expect(countCode(quiet.all, 'BINDING_UNREAD')).toBe(0);
   });
 
-  it('the advisory live drift names the binding module the consumer must update before the re-pin', async () => {
+  it('the live break of a path external names the binding module the consumer must update — and there is no re-pin (wairon 7)', async () => {
     const folder = sb.project('advisory');
     const producer = path.join(folder, 'producer');
     const consumer = path.join(folder, 'consumer');
@@ -210,6 +210,6 @@ describe('4. binding modules (tinkerer MAJOR 5, platform)', () => {
     const rename = await sb.run(['method', 'rename', 'habit_portal', 'listHabits', 'allHabits'], producer);
     expect(rename.code, transcript(rename)).toBe(0);
     const r = await sb.run(['validate'], consumer);
-    expect(r.all, transcript(r)).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\][^\n]*Binding module\(s\) declared there: "src\/legacy-binding\.ts"[^\n]*draws BINDING_DRIFT once the re-pin lands/);
+    expect(r.all, transcript(r)).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\][^\n]*is read live[^\n]*Binding module\(s\) declared there: "src\/legacy-binding\.ts" — follow the move there too[^\n]*nothing to re-pin/);
   });
 });

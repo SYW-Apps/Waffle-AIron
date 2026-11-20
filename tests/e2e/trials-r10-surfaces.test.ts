@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { FixtureTree } from '../rules-matrix/harness';
 import { DIST_CLI, callTool } from './helpers';
-import { createTrialSandbox, readFile, transcript, writeFile, type TrialSandbox } from './trials-helpers';
+import { createTrialSandbox, readFile, serveGitProducer, transcript, writeFile, type TrialSandbox } from './trials-helpers';
 import { projectYaml } from '../helpers/conformance-r6-trees';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 
@@ -85,14 +85,21 @@ function reminders(): FixtureTree {
   };
 }
 
-async function pinnedPair(name: string): Promise<{ producer: string; consumer: string }> {
+/**
+ * A producer served over git (approved and pushed) and a consumer that pinned
+ * it. wairon 7 pins only hosted and git sources — a `../` sibling is read live
+ * and never pinned — so a "moved since the pin" journey needs a git producer;
+ * `release()` approves and pushes the producer's edited tree.
+ */
+async function pinnedPair(name: string): Promise<{ producer: string; consumer: string; release: () => Promise<void> }> {
   const folder = sb.project(name);
   const producer = writeProject(path.join(folder, 'producer'), habitApi(), projectYaml('habitly-api'));
-  const consumer = writeProject(path.join(folder, 'consumer'), reminders(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { path: '../producer' }, use: ['habit_portal'] } } }));
+  const served = await serveGitProducer(sb.run, folder, producer);
+  const consumer = writeProject(path.join(folder, 'consumer'), reminders(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { git: served.source }, use: ['habit_portal'] } } }));
   const pin = await sb.run(['externals', 'pin'], consumer);
   expect(pin.code, transcript(pin)).toBe(0);
   expect(readFile(consumer, '.wai/inputs.lock.yaml')).toMatch(/habit_portal: \{\}/);
-  return { producer, consumer };
+  return { producer, consumer, release: served.publish };
 }
 
 /** Rewrite the producer's contract file. */
@@ -102,24 +109,28 @@ function editContract(producer: string, edit: (text: string) => string): void {
 }
 
 describe('1. a contract used whole: the live gate sees a verb removed, renamed or re-routed (solo-app top-1)', () => {
-  it('removed: incompatible by name, exit 1, EXTERNAL_LIVE_INCOMPATIBLE', async () => {
-    const { producer, consumer } = await pinnedPair('whole-removed');
+  it('removed: incompatible by name, exit 1, EXTERNAL_INCOMPATIBLE', async () => {
+    const { producer, consumer, release } = await pinnedPair('whole-removed');
     const client = await serve(producer);
     const removed = await callTool(client, 'sdd_update_spec', { kind: 'interface', id: 'ihabit_portal', delta: { methods: [{ name: 'checkIn', action: 'delete' }] } });
     expect(removed.ok, removed.text).toBe(true);
+    await release();
     const status = await sb.run(['externals', 'status'], consumer);
     // Round 10: "habit_portal: unchanged · drifted: re-pin when convenient", exit 0.
     expect(status.code, transcript(status)).toBe(1);
     expect(status.all).toContain('habit_portal.checkIn: removed');
     const validate = await sb.run(['validate'], consumer);
-    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\][^\n]*"habit_portal\.checkIn" gone from the producer's live export table/);
+    // wairon 7: a pinned dependency invalid for the consumer's uses fails the consumer's build.
+    expect(validate.code, transcript(validate)).toBe(1);
+    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_INCOMPATIBLE\][^\n]*"habit_portal\.checkIn"[^\n]*gone from the producer's live export table/);
     expect(validate.all).not.toContain('nothing this project uses changed');
   });
 
   it('renamed: "renamed to" the new name, exit 1', async () => {
-    const { producer, consumer } = await pinnedPair('whole-renamed');
+    const { producer, consumer, release } = await pinnedPair('whole-renamed');
     const rename = await sb.run(['method', 'rename', 'habit_portal', 'checkIn', 'markDone'], producer);
     expect(rename.code, transcript(rename)).toBe(0);
+    await release();
     const status = await sb.run(['externals', 'status', '--json'], consumer);
     expect(status.code, transcript(status)).toBe(1);
     const [s] = JSON.parse(status.stdout) as { uses: { member?: string; state: string; renamedTo?: string }[] }[];
@@ -127,8 +138,9 @@ describe('1. a contract used whole: the live gate sees a verb removed, renamed o
   });
 
   it('a moved route: incompatible (round 11), the verb and its route named', async () => {
-    const { producer, consumer } = await pinnedPair('whole-moved');
+    const { producer, consumer, release } = await pinnedPair('whole-moved');
     editContract(producer, (text) => text.split('path: /habits/{habitId}/check-ins').join('path: /habits/{habitId}/done'));
+    await release();
     const status = await sb.run(['externals', 'status'], consumer);
     expect(status.all, transcript(status)).toContain('habit_portal.checkIn: changed — endpoint moved: PUT /habits/{habitId}/check-ins → PUT /habits/{habitId}/done');
     expect(status.all).toContain('incompatible');
@@ -175,11 +187,12 @@ describe('2. surface diff on an unchanged tree with a `../` sibling member (lib-
 
 describe('3. the live comparison and the producer\'s route move (tinkerer)', () => {
   it('an added field is named; the route move names the consumer it breaks', async () => {
-    const { producer, consumer } = await pinnedPair('fields-and-routes');
+    const { producer, consumer, release } = await pinnedPair('fields-and-routes');
     const types = path.join(producer, specFile(producer, 'types', 'habit'));
     const habit = readYamlFile(types) as { fields: unknown[] };
     writeYamlFile(types, { ...habit, fields: [{ name: 'title', type: 'string', previousNames: ['name'] }, { name: 'cadence', type: 'string' }] });
     expect(readFile(producer, specFile(producer, 'types', 'habit'))).toContain('cadence');
+    await release();
     const status = await sb.run(['externals', 'status'], consumer);
     expect(status.all, transcript(status)).toContain('field "habit.name" renamed to "title"; field "habit.cadence" added (its shape is otherwise unchanged)');
 

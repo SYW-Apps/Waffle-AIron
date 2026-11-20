@@ -135,8 +135,6 @@ describe('r6 (lib-and-app R6-19): a rename under an EXTERNAL parameter type', ()
     writeFile(geo, '.wai/project.yaml', projectYaml('geo-kit'));
     const rp = sb.materialize(`rp${n}`, routePlanner(signature));
     writeFile(rp, '.wai/project.yaml', projectYaml('route-planner', { externals: { geo: { source: { path: `../geo${n}` } } } }));
-    const pin = await sb.run(['externals', 'pin'], rp);
-    expect(pin.code, transcript(pin)).toBe(0);
     const r = await sb.run(['validate'], rp);
     return { code: r.code, all: r.all, t: transcript(r) };
   };

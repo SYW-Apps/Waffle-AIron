@@ -11,11 +11,12 @@ import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from 
 // Each replays a probe the round-7 trials ran by hand on their upgrade
 // fixtures and asserts exit codes and the words a person reads.
 //
-//   1  a record from before gate parts plus a rule-tuning change is stale with
-//      one sentence, and `lock` then takes a real approval (never a restamp)
-//   2  a member's restamp keeps the family root approved, and a no-op lock
-//      leaves .wai/lock.json untouched
-//   3  a bogus release stamp (newer, or no version) is no upgrade
+//   1  a rule-tuning change is stale with one sentence naming it, and `lock`
+//      then takes a real approval (never a restamp)
+//   2  a member's release stamp never moves the family root's approval, and a
+//      no-op lock leaves .wai/lock.json untouched
+//   3  a bogus release stamp (newer, or no version) moves nothing: the release
+//      is no part of the approval
 //   4  `lock --subsystem` is refused as a first approval
 //   5  `member attach --report` announces the findings its result will have
 // ---------------------------------------------------------------------------
@@ -80,95 +81,88 @@ async function lockIn(dir: string): Promise<void> {
 const record = (dir: string): Record<string, any> => JSON.parse(readFile(dir, '.wai/lock.json'));
 const writeRecord = (dir: string, value: Record<string, unknown>): void => writeFile(dir, '.wai/lock.json', `${JSON.stringify(value, null, 2)}\n`);
 
-/** The record as an older release took it over the same design: its release part, digest and stamp differ. */
-function takenByOlderRelease(dir: string, fill: string, edit: (r: Record<string, any>) => Record<string, any> = (r) => r): Record<string, any> {
+/** The record with another release's stamp over the same design: the stamp is the only thing that differs. */
+function stampedBy(dir: string, validatorVersion: string): Record<string, any> {
   const r = record(dir);
-  expect(r.gateParts, 'a lock records its gate parts').toBeDefined();
-  const older = edit({ ...r, stateId: { ...r.stateId, digest: fill.repeat(64) }, gateParts: { ...r.gateParts, release: 'older-release-doctrine' }, validatorVersion: '5.1.1-dev.100' });
+  expect(r.parts, 'a format-4 lock records its approval parts').toBeDefined();
+  const older = { ...r, validatorVersion };
   writeRecord(dir, older);
   return older;
 }
 
-describe('1 — a record from before gate parts never carries over (round 7: solo-app, tinkerer, platform)', () => {
-  it('with a rule tuned in the same upgrade it is stale with one sentence; `lock` then takes a real approval', async () => {
-    const dir = sb.project('pre-parts');
+describe('1 — a rule-tuning change is stale with one sentence; `lock` then takes a real approval (round 7: solo-app, tinkerer, platform)', () => {
+  it('lock-check names the rule tuning, a lock without --yes asks and writes nothing, the real lock records the new parts', async () => {
+    const dir = sb.project('rule-tuned');
     habitlyAt(dir, 'habitly');
     await lockIn(dir);
-    // A round-1..5 record: no gate parts, an older stamp — and the team tunes a rule in the same PR.
-    const { gateParts: _parts, ...legacy } = record(dir);
-    const old = { ...legacy, stateId: { ...legacy.stateId, digest: 'd'.repeat(64) }, validatorVersion: '5.1.1-dev.109', lockedAt: '2026-01-02T00:00:00.000Z' };
-    writeRecord(dir, old);
+    const old = record(dir);
+    // The team tunes a rule: part of the policy the approval covers.
     fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), configYaml('habitly', { rules: { ...BASE_FIXTURE_RULES, sddRuleSeverity: { UNOWNED_STORE: 'off' } } }));
 
     const check = await sb.run(['lock-check', '--strict'], dir);
     expect(check.code, transcript(check)).toBe(1);
-    expect(check.all).toContain('Approved under wairon 5.1.1-dev.109 before wairon recorded its inputs separately — re-lock once to record them; later upgrades then carry over.');
-    expect(check.all).not.toContain('every input the project decides are as approved');
+    expect(check.all).toMatch(/rule tuning/);
+    expect(check.all).not.toMatch(/release stamp/i);
     const status = await sb.run(['status'], dir);
-    expect(status.all).toContain('before wairon recorded its inputs separately');
+    expect(status.all).toMatch(/rule tuning/);
 
     // No restamp: without --yes in a non-interactive shell the lock asks, so it writes nothing.
     const asks = await sb.run(['lock'], dir);
     expect(asks.code, transcript(asks)).toBe(1);
-    expect(asks.all).not.toContain('release stamp is refreshed');
     expect(record(dir).lockedAt).toBe(old.lockedAt);
-    // A real approval records the parts.
+    // A real approval records the new parts.
     await lockIn(dir);
     const approved = record(dir);
     expect(approved.lockedAt).not.toBe(old.lockedAt);
     expect(approved.restamped).toBeUndefined();
-    expect(approved.gateParts).toBeDefined();
+    expect(approved.parts.rules).not.toBe(old.parts.rules);
+    expect(approved.parts.design).toBe(old.parts.design);
     const after = await sb.run(['lock-check', '--strict'], dir);
     expect(after.code, transcript(after)).toBe(0);
   });
 });
 
-describe('2 — a restamp is no re-approval, for a family too (round 7: platform top-1)', () => {
-  it('a member\'s restamp keeps the root approved; a no-op lock leaves .wai/lock.json untouched', async () => {
+describe('2 — a release stamp never moves the family approval (round 7: platform top-1)', () => {
+  it('each member is approved at its own root; a stamp change keeps the root approved; a no-op lock leaves .wai/lock.json untouched', async () => {
     const root = sb.project('family');
     const lib = path.join(root, 'libs', 'lib');
     habitlyAt(lib, 'lib');
     habitlyAt(root, 'shop', { members: { lib: 'libs/lib' } });
     await lockIn(lib);
-    takenByOlderRelease(lib, 'a');
     await lockIn(root);
-    takenByOlderRelease(root, 'b');
+    stampedBy(lib, '5.1.1-dev.100');
+    stampedBy(root, '5.1.1-dev.100');
 
-    const carried = await sb.run(['lock-check', '--strict'], root);
-    expect(carried.code, transcript(carried)).toBe(0);
-    expect(carried.all).toContain('re-validated under');
+    const held = await sb.run(['lock-check', '--strict'], root);
+    expect(held.code, transcript(held)).toBe(0);
+    expect(held.all).not.toContain('re-validated under');
 
-    // The member restamps under the new release: no review asked, the approval kept.
-    const restamp = await sb.run(['lock'], lib);
-    expect(restamp.code, transcript(restamp)).toBe(0);
-    expect(restamp.all).toContain('release stamp is refreshed');
-    expect(record(lib).restamped.subject).toBeDefined();
+    // The member has nothing to approve: no review asked, no restamp, the file untouched.
+    const bytes = readFile(lib, '.wai/lock.json');
+    const noop = await sb.run(['lock', '--yes'], lib);
+    expect(noop.code, transcript(noop)).toBe(0);
+    expect(noop.all).not.toContain('release stamp is refreshed');
+    expect(readFile(lib, '.wai/lock.json')).toBe(bytes);
+    expect(record(lib).restamped).toBeUndefined();
 
     // The root is not asked to re-approve anything.
     const rootCheck = await sb.run(['lock-check', '--strict'], root);
     expect(rootCheck.code, transcript(rootCheck)).toBe(0);
     expect(rootCheck.all).not.toContain('re-approved at their own roots');
-
-    // A no-op lock at the member: the file stays byte for byte, and it says so.
-    const bytes = readFile(lib, '.wai/lock.json');
-    const noop = await sb.run(['lock', '--yes'], lib);
-    expect(noop.code, transcript(noop)).toBe(0);
-    expect(noop.all).toContain('left untouched');
-    expect(readFile(lib, '.wai/lock.json')).toBe(bytes);
   });
 });
 
-describe('3 — a bogus release stamp is no upgrade (round 7: tinkerer, lib-and-app R7-2)', () => {
-  for (const [stamp, words] of [['9.9.9', 'written by a newer wairon (9.9.9)'], ['banana', 'is no wairon version']] as const) {
+describe('3 — a bogus release stamp moves nothing: the release is no part of the approval (round 7: tinkerer, lib-and-app R7-2)', () => {
+  for (const stamp of ['9.9.9', 'banana']) {
     it(`validatorVersion ${stamp}`, async () => {
-      const dir = sb.project(`stamp-${stamp.replace(/\W/g, '')}`);
+      const dir = sb.project(`stamp-${stamp.replace(/W/g, '')}`);
       habitlyAt(dir, 'habitly');
       await lockIn(dir);
-      takenByOlderRelease(dir, 'c', (r) => ({ ...r, validatorVersion: stamp }));
-      const check = await sb.run(['lock-check'], dir);
-      expect(check.code, transcript(check)).toBe(1);
-      expect(check.all).toContain(words);
-      expect(check.all).not.toContain('re-validated under');
+      stampedBy(dir, stamp);
+      const check = await sb.run(['lock-check', '--strict'], dir);
+      expect(check.code, transcript(check)).toBe(0);
+      expect(check.all).toContain('The design in this tree is the approved design');
+      expect(check.all).not.toMatch(/release stamp|re-validated under|newer wairon/);
     });
   }
 });
