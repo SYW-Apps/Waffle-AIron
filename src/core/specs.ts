@@ -3452,7 +3452,9 @@ export class SpecWorkspace {
   private scanFamily(maxDepth: number): { index: SpecIndex; raws: RawRoot[]; readables: ReadableProject[] } {
     // Steps 1-8: phase one, every root read and keyed, members followed.
     const raws: RawRoot[] = [];
-    this.readRoot(this.rootDir, null, undefined, new Set([chainDirKey(this.rootDir)]), maxDepth, 0, raws, new Set());
+    const taken = new Set<string>();
+    this.readRoot(this.rootDir, null, undefined, new Set([chainDirKey(this.rootDir)]), maxDepth, 0, raws, taken);
+    this.followPathExternals(raws, taken, maxDepth);
     raws.forEach((raw) => this.keyRoot(raw));
     raws.forEach((raw) => this.bindAliases(raw, raws));
     const readables = raws.map((raw) => readableOf(raw));
@@ -3577,6 +3579,70 @@ export class SpecWorkspace {
       this.readRoot(childDir, raw, decl, new Set([...ancestors, chainDirKey(childDir)]), maxDepth, depth + 1, raws, taken);
       raw.memberKeys.set(decl.alias, raws[before].record.namespace);
     }
+  }
+
+  /**
+   * Step 6 (round 9): the path EXTERNALS (`../x`) of every root read so far,
+   * followed exactly like a `../` sibling project member — a node of the scan
+   * read live from its own root, composed live and never through a pin. A git
+   * or hosted external is not read. It runs after every member is followed, so
+   * a folder some root declares as a member is one node, not two; a path
+   * producer's own members and externals are followed in turn.
+   */
+  private followPathExternals(raws: RawRoot[], taken: Set<string>, maxDepth: number): void {
+    // `raws` grows as producers are read: each is visited in its turn.
+    for (let i = 0; i < raws.length; i++) {
+      const raw = raws[i];
+      const depth = this.depthOf(raw, raws);
+      if (depth >= maxDepth) continue;
+      for (const decl of this.pathExternalsOf(raw, raws)) {
+        const childDir = path.resolve(raw.dir, decl.path);
+        const before = raws.length;
+        this.readRoot(childDir, raw, decl, this.ancestorKeysOf(raw, raws, childDir), maxDepth, depth + 1, raws, taken);
+        raw.memberKeys.set(decl.alias, raws[before].record.namespace);
+      }
+    }
+  }
+
+  /** How many roots lie between this one and the bound root. */
+  private depthOf(raw: RawRoot, raws: readonly RawRoot[]): number {
+    let depth = 0;
+    for (let at: RawRoot | undefined = raw; at && at.record.parent !== undefined; depth++) {
+      const parent: string | undefined = at.record.parent;
+      at = raws.find((r) => r.record.namespace === parent);
+    }
+    return depth;
+  }
+
+  /** The directories on the walk from the bound root to this root, and a directory about to be read below it. */
+  private ancestorKeysOf(raw: RawRoot, raws: readonly RawRoot[], below: string): Set<string> {
+    const keys = new Set([chainDirKey(below)]);
+    for (let at: RawRoot | undefined = raw; at; ) {
+      keys.add(chainDirKey(at.dir));
+      const parent: string | undefined = at.record.parent;
+      at = parent === undefined ? undefined : raws.find((r) => r.record.namespace === parent);
+    }
+    return keys;
+  }
+
+  /**
+   * The path externals of a root the scan follows, each as the member
+   * declaration it reads as: usable declarations whose folder exists and is not
+   * already read by this scan. A missing folder is left unread — its
+   * references are judged unavailable (EXTERNAL_CHECK_UNAVAILABLE).
+   */
+  private pathExternalsOf(raw: RawRoot, raws: readonly RawRoot[]): MemberDeclarationRead[] {
+    const config = raw.record.config;
+    if (!config || getHostedLookup() !== null) return [];
+    const out: MemberDeclarationRead[] = [];
+    for (const decl of declaredExternals(config)) {
+      if (decl.problem || decl.sourcePath === undefined || raw.memberKeys.has(decl.alias)) continue;
+      const dir = path.resolve(raw.dir, decl.sourcePath);
+      const key = chainDirKey(dir);
+      if (raws.some((r) => chainDirKey(r.dir) === key) || !ioFiles.exists(dir)) continue;
+      out.push({ alias: decl.alias, path: decl.sourcePath, form: 'members', storage: 'path', source: { path: decl.sourcePath }, use: decl.use, kind: 'project' });
+    }
+    return out;
   }
 
   /**
@@ -4142,7 +4208,8 @@ export class SpecWorkspace {
     for (const [alias, memberKey] of raw.memberKeys) raw.record.aliases.set(alias, memberKey);
     if (!raw.record.config) return;
     for (const decl of declaredExternals(raw.record.config)) {
-      if (decl.problem || raw.record.aliases.has(decl.alias)) continue;
+      // A git or hosted external is never read by the scan: it is judged through its pin, whatever else answers to its id.
+      if (decl.problem || raw.record.aliases.has(decl.alias) || decl.sourceGit !== undefined || decl.sourceHosted !== undefined) continue;
       const others = raws.filter((r) => r !== raw);
       let producer: RawRoot | undefined;
       if (decl.sourcePath !== undefined) {

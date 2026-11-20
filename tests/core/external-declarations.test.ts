@@ -13,7 +13,7 @@ import { declaredExternals, readExternalSource } from '../../src/models/project.
 import { runExternals } from '../../src/commands/externals.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { requiredDataPlaneCapability, toolScope, isExplicitlyClassifiedTool } from '../../src/server/request.js';
-import { buildPathExternalPair, type PathExternalPair } from '../helpers/reference-family.js';
+import { buildGitExternalPair, buildPathExternalPair, type PathExternalPair } from '../helpers/reference-family.js';
 
 // ---------------------------------------------------------------------------
 // Declaring an external is a command (linkage-and-drift D9): `wairon
@@ -40,6 +40,16 @@ afterEach(() => {
 /** The pair with billing declaring nothing yet, bound at billing. */
 function undeclared(): PathExternalPair {
   const p = buildPathExternalPair();
+  cleanups.push(() => p.cleanup());
+  p.setBillingConfig(['id: billing', 'name: Billing']);
+  setProjectRoot(p.billing);
+  invalidateSpecCache();
+  return p;
+}
+
+/** The pair with billing declaring nothing yet, ledger served by a local git repository (approved), bound at billing. */
+function undeclaredGit(): ReturnType<typeof buildGitExternalPair> {
+  const p = buildGitExternalPair();
   cleanups.push(() => p.cleanup());
   p.setBillingConfig(['id: billing', 'name: Billing']);
   setProjectRoot(p.billing);
@@ -95,13 +105,23 @@ describe('external_declarations.declare — refusals, one sentence each, nothing
 });
 
 describe('external_declarations.declare — against the producer', () => {
-  it('declares, checks and pins by default: the reproducible gate exists from the first validate', () => {
+  it('declares, checks and pins a git external by default: the reproducible gate exists from the first validate', () => {
+    const p = undeclaredGit();
+    const answer = declareExternal({ alias: 'ledger', source: p.url, use: ['ledger-portal'] });
+    expect(answer).toMatchObject({ alias: 'ledger', written: true, project: 'ledger', declaration: { source: { git: p.url }, use: ['ledger-portal'] } });
+    expect(answer.pin?.outcome).toBe('pinned');
+    expect(externalsOnDisk(p)).toEqual({ ledger: { source: { git: p.url }, use: ['ledger-portal'] } });
+    expect(externalsRepository.readLock()?.externals.ledger).toBeDefined();
+  });
+
+  it('declares and checks a path external, read live: nothing is pinned, and the lock holds no entry for it', () => {
     const p = undeclared();
     const answer = declareExternal({ alias: 'ledger', source: '../ledger', use: ['ledger-portal'] });
     expect(answer).toMatchObject({ alias: 'ledger', written: true, project: 'ledger', declaration: { source: { path: '../ledger' }, use: ['ledger-portal'] } });
-    expect(answer.pin?.outcome).toBe('pinned');
+    expect(answer.pin?.outcome).toBe('unchanged');
+    expect(answer.pin?.detail).toContain('read live, never pinned');
     expect(externalsOnDisk(p)).toEqual({ ledger: { source: { path: '../ledger' }, use: ['ledger-portal'] } });
-    expect(externalsRepository.readLock()?.externals.ledger).toBeDefined();
+    expect(externalsRepository.readLock()).toBeNull();
   });
 
   it('--no-pin declares only', () => {
@@ -217,7 +237,7 @@ describe('sdd_add_external', () => {
       expect(dry.structuredContent).toMatchObject({ alias: 'ledger', written: false, declaration: { source: { path: '../ledger' } } });
       const added: any = await client.callTool({ name: 'sdd_add_external', arguments: { alias: 'ledger', source: '../ledger' } });
       expect(added.structuredContent).toMatchObject({ alias: 'ledger', written: true, project: 'ledger' });
-      expect(added.structuredContent.pin).toMatchObject({ outcome: 'pinned' });
+      expect(added.structuredContent.pin).toMatchObject({ outcome: 'unchanged' });
     } finally {
       await client.close();
     }
@@ -264,7 +284,7 @@ describe('round 2: exit codes, remove and use through the CLI and MCP', () => {
       expect(refused.isError).toBe(true);
       expect(refused.content[0].text).toMatch(/closest: "ledger-portal"/);
       const removed: any = await client.callTool({ name: 'sdd_remove_external', arguments: { alias: 'ledger' } });
-      expect(removed.structuredContent).toMatchObject({ alias: 'ledger', removed: true, unpinned: true });
+      expect(removed.structuredContent).toMatchObject({ alias: 'ledger', removed: true, unpinned: false });
       expect(externalsOnDisk(p)).toBeUndefined();
       expect(externalsRepository.readSnapshot('ledger')).toBeNull();
     } finally {

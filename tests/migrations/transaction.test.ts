@@ -157,8 +157,8 @@ describe('stage 6 — the family transaction', () => {
       '.|create|.wai/specs/new/deep/c.yaml',
       `${path.join('packages', 'm1')}|delete|.wai/specs/only/y.yaml`,
       `${path.join('packages', 'm1')}|write|.wai/specs/x.yaml`,
-      `${path.join('packages', 'm2')}|create|.wai/inputs.lock.yaml`,
       `${path.join('packages', 'm2')}|create|.wai/externals/p.yaml`,
+      `${path.join('packages', 'm2')}|create|.wai/inputs.lock.yaml`,
     ]);
     // A plan writes nothing into the family.
     expect(transactionDirsLeft(f)).toEqual([]);

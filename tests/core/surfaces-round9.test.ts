@@ -12,6 +12,7 @@ import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import { canonicalTypeRef, carriedFactChanges, relationHealth, surfaceChanges, SurfaceSnapshotSchema, type SurfaceSnapshot } from '../../src/models/index.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness';
 import { projectYaml } from '../helpers/conformance-r6-trees';
+import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // Round-9 sandbox trials — surfaces, externals, members and the OpenAPI
@@ -20,9 +21,13 @@ import { projectYaml } from '../helpers/conformance-r6-trees';
 
 const NOW = '2026-10-09T10:00:00.000Z';
 const roots: string[] = [];
+const cleanups: (() => void)[] = [];
 afterEach(() => {
   setProjectRoot(null);
   invalidateSpecCache();
+  for (const c of cleanups.splice(0)) {
+    try { c(); } catch { /* windows locks */ }
+  }
   for (const dir of roots.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* windows locks */ }
   }
@@ -193,20 +198,24 @@ function moveRoute(producer: string, from: string, to: string | null): void {
 // ---------------------------------------------------------------------------
 
 describe('1. a used verb\'s route moving reaches the consumer', () => {
-  function pinnedPair(): { producer: string; consumer: string } {
+  /** The dashboard pinned against linkshort, a git external served by a local repository: the kind of external a pin judges. */
+  function pinnedPair(): { producer: string; consumer: string; release(): void } {
     const folder = tempDir();
+    cleanups.push(isolateGlobals(cleanups));
     const producer = writeProject(path.join(folder, 'linkshort'), statsApi(), projectYaml('linkshort'));
-    const consumer = writeProject(path.join(folder, 'dashboard'), dashboard(), projectYaml('dashboard', { externals: { linkshort: { project: 'linkshort', source: { path: '../linkshort' } } } }));
+    const served = serveGit(cleanups, producer, 'linkshort');
+    const consumer = writeProject(path.join(folder, 'dashboard'), dashboard(), projectYaml('dashboard', { externals: { linkshort: { project: 'linkshort', source: { git: served.url } } } }));
     bind(consumer);
     expect(pinExternals().map((p) => p.outcome)).toEqual(['pinned']);
-    return { producer, consumer };
+    return { producer, consumer, release: () => { served.release(); } };
   }
 
   // Round 11 (solo-app top-3): a moved route is a BREAK for the client that
   // calls it over the wire — changed, incompatible — no longer a drift.
-  it('a moved path breaks the use, names the route on the use and in the advisory — and the re-pin says what moved', () => {
-    const { producer, consumer } = pinnedPair();
+  it('a moved path breaks the use and names the route on it — and the re-pin says what moved', () => {
+    const { producer, consumer, release } = pinnedPair();
     moveRoute(producer, '/stats/{shortCode}', '/v2/stats/{shortCode}');
+    release();
     bind(consumer);
     const [status] = getExternalsStatus();
     expect(status.uses).toEqual([{ publicName: 'stats_portal', member: 'getStats', state: 'changed', detail: expect.stringContaining('endpoint moved: GET /stats/{shortCode} → GET /v2/stats/{shortCode}') }]);
@@ -214,9 +223,8 @@ describe('1. a used verb\'s route moving reaches the consumer', () => {
     expect(status.staleFacts).toContain('endpoint of stats_portal.getStats (GET /stats/{shortCode} → GET /v2/stats/{shortCode})');
     expect(relationHealth(status)).toBe('incompatible');
     bind(consumer);
-    const advised = adviseExternals();
-    expect(advised.map((i) => i.code)).toEqual(['EXTERNAL_LIVE_INCOMPATIBLE']);
-    expect(advised[0].message).toContain('"stats_portal.getStats" changed since it was pinned: endpoint moved: GET /stats/{shortCode} → GET /v2/stats/{shortCode}');
+    // Offline, a pinned git external is not compared: the advisory says so.
+    expect(adviseExternals().map((i) => i.code)).toEqual(['EXTERNAL_LIVE_UNCOMPARED']);
     // The re-pin rewrites the route with a word, never silently (round 9: "pinned 1 used name(s)").
     bind(consumer);
     const [pin] = pinExternals();
@@ -226,16 +234,18 @@ describe('1. a used verb\'s route moving reaches the consumer', () => {
   });
 
   it('a verb stating a new status moves the route too', () => {
-    const { producer, consumer } = pinnedPair();
+    const { producer, consumer, release } = pinnedPair();
     moveRoute(producer, '/stats/{shortCode}', '/stats/{shortCode}\n      status: 203');
+    release();
     bind(consumer);
     const [status] = getExternalsStatus();
     expect(status.uses[0].detail).toContain('endpoint moved: GET /stats/{shortCode} → GET /stats/{shortCode} (answers 203)');
   });
 
   it('a route removed is a break: the use is changed and the relation incompatible', () => {
-    const { producer, consumer } = pinnedPair();
+    const { producer, consumer, release } = pinnedPair();
     moveRoute(producer, '/stats/{shortCode}', null);
+    release();
     bind(consumer);
     const [status] = getExternalsStatus();
     expect(status.uses[0]).toMatchObject({ state: 'changed', detail: expect.stringContaining('endpoint GET /stats/{shortCode} removed') });

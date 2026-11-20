@@ -38,6 +38,9 @@ function dump(spec: Record<string, unknown>): string {
   return yaml.dump({ schemaVersion: '1.0.0', createdAt: TS, updatedAt: TS, ...spec }, { noRefs: true, lineWidth: 200 });
 }
 
+/** Billing as a git external — the form of external a pin judges. */
+const BILLING_GIT = { source: 'https://example.invalid/billing.git' };
+
 /** A project.yaml with the identity, externals and members a scenario sets. */
 function projectYaml(identity: { id?: string; name: string }, externals?: Record<string, unknown>, members?: Record<string, unknown>): string {
   return dump({
@@ -174,8 +177,8 @@ export default [
     code: 'EXTERNAL_UNDECLARED',
     expectFire: false,
     reason: 'Dispatch declares billing under `externals`, so the sibling reference is a declared dependency (judged against its pin).',
-    scenario: 'The dispatch member declares `externals: { billing: {} }`, pins it, and its route planner depends on billing\'s exported invoicing portal.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing', fromDispatch: true, dispatchPin: true }),
+    scenario: 'The dispatch member declares billing as a git external, pins it, and its route planner depends on billing\'s exported invoicing portal.',
+    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: BILLING_GIT }, plannerDependsOn: 'billing::invoicing', fromDispatch: true, dispatchPin: true }),
   }),
 
   // -------------------------------------------------------------------------
@@ -195,7 +198,7 @@ export default [
     anchoredTo: 'route-planner',
     expectFire: true,
     scenario: 'Judged by its own gate against its pin of billing, the dispatch route planner depends on `billing::invoice-portal`, a name the pinned billing contract does not export.',
-    tree: fleet({ dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoice-portal', fromDispatch: true, dispatchPin: true }),
+    tree: fleet({ dispatchExternals: { billing: BILLING_GIT }, plannerDependsOn: 'billing::invoice-portal', fromDispatch: true, dispatchPin: true }),
   }),
   defineRuleFixture({
     code: 'EXTERNAL_NOT_EXPORTED',
@@ -247,8 +250,8 @@ export default [
     code: 'EXTERNAL_UNRESOLVED',
     expectFire: false,
     reason: 'Dispatch holds a pin for its declared external billing, which is what its own gate judges against: nothing is climbed to find the producer.',
-    scenario: 'Judged by its own gate, the dispatch member declares `externals: { billing: {} }` and holds billing\'s pin.',
-    tree: fleet({ dispatchExternals: { billing: {} }, fromDispatch: true, dispatchPin: true }),
+    scenario: 'Judged by its own gate, the dispatch member declares billing as a git external and holds billing\'s pin.',
+    tree: fleet({ dispatchExternals: { billing: BILLING_GIT }, fromDispatch: true, dispatchPin: true }),
   }),
 
   // -------------------------------------------------------------------------

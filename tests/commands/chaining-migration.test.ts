@@ -237,8 +237,12 @@ describe('stage 2c — the chaining migration', () => {
     const report = at(f.root, () => apply(plan()));
     const after = at(f.root, () => validateProject());
     expect(codesOf(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXPORT_INVALID')).toEqual([]);
-    // The same verdict from the child.
-    expect(codesOf(at(f.dispatch, () => validateProject()), 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
+    // From the child: its references are declared and exported; with nothing above its root read and no pin, they stay unavailable — never a pass.
+    const fromChild = at(f.dispatch, () => validateProject());
+    expect(codesOf(fromChild, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+    expect(codesOf(fromChild, 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([
+      'EXTERNAL_CHECK_UNAVAILABLE @iroute-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner', 'EXTERNAL_CHECK_UNAVAILABLE @route-planner-impl',
+    ]);
     // Written in order: ids, L0 specs, externals; the producers' and the consumer's locks are stale.
     const rel = report.written.map((w) => path.relative(f.root, w).split(path.sep).join('/'));
     expect(rel).toEqual([
@@ -248,8 +252,7 @@ describe('stage 2c — the chaining migration', () => {
       '.wai/specs: subsystem billing', '.wai/specs: subsystem dispatch',
       'packages/dispatch/.wai/specs: interface iroute-planner', 'packages/dispatch/.wai/specs: component route-planner',
       'packages/dispatch/.wai/specs: implementation route-planner-impl',
-      // Pins LAST, projected from the final spelling (stage 4).
-      'packages/dispatch/.wai/externals/billing.yaml', 'packages/dispatch/.wai/inputs.lock.yaml', 'packages/dispatch/.wai/externals/fleetworks.yaml',
+      // No pins: a family external is read live where its producer is stored.
     ]);
     // A raw position is rewritten too: the parameter type and the display signature beside it.
     const contract = fs.readFileSync(path.join(f.dispatch, '.wai', 'specs', 'interfaces', 'iroute-planner.yaml'), 'utf8');
@@ -337,7 +340,7 @@ describe('stage 2c — the chaining migration', () => {
     expect(planned.projects.find((p) => p.project === 'dispatch-service')?.externals.map((e) => e.alias)).toEqual(['billing', 'fleetworks']);
   });
 
-  it('converts a member\'s stage-1 family pin to an external and deletes every family pin once the external is pinned', () => {
+  it('converts a member\'s stage-1 family pin to an external and deletes every family pin: the external is read live, never pinned', () => {
     const f = family();
     // The pins `surface pin` once wrote (stage 3 retired the writer): the parent's family surface and two siblings'.
     const pin = (projectName: string): string => runWithProjectRoot(f.billing, () => surfaceRepository.saveSnapshot(SurfaceSnapshotSchema.parse({
@@ -351,7 +354,7 @@ describe('stage 2c — the chaining migration', () => {
     expect(billing.supersededPins).toEqual(['FleetWorks', 'FleetWorks::dispatch', 'FleetWorks::operations']);
     at(f.root, () => apply(planned));
     for (const file of pinned) expect(fs.existsSync(file)).toBe(false);
-    expect(fs.existsSync(path.join(f.billing, '.wai', 'externals', 'fleetworks.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(f.billing, '.wai', 'externals', 'fleetworks.yaml'))).toBe(false);
     expect(isEmpty(at(f.root, () => plan()))).toBe(true);
   });
 });

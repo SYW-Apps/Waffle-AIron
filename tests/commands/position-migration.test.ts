@@ -138,19 +138,17 @@ describe('stage 3 — the position migration over the reference family', () => {
       '.wai/specs: subsystem shared',
       '.wai/specs: component app-worker',
       'core/transpiler/.wai/specs: component lowering-core',
-      // Pins LAST (stage 4): the external the migration declares, and core's
-      // `shared` and shared's `core`, declared before it ran and never pinned.
-      'core/.wai/externals/shared.yaml',
-      'core/.wai/inputs.lock.yaml',
-      'core/transpiler/.wai/externals/core.yaml',
-      'core/transpiler/.wai/inputs.lock.yaml',
-      'shared/.wai/externals/core.yaml',
-      'shared/.wai/inputs.lock.yaml',
+      // No pins: a family external is read live where its producer is stored, never pinned.
     ]);
-    for (const root of [f.top, f.core, f.transpiler, f.shared]) {
+    // Every migrated reference is declared and exported. A member that declares its parent or a sibling with no `source`
+    // cannot resolve it from its own root (nothing above it is read, nothing is pinned): that is all that is left.
+    const unresolved: Record<string, string[]> = {};
+    for (const [name, root] of [['top', f.top], ['core', f.core], ['transpiler', f.transpiler], ['shared', f.shared]] as const) {
       const after = at(root, () => validateProject());
-      expect(codes(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNRESOLVED')).toEqual([]);
+      expect(codes(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
+      unresolved[name] = codes(after, 'EXTERNAL_UNRESOLVED');
     }
+    expect(unresolved).toEqual({ top: [], core: ['EXTERNAL_UNRESOLVED @-'], transpiler: ['EXTERNAL_UNRESOLVED @-'], shared: ['EXTERNAL_UNRESOLVED @-'] });
     // The member entry carries the mount's description; no L1 document is left.
     const members = (yaml.load(fs.readFileSync(path.join(f.top, '.wai', 'project.yaml'), 'utf8')) as { members: unknown }).members;
     expect(members).toEqual({ core: 'core', shared: { source: 'shared', description: 'The vocabulary every project speaks' } });
@@ -265,7 +263,7 @@ describe('stage 3 — the wave-B follow-ups', () => {
     const ops = path.join(root, 'packages', 'ops');
     fs.mkdirSync(path.join(ops, '.wai', 'specs'), { recursive: true });
     writeYamlFile(path.join(ops, '.wai', 'project.yaml'), {
-      schemaVersion: '1.0.0', id: 'ops', name: 'ops', targets: [], externals: { core: {} }, createdAt: now, updatedAt: now,
+      schemaVersion: '1.0.0', id: 'ops', name: 'ops', targets: [], externals: { core: { source: { path: '../core' } } }, createdAt: now, updatedAt: now,
     });
     runWithProjectRoot(ops, () => {
       saveSystemSpec({ schemaVersion: '1.0.0', name: 'ops', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now } as never);
@@ -288,29 +286,29 @@ describe('stage 3 — the wave-B follow-ups', () => {
     expect(planned.edits.map((e) => `${e.project}|${e.kind}`)).toEqual(['ops|external', '|move', 'ops|pin', 'core|delete']);
     expect(at(root, () => familyMigrations.apply(planned)).applied).toBe(true);
     expect(projectConfigRepositoryAt(root).load()?.members).toEqual({ ops: 'packages/ops' });
-    expect(projectConfigRepositoryAt(ops).load()?.externals).toEqual({ core: { project: 'fleet' } });
+    expect(projectConfigRepositoryAt(ops).load()?.externals).toEqual({ core: { project: 'fleet', source: { path: '../..' } } });
     // ops' `core::core_portal` now binds the parent's export (its exports completed with the name ops used), re-pinned: still clean.
     expect(crossing()).toEqual([]);
   });
 
-  it('follow-up (c): a member declaring its parent or a sibling is clean from its own root; only what neither the scan nor the climb finds is EXTERNAL_UNRESOLVED', () => {
+  it('follow-up (c): a member declaring its parent or a sibling with no source holds no pin and reads nothing above its root: each is EXTERNAL_UNRESOLVED from its own root, as a misspelled one is', () => {
     family = buildReferenceFamily();
     const f = family;
     at(f.top, () => apply(plan()));
     // transpiler declares its parent core, shared declares its sibling core: each producer lies above its
-    // root, so its own gate judges it against its pin (stage 4) — and the migration pinned both, the one
-    // shared declared before it ran included.
-    for (const root of [f.transpiler, f.shared]) expect(codes(at(root, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual([]);
+    // root, which the scan never reads (stage 4), and a family external is read live, never pinned: with no
+    // `source` there is nothing its own gate can resolve the declaration against.
+    for (const root of [f.transpiler, f.shared]) expect(codes(at(root, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-']);
     // A misspelled declaration is still reported from the member's own root …
     runWithProjectRoot(f.shared, () => projectConfigRepository.declareExternal('nowhere', {}));
-    expect(codes(at(f.shared, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-']);
+    expect(codes(at(f.shared, () => validateProject()), 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-', 'EXTERNAL_UNRESOLVED @-']);
     // … and a request that may not read above its root cannot climb: its own scan's verdict stands.
     const narrowed = runWithProjectBinding(f.transpiler, { topRoot: f.transpiler, parentReach: false }, () => {
       invalidateSpecCache();
       return validateProject();
     });
-    // Stage 4: the pin is what it is judged against, so the reach changes nothing.
-    expect(codes(narrowed, 'EXTERNAL_UNRESOLVED')).toEqual([]);
+    // Stage 4: the reach changes nothing — the same verdict as the plain run.
+    expect(codes(narrowed, 'EXTERNAL_UNRESOLVED')).toEqual(['EXTERNAL_UNRESOLVED @-']);
   });
 });
 

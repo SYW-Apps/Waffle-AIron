@@ -26,8 +26,9 @@ afterEach(async () => {
   }
 });
 
-function contractFamily(): ContractFamily {
-  const f = buildContractFamily();
+/** The contract family; with `git`, billing's external for ledger is a pinned git one (ledger released through a local repository). */
+function contractFamily(git = false): ContractFamily {
+  const f = buildContractFamily({ git });
   cleanups.push(() => f.cleanup());
   return f;
 }
@@ -84,11 +85,24 @@ describe('wairon validate', () => {
     const composed = await validateAt(f.billing, { family: true });
     expect(composed.out).toMatch(/\[billing \(bound\)\] \[EXTERNAL_INCOMPATIBLE\]/);
     expect(composed.failed).toBe(true);
-    // --no-recursive: the owner's gate alone, judged against the pin, and the hint names the plain run that composes.
+    // --no-recursive: the owner's gate alone.
+    const own = await validateAt(f.billing, { recursive: false });
+    expect(own.out).not.toContain('Per project');
+  });
+
+  it('--no-recursive at a member with a pinned git external: the owner\'s gate alone, judged against the pin, and the hint names the plain run that composes it', async () => {
+    const f = contractFamily(true);
+    bind(f.billing);
+    pinExternals();
+    f.setLedgerContract('record');
     const own = await validateAt(f.billing, { recursive: false });
     expect(own.out).not.toContain('Per project');
     expect(own.out).toMatch(/judged against its pin alone; the advisory live comparison reads its live producer \(offline\); `wairon validate` without `--no-recursive` composes it/);
     expect(own.out).not.toContain('--family');
+    // Plain validate composes the git producer live, so the break shows as an error naming the re-pin.
+    const plain = await validateAt(f.billing);
+    expect(plain.out).toMatch(/\[EXTERNAL_INCOMPATIBLE\]/);
+    expect(plain.failed).toBe(true);
   });
 
   it('--ci fails on an unwaived warning of the family run, as it does on the owner\'s gate', async () => {
@@ -129,7 +143,6 @@ describe('sdd_validate_tree', () => {
     bind(f.billing);
     const ownGate = (await client.callTool({ name: 'sdd_validate_tree', arguments: { recursive: false } })).structuredContent as Record<string, any>;
     expect(ownGate.projects).toBeUndefined();
-    expect(ownGate.hint).toMatch(/`wairon validate` without `--no-recursive` composes/);
     bind(f.billing);
     const withFamily = (await client.callTool({ name: 'sdd_validate_tree', arguments: { family: true } })).structuredContent as Record<string, any>;
     expect(withFamily.projects.map((p: { key: string }) => p.key)).toEqual(['']);

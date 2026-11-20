@@ -10,7 +10,7 @@ import { buildCanvasModel, type CanvasModel } from '../../src/core/canvas.js';
 import { runDiagram } from '../../src/commands/diagram.js';
 import { relationHealth, type ExternalStatus, type ProjectRelations } from '../../src/models/index.js';
 import {
-  tempDir, isolateGlobals, bareFrom, pushChange, component, writeLedger, renameLedgerMethod, writeShop,
+  tempDir, isolateGlobals, bareFrom, pushChange, approveAt, component, writeLedger, renameLedgerMethod, writeShop,
 } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
@@ -157,7 +157,7 @@ describe('family_validator.relations — a contained project member', () => {
 });
 
 describe('a declared external that is no project of the family', () => {
-  it('is drawn as an external project node its consumption edge lands on, with the relation\'s health', () => {
+  it('a path external is drawn as a project node of the family, read live: its consumption edge lands on it, with the relation\'s health', () => {
     const base = tempDir(cleanups, 'wairon-rh-ext-');
     writeLedger(path.join(base, 'ledger'));
     const shop = path.join(base, 'shop');
@@ -166,9 +166,9 @@ describe('a declared external that is no project of the family', () => {
     pinExternals();
     const { model } = canvasAt(shop);
     const node = model.subsystems.find((s) => s.id === 'ledger');
-    expect(node).toMatchObject({ project: true, external: true, storage: '../ledger' });
+    expect(node).toMatchObject({ project: true, storage: '../ledger' });
     const { edge, relation } = checkoutRelation(model);
-    expect(edge.to).toBe('ledger');
+    expect(edge.to).toBe('ledger::ledger-portal');
     expect(relation.health, JSON.stringify(relation)).toBe('ok');
   });
 
@@ -237,6 +237,8 @@ describe('hosted: a `source.hosted` producer resolves through the caller record 
     writeLedger(ledger);
     const shop = path.join(base, 'shop');
     writeShop(shop, { externals: { ledger: { source: { hosted: 'ledger-rec' } } } });
+    // A pin is taken from the producer's approved state.
+    approveAt(ledger);
     expect(hosted(shop, ledger, true, () => pinExternals())[0]).toMatchObject({ alias: 'ledger', outcome: 'pinned' });
     const externalCodes = (r: ReturnType<typeof validateFamily>): string[] => r.issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code);
 

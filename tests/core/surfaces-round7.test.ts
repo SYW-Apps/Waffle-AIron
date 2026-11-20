@@ -14,7 +14,7 @@ import { renameField, renameParam } from '../../src/core/provision.js';
 import { narrowedToUses, surfaceChanges, SurfaceSnapshotSchema, type SurfaceSnapshot } from '../../src/models/index.js';
 import { createMember } from '../../src/core/index.js';
 import { fromOpenApi, toOpenApiSet } from '../../src/core/openapi.js';
-import { isolateGlobals, bareFrom, writeLedger, writeShop, tempDir as stage8TempDir, system as stage8System, projectYaml as stage8ProjectYaml } from '../helpers/stage8-family.js';
+import { isolateGlobals, bareFrom, serveGit, writeLedger, writeShop, tempDir as stage8TempDir, system as stage8System, projectYaml as stage8ProjectYaml } from '../helpers/stage8-family.js';
 import type { ComponentSpec, ExternalConsumer, SubsystemSpec, TypeSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -25,9 +25,14 @@ import type { ComponentSpec, ExternalConsumer, SubsystemSpec, TypeSpec } from '.
 // ---------------------------------------------------------------------------
 
 const roots: string[] = [];
+/** What a test served from a local git repository must undo (the redirected globals, the repositories). */
+const served: (() => void)[] = [];
 afterEach(() => {
   setProjectRoot(null);
   invalidateSpecCache();
+  for (const c of served.splice(0)) {
+    try { c(); } catch { /* windows locks */ }
+  }
   for (const dir of roots.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* windows locks */ }
   }
@@ -62,18 +67,22 @@ describe('pin: a verb the producer removed is carried as retired, and a binding 
     const root = tempDir();
     const geo = path.join(root, 'geo');
     const studio = path.join(root, 'route-planner');
+    served.push(isolateGlobals(served));
     materialize(geo, geoKitWithVincenty());
     fs.writeFileSync(path.join(geo, '.wai', 'project.yaml'), projectYaml('geo-kit'));
+    // GeoKit is a git external, served by a local repository (approved): the kind of external a pin judges.
+    const geoRepo = serveGit(served, geo, 'geo');
     const planner = routePlanner('stops: Coordinate[]');
     planner.implementations = planner.implementations!.map((impl) => ({ ...impl, bindings: ['src/geo-binding.ts'] }));
     materialize(studio, planner);
     fs.writeFileSync(path.join(studio, 'src', 'geo-binding.ts'), 'export interface Coordinate { lat: number; lon: number }\nexport function haversine(from: Coordinate, to: Coordinate): number;\nexport function vincenty(from: Coordinate, to: Coordinate): number;\n');
-    fs.writeFileSync(path.join(studio, '.wai', 'project.yaml'), projectYaml('route-planner', { externals: { geo: { source: { path: '../geo' } } } }));
+    fs.writeFileSync(path.join(studio, '.wai', 'project.yaml'), projectYaml('route-planner', { externals: { geo: { source: { git: geoRepo.url } } } }));
     setProjectRoot(studio);
     invalidateSpecCache();
     pinExternals();
-    // GeoKit drops vincenty; the consumer re-pins.
+    // GeoKit drops vincenty in a release; the consumer re-pins.
     materialize(geo, geoKit());
+    geoRepo.release();
     invalidateSpecCache();
     pinExternals();
     invalidateSpecCache();
@@ -274,8 +283,10 @@ describe('3d. externals status says what moved with a renamed method', () => {
     const root = tempDir();
     const geo = path.join(root, 'geo');
     const studio = path.join(root, 'route-planner');
+    served.push(isolateGlobals(served));
     materialize(geo, geoKit());
     fs.writeFileSync(path.join(geo, '.wai', 'project.yaml'), projectYaml('geo-kit'));
+    const geoRepo = serveGit(served, geo, 'geo');
     const planner = routePlanner('stops: Coordinate[]');
     planner.components = planner.components!.map((c) => ({ ...c, dependsOn: ['geo::distance_library'] }));
     planner.implementations = planner.implementations!.map((impl) => ({
@@ -283,7 +294,7 @@ describe('3d. externals status says what moved with a renamed method', () => {
       methods: [{ name: 'sequence', detail: 'intent', intent: 'Orders the stops nearest-neighbour first by great-circle distance and answers the number of legs.', calls: ['geo::distance_library.haversine'] }],
     }));
     materialize(studio, planner);
-    fs.writeFileSync(path.join(studio, '.wai', 'project.yaml'), projectYaml('route-planner', { externals: { geo: { source: { path: '../geo' } } } }));
+    fs.writeFileSync(path.join(studio, '.wai', 'project.yaml'), projectYaml('route-planner', { externals: { geo: { source: { git: geoRepo.url } } } }));
     setProjectRoot(studio);
     invalidateSpecCache();
     pinExternals();
@@ -295,8 +306,9 @@ describe('3d. externals status says what moved with a renamed method', () => {
     }));
     renamed.types = renamed.types!.map((t) => ({ ...t, fields: [{ name: 'latitude', type: 'float', previousNames: ['lat'] }, { name: 'lon', type: 'float' }] }));
     materialize(geo, renamed);
+    geoRepo.release();
     invalidateSpecCache();
-    const [status] = getExternalsStatus(true);
+    const [status] = getExternalsStatus();
     const use = status.uses.find((u) => u.member === 'haversine');
     expect(use?.state).toBe('renamed');
     expect(use?.detail).toContain('parameter "from" renamed to "origin"');

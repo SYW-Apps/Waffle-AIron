@@ -17,13 +17,18 @@ import { provisionProject } from '../../src/core/provision.js';
 import { pinExternals } from '../../src/core/surfaces.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
+import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
 
 type ToolResult = { isError?: boolean; content?: { type: string; text?: string }[]; structuredContent?: Record<string, unknown> };
 
 const roots: string[] = [];
 const clients: Client[] = [];
+const cleanups: (() => void)[] = [];
 afterEach(async () => {
   for (const c of clients.splice(0)) await c.close();
+  for (const c of cleanups.splice(0).reverse()) {
+    try { c(); } catch { /* windows file locks */ }
+  }
   setProjectRoot(null);
   invalidateSpecCache();
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
@@ -75,14 +80,15 @@ function calProject(dir: string): string {
   }, 'cal-lib');
 }
 
-/** habits: consumes cal as the external `ext`, and holds a member `legacy` (a project) under vendor/legacy. */
+/** habits: consumes cal as the git external `ext` (served by a local repository, pinned), and holds a member `legacy` (a project) under vendor/legacy. */
 function habits(base: string): string {
-  calProject(path.join(base, 'cal'));
+  cleanups.push(isolateGlobals(cleanups));
+  const served = serveGit(cleanups, calProject(path.join(base, 'cal')), 'cal');
   const app = project(path.join(base, 'habits'), {
     system: { name: 'habits', vision: 'Habits.', targetLanguage: 'TypeScript' },
     subsystems: [{ id: 'habit', status: 'complete' }],
     components: [{ id: 'habit_flow', subsystem: 'habit', componentType: 'Orchestrator', status: 'complete' }],
-  }, 'habits', { externals: { ext: { project: 'cal-lib', source: { path: '../cal' } } }, members: { legacy: 'vendor/legacy' } });
+  }, 'habits', { externals: { ext: { project: 'cal-lib', source: { git: served.url } } }, members: { legacy: 'vendor/legacy' } });
   project(path.join(app, 'vendor', 'legacy'), {
     system: { name: 'legacy-api', vision: 'The old API.', targetLanguage: 'TypeScript', publicInterfaces: [{ from: 'old', component: 'habit_portal', audience: 'project' }] },
     subsystems: [{ id: 'old', status: 'complete', publicInterfaces: [{ component: 'habit_portal', details: 'Habits.' }] }],

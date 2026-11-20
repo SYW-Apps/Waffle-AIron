@@ -23,6 +23,7 @@ import { consumerReaches, surfaceChanges, type ExternalConsumer, type SurfaceSna
 import type { ReachModel } from '../../src/models/reach.js';
 import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 import { platformFamily } from '../helpers/network-family.js';
+import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // Round-4 trial fixes in approval, migrations, externals/surfaces and
@@ -33,10 +34,17 @@ import { platformFamily } from '../helpers/network-family.js';
 
 const TS = '2026-01-01T00:00:00.000Z';
 const roots: string[] = [];
+const cleanups: (() => void)[] = [];
+/** The producers served by a local git repository, by folder: what releases a change to one. */
+const released = new Map<string, () => string>();
 
 afterEach(() => {
   setProjectRoot(null);
   invalidateSpecCache();
+  released.clear();
+  for (const c of cleanups.splice(0).reverse()) {
+    try { c(); } catch { /* windows locks */ }
+  }
   for (const dir of roots.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* windows locks */ }
   }
@@ -45,6 +53,14 @@ afterEach(() => {
 function bind(dir: string): void {
   setProjectRoot(dir);
   invalidateSpecCache();
+}
+
+/** GeoKit served by a local git repository (approved): the kind of external a pin judges; returns the external's declaration. */
+function served(geo: string): Record<string, unknown> {
+  cleanups.push(isolateGlobals(cleanups));
+  const repo = serveGit(cleanups, geo, 'geo');
+  released.set(geo, repo.release);
+  return { geo: { source: { git: repo.url } } };
 }
 
 function tmp(prefix: string): string {
@@ -207,7 +223,7 @@ describe('3 — uses a pin does not record', () => {
   function pairWithZeroUsePin(): { geo: string; studio: string } {
     const folder = tmp('unrecorded');
     const geo = project(path.join(folder, 'geo'), 'geo', geoKit());
-    const studio = project(path.join(folder, 'studio'), 'studio', tileStudio({ usesGeo: false }), { externals: { geo: { source: '../geo' } } });
+    const studio = project(path.join(folder, 'studio'), 'studio', tileStudio({ usesGeo: false }), { externals: served(geo) });
     bind(studio);
     expect(pinExternals(['geo'])[0].outcome).toBe('pinned');
     // The references come after the pin, which records none of them.
@@ -373,7 +389,7 @@ describe('8 — implements, alias forms, dry runs, duplicated statuses', () => {
   function pinnedPair(studio: FixtureTree): { geo: string; studio: string } {
     const folder = tmp('pair');
     const geo = project(path.join(folder, 'geo'), 'geo', geoKit());
-    const consumer = project(path.join(folder, 'studio'), 'studio', studio, { externals: { geo: { source: '../geo' } } });
+    const consumer = project(path.join(folder, 'studio'), 'studio', studio, { externals: served(geo) });
     bind(consumer);
     expect(pinExternals(['geo'])[0].outcome).toBe('pinned');
     invalidateSpecCache();
@@ -415,6 +431,7 @@ describe('8 — implements, alias forms, dry runs, duplicated statuses', () => {
     fs.rmSync(path.join(geo, '.wai', 'specs'), { recursive: true, force: true });
     materializeFixtureProject(path.join(path.dirname(geo), 'geo-v2'), geoKit({ renamedType: true }));
     fs.renameSync(path.join(path.dirname(geo), 'geo-v2', '.wai', 'specs'), path.join(geo, '.wai', 'specs'));
+    released.get(geo)!();
     invalidateSpecCache();
     const status = getExternalsStatus().find((s) => s.alias === 'geo')!;
     const keyed = status.uses.filter((u) => u.publicName === 'tile-key');

@@ -11,6 +11,7 @@ import {
   TypeSpecSchema,
 } from '../../src/models/index.js';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+import { bareFrom, isolateGlobals, pushChange, serveGit } from './stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // The reference family: Waffler's shape in miniature, on disk, for stage 3's
@@ -225,6 +226,12 @@ export interface ImportFamily {
   addTopType(id: string, fields: { name: string; type: string }[]): void;
   /** Rewrite a field type of shared's `host-record` (a reference inside the producer). */
   setSharedRecordField(type: string): void;
+  /**
+   * Serve shared as a GIT external — an approved local repository, its exports at the audience such an
+   * external reads at — and answer its URL and the release of a later change (a path or id sibling is read
+   * live and never pinned). HOME and the fetch cache are redirected until `cleanup`.
+   */
+  serveShared(): { url: string; release(): void };
   cleanup(): void;
 }
 
@@ -260,6 +267,7 @@ export function buildImportFamily(): ImportFamily {
   subsystem(app, 'App', 'screens');
   type(specs(app, 'types', 'screen-state.yaml'), 'screen-state', [{ name: 'error', type: 'WafflerError' }, { name: 'record', type: 'shared::host-record' }]);
 
+  const cleanups: (() => void)[] = [];
   const rewriteConfig = (dir: string, lines: string[]): void => projectYaml(dir, lines);
   const yamlBlock = (key: string, value: Record<string, unknown>): string[] => {
     const out = [`${key}:`];
@@ -274,7 +282,21 @@ export function buildImportFamily(): ImportFamily {
     setAppExternals: (e) => rewriteConfig(app, ['id: app', 'name: App', ...yamlBlock('externals', e)]),
     addTopType: (id, fields) => type(specs(top, 'types', `${id}.yaml`), id, fields),
     setSharedRecordField: (t) => type(specs(shared, 'types', 'host-record.yaml'), 'host-record', [{ name: 'index', type: t }]),
-    cleanup: () => fs.rmSync(top, { recursive: true, force: true }),
+    serveShared: () => {
+      cleanups.push(isolateGlobals(cleanups));
+      system(shared, 'Shared', [
+        { typeDef: 'waffler-error', audience: 'instance' },
+        { typeDef: 'index-value', audience: 'instance' },
+        { typeDef: 'host-record', audience: 'instance' },
+      ]);
+      return serveGit(cleanups, shared, 'shared');
+    },
+    cleanup: () => {
+      for (const c of cleanups.splice(0).reverse()) {
+        try { c(); } catch { /* windows file locks */ }
+      }
+      fs.rmSync(top, { recursive: true, force: true });
+    },
   };
 }
 
@@ -302,11 +324,19 @@ export interface ContractFamily {
   setLedgerContract(postName: string, balanceReturns?: string): void;
   /** Rewrite a member's project.yaml (lines between the schema version and the targets). */
   setConfig(dir: string, lines: string[]): void;
+  /** The `externals:` lines of billing's project.yaml: how it declares ledger. */
+  externalLines: string[];
   cleanup(): void;
 }
 
-/** Build the contract family in a fresh temp directory. */
-export function buildContractFamily(): ContractFamily {
+/**
+ * Build the contract family in a fresh temp directory. By default billing finds
+ * ledger by its id in the family: read live, never pinned. With `git`, billing
+ * declares ledger as a GIT external served by a local repository (ledger
+ * exports at the audience such an external reads at; every `setLedgerContract`
+ * is approved, committed and pushed): the kind of external a pin judges.
+ */
+export function buildContractFamily(options: { git?: boolean } = {}): ContractFamily {
   const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ctfam-'));
   const ledger = path.join(top, 'ledger');
   const billing = path.join(top, 'billing');
@@ -316,17 +346,30 @@ export function buildContractFamily(): ContractFamily {
   subsystem(top, 'House', 'front');
 
   projectYaml(ledger, ['id: ledger', 'name: Ledger']);
-  system(ledger, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: 'project' }]);
+  system(ledger, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: options.git ? 'instance' : 'project' }]);
   subsystem(ledger, 'Ledger', 'books', { publicInterfaces: [{ details: 'The ledger surface', component: 'ledger-portal' }] });
   component(ledger, 'books', 'ledger-portal', 'Portal');
-  const setLedgerContract = (postName: string, balanceReturns = 'number'): void => contract(ledger, 'books', 'ledger-portal', [
+  const writeLedgerContract = (postName: string, balanceReturns = 'number'): void => contract(ledger, 'books', 'ledger-portal', [
     { name: postName, description: 'Post an amount', signature: `${postName}(amount: number): void`, returns: 'void',
       params: [{ name: 'amount', type: 'number', description: 'The amount' }] },
     { name: 'balance', description: 'The balance', signature: `balance(): ${balanceReturns}`, returns: balanceReturns, params: [] },
   ]);
-  setLedgerContract('post');
+  writeLedgerContract('post');
+  const cleanups: (() => void)[] = [];
+  let released = (): void => undefined;
+  let ledgerDeclaration = ['  ledger: {}'];
+  if (options.git) {
+    cleanups.push(isolateGlobals(cleanups));
+    const repo = bareFrom(cleanups, ledger, 'ledger', { approved: true });
+    released = () => { pushChange(ledger, repo.bare, 'the ledger changes'); };
+    ledgerDeclaration = ['  ledger:', '    source:', `      git: ${repo.url}`];
+  }
+  const setLedgerContract = (postName: string, balanceReturns = 'number'): void => {
+    writeLedgerContract(postName, balanceReturns);
+    released();
+  };
 
-  projectYaml(billing, ['id: billing', 'name: Billing', 'externals:', '  ledger: {}']);
+  projectYaml(billing, ['id: billing', 'name: Billing', 'externals:', ...ledgerDeclaration]);
   system(billing, 'Billing');
   subsystem(billing, 'Billing', 'invoicing');
   component(billing, 'invoicing', 'invoice-poster', 'Adapter', ['ledger::ledger-portal']);
@@ -345,7 +388,13 @@ export function buildContractFamily(): ContractFamily {
   return {
     top, ledger, billing, setLedgerContract,
     setConfig: (dir, lines) => projectYaml(dir, lines),
-    cleanup: () => fs.rmSync(top, { recursive: true, force: true }),
+    externalLines: ['externals:', ...ledgerDeclaration],
+    cleanup: () => {
+      for (const c of cleanups.splice(0).reverse()) {
+        try { c(); } catch { /* windows file locks */ }
+      }
+      fs.rmSync(top, { recursive: true, force: true });
+    },
   };
 }
 
@@ -416,6 +465,46 @@ export function buildPathExternalPair(source: 'object' | 'string' = 'object'): P
     root, ledger, billing, setLedgerContract,
     setBillingConfig: (lines) => projectYaml(billing, lines),
     cleanup: () => fs.rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+/**
+ * The git-external pair: the same ledger and billing as the path pair, but
+ * billing reaches ledger through a GIT source — the one kind of external a pin
+ * judges (a path external is read live, never pinned). Ledger is approved and
+ * served by a local bare repository; every `setLedgerContract` is approved,
+ * committed and pushed, so the producer's head moves the way a release does.
+ * HOME and the fetch cache are redirected to temp directories until `cleanup`.
+ */
+export interface GitExternalPair extends PathExternalPair {
+  /** The ledger repository's file URL, as billing's configuration spells it. */
+  url: string;
+  bare: string;
+}
+
+/** Build the git-external pair in a fresh temp directory. */
+export function buildGitExternalPair(source: 'object' | 'string' = 'object'): GitExternalPair {
+  const pair = buildPathExternalPair();
+  const cleanups: (() => void)[] = [];
+  const restore = isolateGlobals(cleanups);
+  const repo = bareFrom(cleanups, pair.ledger, 'ledger', { approved: true });
+  const declaration = source === 'string' ? ['externals:', '  ledger:', `    source: ${repo.url}`] : ['externals:', '  ledger:', '    source:', `      git: ${repo.url}`];
+  pair.setBillingConfig(['id: billing', 'name: Billing', ...declaration]);
+  return {
+    ...pair,
+    url: repo.url,
+    bare: repo.bare,
+    setLedgerContract: (options) => {
+      pair.setLedgerContract(options);
+      pushChange(pair.ledger, repo.bare, 'the ledger changes');
+    },
+    cleanup: () => {
+      restore();
+      pair.cleanup();
+      for (const c of cleanups.splice(0)) {
+        try { c(); } catch { /* windows file locks */ }
+      }
+    },
   };
 }
 

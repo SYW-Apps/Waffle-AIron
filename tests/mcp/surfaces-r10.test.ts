@@ -15,13 +15,18 @@ import { pinExternals } from '../../src/core/surfaces.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 import { projectYaml } from '../helpers/conformance-r6-trees';
+import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
 
 type ToolResult = { isError?: boolean; content?: { type: string; text?: string }[]; structuredContent?: Record<string, unknown> };
 
 const roots: string[] = [];
 const clients: Client[] = [];
+const served: (() => void)[] = [];
 afterEach(async () => {
   for (const c of clients.splice(0)) await c.close();
+  for (const c of served.splice(0)) {
+    try { c(); } catch { /* windows locks */ }
+  }
   setProjectRoot(null);
   invalidateSpecCache();
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -80,10 +85,23 @@ function dashboard(): FixtureTree {
   };
 }
 
-function pinnedPair(): { producer: string; consumer: string } {
+/** The dashboard reading linkshort live, a `../` path external: never pinned. */
+function livePair(): { producer: string; consumer: string } {
   const folder = scratch();
   const producer = writeProject(path.join(folder, 'linkshort'), statsApi(), projectYaml('linkshort'));
   const consumer = writeProject(path.join(folder, 'dashboard'), dashboard(), projectYaml('dashboard', { externals: { linkshort: { project: 'linkshort', source: { path: '../linkshort' } } } }));
+  setProjectRoot(consumer);
+  invalidateSpecCache();
+  return { producer, consumer };
+}
+
+/** The dashboard pinned against linkshort, a git external served by a local repository: the kind of external a pin judges. */
+function pinnedPair(): { producer: string; consumer: string } {
+  const folder = scratch();
+  served.push(isolateGlobals(served));
+  const producer = writeProject(path.join(folder, 'linkshort'), statsApi(), projectYaml('linkshort'));
+  const repo = serveGit(served, producer, 'linkshort');
+  const consumer = writeProject(path.join(folder, 'dashboard'), dashboard(), projectYaml('dashboard', { externals: { linkshort: { project: 'linkshort', source: { git: repo.url } } } }));
   setProjectRoot(consumer);
   invalidateSpecCache();
   expect(pinExternals().map((p) => p.outcome)).toEqual(['pinned']);
@@ -92,7 +110,7 @@ function pinnedPair(): { producer: string; consumer: string } {
 
 describe('3b. an endpoint move names the consumers it breaks, as a rename does (tinkerer)', () => {
   it('the dry run names the public name and the consumer calling the moved verb', async () => {
-    const { producer } = pinnedPair();
+    const { producer } = livePair();
     const client = await connectAt(producer);
     const r = await call(client, 'sdd_set_endpoints', { interface: 'istats_portal', endpoints: [{ method: 'getStats', transport: 'HTTP', httpMethod: 'GET', path: '/v2/stats/{shortCode}' }], dryRun: true, search: ['..'] });
     expect(r.isError, r.text).toBeFalsy();
@@ -103,7 +121,7 @@ describe('3b. an endpoint move names the consumers it breaks, as a rename does (
   });
 
   it('a route nobody calls moves with the public name named and no consumer broken; a first binding names none', async () => {
-    const { producer } = pinnedPair();
+    const { producer } = livePair();
     const client = await connectAt(producer);
     const r = await call(client, 'sdd_set_endpoints', { interface: 'istats_portal', endpoints: [{ method: 'getTop', transport: 'HTTP', httpMethod: 'GET', path: '/v2/stats/top' }], dryRun: true, search: ['..'] });
     expect(r.text).toContain('PUBLISHED as: stats_api (getTop)');

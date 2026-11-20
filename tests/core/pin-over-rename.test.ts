@@ -4,7 +4,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { pinExternals } from '../../src/core/surfaces.js';
-import { buildPathExternalPair, type PathExternalPair } from '../helpers/reference-family.js';
+import { buildGitExternalPair, type PathExternalPair } from '../helpers/reference-family.js';
 
 // ---------------------------------------------------------------------------
 // A pin over a rename is refused. The 6.1.3 QA gate pinned an external whose
@@ -29,9 +29,9 @@ function bind(dir: string): void {
   invalidateSpecCache();
 }
 
-/** billing pinned against ledger as it stands. */
+/** billing pinned against ledger (a git external: the kind a pin judges) as it stands. */
 function pinned(): PathExternalPair {
-  const p = buildPathExternalPair();
+  const p = buildGitExternalPair();
   cleanups.push(() => p.cleanup());
   bind(p.billing);
   expect(pinExternals().map((x) => [x.alias, x.outcome])).toEqual([['ledger', 'pinned']]);

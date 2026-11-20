@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
+import { v5it, inV5Reading } from '../helpers/v5-reading.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
@@ -94,7 +94,9 @@ const changeLines = (p: MigrationPlan, top: string): string[] =>
 describe('stage 6 — the chaining migration on the family transaction', () => {
   const made: ReferenceFamily[] = [];
   const family = (): ReferenceFamily => {
-    const f = buildReferenceFamily({ canonical: true });
+    // The wairon 5 forms (a legacy mount, positional references) are what the migration has left to do: a family already
+    // in the canonical form has nothing to plan — its externals are read live, never pinned.
+    const f = buildReferenceFamily();
     made.push(f);
     return f;
   };
@@ -211,10 +213,10 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
 
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    f = buildReferenceFamily({ canonical: true });
+    f = buildReferenceFamily();
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-home-'));
     before = waiState(f.top);
-    const planned = at(f.top, () => migrations.plan({ verb: 'chaining' }));
+    const planned = inV5Reading(() => at(f.top, () => migrations.plan({ verb: 'chaining' })));
     // Staged and half-swapped by hand: the coordinator reads swapping, the first owner's files are in.
     const journals = transaction.stage(planned.rehearsal!, planned.changes, 'chaining');
     journals[0].phase = 'swapping';
@@ -242,7 +244,7 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     const validate = await cli(f.top, home, 'validate');
     expect(validate.stdout).toMatch(/\[TRANSACTION_PENDING\]/);
     // From a member's root too: its journal names the coordinator.
-    const fromMember = await cli(f.core, home, 'validate');
+    const fromMember = await cli(f.transpiler, home, 'validate');
     expect(fromMember.stdout).toMatch(/\[TRANSACTION_PENDING\]/);
     const doctor = await cli(f.top, home, 'doctor');
     expect(doctor.stdout).toMatch(/Unfinished family migration [0-9a-f]{8} \(chaining, coordinator phase swapping/);

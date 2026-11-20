@@ -104,10 +104,32 @@ describe('analyzerDigest', () => {
 describe('packContents', () => {
   it('digests each loaded pack by name, and is empty with none', () => {
     expect(packContents(emptyExtensions())).toEqual({});
-    const loaded = { ...emptyExtensions(), packs: [{ name: 'p', ref: 'x', scope: 'project' as const }], guarantees: ['g'] };
+    const loaded = {
+      ...emptyExtensions(),
+      packs: [{ name: 'p', ref: 'x', scope: 'project' as const }],
+      contributions: { p: { profiles: {}, languages: {}, guarantees: ['g'], rules: [] } },
+    };
     const a = packContents(loaded);
-    const b = packContents({ ...loaded, guarantees: ['g', 'h'] });
+    const b = packContents({ ...loaded, contributions: { p: { profiles: {}, languages: {}, guarantees: ['g', 'h'], rules: [] } } });
     expect(Object.keys(a)).toEqual(['p']);
     expect(a.p).not.toBe(b.p);
+  });
+
+  it('covers only what each pack contributed by itself', () => {
+    const two = {
+      ...emptyExtensions(),
+      packs: [
+        { name: 'one', ref: 'a', scope: 'project' as const },
+        { name: 'two', ref: 'b', scope: 'project' as const },
+      ],
+      contributions: {
+        one: { profiles: {}, languages: {}, guarantees: ['g'], rules: [] },
+        two: { profiles: {}, languages: {}, guarantees: ['x'], rules: [] },
+      },
+    };
+    const before = packContents(two);
+    const after = packContents({ ...two, contributions: { ...two.contributions, two: { ...two.contributions.two, guarantees: ['x', 'y'] } } });
+    expect(after.one).toBe(before.one);
+    expect(after.two).not.toBe(before.two);
   });
 });

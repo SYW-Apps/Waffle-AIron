@@ -14,6 +14,7 @@ import {
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { consumedContractInputs } from '../../src/core/specs.js';
 import { contentDigest, ownerOf, producerOf, declares, familyNode } from '../../src/models/index.js';
+import { approveAt, bareFrom, isolateGlobals, pushChange } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // Stage 2b — the project graph and declared externals, run against a REAL
@@ -132,15 +133,43 @@ const codes = (res: ValidationResult, code: string): string[] =>
 
 describe('stage 2b — the project graph and declared externals', () => {
   const made: string[] = [];
+  const cleanups: (() => void)[] = [];
+  /** Where billing is served from when a test asks for dispatch's `billing` external as a git one. */
+  let served: { bare: string; url: string } | null = null;
+  /**
+   * The family. A dispatch external whose value is the marker 'git' is a git external: billing is served
+   * from a local repository (approved, so a pin can be taken from it), the form of external a pin judges —
+   * a sibling found by its id is read live and never pinned. Its planner then refers to billing by the
+   * public name its pin carries.
+   */
   const family = (o?: FleetOptions): ReturnType<typeof fleet> => {
-    const f = fleet(o);
+    const wantsGit = o?.dispatchExternals?.billing === 'git';
+    const exported = [{ from: o?.viaFacade ? 'billing-api' : 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'instance' }];
+    const f = fleet(wantsGit ? { plannerRef: 'billing::invoicing', billingExports: exported, ...o, dispatchExternals: undefined } : o);
     made.push(f.root);
+    if (wantsGit) {
+      cleanups.push(isolateGlobals(cleanups));
+      served = bareFrom(cleanups, f.billing, 'billing', { approved: true });
+      const externals = { ...o!.dispatchExternals, billing: { source: { git: served.url } } };
+      write(f.root, 'packages/dispatch/.wai/project.yaml', projectYaml('dispatch', 'Dispatch Service', externals));
+      invalidateSpecCache();
+    }
     return f;
+  };
+  /** Release a change to the served billing: approved, committed and pushed. */
+  const releaseBilling = (f: ReturnType<typeof fleet>): void => {
+    approveAt(f.billing);
+    pushChange(f.billing, served!.bare, 'billing changes');
+    invalidateSpecCache();
   };
 
   afterEach(() => {
     setProjectRoot(null);
     invalidateSpecCache();
+    served = null;
+    for (const c of cleanups.splice(0)) {
+      try { c(); } catch { /* win locks */ }
+    }
     for (const dir of made.splice(0)) {
       try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* win locks */ }
     }
@@ -239,8 +268,8 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(codes(at(legacy.dispatch, () => validateProject()), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @route-planner', 'warning @route-planner-impl']);
   });
 
-  v5it('property: not-exported-is-reported — judged against the member\'s own pin, which exports nothing public', () => {
-    const f = family({ dispatchExternals: { billing: {} }, billingExports: [], plannerRef: 'billing::invoice-portal' });
+  v5it('property: not-exported-is-reported — judged against the producer\'s own pin, which exports nothing public', () => {
+    const f = family({ dispatchExternals: { billing: 'git' }, billingExports: [], plannerRef: 'billing::invoice-portal' });
     const res = at(f.root, () => validateProject());
     expect(codes(res, 'EXTERNAL_UNDECLARED')).toEqual([]);
     expect(codes(res, 'EXTERNAL_NOT_EXPORTED')).toEqual([]);
@@ -248,8 +277,9 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(codes(at(f.dispatch, () => validateProject()), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @route-planner', 'warning @route-planner-impl']);
     const pins = at(f.dispatch, () => pinExternals());
     expect(pins[0].outcome).toBe('pinned');
-    expect(pins[0].usedNames).toBe(0);
-    expect(pins[0].unexported.map((r) => r.specId).sort()).toEqual(['dispatch::route-planner', 'dispatch::route-planner-impl']);
+    // The used member the pinned snapshot cannot carry is named, never pinned.
+    expect(pins[0].unexported.map((r) => [r.target, r.member])).toEqual([['billing::invoice-portal', 'issueInvoice']]);
+    expect(pins[0].detail).toContain('cannot be pinned: invoice-portal.issueInvoice');
     // Pinned, its own gate judges the reference against the pin: missing.
     const pinned = at(f.dispatch, () => validateProject());
     expect(codes(pinned, 'EXTERNAL_NOT_EXPORTED')).toEqual(['error @route-planner', 'error @route-planner-impl']);
@@ -259,12 +289,12 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   // ---- pin, status, list -----------------------------------------------------------
 
-  v5it('property: pin-is-a-projection — the pinned snapshot is the producer\'s table projected at the audience ceiling', () => {
-    const f = family({ dispatchExternals: { billing: {} } });
+  it('property: pin-is-a-projection — the pinned snapshot is the producer\'s table projected at the audience ceiling', () => {
+    const f = family({ dispatchExternals: { billing: 'git' } });
     const pins = at(f.dispatch, () => pinExternals());
     expect(pins).toEqual([expect.objectContaining({ alias: 'billing', outcome: 'pinned', project: 'billing', usedNames: 1, unexported: [] })]);
     const pinned = at(f.dispatch, () => externalsRepository.readSnapshot('billing'))!;
-    const projected = at(f.billing, () => ({ ...projectOwnSurface('project'), audience: 'project' }));
+    const projected = at(f.billing, () => ({ ...projectOwnSurface('instance'), audience: 'instance' }));
     expect(contentDigest(pinned)).toBe(contentDigest(projected));
     const lock = at(f.dispatch, () => externalsRepository.readLock())!;
     expect(lock.externals.billing).toMatchObject({ project: 'billing', snapshot: '.wai/externals/billing.yaml', digest: contentDigest(projected) });
@@ -276,27 +306,29 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(fs.statSync(path.join(f.dispatch, '.wai', 'inputs.lock.yaml')).mtimeMs).toBe(before);
   });
 
-  v5it('property: stale-only-when-used-changes — an unused member drifts, a used one goes stale', () => {
-    const f = family({ dispatchExternals: { billing: {} } });
+  it('property: stale-only-when-used-changes — an unused member drifts, a used one goes stale', () => {
+    const f = family({ dispatchExternals: { billing: 'git' } });
     at(f.dispatch, () => pinExternals());
     expect(at(f.dispatch, () => getExternalsStatus())[0]).toMatchObject({ pinned: true, reachable: true, stale: false, drifted: false });
 
     // voidInvoice is not used: the producer drifted, nothing used moved.
     write(f.root, 'packages/billing/.wai/specs/interfaces/iinvoice-portal.yaml', fs.readFileSync(path.join(f.billing, '.wai', 'specs', 'interfaces', 'iinvoice-portal.yaml'), 'utf8').replace("returns: void", 'returns: boolean'));
+    releaseBilling(f);
     const drifted = at(f.dispatch, () => getExternalsStatus())[0];
     expect(drifted).toMatchObject({ stale: false, drifted: true });
     expect(drifted.uses).toEqual([{ publicName: 'invoicing', member: 'issueInvoice', state: 'unchanged' }]);
 
     // issueInvoice IS used: its return type changed, so the pin is stale.
     write(f.root, 'packages/billing/.wai/specs/interfaces/iinvoice-portal.yaml', fs.readFileSync(path.join(f.billing, '.wai', 'specs', 'interfaces', 'iinvoice-portal.yaml'), 'utf8').replace("returns: string", 'returns: number'));
+    releaseBilling(f);
     const stale = at(f.dispatch, () => getExternalsStatus())[0];
     expect(stale).toMatchObject({ stale: true, drifted: true });
     expect(stale.uses).toEqual([{ publicName: 'invoicing', member: 'issueInvoice', state: 'changed' }]);
   });
 
-  v5it('property: reexport-is-transparent — the lock and the verdict are the same through a re-export chain', () => {
-    const direct = family({ dispatchExternals: { billing: {} } });
-    const chained = family({ dispatchExternals: { billing: {} }, viaFacade: true });
+  it('property: reexport-is-transparent — the lock and the verdict are the same through a re-export chain', () => {
+    const direct = family({ dispatchExternals: { billing: 'git' } });
+    const chained = family({ dispatchExternals: { billing: 'git' }, viaFacade: true });
     const lockOf = (f: ReturnType<typeof fleet>) => {
       at(f.dispatch, () => pinExternals());
       return at(f.dispatch, () => externalsRepository.readLock())!.externals.billing.used;
@@ -319,22 +351,22 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(fs.existsSync(path.join(f.dispatch, '.wai', 'externals'))).toBe(false);
   });
 
-  v5it('an unresolved or out-of-reach producer is reported, never read, and keeps its previous pin', () => {
-    const f = family({ dispatchExternals: { billing: {}, ledger: {} } });
+  it('an unresolved or out-of-reach producer is reported, never read, and keeps its previous pin', () => {
+    const f = family({ dispatchExternals: { billing: 'git', ledger: {} } });
     const pins = at(f.dispatch, () => pinExternals());
     expect(pins.map((p) => [p.alias, p.outcome])).toEqual([['billing', 'pinned'], ['ledger', 'unresolved']]);
-    // A request narrowed to the child reads nothing above its root: the sibling is not even found.
+    // A request narrowed to the child reads nothing above its root: the git producer is still fetched, but not within reach.
     const narrowed = runWithProjectBinding(f.dispatch, { topRoot: f.dispatch, parentReach: false }, () => {
       invalidateSpecCache();
       return resolveDeclared();
     });
-    expect(narrowed.map((b) => [b.external.alias, b.external.sourceKind, b.reachable])).toEqual([['billing', 'unresolved', false], ['ledger', 'unresolved', false]]);
+    expect(narrowed.map((b) => [b.external.alias, b.external.sourceKind, b.reachable])).toEqual([['billing', 'git', false], ['ledger', 'unresolved', false]]);
     const status = runWithProjectBinding(f.dispatch, { topRoot: f.dispatch, parentReach: false }, () => getExternalsStatus());
-    expect(status[0]).toMatchObject({ alias: 'billing', pinned: true, reachable: false, stale: false });
-    expect(status[0].uses.every((u) => u.state === 'unavailable' && u.code === 'EXTERNAL_CHECK_UNAVAILABLE')).toBe(true);
+    expect(status[0]).toMatchObject({ alias: 'billing', pinned: true, reachable: true, stale: false });
+    expect(status[0].uses.every((u) => u.state === 'unchanged')).toBe(true);
   });
 
-  it('a source.path external outside the family is pinned at instance; with nothing used, its status compares nothing (stage 8: never the old blanket unavailable)', () => {
+  it('a source.path external outside the family is read live and never pinned; with nothing used, its status compares nothing', () => {
     const f = family();
     // A standalone project next to the family, reached only through source.path.
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-out-'));
@@ -349,21 +381,24 @@ describe('stage 2b — the project graph and declared externals', () => {
     write(outside, '.wai/specs/components/audit-portal.yaml', dump({ id: 'audit-portal', name: 'Audit Portal', description: 'd', subsystem: 'ledger', componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [] }));
     write(f.root, '.wai/project.yaml', projectYaml('fleetworks', 'FleetWorks', { ledger: { source: { path: path.relative(f.root, outside) } } }));
     const pins = at(f.root, () => pinExternals());
-    expect(pins[0]).toMatchObject({ alias: 'ledger', outcome: 'pinned', usedNames: 0 });
-    const snapshot = at(f.root, () => externalsRepository.readSnapshot('ledger'))!;
-    // The instance ceiling: the project-audience entry stays inside its family.
-    expect(snapshot.interfaces.map((e) => e.id)).toEqual(['ledger-portal']);
-    expect(snapshot.audience).toBe('instance');
+    expect(pins[0]).toMatchObject({ alias: 'ledger', outcome: 'unchanged', usedNames: 0 });
+    expect(pins[0].detail).toContain('read live, never pinned');
+    expect(at(f.root, () => externalsRepository.readSnapshot('ledger'))).toBeNull();
+    expect(at(f.root, () => externalsRepository.readLock())).toBeNull();
+    // The producer is a node of the scan: its live export table is what a reference into it resolves against.
+    const node = at(f.root, () => familyNode(graph(), 'ledger'));
+    expect(node).toMatchObject({ mountAlias: 'ledger', parent: '' });
     const status = at(f.root, () => getExternalsStatus())[0];
-    expect(status).toMatchObject({ sourceKind: 'path', reachable: true, stale: false });
+    expect(status).toMatchObject({ alias: 'ledger', sourceKind: 'family', reachable: true, stale: false });
     expect(status.uses).toEqual([]);
-    expect(at(f.root, () => listExternals())[0]).toMatchObject({ alias: 'ledger', sourceKind: 'path', audience: 'instance', lock: expect.objectContaining({ project: 'ledger' }) });
+    expect(at(f.root, () => listExternals())[0]).toMatchObject({ alias: 'ledger', sourceKind: 'family' });
+    expect(at(f.root, () => listExternals())[0].lock).toBeUndefined();
   });
 
   it('a malformed lock is refused naming the file, never read as empty', () => {
     const f = family();
     write(f.dispatch, '.wai/inputs.lock.yaml', 'externals: [not, a, map]\n');
-    expect(() => at(f.dispatch, () => externalsFileAdapter.readLock())).toThrow(/externals\.lock\.yaml/);
+    expect(() => at(f.dispatch, () => externalsFileAdapter.readLock())).toThrow(/inputs\.lock\.yaml/);
   });
 
   v5it('exportUsage maps the consumer\'s references onto the producer\'s public names', () => {

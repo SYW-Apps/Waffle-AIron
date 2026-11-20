@@ -193,18 +193,17 @@ describe('stage 6 — the membership verbs', () => {
     expect([again.refusals, again.changes]).toEqual([[], []]);
   });
 
-  it('detach: the member leaves the family; the parent and every family consumer reach it by path, the parent pinned last; family-consistent; idempotent', () => {
+  it('detach: the member leaves the family; the parent and every family consumer reach it by path, read live; family-consistent; idempotent', () => {
     const f = family();
     const before = familyFindings(f.top);
-    const billingPin = pinsOf(f.billing).ledger;
     const report = migrate(f.top, { verb: 'detach', alias: 'ledger' });
     expect(report.applied).toBe(true);
     expect(configOf(f.top).members).toEqual({ billing: 'billing' });
     expect(configOf(f.top).externals).toEqual({ ledger: { source: { path: 'ledger' } } });
     expect(configOf(f.billing).externals).toEqual({ ledger: { source: { path: '../ledger' } } });
-    // The parent pinned the detached project; billing's pin is untouched (the producer did not change).
-    expect(Object.keys(pinsOf(f.top))).toEqual(['ledger']);
-    expect(pinsOf(f.billing).ledger).toEqual(billingPin);
+    // A path external is read live: nothing is pinned, in the parent or in billing.
+    expect(Object.keys(pinsOf(f.top))).toEqual([]);
+    expect(pinsOf(f.billing).ledger).toBeUndefined();
     expect(report.plan.notes.some((n) => /Consumers outside the family/.test(n))).toBe(true);
     // No reference text changed.
     expect(report.plan.edits.some((e) => e.kind === 'reference')).toBe(false);

@@ -414,7 +414,11 @@ function searchedConsumers(bound: string, search: string[], seen: ReadonlySet<st
         || (e.sourceGit !== undefined && producerId !== null && e.project === producerId)));
       if (!declared) return null;
       const node = consumerNode(graph(), root);
-      const usage = node ? pinnedUsage(node.namespace, declared.alias) : null;
+      // A path producer is a node of that root's scan, read live: its usage is counted against its live table.
+      const producerBinding = node?.externals.find((e) => e.alias === declared.alias);
+      const usage = !node ? null
+        : producerBinding?.sourceKind === 'family' && producerBinding.producer !== undefined ? exportUsage(node.namespace, producerBinding.producer)
+          : pinnedUsage(node.namespace, declared.alias);
       return {
         project: effectiveProjectId(config) ?? path.basename(root),
         key: node?.namespace ?? '',

@@ -188,30 +188,27 @@ export function approvalParts(design: StateId, builtinRules: SddRule[], gate: Ga
  * packages are left out. What `wairon packs sync` and `wairon lock` record in
  * the inputs lock, and what the build compares against it.
  *
- * The loader keeps patterns and assertions per pack but merges profiles,
- * languages, guarantee tokens and pack rules across packs (a later pack wins a
- * collision), so those merged sets stand in every pack's projection: a change
- * to any of them is a change to the doctrine each pack is judged under.
+ * The loader merges profiles, languages, guarantee tokens and pack rules across
+ * packs but records what each pack contributed by itself (LoadedExtensions.
+ * contributions), so a pack's digest covers only its own content: a change in
+ * another pack never owes this one a sync.
  */
 export function packContents(doctrine: LoadedExtensions): Record<string, string> {
-  // Step 1: the merged half every pack is judged under.
-  const merged = {
-    profiles: doctrine.profiles,
-    languages: doctrine.languages,
-    guarantees: [...doctrine.guarantees].sort(compareOrdinal),
-    rules: byKey(
-      doctrine.rules.map((r) => ({
-        name: r.name,
-        codes: byKey(r.codes.map((c) => ({ code: c.code, severity: c.defaultSeverity })), (c) => c.code),
-      })),
-      (r) => r.name,
-    ),
-  };
   const out: Record<string, string> = {};
   for (const pack of doctrine.packs) {
     // Step 1: what this pack contributes by itself.
+    const own = doctrine.contributions[pack.name];
     const projection = {
-      ...merged,
+      profiles: own?.profiles ?? {},
+      languages: own?.languages ?? {},
+      guarantees: [...(own?.guarantees ?? [])].sort(compareOrdinal),
+      rules: byKey(
+        (own?.rules ?? []).map((r) => ({
+          name: r.name,
+          codes: byKey(r.codes.map((c) => ({ code: c.code, severity: c.defaultSeverity })), (c) => c.code),
+        })),
+        (r) => r.name,
+      ),
       patterns: byKey(
         doctrine.patterns.filter((p) => p.pack === pack.name).map((p) => ({ id: p.id, version: p.version })),
         (p) => `${p.id}@${p.version}`,

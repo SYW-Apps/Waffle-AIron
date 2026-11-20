@@ -206,7 +206,8 @@ describe('round 8 — 4c: externalize as a project declares the sibling projects
       shared: { project: 'contracts', source: { path: '../../libs/contracts' } },
       payments_svc: { project: 'payments', source: { path: '../payments' } },
     });
-    expect(fs.existsSync(path.join(root, 'services', 'orders', '.wai', 'inputs.lock.yaml'))).toBe(true);
+    // Its externals are found by path and read live: no lock is written for them.
+    expect(fs.existsSync(path.join(root, 'services', 'orders', '.wai', 'inputs.lock.yaml'))).toBe(false);
     expect(familyFindings(root).filter((f) => f.includes('EXTERNAL_UNDECLARED'))).toEqual(before);
   }, 120_000);
 });

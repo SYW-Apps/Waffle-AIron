@@ -89,6 +89,12 @@ export function bareFrom(cleanups: (() => void)[], work: string, name: string, o
   return { url: `file:///${bare.replace(/\\/g, '/').replace(/^\//, '')}`, bare, commit: git(work, 'rev-parse', 'HEAD') };
 }
 
+/** A project served by a local git repository: approved as it stands. `release` approves, commits and pushes each later change. */
+export function serveGit(cleanups: (() => void)[], dir: string, name: string): { url: string; bare: string; commit: string; release(message?: string): string } {
+  const repo = bareFrom(cleanups, dir, name, { approved: true });
+  return { ...repo, release: (message = `the ${name} changes`) => { approveAt(dir); return pushChange(dir, repo.bare, message); } };
+}
+
 /** Commit the work tree's changes and push them to its bare repository; answers the new commit. */
 export function pushChange(work: string, bare: string, message: string): string {
   // Each release of the producer is approved as it stands.

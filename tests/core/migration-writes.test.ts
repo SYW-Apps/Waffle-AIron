@@ -26,8 +26,9 @@ const lockOf = (dir: string): Record<string, { project: string; digest: string; 
 
 describe('stage 6 — the verbs\' writes, one at a time', () => {
   const made: ContractFamily[] = [];
-  const family = (): ContractFamily => {
-    const f = buildContractFamily();
+  /** The contract family; with `git`, billing's external for ledger is a git one — the kind of external a pin holds. */
+  const family = (git = false): ContractFamily => {
+    const f = buildContractFamily({ git });
     made.push(f);
     return f;
   };
@@ -140,7 +141,7 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
   });
 
   it('renamePin carries a pin to a new alias and producer id without re-pinning — digest and `used` kept; unpin removes a pin; each answers false when there is nothing to do', () => {
-    const f = family();
+    const f = family(true);
     pinAt(f.billing);
     const pinned = lockOf(f.billing).ledger;
     runWithProjectRoot(f.billing, () => {

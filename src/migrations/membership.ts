@@ -183,7 +183,7 @@ function attachEdits(plan: MigrationPlan, family: ProjectFamily, bound: string, 
   }
   const effective = attached ? effectiveProjectId(attached) ?? undefined : undefined;
   const id = attached?.id ?? approved ?? effective;
-  const colliding = id !== undefined ? family.nodes.find((n) => n.id === id) : undefined;
+  const colliding = id !== undefined ? family.nodes.find((n) => n.id === id && path.resolve(n.directory) !== path.resolve(dir)) : undefined;
   if (colliding) {
     refuse(plan, 'id-collision', colliding.namespace, `the project at ${dir} answers to "${id}", which ${label(colliding.namespace)} (${colliding.directory}) answers to as well (PROJECT_ID_COLLISION)`);
     return plan;
@@ -393,7 +393,8 @@ export function planAdopt(family: ProjectFamily, bound: string, request: Migrati
     dir = located !== null && 'dir' in located ? located.dir : null;
     if (located === null) refuse(plan, 'not-contained', bound, `the external "${alias}" names no source.path`);
     else if ('refused' in located) refuse(plan, 'not-contained', bound, `the external "${alias}" is found at "${written}": ${located.refused.replace('{bound}', label(bound))}`);
-    else if (nodeAt(family, located.dir)) refuse(plan, 'already-member', nodeAt(family, located.dir)!.namespace, `${located.dir} is already the family project ${label(nodeAt(family, located.dir)!.namespace)}`);
+    // The external's own folder is a node of the scan (a path external is read live): only another project there is in the way.
+    else if (nodeAt(family, located.dir) && !(nodeAt(family, located.dir)!.parent === bound && nodeAt(family, located.dir)!.mountAlias === alias)) refuse(plan, 'already-member', nodeAt(family, located.dir)!.namespace, `${located.dir} is already the family project ${label(nodeAt(family, located.dir)!.namespace)}`);
   }
   // Steps 3-4.
   if (plan.refusals.length > 0) return plan;
@@ -437,7 +438,8 @@ function adoptEdits(plan: MigrationPlan, family: ProjectFamily, bound: string, a
     return plan;
   }
   const id = adoptee ? effectiveProjectId(adoptee) ?? undefined : undefined;
-  const colliding = id !== undefined ? family.nodes.find((n) => n.id === id) : undefined;
+  // The adoptee itself is a node when its external is read live (a path external): only another project answering to its id collides.
+  const colliding = id !== undefined ? family.nodes.find((n) => n.id === id && path.resolve(n.directory) !== path.resolve(dir)) : undefined;
   if (colliding) {
     refuse(plan, 'id-collision', colliding.namespace, `the project at ${dir} answers to "${id}", which ${label(colliding.namespace)} answers to as well`);
     return plan;

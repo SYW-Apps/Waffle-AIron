@@ -584,17 +584,19 @@ function convertParentPin(ctx: Planning, member: ProjectNode, parent: string): v
 }
 
 /**
- * Step 21: a family external a project declared before the migration ran and
- * never pinned is pinned with the rest — its gate has nothing to judge the
- * references against until it is. A pinned one is left alone: re-pinning a
- * changed producer would hide the change the family run reports.
+ * Step 21: an external a project declared before the migration ran and never
+ * pinned is pinned with the rest — its gate has nothing to judge the
+ * references against until it is. A family external is read live, where its
+ * producer is stored, and is never pinned: it is left out, or every plan would
+ * find it again. A pinned one is left alone: re-pinning a changed producer
+ * would hide the change the family run reports.
  */
 function pinNeverPinned(ctx: Planning, node: ProjectNode): void {
-  if (node.externals.every((e) => e.sourceKind !== 'family')) return;
+  if (node.externals.every((e) => e.sourceKind !== 'git' && e.sourceKind !== 'hosted')) return;
   // Its declared externals and their lock entries, under its binding.
   const listed = runWithProjectRoot(node.directory, () => surfaces.listExternals());
   for (const external of listed) {
-    if (external.sourceKind === 'family' && external.lock === undefined) addPin(ctx, node, external.alias);
+    if ((external.sourceKind === 'git' || external.sourceKind === 'hosted') && external.lock === undefined) addPin(ctx, node, external.alias);
   }
 }
 

@@ -1739,7 +1739,7 @@ function wholeContractMembers(pinned: SurfaceSnapshot | null, publicName: string
 }
 
 /** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
-function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null): ExternalUseStatus[] {
+function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null, readLive = false): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
   const locked = entry?.used ?? {};
   const liveHas = (name: string): boolean => live.interfaces.some((e) => e.id === name) || (live.exportedTypes ?? []).some((t) => t.id === name);
@@ -1789,6 +1789,8 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
   const unlocked = (publicName: string, member?: string): ExternalUseStatus => {
     const present = member === undefined ? liveHas(publicName) : memberDigest(live, publicName, member) !== null;
     if (!present) return goneUse(live, publicName, member, undefined);
+    // A producer read live (a sibling, a path external) owes no pin: a use it still holds is as it is.
+    if (readLive) return { publicName, ...(member !== undefined ? { member } : {}), state: 'unchanged' };
     return { publicName, ...(member !== undefined ? { member } : {}), state: 'unlocked', detail: entry === undefined ? 'used, and present in the live producer, but never pinned — pin it (`wairon externals pin`) to record what it is judged against' : 'used now, but not in the lock — re-pin' };
   };
   for (const use of usage?.used ?? []) {
@@ -1874,7 +1876,7 @@ function externalStatus(binding: ExternalBinding, lock: InputsLock | null): Exte
   // Step 8: every used member compared at signature level, for every producer
   // alike — family, path, git, hosted, a referenced project (stage 8).
   const snapshot = entry !== undefined ? externalsRepository.readSnapshot(external.alias) : null;
-  const uses = compareUses(entry, binding.usage, live, snapshot);
+  const uses = compareUses(entry, binding.usage, live, snapshot, external.sourceKind === 'family' || external.sourceKind === 'path');
   // A pinned snapshot that no longer carries what the producer says (an abi,
   // a transport, a role) is stale even when its digest is not: never ok.
   const staleFacts = snapshot ? carriedFactChanges(snapshot, live) : [];

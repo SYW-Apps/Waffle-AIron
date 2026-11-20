@@ -461,6 +461,13 @@ export interface LoadedExtensions {
    * is the order they are appended to wairon's own instructions.
    */
   instructions: LoadedInstructionBlock[];
+  /**
+   * Provenance of the merged doctrine: what each pack contributed by itself —
+   * the profiles, languages, guarantee tokens and rules the merged fields above
+   * fold across packs — keyed by pack name. What a pack's own digest covers
+   * (approval_identity.packContents).
+   */
+  contributions: Record<string, PackContribution>;
   /** Pack loading failures — surfaced as EXTENSION_LOAD_ERROR (error). */
   errors: string[];
   /**
@@ -472,8 +479,21 @@ export interface LoadedExtensions {
   selectionFailures: PackSelectionFailure[];
 }
 
+/** What one pack contributed to the merged doctrine by itself. */
+export interface PackContribution {
+  profiles: Record<string, ProfileDef>;
+  languages: Record<string, LanguagePackDef>;
+  guarantees: string[];
+  rules: SddRule[];
+}
+
+/** The contribution a pack's own record holds, created on first use. */
+function contributionOf(out: LoadedExtensions, pack: string): PackContribution {
+  return (out.contributions[pack] ??= { profiles: {}, languages: {}, guarantees: [], rules: [] });
+}
+
 export function emptyExtensions(): LoadedExtensions {
-  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], practices: [], guarantees: [], technologyPackages: {}, assertions: [], instructions: [], errors: [], selectionFailures: [] };
+  return { packNames: [], packs: [], rules: [], profiles: {}, languages: {}, skills: [], patterns: [], practices: [], guarantees: [], technologyPackages: {}, assertions: [], instructions: [], contributions: {}, errors: [], selectionFailures: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -620,11 +640,14 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   out.packNames.push(pack.name);
   out.packs.push({ name: pack.name, ref, scope, version: pack.version });
   // Later packs win on collision — pack order in project.yaml is precedence.
+  const own = contributionOf(out, pack.name);
   Object.assign(out.profiles, pack.profiles);
+  Object.assign(own.profiles, pack.profiles);
   for (const [lang, def] of Object.entries(pack.languages)) {
     const key = lang.toLowerCase();
     const existing = out.languages[key];
     out.languages[key] = { unsupportedFlow: { ...existing?.unsupportedFlow, ...def.unsupportedFlow } };
+    own.languages[key] = { unsupportedFlow: { ...own.languages[key]?.unsupportedFlow, ...def.unsupportedFlow } };
   }
   // Skills and patterns are namespaced by pack id (skills at install time, pattern
   // ids by convention), so they accumulate across packs with their provenance.
@@ -642,6 +665,7 @@ function mergePack(out: LoadedExtensions, pack: DeclarativePack, ref: string, sc
   }
   // Guarantee tokens are a flat vocabulary — same token from two packs is one token.
   out.guarantees = [...new Set([...out.guarantees, ...pack.guarantees])];
+  own.guarantees = [...new Set([...own.guarantees, ...pack.guarantees])];
   // Technology packages accumulate per technology name, lower-cased and deduped.
   for (const [tech, packages] of Object.entries(pack.technologyPackages ?? {})) {
     const key = tech.toLowerCase();
@@ -735,19 +759,25 @@ interface LoadItem extends PackRef {
   manifest?: ExtensionPack;
 }
 
+/** A programmatic rule, merged and recorded with the pack it came from. */
+function pushRule(out: LoadedExtensions, pack: string, rule: SddRule): void {
+  out.rules.push(rule);
+  contributionOf(out, pack).rules.push(rule);
+}
+
 /** Load one ref into the accumulated result; a failure is recorded as a load error, never thrown. */
 function loadRefInto(out: LoadedExtensions, { ref, scope, manifest: supplied }: LoadItem, projectRoot: string): void {
   try {
     if (supplied) {
       // A manifest supplied with a candidate (not on disk yet) is merged at its entry's position.
       mergePack(out, supplied, ref, scope, path.resolve(projectRoot, ref));
-      for (const r of supplied.rules) out.rules.push(r);
+      for (const r of supplied.rules) pushRule(out, supplied.name, r);
       return;
     }
     const target = resolvePackRef(ref, projectRoot);
     const manifest = readManifest(target, projectRoot);
     mergePack(out, manifest, ref, scope, path.dirname(target));
-    for (const r of manifest.rules) out.rules.push(r);
+    for (const r of manifest.rules) pushRule(out, manifest.name, r);
   } catch (e) {
     out.errors.push(`Extension pack "${ref}" failed to load: ${e instanceof Error ? e.message : String(e)}`);
   }

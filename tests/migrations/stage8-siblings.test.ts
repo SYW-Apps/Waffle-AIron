@@ -11,7 +11,7 @@ import * as transaction from '../../src/migrations/transaction.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import type { MigrationRequest } from '../../src/migrations/types.js';
 import { at, dirHash, migrate, plan, waiState } from '../helpers/family-verbs.js';
-import { tempDir, isolateGlobals, git, projectYaml, writeClinic, writeLedger, writeShop } from '../helpers/stage8-family.js';
+import { tempDir, isolateGlobals, git, projectYaml, serveGit, writeClinic, writeLedger, writeShop } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // Stage 8 follow-up — a sibling checkout joins the family transaction. A part
@@ -21,7 +21,7 @@ import { tempDir, isolateGlobals, git, projectYaml, writeClinic, writeLedger, wr
 // gets its own commit (the plan says so). One on another volume is refused.
 // The fs module is wrapped (never replaced) so a test can inject a failure at
 // any write, or report another device for a path; nothing else is mocked.
-// Also: a pin records a producer's commit only across repositories.
+// Also: a git producer's pin records its commit; a path producer is never pinned.
 // ---------------------------------------------------------------------------
 
 const hook = vi.hoisted(() => ({
@@ -208,10 +208,10 @@ describe('stage 8 — a sibling checkout joins the family transaction', () => {
   });
 });
 
-describe('stage 8 — a pin records a commit only across repositories', () => {
-  it('a producer in the consumer\'s repository records none; a sibling that is its own repository records its head', () => {
+describe('stage 8 — a pin records the commit of a git producer; a path producer is never pinned', () => {
+  it('a git external records the commit it was pinned at; a path external, in the consumer\'s repository or another, records nothing', () => {
     const base = tempDir(cleanups, 'wairon-pincommit-');
-    // One repository holding both: a monorepo.
+    // One repository holding both: a monorepo. The path external is read live: nothing is pinned.
     const mono = path.join(base, 'mono');
     writeLedger(path.join(mono, 'ledger'));
     writeShop(path.join(mono, 'shop'), { externals: { ledger: { source: { path: '../ledger' } } } });
@@ -219,18 +219,21 @@ describe('stage 8 — a pin records a commit only across repositories', () => {
     git(mono, 'add', '-A');
     git(mono, 'commit', '-q', '-m', 'mono');
     at(path.join(mono, 'shop'), () => pinExternals());
-    const monoLock = yaml.load(fs.readFileSync(path.join(mono, 'shop', '.wai', 'inputs.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
-    expect(monoLock.externals.ledger.commit).toBeUndefined();
-    // Two repositories side by side.
+    expect(fs.existsSync(path.join(mono, 'shop', '.wai', 'inputs.lock.yaml'))).toBe(false);
+    // Two repositories side by side: still read live.
     writeLedger(path.join(base, 'ledger'));
     git(path.join(base, 'ledger'), 'init', '-q');
     git(path.join(base, 'ledger'), 'add', '-A');
     git(path.join(base, 'ledger'), 'commit', '-q', '-m', 'ledger');
-    const head = git(path.join(base, 'ledger'), 'rev-parse', 'HEAD');
     writeShop(path.join(base, 'shop'), { externals: { ledger: { source: { path: '../ledger' } } } });
     git(path.join(base, 'shop'), 'init', '-q');
     at(path.join(base, 'shop'), () => pinExternals());
-    const lock = yaml.load(fs.readFileSync(path.join(base, 'shop', '.wai', 'inputs.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
-    expect(lock.externals.ledger.commit).toBe(head);
+    expect(fs.existsSync(path.join(base, 'shop', '.wai', 'inputs.lock.yaml'))).toBe(false);
+    // The same producer served as a git external is pinned, and the pin names the commit it was taken from.
+    const served = serveGit(cleanups, path.join(base, 'ledger'), 'ledger');
+    writeShop(path.join(base, 'git-shop'), { externals: { ledger: { source: { git: served.url } } } });
+    at(path.join(base, 'git-shop'), () => pinExternals());
+    const lock = yaml.load(fs.readFileSync(path.join(base, 'git-shop', '.wai', 'inputs.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
+    expect(lock.externals.ledger.commit).toBe(served.commit);
   });
 });
