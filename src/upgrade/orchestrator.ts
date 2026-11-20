@@ -2,8 +2,8 @@ import * as chain from './chain.js';
 import * as migrations from './adapters/migrations.js';
 import * as release from './adapters/release.js';
 import * as stamp from './adapters/stamp.js';
-import * as v5ToV6 from './steps/v5-to-v6/step.js';
-import { runInV5Reading, runWithProjectRoot } from '../utils/fs.js';
+import * as v6ToV7 from './steps/v6-to-v7/step.js';
+import { runWithProjectRoot } from '../utils/fs.js';
 import { rehearsalRoot, type FileChange } from '../migrations/types.js';
 import { StepRefused } from './types.js';
 import type { ReleaseNote, StepPlan, TreeStanding, TreeUpgradeReport, UpgradePlan, UpgradeStep } from './types.js';
@@ -21,14 +21,13 @@ import type { ReleaseNote, StepPlan, TreeStanding, TreeUpgradeReport, UpgradePla
 // report names the projects whose approved design moved. It holds no state:
 // the plan is a value its caller carries from plan to apply.
 //
-// The core reads only the running major's forms. The forms wairon 5 wrote are
-// read under one binding, the v5 reading, which this orchestrator binds around
-// each step's plan and write on the project's rehearsal root and nothing else
-// ever binds: the core refuses such a form anywhere else.
+// The core reads only the running major's forms. The kept step reads the lock
+// forms wairon 6 wrote itself, so the step is planned and written with the
+// project's rehearsal root bound and nothing else bound around it.
 // ---------------------------------------------------------------------------
 
-/** The major the one kept step reads: today only 5 to 6 is kept, and its runner is the v5 to v6 tree step. */
-const RUNNER_FROM = 5;
+/** The major the one kept step reads: today only 6 to 7 is kept, and its runner is the v6 to v7 tree step. */
+const RUNNER_FROM = 6;
 
 /** The major of a version: 6.0.1-dev.3 is major 6. */
 function majorOf(version: string): number {
@@ -70,7 +69,7 @@ function emptyPlan(root: string, runningMajor: number, standings: TreeStanding[]
 /** iupgrade_orchestrator.plan — plan the upgrade of the family under the root onto one rehearsal. */
 export function plan(root: string): UpgradePlan {
   // Step 1: the family as the oldest kept step reads it.
-  const roots = v5ToV6.familyRoots(root);
+  const roots = v6ToV7.familyRoots(root);
   const runningMajor = majorOf(release.version());
   // Steps 2-4: a part holds no project.yaml, so it carries no stamp of its own;
   // each project stands where its stamp says.
@@ -88,15 +87,15 @@ export function plan(root: string): UpgradePlan {
   // Steps 5-6: a project this release cannot upgrade refuses the whole plan.
   const stuck = standings.find((s) => s.state === 'newer' || s.state === 'out_of_window');
   if (stuck) return emptyPlan(root, runningMajor, standings, `${stuck.root}: ${stuck.advice ?? stuck.state}`);
-  // Steps 7-8: a tree stamped current that still holds a wairon 5 form is an
+  // Steps 7-8: a tree stamped current that still holds a wairon 6 lock form is an
   // unfinished upgrade (an earlier release committed one without finishing it):
   // it stands at the step's major again, and the step runs on it once more.
-  const unfinished = v5ToV6.unfinished(roots);
+  const unfinished = v6ToV7.unfinished(roots);
   // A part holding one finishes with the family, which then stands unfinished at its top.
   const partLeft = unfinished.some((r) => !projects.includes(r));
   for (const [i, s] of standings.entries()) {
     if (s.state === 'current' && (unfinished.includes(s.root) || (partLeft && i === 0))) {
-      standings[i] = { ...s, writtenMajor: RUNNER_FROM, state: 'older', unfinished: true, advice: 'Run `wairon upgrade` to finish the upgrade: the tree still holds wairon 5 forms.' };
+      standings[i] = { ...s, writtenMajor: RUNNER_FROM, state: 'older', unfinished: true, advice: 'Run `wairon upgrade` to finish the upgrade: the tree still holds wairon 6 lock forms.' };
     }
   }
   // Steps 9-10: nothing older, nothing to do; the parts are current with the family.
@@ -119,16 +118,14 @@ export function plan(root: string): UpgradePlan {
       if (step.from !== RUNNER_FROM) throw new Error(`no runner is kept for the step from major ${step.from}`);
       for (const project of older) {
         if (!chains.get(project.root)?.some((s) => s.from === step.from)) continue;
-        // Steps 14-15: the project's rehearsal root is the bound root for the
-        // step, in the v5 reading: the one binding under which the core reads
-        // the forms the step's major wrote.
+        // Steps 14-15: the project's rehearsal root is the bound root for the step.
         const copy = rehearsalRoot(rehearsal, project.root);
         try {
-          const planned = runWithProjectRoot(copy, () => runInV5Reading(() => {
-            const p = v5ToV6.plan(copy);
-            v5ToV6.write(p);
+          const planned = runWithProjectRoot(copy, () => {
+            const p = v6ToV7.plan(copy);
+            v6ToV7.write(p);
             return p;
-          }));
+          });
           // Step 16: recorded under the project's live root.
           steps.push({ ...planned, project: project.root });
           ran.set(step.from, step);
@@ -146,7 +143,7 @@ export function plan(root: string): UpgradePlan {
     }
     // Steps 21-23.
     const changes = migrations.diff(rehearsal);
-    const whatChanged = ran.has(RUNNER_FROM) ? v5ToV6.whatChanged() : [];
+    const whatChanged = ran.has(RUNNER_FROM) ? v6ToV7.whatChanged() : [];
     return { familyRoot: root, runningMajor, standings, steps, whatChanged, rehearsal, changes };
   } catch (e) {
     // Steps 24-25: dropped, nothing written live.

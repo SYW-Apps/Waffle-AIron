@@ -2,12 +2,12 @@ import type { UpgradeChainAnswer, UpgradeStep } from './types.js';
 
 // ---------------------------------------------------------------------------
 // upgrade_chain — the fixed table of steps this release keeps, and the pure
-// arithmetic over it. Today one step, 5 to 6. The table is contiguous and ends
+// arithmetic over it. Today one step, 6 to 7. The table is contiguous and ends
 // at the running major; a test holds it to that. Nothing here reads a file.
 // ---------------------------------------------------------------------------
 
 /** The kept steps, oldest first: each reads one major and writes the next. */
-const KEPT_STEPS: readonly UpgradeStep[] = [{ from: 5, to: 6 }];
+const KEPT_STEPS: readonly UpgradeStep[] = [{ from: 6, to: 7 }];
 
 /** iupgrade_chain.between — the steps from the major that wrote a tree to the running major, oldest first. */
 export function between(writtenMajor: number, runningMajor: number): UpgradeChainAnswer {
@@ -21,7 +21,7 @@ export function between(writtenMajor: number, runningMajor: number): UpgradeChai
   if (writtenMajor < KEPT_STEPS[0].from) {
     return {
       state: 'out_of_window', steps: [],
-      advice: `Install the last release of major ${writtenMajor + 1}, run \`wairon upgrade\` there, then come back to this release.`,
+      advice: `Install the last release of major ${writtenMajor + 1}, run \`wairon upgrade\` there, then come back to this release.${writtenMajor === 5 ? ' For a wairon 5 tree: `npx wairon@6 upgrade`.' : ''}`,
     };
   }
   // Steps 7-8.

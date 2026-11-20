@@ -14,8 +14,6 @@ import {
 import {
   createMember,
   moveMember,
-  backfillChainedSubprojectConfigs,
-  findChainingSubprojectsMissingConfig,
   listDirectChainedSubprojects,
   provisionProject,
 } from '../../src/core/provision.js';
@@ -274,37 +272,6 @@ describe('member discovery and the doctor backfill', () => {
     expect(path.relative(rootDir, direct[0].dir).split(path.sep).join('/')).toBe('packages/new');
   });
 
-  v5it('detects and backfills a member missing project.yaml, in either form, declaring the alias as its id', () => {
-    rootDir = makeRoot();
-    createMember('billing', 'packages/billing', undefined, 'project');
-    writeLegacyMount(subsystemSpec('legacy', 'packages/legacy'), 'legacy');
-    const billing = path.join(rootDir, 'packages', 'billing');
-    const legacy = path.join(rootDir, 'packages', 'legacy');
-    fs.rmSync(path.join(billing, '.wai', 'project.yaml'));
-    fs.rmSync(path.join(legacy, '.wai', 'project.yaml'));
-    invalidateSpecCache();
-
-    const missing = findChainingSubprojectsMissingConfig(rootDir).map((d) => path.resolve(d)).sort();
-    expect(missing).toEqual([path.resolve(billing), path.resolve(legacy)].sort());
-
-    const repaired = backfillChainedSubprojectConfigs(rootDir).map((d) => path.resolve(d)).sort();
-    expect(repaired).toEqual(missing);
-    expect(projectConfigRepositoryAt(billing).load()?.id).toBe('billing');
-    expect(projectConfigRepositoryAt(legacy).load()?.id).toBe('legacy');
-    expect(findChainingSubprojectsMissingConfig(rootDir)).toHaveLength(0);
-  });
-
-  it('walks nested members recursively', () => {
-    rootDir = makeRoot();
-    createMember('core', 'core', undefined, 'project');
-    setProjectRoot(path.join(rootDir, 'core'));
-    createMember('transpiler', 'transpiler', undefined, 'project');
-    setProjectRoot(rootDir);
-    invalidateSpecCache();
-    const nested = path.join(rootDir, 'core', 'transpiler');
-    fs.rmSync(path.join(nested, '.wai', 'project.yaml'));
-    expect(findChainingSubprojectsMissingConfig(rootDir).map((d) => path.resolve(d))).toEqual([path.resolve(nested)]);
-  });
 });
 
 describe('layered agent topology', () => {

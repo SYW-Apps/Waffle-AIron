@@ -27,7 +27,7 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: computeApprovalId
-    symbol: computeGateStateId
+    symbol: computeApprovalId
   - name: projectFamily
     narrative:
       - stepNumber: 1
@@ -65,4 +65,4 @@ methods:
         targetMethod: loadProjectConfig
 status: draft
 createdAt: '2026-10-18T14:14:23.627Z'
-updatedAt: '2026-11-20T01:26:10.932Z'
+updatedAt: '2026-11-20T19:12:09.884Z'

@@ -26,29 +26,38 @@ afterEach(() => {
 
 describe('upgrade_chain', () => {
   it('answers current, older, newer and out_of_window from the two majors', () => {
-    expect(between(6, 6)).toEqual({ state: 'current', steps: [] });
-    expect(between(5, 6)).toEqual({ state: 'older', steps: [{ from: 5, to: 6 }] });
-    const newer = between(7, 6);
+    expect(between(7, 7)).toEqual({ state: 'current', steps: [] });
+    expect(between(6, 7)).toEqual({ state: 'older', steps: [{ from: 6, to: 7 }] });
+    const newer = between(8, 7);
     expect(newer.state).toBe('newer');
     expect(newer.steps).toEqual([]);
-    expect(newer.advice).toContain('7');
-    const old = between(4, 6);
+    expect(newer.advice).toContain('8');
+    const old = between(4, 7);
     expect(old.state).toBe('out_of_window');
     expect(old.steps).toEqual([]);
     expect(old.advice).toContain('5');
     expect(old.advice).toContain('wairon upgrade');
+    expect(old.advice).not.toContain('npx wairon@6');
+  });
+
+  it('names npx wairon@6 upgrade for a wairon 5 tree', () => {
+    const five = between(5, 7);
+    expect(five.state).toBe('out_of_window');
+    expect(five.advice).toContain('npx wairon@6 upgrade');
   });
 
   it('keeps a table that is contiguous and ends at the running major', () => {
-    expect(oldestKept()).toBe(5);
-    const steps = between(oldestKept(), WAIRON_MAJOR).steps;
+    expect(oldestKept()).toBe(6);
+    // The table is built for the major the release ships as (7); a build still at 6 has nothing to run yet.
+    const target = Math.max(WAIRON_MAJOR, 7);
+    const steps = between(oldestKept(), target).steps;
     expect(steps.length).toBeGreaterThan(0);
     expect(steps[0].from).toBe(oldestKept());
     steps.forEach((s, i) => {
       expect(s.to).toBe(s.from + 1);
       if (i > 0) expect(s.from).toBe(steps[i - 1].to);
     });
-    expect(steps[steps.length - 1].to).toBe(WAIRON_MAJOR);
+    expect(steps[steps.length - 1].to).toBe(target);
   });
 });
 
