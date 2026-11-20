@@ -3355,6 +3355,15 @@ export class SpecWorkspace {
   private scanVisitedSpecDirs: string[] = [];
   private scanVisitedConfigFiles: string[] = [];
   private cachedConfigFiles: string[] = [];
+  /**
+   * The build-input files the scan read: each root's inputs lock and its pinned
+   * snapshots. A pin is written in-process by the same caller that reads the
+   * tree next (`wairon lock` pins what it owes, then captures the identity),
+   * so these few files are re-checked on every cache hit, not once per TTL.
+   */
+  private scanVisitedInputFiles: string[] = [];
+  private cachedInputFiles: string[] = [];
+  private cachedInputSignature: string | null = null;
   private cachedRoots: ScannedProjectRoot[] = [];
   private cachedRawRoots: RawRoot[] = [];
   private cachedReadables: ReadableProject[] = [];
@@ -3384,6 +3393,8 @@ export class SpecWorkspace {
     this.cachedDepth = null;
     this.cachedSpecDirs = [];
     this.cachedConfigFiles = [];
+    this.cachedInputFiles = [];
+    this.cachedInputSignature = null;
     this.cachedRoots = [];
     this.cachedRawRoots = [];
     this.cachedReadables = [];
@@ -3405,10 +3416,11 @@ export class SpecWorkspace {
       // Cache hit — but the files may have been edited externally (hand edits,
       // another process) since we scanned. Re-verify via mtime signature at
       // most once per TTL.
+      const inputsMoved = computeSpecTreeSignature([], this.cachedInputFiles) !== this.cachedInputSignature;
       const now = Date.now();
-      if (now - this.lastSignatureCheckMs <= SIGNATURE_TTL_MS) return this.cachedIndex;
+      if (!inputsMoved && now - this.lastSignatureCheckMs <= SIGNATURE_TTL_MS) return this.cachedIndex;
       this.lastSignatureCheckMs = now;
-      if (computeSpecTreeSignature(this.cachedSpecDirs, this.cachedConfigFiles) === this.cachedSignature) return this.cachedIndex;
+      if (!inputsMoved && computeSpecTreeSignature(this.cachedSpecDirs, this.cachedConfigFiles) === this.cachedSignature) return this.cachedIndex;
       this.invalidate();
     }
 
@@ -3417,6 +3429,7 @@ export class SpecWorkspace {
     this.cachedV5 = readsV5Forms();
     this.scanVisitedSpecDirs = [];
     this.scanVisitedConfigFiles = [];
+    this.scanVisitedInputFiles = [];
 
     const scan = this.scanFamily(maxDepth);
     this.cachedIndex = scan.index;
@@ -3428,6 +3441,8 @@ export class SpecWorkspace {
     this.cachedSpecDirs = this.scanVisitedSpecDirs;
     this.cachedConfigFiles = this.scanVisitedConfigFiles;
     this.cachedSignature = computeSpecTreeSignature(this.cachedSpecDirs, this.cachedConfigFiles);
+    this.cachedInputFiles = this.scanVisitedInputFiles;
+    this.cachedInputSignature = computeSpecTreeSignature([], this.cachedInputFiles);
     this.lastSignatureCheckMs = Date.now();
     return this.cachedIndex;
   }
@@ -3527,6 +3542,13 @@ export class SpecWorkspace {
     // Step 2: the root's configuration, through its own binding.
     const config = configAt(dir);
     this.scanVisitedConfigFiles.push(aiPathsAt(dir).projectConfig());
+    // The root's build inputs the scan reads: its inputs lock and each declared external's pinned snapshot.
+    this.scanVisitedInputFiles.push(path.join(aiPathsAt(dir).root(), 'inputs.lock.yaml'));
+    if (config) {
+      for (const declared of declaredExternals(config)) {
+        if (!declared.problem) this.scanVisitedInputFiles.push(path.join(aiPathsAt(dir).root(), 'externals', `${declared.alias}.yaml`));
+      }
+    }
     // The bound root's configuration keys its schema does not know: the parse
     // drops them, so a misspelt setting (`requireCod`) would silently do nothing.
     if (!parent && config) this.reportUnknownConfigKeys(aiPathsAt(dir).projectConfig(), rawConfigAt(dir), config);

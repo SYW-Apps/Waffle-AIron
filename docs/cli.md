@@ -318,8 +318,10 @@ warnings as errors (notices are printed and counted, never fatal).
   see [Using it in GitHub Actions](#using-it-in-github-actions)); a member in
   its own repository adds the root's run to its pipeline or relies on the root
   repository's.
-- **Externals, compared live (advisory: the pin gates).** The gate judges each
-  external against its pin. Then every external the run did not compose is
+- **Externals, compared live (advisory where pinned: the pin gates).** The gate
+  judges each hosted or git external against its pin; a path external (`../x`)
+  is never pinned and is judged from its live producer, so a use it no longer
+  fits fails the build there (adapt the uses — there is nothing to re-pin). Then every external the run did not compose is
   compared with its **live** producer, offline, and printed in its own section:
   `EXTERNAL_LIVE_INCOMPATIBLE` (warning: a used member changed at signature
   level, was renamed — the new name is given — or is gone; it names the specs

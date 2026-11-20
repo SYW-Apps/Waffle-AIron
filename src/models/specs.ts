@@ -2270,11 +2270,23 @@ export function asSchemaReads(kind: keyof typeof SCHEMA_OF_KIND, doc: Record<str
 /**
  * interface_spec.designView — this contract as the approval sees it: its
  * readiness (status) and the timestamps left out; every other field stays,
- * the methods, endpoints and findings included. Pure, and reads a stored
- * (raw) spec as readily as a loaded one.
+ * the methods, endpoints and findings included. A method naming a
+ * signatureFrom is read as authored: the params, returns and signature text
+ * its source supplies are left out (the source's design, digested where the
+ * source is), so a producer read live never moves this approval through them;
+ * its signatureFrom and its effect stay. Pure, and reads a stored (raw) spec
+ * as readily as a loaded one.
  */
 export function interfaceDesignView<T extends object>(contract: T): T {
-  return withoutFields(contract, outOfApproval('interface'));
+  const view = withoutFields(contract, outOfApproval('interface')) as T & { methods?: unknown };
+  if (!Array.isArray(view.methods)) return view;
+  return { ...view, methods: eachOf(view.methods, asAuthored) } as T;
+}
+
+/** A contract method as its author wrote it: a sourced method without what its source supplies. */
+function asAuthored(method: unknown): unknown {
+  if (!method || typeof method !== 'object' || (method as { signatureFrom?: unknown }).signatureFrom === undefined) return method;
+  return withoutFields(method, ['params', 'returns', 'signature']);
 }
 
 /**

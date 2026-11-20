@@ -83,7 +83,7 @@ export function adviseNetwork(options: ValidationOptions, already?: ValidationIs
 }
 
 /** The heading the advisory live comparison is printed under, by `validate` and `status` alike. */
-const ADVISORY_HEADING = 'Externals, compared live (advisory: the pin gates)';
+const ADVISORY_HEADING = 'Externals, compared live (advisory where pinned: the pin gates)';
 
 /** The heading a member's family-root network findings are printed under. */
 const NETWORK_HEADING = 'Network proofs, judged at the family root (advisory: the root gates)';

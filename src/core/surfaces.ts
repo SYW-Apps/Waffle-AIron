@@ -804,6 +804,12 @@ export function foreignSurfaces(members?: ReadonlyMap<string, SurfaceSnapshot>):
   try {
     const config = loadProjectConfig();
     declared = config ? declaredMembers(config) : [];
+    // A path external (`../x` under `externals`) is read live like a sibling member: it is never pinned.
+    if (config) {
+      for (const e of declaredExternals(config)) {
+        if (e.sourcePath !== undefined) declared.push({ alias: e.alias, source: { path: e.sourcePath }, storage: 'path', ...(e.problem ? { problem: e.problem } : {}) });
+      }
+    }
   } catch {
     declared = [];
   }

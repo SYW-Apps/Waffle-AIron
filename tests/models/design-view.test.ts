@@ -107,6 +107,19 @@ describe('the projections drop exactly the linkage', () => {
     expect(interfaceDesignView({ id: 'ii', component: 'c', methods: [], ...status })).toEqual({ id: 'ii', component: 'c', methods: [] });
   });
 
+  it('a sourced method is read as authored: what its source supplies never reaches the approval, its effect does', () => {
+    const sourced = { name: 'load', description: 'd', signatureFrom: 'geo::tile-source.load', effect: 'read' };
+    const resolved = { ...sourced, params: [{ name: 'key', type: 'geo::tile_key' }], returns: 'string', signature: 'load(key: geo::tile_key): string' };
+    const own = { name: 'own', description: 'o', params: [{ name: 'x', type: 'string' }], returns: 'void', signature: 'own(x: string): void' };
+    // Loaded (source filled in) and stored (as written) read the same.
+    expect(interfaceDesignView({ id: 'ii', component: 'c', methods: [resolved, own] })).toEqual({ id: 'ii', component: 'c', methods: [sourced, own] });
+    expect(interfaceDesignView({ id: 'ii', component: 'c', methods: [sourced, own] })).toEqual({ id: 'ii', component: 'c', methods: [sourced, own] });
+    // A producer's signature change moves nothing here; the method's own effect does.
+    const moved = { ...resolved, returns: 'bytes' };
+    expect(interfaceDesignView({ id: 'ii', methods: [moved] })).toEqual(interfaceDesignView({ id: 'ii', methods: [resolved] }));
+    expect(interfaceDesignView({ id: 'ii', methods: [{ ...resolved, effect: 'io' }] })).not.toEqual(interfaceDesignView({ id: 'ii', methods: [resolved] }));
+  });
+
   it('reads a malformed stored spec without throwing (absent or non-array methods pass through)', () => {
     expect(implementationDesignView({ id: 'a', methods: 'nope', sourcePath: 'x' })).toEqual({ id: 'a', methods: 'nope' });
     expect(typeDesignView({ id: 'b' })).toEqual({ id: 'b' });

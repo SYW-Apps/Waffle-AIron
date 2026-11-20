@@ -212,7 +212,9 @@ interface Selected {
  */
 function selectProjects(family: ProjectFamily, options: ValidationOptions): Selected[] {
   const limit = options.memberDepth ?? Infinity;
-  const nodes = family.nodes.filter((n) => depthOf(family, n) <= limit);
+  // A path external, and anything read below one, is no member: the owner's own gate judges its
+  // uses of it, and its own findings are its own gate's — never a selection entry here.
+  const nodes = family.nodes.filter((n) => depthOf(family, n) <= limit && !underPathExternal(family, n));
   const scope = options.scopeSubsystem;
   if (!scope) return nodes.map((node) => ({ node }));
   const member = nodes.find((n) => n.namespace !== '' && (scope === n.namespace || scope.startsWith(`${n.namespace}::`)));
@@ -487,7 +489,7 @@ function judgeExternal(status: ExternalStatus, project: string, config: ProjectC
   const neverPinned = status.pinnedDigest === undefined ? status.uses.filter((u) => u.state === 'unlocked') : [];
   if (neverPinned.length > 0) {
     out.push(finding(config, 'EXTERNAL_UNPINNED',
-      `${named(project)} uses ${neverPinned.map(useName).join(', ')} of ${who}, which was never pinned: nothing records what its design is judged against, so a producer change that breaks it cannot be told. Pin it (\`wairon externals pin ${status.alias}\`) — and \`wairon lock\` refuses until it is.`,
+      `${named(project)} uses ${neverPinned.map(useName).join(', ')} of ${who}, which was never pinned: nothing records what its design is judged against, so a producer change that breaks it cannot be told. Pin it (\`wairon externals pin ${status.alias}\`, or the next \`wairon lock\`, which pins what the build owes).`,
       project));
   }
   for (const use of status.uses.filter((u) => u.state === 'unavailable' || (u.state === 'unlocked' && !neverPinned.includes(u)))) {
@@ -675,6 +677,14 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
       const users = [...new Set(broken.flatMap((u) => specsUsing(family, status.alias, u.publicName)))].sort();
       const renamed = broken.some((u) => u.state === 'renamed' || u.detail?.includes('follow the rename'));
       const bindings = bindingModulesOf(users);
+      // A path external is read live and never pinned: there is no pin to refresh, only the uses to adapt.
+      if (!status.pinned && (status.sourceKind === 'family' || status.sourceKind === 'path')) {
+        return advisory(config, 'EXTERNAL_LIVE_INCOMPATIBLE',
+          `${who} is read live, and its producer no longer fits this project's uses: ${broken.map(movedUse).join('; ')}. `
+          + `Used by ${users.length ? users.map((s) => `"${s}"`).join(', ') : 'this project\'s references'}. `
+          + (bindings.length ? `Binding module(s) declared there: ${bindings.map((b) => `"${b}"`).join(', ')} — follow the move there too. ` : '')
+          + `Adapt the uses${renamed ? ' (follow the rename: edit them to the new name)' : ''}; it is never pinned, so there is nothing to re-pin.`);
+      }
       return advisory(config, 'EXTERNAL_LIVE_INCOMPATIBLE',
         `${who} moved in its live producer since it was pinned: ${broken.map(movedUse).join('; ')}. `
         + `Used by ${users.length ? users.map((s) => `"${s}"`).join(', ') : 'this project\'s references'}. `
