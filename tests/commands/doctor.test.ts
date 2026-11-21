@@ -176,7 +176,8 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     const exitSpy = vi.spyOn(process, 'exit');
     await runDoctor({});
     const out = printed(logSpy);
-    expect(out).toMatch(/Major: written by wairon \d+ \(unstamped\), the running major is \d+ — run `wairon upgrade`/);
+    expect(out).toMatch(/Major: unstamped, written by wairon \d+\.0 or earlier, the running major is \d+ — run `wairon upgrade`/);
+    expect(out).toContain('a wairon 5 tree is refused there with the way forward');
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 

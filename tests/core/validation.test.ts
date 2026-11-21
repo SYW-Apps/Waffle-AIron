@@ -1319,6 +1319,23 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
+  it('accepts an Adapter published with role implement (an extension point), and still reports an Observer published so', () => {
+    const proj = createTempProject();
+    proj.writeSpec('system', 'system', SYS);
+    proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
+      'publicInterfaces:\n  - details: port\n    component: port-b\n    role: implement\n  - details: queue\n    component: obs-b\n    role: implement\n'));
+    proj.writeSpec('component', 'port-b', comp('port-b', 'sub-b', 'Adapter'));
+    proj.writeSpec('component', 'obs-b', comp('obs-b', 'sub-b', 'Observer'));
+    proj.activate();
+    try {
+      const found = validateProject().issues.filter(i => i.code === 'PUBLIC_INTERFACE_NOT_PORTAL');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"obs-b", a Observer, not a Portal');
+    } finally {
+      proj.cleanup();
+    }
+  });
+
   it('flags a narrative step asserting idempotency against a non-idempotent contract (NARRATIVE_SEMANTIC_UNBACKED)', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', SYS);

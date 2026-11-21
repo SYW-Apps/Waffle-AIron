@@ -1202,7 +1202,12 @@ function reportMajor(tally: Tally): void {
   if (where.state === 'current') {
     line(tally, 'ok', `Major: written by wairon ${where.writtenMajor}, the running major`);
   } else if (where.state === 'older') {
-    line(tally, 'error', `Major: written by wairon ${where.writtenMajor}${where.stamped ? '' : ' (unstamped)'}, the running major is ${where.runningMajor} — run \`wairon upgrade\`; the fixes and the commands wait for it`);
+    // An unstamped tree carries no major: it predates the stamp, so it was
+    // written by wairon 6.0 or by wairon 5, which `wairon upgrade` tells apart.
+    const written = where.stamped
+      ? `written by wairon ${where.writtenMajor}`
+      : `unstamped, written by wairon ${where.writtenMajor}.0 or earlier`;
+    line(tally, 'error', `Major: ${written}, the running major is ${where.runningMajor} — run \`wairon upgrade\`; the fixes and the commands wait for it${where.stamped ? '' : ' (a wairon 5 tree is refused there with the way forward)'}`);
   } else {
     line(tally, 'error', `Major: written by wairon ${where.writtenMajor}, the running major is ${where.runningMajor} (${where.state === 'newer' ? 'newer' : 'out of the upgrade window'}) — ${where.advice ?? 'install the release that can read it'}`);
   }

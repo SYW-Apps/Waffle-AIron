@@ -56,7 +56,11 @@ if [ -n "$latest_pre" ]; then
   pre_base="$(printf '%s' "$latest_pre" | sed -E "s/^v([0-9]+\.[0-9]+\.[0-9]+)-${channel}\.[0-9]+$/\1/")"
   pre_n="$(printf '%s' "$latest_pre" | sed -E "s/.*-${channel}\.([0-9]+)$/\1/")"
   higher="$(printf '%s\n%s\n' "$stable_base" "$pre_base" | sort -V | tail -n1)"
-  if [ "$higher" = "$pre_base" ] && [ "$pre_base" != "$stable_base" ]; then
+  # A bump the line does not cover yet (a [major] or [minor] on a patch line)
+  # starts a fresh line on the bumped base instead of continuing the counter.
+  wanted="$(bump_base "$stable_base" "$bump")"
+  covers="$(printf '%s\n%s\n' "$wanted" "$pre_base" | sort -V | tail -n1)"
+  if [ "$higher" = "$pre_base" ] && [ "$pre_base" != "$stable_base" ] && [ "$covers" = "$pre_base" ]; then
     printf '%s-%s.%s' "$pre_base" "$channel" "$((pre_n + 1))"
     exit 0
   fi
