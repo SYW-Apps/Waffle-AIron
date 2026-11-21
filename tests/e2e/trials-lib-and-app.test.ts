@@ -75,7 +75,7 @@ function geoKit(o: GeoOptions = {}): FixtureTree {
       id: 'tiling', description: 'Tile arithmetic.',
       publicInterfaces: [
         { component: 'tile-library', details: 'The crate\'s tile API.' },
-        { component: 'tile-source-port', details: 'Where tiles load from.', role: 'implement', shared: true },
+        { component: 'tile-source-port', details: 'Where tiles load from.', role: 'implement' },
         { typeDef: 'tile-key', details: 'A tile key.' },
       ],
     }],
