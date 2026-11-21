@@ -2,14 +2,14 @@
   "format": 4,
   "stateId": {
     "algorithm": "sha256+design+policy",
-    "digest": "9e3eea0c27db4f1356369230691c457829a4bfb3b2eb959f6840d7af05a6a819"
+    "digest": "1c3464e0cc00d145d00e80d33f916f44acbe196e6b9365d578e6edbeb132e215"
   },
-  "lockedAt": "2026-11-21T16:35:35.032Z",
+  "lockedAt": "2026-11-21T18:44:10.101Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "7.0.0-dev.0",
+  "validatorVersion": "7.0.0-dev.1",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -403,7 +403,7 @@
     ".wai/specs/implementations/authorization_impl.yaml": "2029b3dc0a6deab35344fa29a5585b2314636b251df4eb70da038d1a92ce42cd",
     ".wai/specs/implementations/backup_schedule_impl.yaml": "77554a00ed4f9074fdd7a9e214a8dc3b7454560a625a1185264a16386df79936",
     ".wai/specs/implementations/binding_module_adapter_impl.yaml": "2e5462b6a366a204ade6f18b48d061de48959278083f7d75800be1c58fb522d5",
-    ".wai/specs/implementations/boundary_migration_impl.yaml": "3c41112cfcaa31ca006f4152a9b44d9e8805cfa335a18826447555454156c11b",
+    ".wai/specs/implementations/boundary_migration_impl.yaml": "74fa62b49b8bb5a2c56c77c08846f98b1be1ae66d5f483f38650cfafc2d6c20a",
     ".wai/specs/implementations/budget_policy_impl.yaml": "bba10abba2aa2925eed9f7be33df2f9f626dd4e4c5d70377583bfc232a6c5afa",
     ".wai/specs/implementations/claude_exporter_impl.yaml": "f3ba2403b1e0c1011c73c606e2567716d574b4f9460049c5d9354b24a7845073",
     ".wai/specs/implementations/cli_core_adapter_impl.yaml": "e542b33dab8bb2543de097f945e3651375278c2616e3de1c4dc9da0762e74693",
@@ -545,7 +545,7 @@
     ".wai/specs/implementations/member_registration_impl.yaml": "1323f18af469190e4585332d46f59a1b195caf9c134f9b177e9c686b7a6740ef",
     ".wai/specs/implementations/membership_migration_impl.yaml": "4574718dd12526bc6ce1201218364f916b60493df53ccc773c3ce00b7192b1c5",
     ".wai/specs/implementations/migration_authoring_adapter_impl.yaml": "a5471dfeae8842c680c92794535d9e44c634e85e772f7d94adbb4ea13f57b5bb",
-    ".wai/specs/implementations/migration_core_adapter_impl.yaml": "03113c5f7c0101d0a787637f31aa8c763139e3166ed8428aa042ce15aff37fd1",
+    ".wai/specs/implementations/migration_core_adapter_impl.yaml": "d793da46a44edef9911dab0ac52207d905d5355de9b8faad4f3b7d8f98e433fc",
     ".wai/specs/implementations/migration_portal_impl.yaml": "f737974875030b0ab2c065536292b7d55b32f3b7284ced2eef2a545865c73433",
     ".wai/specs/implementations/migration_surfaces_adapter_impl.yaml": "6b0cb4a6ecf3ab9cc09a4cee2f9e4960e704373d7d1caeb5e0856b02885db75d",
     ".wai/specs/implementations/migration_validator_adapter_impl.yaml": "ebeb89de0a0c6ed5f3d8f0f32384ba5d64ac3309c234dcb69aba00c284796c96",
@@ -872,7 +872,7 @@
     ".wai/specs/interfaces/iinstance_upgrade.yaml": "fa5a17527ab956633f472cfef4254bfd82f54dce73dbbd8d52885d95df14e24a",
     ".wai/specs/interfaces/iinstance_version_store.yaml": "1650cacad1babb73f5bbc2adc5c716a5b8cad5018a98e5907a915c9d84b218fc",
     ".wai/specs/interfaces/iintegrity_rules.yaml": "9fa9cb6f389006afb32ba4b86d9f85b3871fe1002c3d16947f2014cf9d3d3086",
-    ".wai/specs/interfaces/iintrinsic_rules.yaml": "a50af0f15039cb6268a8ed98e265470bf660be40bc20500f45568d843da926b2",
+    ".wai/specs/interfaces/iintrinsic_rules.yaml": "d5cd2338d16374117eec5bd5a23d6be36c0559835af6983a203dc073303c0b70",
     ".wai/specs/interfaces/ilandscape_graph.yaml": "9732a5604ea9557516b2e3b85a901b5d2108c4c77c77fa78f0f9029a6560c57c",
     ".wai/specs/interfaces/ilandscape_orchestrator.yaml": "9fd4d4499025aaed299f613de3d0f69fad8ef8a79ca996f89c106331efa7628c",
     ".wai/specs/interfaces/ilandscape_portal.yaml": "b00152d4a9a03584a0ef00790e4c1244d13c30877c83778697182abcb7615b09",
@@ -902,7 +902,7 @@
     ".wai/specs/interfaces/imember_registration.yaml": "9d2d8cc844402ffa3f6e304bba8a6e56dea177e56336f04677817bd7c9fe3eb6",
     ".wai/specs/interfaces/imembership_migration.yaml": "dfbc4a210e51b30ac572aa28cbf70ccd2070245ef6c2a62427dd3d092fa76f64",
     ".wai/specs/interfaces/imigration_authoring_adapter.yaml": "b77e04408d4e77fa4704e88503f9d1faa7cb672c4c9377269692b5296df3ac88",
-    ".wai/specs/interfaces/imigration_core_adapter.yaml": "45d12c402d80445e86b0d43f1e6f9dbe9187ee0ca32f3cf1f13f06ad1af86597",
+    ".wai/specs/interfaces/imigration_core_adapter.yaml": "885cbe75f95b1144c804f05bc28f8b6da364f1edb9790422c949cd354bc5e9fa",
     ".wai/specs/interfaces/imigration_portal.yaml": "cc58bfbd10e8b05ddd69af662e8dd24f8280d6016f01810ad41fc495ccaecfb9",
     ".wai/specs/interfaces/imigration_surfaces_adapter.yaml": "0f9f48d3a7a7e09290e6fb8dd2f5a4df759432917cfb75f97230960266946a33",
     ".wai/specs/interfaces/imigration_validator_adapter.yaml": "daa906aff535d8fe33e16413823b669042a327ba7909353b90da5d243a00e0fe",
@@ -1860,18 +1860,18 @@
   },
   "parts": {
     "composition": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-    "design": "b2520d8edfb080a0c03b456d70850f7fb6a18e283e4b4894c4fbee1bbb64279c",
+    "design": "d2c1f6e1b3b83d644382b0b80aa502be40c20672460d534acb57bef24ef110fd",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "selections": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
   "code": {
     "analyzer": {
-      "validatorVersion": "7.0.0-dev.0",
+      "validatorVersion": "7.0.0-dev.1",
       "doctrineDigest": "d2d1c7948542a202b27a6ca98b46774ecc1afc867ec3da9daf0b5c0ad96c2c90",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 21,
+    "warnings": 0,
     "notices": 95
   }
 }
