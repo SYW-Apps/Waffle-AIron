@@ -35,7 +35,7 @@ import {
   invalidateSpecCache, workspaceFor, resolveChainingParent,
 } from '../../src/core/specs.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';

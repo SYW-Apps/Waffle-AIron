@@ -295,23 +295,21 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   // .claude/agents/ (and the context every session loads) proportional to one
   // layer, not the whole deep tree.
   const isLocal = (id: string): boolean => !id.includes('::');
-  // Each member the bound root declares — `members` (or, in the v5 reading only,
-  // a legacy L1 mount) — is one delegating owner here, shaped as the mount
-  // subsystem it used to be.
+  // Each member the bound root declares in `members` is one delegating owner
+  // here, shaped as a subsystem carrying its project path.
   const members = graph().nodes
     .filter((n) => n.parent === '' && n.mountAlias !== undefined)
     .map((n) => ({
       id: n.mountAlias!,
       name: n.mountAlias!,
       projectPath: path.relative(getProjectRoot(), n.directory).replace(/\\/g, '/'),
-      form: n.mountForm,
-      createdAt: n.legacyMount?.createdAt ?? system.createdAt,
-      updatedAt: n.legacyMount?.updatedAt ?? system.updatedAt,
+      createdAt: system.createdAt,
+      updatedAt: system.updatedAt,
     }));
   const subsystems = [
     ...loadSubsystemSpecs().filter((s) => isLocal(s.id)),
     ...members,
-  ] as (ReturnType<typeof loadSubsystemSpecs>[number] & { form?: 'members' | 'mount' })[];
+  ] as ReturnType<typeof loadSubsystemSpecs>;
   // Stage 8: the parts this layer declares — their subsystems are this
   // layer's own (no delegating owner); a git part's files are read-only here.
   const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
@@ -377,11 +375,8 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
     // It never enumerates the child's internals here — that is the whole point of
     // stacking agents per layer instead of flattening the tree at the top.
     if (sub.projectPath) {
-      // The declaration it owns: the legacy mount's spec file, or — declared in
-      // project.yaml `members` — the member's own tree it delegates into.
-      const mountSpecPath = sub.form === 'members'
-        ? `${sub.projectPath}/**`
-        : path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
+      // The declaration it owns: the member's own tree it delegates into.
+      const mountSpecPath = `${sub.projectPath}/**`;
       agents.push({
         id: `${sub.id}-owner`,
         name: `${sub.name} (member project)`,

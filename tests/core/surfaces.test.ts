@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -21,12 +20,10 @@ import {
   listSnapshots,
   surfaceRepository,
   removeSnapshot,
-  listFamilyPins,
 } from '../../src/core/surfaces.js';
 import { computeStateIdAt, loadSystemSpec } from '../../src/core/specs.js';
 import { toOpenApiSet, fromOpenApi, isOpenApiDocument } from '../../src/core/openapi.js';
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import type {
   ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, SurfaceContractEntry, SurfaceSnapshot,
@@ -395,7 +392,7 @@ describe('OpenAPI round-trip of x-wairon-* contract keys', () => {
   });
 });
 
-describe('standalone-child validation against pinned parent snapshots', () => {
+describe('computeStateIdAt', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -403,327 +400,16 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  function buildFamily(): string {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
-    buildParent(rootDir);
-    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
-    const childDir = path.join(rootDir, 'packages', 'transpiler');
-
-    // Child content: an Adapter consuming the parent's gateway across the tree.
-    setProjectRoot(childDir);
-    saveSpec('subsystem', subsystem('transpiler', { parentSystem: 'transpiler' }));
-    saveComponentSpec(component('parent-gateway-adapter', 'transpiler', {
-      componentType: 'Adapter', dependsOn: ['super::gateway-portal'],
-    } as Partial<ComponentSpec>));
-    saveInterfaceSpec(iface('iparent-gateway-adapter', 'parent-gateway-adapter', [
-      { name: 'fetchRecord', description: 'fetches via the parent gateway', signature: 'fetchRecord(id: string): json', returns: 'json' },
-    ]));
-    saveImplementationSpec({
-      id: 'parent-gateway-adapter-impl', name: 'impl', description: 'd', contract: 'iparent-gateway-adapter',
-      methods: [{
-        name: 'fetchRecord',
-        narrative: [
-          { stepNumber: 1, description: 'call the parent gateway', type: 'call', targetComponent: 'super::gateway-portal', targetMethod: 'fetchRecord' },
-        ],
-      }],
-      status: 'complete', createdAt: now, updatedAt: now,
-    } as ImplementationSpec);
-    invalidateSpecCache();
-
-    // The child holds a stage-1 sibling pin of the parent's core-sub, as
-    // `surface pin` once wrote it (stage 3 retired the writer; the pins a child
-    // holds are still consulted until stage 4).
-    surfaceRepository.saveSnapshot(SurfaceSnapshotSchema.parse({
-      projectName: 'root-system::core-sub', origin: 'generated', stateId: 'sha256:pinned', generatedAt: now, types: [],
-      interfaces: [{
-        id: 'gateway-portal', name: 'gateway-portal', audience: 'project', type: 'REST', component: 'gateway-portal', details: 'api',
-        methods: [{ name: 'fetchRecord', description: 'Fetches a record by id.', signature: 'fetchRecord(id: string): json', returns: 'json' }],
-      }],
-    }), childDir);
-    invalidateSpecCache();
-    return childDir;
-  }
-
-  v5it('a covered super:: call validates silently; a missing method is SURFACE_REF_NOT_EXPOSED', () => {
-    const childDir = buildFamily();
-
-    // Standalone child context.
-    setProjectRoot(childDir);
-    const res = validateProject();
-    const codes = res.issues.map(i => i.code);
-    expect(codes).not.toContain('EXTERNAL_CHECK_UNAVAILABLE');
-    expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
-    expect(codes).not.toContain('INVALID_TARGET_COMPONENT_REFERENCE');
-    expect(codes).not.toContain('CROSS_SUBSYSTEM_NON_ADAPTER');
-
-    // Now call a method the surface does not expose.
-    saveImplementationSpec({
-      id: 'parent-gateway-adapter-impl', name: 'impl', description: 'd', contract: 'iparent-gateway-adapter',
-      methods: [{
-        name: 'fetchRecord',
-        narrative: [
-          { stepNumber: 1, description: 'call a method the parent never exposed', type: 'call', targetComponent: 'super::gateway-portal', targetMethod: 'noSuchMethod' },
-        ],
-      }],
-      status: 'complete', createdAt: now, updatedAt: now,
-    } as ImplementationSpec);
-    invalidateSpecCache();
-    setProjectRoot(childDir);
-    const res2 = validateProject();
-    const notExposed = res2.issues.filter(i => i.code === 'SURFACE_REF_NOT_EXPOSED');
-    expect(notExposed).toHaveLength(1);
-    expect(notExposed[0].message).toMatch(/noSuchMethod.*root-system/s);
-    // Covered-but-wrong keeps FULL strength: the vendored snapshot is the
-    // verifiable contract, so the mismatch is a hard error even in a chained
-    // subproject — never softened.
-    expect(notExposed[0].severity).toBe('error');
-  });
-
-  v5it('a non-Adapter crossing the project boundary is still a FULL-STRENGTH boundary violation', () => {
-    const childDir = buildFamily();
-    setProjectRoot(childDir);
-    saveComponentSpec(component('rogue-orch', 'transpiler', {
-      componentType: 'Orchestrator', dependsOn: ['super::gateway-portal'],
-    } as Partial<ComponentSpec>));
-    invalidateSpecCache();
-    setProjectRoot(childDir);
-    const res = validateProject();
-    const violation = res.issues.filter(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER' && i.message.includes('rogue-orch'));
-    expect(violation).toHaveLength(1);
-    // The ref RESOLVED against a vendored snapshot, so even in a chained
-    // subproject validated standalone the boundary verdict stays an error —
-    // it is neither downgraded nor waived.
-    expect(violation[0].severity).toBe('error');
-    expect(res.valid).toBe(false);
-  });
-
-  v5it("a cross-tree ref nothing covers is unavailable in the child's own gate — never resolved through the parent, never a pass", () => {
-    const childDir = buildFamily();
-    setProjectRoot(childDir);
-    saveComponentSpec(component('mystery-adapter', 'transpiler', {
-      componentType: 'Adapter', dependsOn: ['super::no-such-portal'],
-    } as Partial<ComponentSpec>));
-    invalidateSpecCache();
-    setProjectRoot(childDir);
-    const res = validateProject();
-    // The parent is on disk, but the owner's gate never walks up to it (stage
-    // 4): a deprecated form naming no alias has nothing to be judged against.
-    const unavailable = res.issues.filter(i => i.code === 'EXTERNAL_CHECK_UNAVAILABLE');
-    expect(unavailable.map(i => [i.specId, i.severity])).toEqual([['mystery-adapter', 'warning']]);
-    expect(unavailable[0].resolution?.outcome).toBe('unavailable');
-    expect(res.issues.map(i => i.code)).not.toContain('INVALID_DEPENDENCY_REFERENCE');
-  });
-
-  v5it("a chained child's source paths are its own: a file missing from its root is reported against that root", () => {
-    const childDir = buildFamily();
-    setProjectRoot(childDir);
-    // A complete implementation whose sourcePath resolves nowhere in the child
-    // root. A chained child's source paths are relative to its own root, so this
-    // is simply code that does not exist — not a path only the parent can read.
-    saveComponentSpec(component('trans-orch', 'transpiler'));
-    saveInterfaceSpec(iface('itrans-orch', 'trans-orch', [
-      { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
-    ]));
-    saveImplementationSpec({
-      id: 'trans-orch-impl', name: 'impl', description: 'd', contract: 'itrans-orch',
-      sourcePath: 'src/lives-in-the-parent.ts',
-      // The method's own file exists in the child; the implementation's
-      // own file does not exist at the child's root, so it is planned there.
-      methods: [{ name: 'run', sourcePath: 'src/run.ts', narrative: [] }],
-      status: 'complete', createdAt: now, updatedAt: now,
-    } as ImplementationSpec);
-    fs.mkdirSync(path.join(childDir, 'src'), { recursive: true });
-    fs.writeFileSync(path.join(childDir, 'src', 'run.ts'), 'export function run(): void {}');
-    invalidateSpecCache();
-    setProjectRoot(childDir);
-    const res = validateProject();
-    // A named file not on disk is planned, judged against the child's own
-    // root (never resolved against the parent's).
-    const planned = res.issues.filter(i => i.code === 'SOURCE_FILE_PLANNED');
-    expect(planned).toHaveLength(1);
-    expect(planned[0].message).toContain('src/lives-in-the-parent.ts');
-    expect(res.issues.filter(i => i.code === 'MISSING_SOURCE_FILE')).toEqual([]);
-  });
-
-});
-
-describe('cross-tree references are matched by the provider they name', () => {
-  // Two siblings of one family publish an `invoice-portal` with different
-  // contracts: billing's serves invoice.void, archive's also exposes
-  // purgeInvoice and serves no capability. A third sibling, ledger, publishes
-  // something else. The client below calls purgeInvoice and dispatches
-  // invoice.void, so judged against either invoice-portal one of its two steps
-  // is not exposed — a verdict against neither shows as no SURFACE_REF_NOT_EXPOSED.
-  const dirs: string[] = [];
-  afterEach(() => {
-    setProjectRoot(null);
-    invalidateSpecCache();
-    for (const dir of dirs.splice(0)) {
-      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* win file locks */ }
-    }
-  });
-
-  const portalEntry = (component: string, methods: string[], capabilities: string[] = []): SurfaceContractEntry => ({
-    id: component, name: component, audience: 'project', type: 'Custom', component, details: '',
-    methods: methods.map((name) => ({ name, description: `${name} by id`, signature: `${name}(id: string): void`, returns: 'void' })),
-    ...(capabilities.length
-      ? { dispatch: capabilities.map((capability) => ({ capability, component: 'invoice-orch', method: 'handle' })) }
-      : {}),
-  });
-  const pin = (projectName: string, interfaces: SurfaceContractEntry[]): SurfaceSnapshot => SurfaceSnapshotSchema.parse({
-    projectName, origin: 'generated', stateId: 'sha256:pinned', generatedAt: now, interfaces, types: [],
-  });
-
-  const BILLING = pin('root-system::billing', [portalEntry('invoice-portal', ['fetchInvoice'], ['invoice.void'])]);
-  const ARCHIVE = pin('root-system::archive', [portalEntry('invoice-portal', ['fetchInvoice', 'purgeInvoice'])]);
-  const LEDGER = pin('root-system::ledger', [portalEntry('ledger-portal', ['postEntry'])]);
-
-  /**
-   * A parent mounting a chained child whose Adapter consumes `ref`: it depends
-   * on it, calls `callMethod` on it and dispatches invoice.void through it. The
-   * child holds `pins` in its own .wai/surfaces/.
-   */
-  function family(ref: string, callMethod: string, pins: SurfaceSnapshot[]): { root: string; kidDir: string } {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-provider-'));
-    dirs.push(root);
-    fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
-    setProjectRoot(root);
-    saveSystemSpec({
-      schemaVersion: '1.0.0', name: 'root-system', vision: 'provider matching fixture',
-      boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
-    });
-    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
-    const kidDir = path.join(root, 'packages', 'kid');
-
-    setProjectRoot(kidDir);
-    saveSpec('subsystem', subsystem('desk', { parentSystem: 'kid' }));
-    saveComponentSpec(component('invoice-client', 'desk', {
-      componentType: 'Adapter', dependsOn: [ref],
-    } as Partial<ComponentSpec>));
-    saveInterfaceSpec(iface('iinvoice-client', 'invoice-client', [
-      { name: 'settle', description: 'settles an invoice', signature: 'settle(id: string): void', returns: 'void' },
-    ]));
-    saveImplementationSpec({
-      id: 'invoice-client-impl', name: 'impl', description: 'd', contract: 'iinvoice-client',
-      methods: [{
-        name: 'settle',
-        narrative: [
-          { stepNumber: 1, description: 'call the invoice portal', type: 'call', targetComponent: ref, targetMethod: callMethod },
-          { stepNumber: 2, description: 'void through the invoice portal', type: 'dispatch', targetComponent: ref, capability: 'invoice.void' },
-        ],
-      }],
-      status: 'complete', createdAt: now, updatedAt: now,
-    } as ImplementationSpec);
-    runWithProjectRoot(kidDir, () => { for (const snapshot of pins) surfaceRepository.saveSnapshot(snapshot); });
-    invalidateSpecCache();
-    return { root, kidDir };
-  }
-
-  /** The child as a clone that never had its parent: the pins are all it has. */
-  function cloneWithoutParent(kidDir: string): string {
-    const clone = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-clone-'));
-    dirs.push(clone);
-    fs.cpSync(kidDir, clone, { recursive: true });
-    return clone;
-  }
-
-  function verdict(root: string): ValidationResult {
-    invalidateSpecCache();
-    setProjectRoot(root);
-    return validateProject();
-  }
-
-  /** The findings of one code as `severity @specId`, sorted. */
-  function findings(res: ValidationResult, code: string): string[] {
-    return res.issues.filter((i) => i.code === code).map((i) => `${i.severity} @${i.specId}`).sort();
-  }
-
-  v5it('a super:: reference two providers answer with different contracts is SURFACE_REF_AMBIGUOUS, judged against neither', () => {
-    const res = verdict(cloneWithoutParent(family('super::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir));
-
-    // The dependency, the call and the dispatch each report it.
-    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([
-      'error @invoice-client', 'error @invoice-client-impl', 'error @invoice-client-impl',
-    ]);
-    for (const finding of res.issues.filter((i) => i.code === 'SURFACE_REF_AMBIGUOUS')) {
-      expect(finding.message).toContain('"root-system::billing"');
-      expect(finding.message).toContain('"root-system::archive"');
-      expect(finding.message).not.toContain('root-system::ledger');
-      // The ambiguity is the verdict: it carries the resolution that decided it.
-      expect(finding.resolution?.outcome).toBe('ambiguous');
-    }
-    const codes = res.issues.map((i) => i.code);
-    expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
-    expect(codes).not.toContain('EXTERNAL_CHECK_UNAVAILABLE');
-    expect(res.valid).toBe(false);
-  });
-
-  v5it("from the parent root the child's references are the child's own gate's — the parent reports none of them", () => {
-    const res = verdict(family('super::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).root);
-
-    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
-    expect(findings(res, 'SURFACE_REF_NOT_EXPOSED')).toEqual([]);
-  });
-
-  v5it('a reference that names its provider is judged against that provider alone', () => {
-    // billing never exposed purgeInvoice, and archive — which does — is not consulted.
-    const billing = verdict(cloneWithoutParent(
-      family('super::billing::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
-    ));
-    expect(findings(billing, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
-    const billingGaps = billing.issues.filter((i) => i.code === 'SURFACE_REF_NOT_EXPOSED');
-    expect(billingGaps.map((i) => i.specId)).toEqual(['invoice-client-impl']);
-    expect(billingGaps[0].message).toMatch(/purgeInvoice.*"root-system::billing"/s);
-
-    // archive serves no invoice.void, and billing — which does — is not consulted.
-    const archive = verdict(cloneWithoutParent(
-      family('super::archive::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
-    ));
-    expect(findings(archive, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
-    const archiveGaps = archive.issues.filter((i) => i.code === 'SURFACE_REF_NOT_EXPOSED');
-    expect(archiveGaps.map((i) => i.specId)).toEqual(['invoice-client-impl']);
-    expect(archiveGaps[0].message).toMatch(/invoice\.void.*"root-system::archive"/s);
-  });
-
-  v5it("a provider that does not expose the name never borrows another provider's contract", () => {
-    // ledger publishes no invoice-portal; billing and archive do, and neither stands in for it.
-    const res = verdict(cloneWithoutParent(
-      family('super::ledger::invoice-portal', 'fetchInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
-    ));
-
-    expect(findings(res, 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @invoice-client', 'warning @invoice-client-impl']);
-    const codes = res.issues.map((i) => i.code);
-    expect(codes).not.toContain('SURFACE_REF_AMBIGUOUS');
-    expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
-  });
-
-  v5it('providers exposing the name with the same contract leave nothing ambiguous', () => {
-    const sameAsBilling = pin('root-system::archive', BILLING.interfaces);
-    const res = verdict(cloneWithoutParent(
-      family('super::invoice-portal', 'purgeInvoice', [BILLING, sameAsBilling]).kidDir,
-    ));
-
-    expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
-    // It resolved: the one contract both declare judges the call it does not expose.
-    expect(findings(res, 'SURFACE_REF_NOT_EXPOSED')).toEqual(['error @invoice-client-impl']);
-  });
-});
-
-describe('stage-1 family pins + computeStateIdAt', () => {
-  let rootDir: string;
-  afterEach(() => {
-    setProjectRoot(null);
-    invalidateSpecCache();
-    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
-  });
-
-  /** Parent + chained child holding a stage-1 family pin, a sibling pin and a foreign import. */
+  /** A parent and a child project beneath it, the child holding generated pins and a foreign import. */
   function buildChainedWorld(): string {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-'));
     buildParent(rootDir);
-    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler', status: 'draft' }), 'transpiler');
-    invalidateSpecCache();
     const childDir = path.join(rootDir, 'packages', 'transpiler');
+    fs.mkdirSync(path.join(childDir, '.wai', 'specs'), { recursive: true });
+    runWithProjectRoot(childDir, () => saveSystemSpec({
+      schemaVersion: '1.0.0', name: 'transpiler', vision: 'child fixture', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    }));
+    invalidateSpecCache();
     const snap = (projectName: string, origin: 'generated' | 'authored') => SurfaceSnapshotSchema.parse({
       projectName, origin, stateId: 'sha256:pinned', generatedAt: now, types: [], interfaces: [],
     });
@@ -736,19 +422,7 @@ describe('stage-1 family pins + computeStateIdAt', () => {
     return childDir;
   }
 
-  v5it('lists the generated pins a root holds, parent and sibling, never a foreign import', () => {
-    const childDir = buildChainedWorld();
-    setProjectRoot(childDir);
-    expect(listFamilyPins().map((pin) => [pin.key, pin.role])).toEqual([
-      ['root-system', 'parent'],
-      ['root-system::core-sub', 'sibling'],
-    ]);
-    // Reads only the bound root: the parent holds no pins of its own.
-    setProjectRoot(rootDir);
-    expect(listFamilyPins()).toEqual([]);
-  });
-
-  v5it('computeStateIdAt returns the hash, restores the previous binding, and is null for a non-project root', () => {
+  it('computeStateIdAt returns the hash, restores the previous binding, and is null for a non-project root', () => {
     const childDir = buildChainedWorld();
 
     // Bind the CHILD; hash the PARENT.

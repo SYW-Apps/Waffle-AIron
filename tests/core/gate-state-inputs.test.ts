@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { computeApprovalId } from '../../src/core/validation.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import { stateIdEquals } from '../../src/core/statehash.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 

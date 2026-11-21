@@ -23,7 +23,6 @@ import {
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
 import type { CarriedDebtKind, DeclaredMember, NetworkDeclaration, PackRequirement, PackSelection, PracticeSelection, ProjectIdentity } from '../../models/project.js';
-import type { RetiredReachFact } from '../../models/specs.js';
 import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
@@ -554,12 +553,6 @@ export interface RuleContext {
    * contained member's native library against. Absent on a candidate run.
    */
   projectLanguages?: Map<string, string>;
-  /**
-   * The retired reachability forms the run's scan met: the loaded specs read
-   * them compatibly, so these facts are the only place the stored form is
-   * still visible. Absent on a candidate run.
-   */
-  retiredReachFacts?: RetiredReachFact[];
   /**
    * What the loader's signature resolution recorded — the sources it met and
    * the stored texts their params contradict. The loaded interfaces and types

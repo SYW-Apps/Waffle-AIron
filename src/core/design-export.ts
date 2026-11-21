@@ -298,8 +298,8 @@ function memberDependency(member: MemberPublicNames, lock: InputsLock | null, us
 
 /**
  * Steps 14-16: the bound project's direct project members — each node of the
- * graph whose parent is the bound root, an in-tree subdirectory member and a
- * legacy mount included (a part is no node: its subsystems are this
+ * graph whose parent is the bound root, an in-tree subdirectory member
+ * included (a part is no node: its subsystems are this
  * project's own) — each with its L0 table's bound keys mapped to
  * `alias::publicName`.
  */

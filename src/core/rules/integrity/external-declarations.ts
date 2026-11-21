@@ -50,7 +50,7 @@ export const externalDeclarationsRule: SddRule = {
           : `This project's .wai/project.yaml declares the external "${external.alias}" (producer "${external.project}"), which does not resolve: ${external.problem}. Fix the alias or the producer id, add \`source: { path: <the producer's root> }\` to say where it lives, or pin it (\`wairon externals pin\`) so this project's gate has something to judge it against.`,
       );
     }
-    // An alias a legacy L1 mount also takes: one alias names one project.
+    // An alias a member also takes: one alias names one project.
     for (const problem of family.problems) {
       if (problem.kind !== 'alias-conflict' || problem.projects[0] !== '' || !problem.id || reported.has(problem.id)) continue;
       ctx.addIssue(

@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import type { z } from 'zod';
 import {
   ComponentSpecSchema,
@@ -81,21 +80,6 @@ describe('the projections drop exactly the linkage', () => {
     expect(typeDesignView(type)).toEqual({
       kind: 'entity', id: 't', name: 'T', fields: [{ name: 'a', type: 'string', optional: false }],
       methods: [{ name: 'm', signature: 'm(): bool', returns: 'bool' }],
-    });
-  });
-
-  v5it('a component loses each mount\'s via and its externalLinks, keeping portal and prefixes', () => {
-    const component = {
-      id: 'web', name: 'Web', description: 'd', subsystem: 's', componentType: 'Portal', owns: [], dependsOn: [],
-      transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'Browsers', scope: 'outside' },
-      mounts: [{ portal: 'api', prefixes: ['/api'], via: 'apiRouter' }],
-      externalLinks: [{ type: 'implementation', url: 'https://example.com' }],
-      createdAt: now, updatedAt: now,
-    };
-    expect(componentDesignView(component)).toEqual({
-      id: 'web', name: 'Web', description: 'd', subsystem: 's', componentType: 'Portal', owns: [], dependsOn: [],
-      transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'Browsers', scope: 'outside' },
-      mounts: [{ portal: 'api', prefixes: ['/api'] }],
     });
   });
 

@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import * as path from 'path';
-import { getProjectRoot, legacyFolderAt } from '../utils/fs.js';
+import { getProjectRoot } from '../utils/fs.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from './project-config.js';
 
@@ -46,9 +46,8 @@ export interface WaiPaths {
  */
 export function aiPathsAt(rootDir: string): WaiPaths {
   const resolvedRoot = path.resolve(rootDir);
-  // .wai/ is the project's folder; a wairon 5 `.wairon/` is read only in the v5 reading.
-  const aiDirAt = (...segments: string[]): string =>
-    path.join(legacyFolderAt(resolvedRoot) ?? path.join(resolvedRoot, '.wai'), ...segments);
+  // .wai/ is the project's folder.
+  const aiDirAt = (...segments: string[]): string => path.join(resolvedRoot, '.wai', ...segments);
   // Where the specs live is configuration (`paths.specsDir`, else .wai/specs), so it
   // is resolved through the project config Repository bound to THIS root. Its index
   // never throws, and still reads the folder from a configuration that fails the schema.

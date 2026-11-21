@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -235,7 +234,7 @@ describe('landscape orchestrator (sdd_host)', () => {
     expect(snap.interfaces).toEqual([]);
   });
 
-  v5it('refreshPublicSurface: resolves type/details from the referenced subsystem public interface', () => {
+  it('refreshPublicSurface: resolves type/details from the referenced subsystem public interface', () => {
     const rec = project('resolve-proj');
     // sub1 publishes gql_portal through igql_portal as GraphQL; the L0 entry
     // then names only the subsystem and the interface, and inherits the rest.
@@ -243,7 +242,7 @@ describe('landscape orchestrator (sdd_host)', () => {
     const indexPath = path.join(rec.rootPath, '.wai', 'specs', '.index.yaml');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const system = readYamlFile(indexPath) as any;
-    system.publicInterfaces = [{ id: 'gql', name: 'GraphQL API', subsystem: 'sub1', interface: 'igql_portal' }];
+    system.publicInterfaces = [{ as: 'gql', name: 'GraphQL API', from: 'sub1', interface: 'igql_portal' }];
     writeYamlFile(indexPath, system);
 
     const snap = refreshPublicSurface(cfg, MASTER, 'resolve-proj');

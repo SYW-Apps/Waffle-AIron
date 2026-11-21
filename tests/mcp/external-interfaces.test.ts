@@ -175,7 +175,7 @@ describe('member announcement + family context', () => {
 
   it('a credential that reaches the top project still sees the parent, by the alias it declares', () => {
     runWithProjectBinding(childDir, { topRoot: rootDir, parentReach: true }, () => {
-      expect(resolveChainingParent()).toMatchObject({ alias: 'kid', form: 'members' });
+      expect(resolveChainingParent()).toMatchObject({ alias: 'kid' });
     });
   });
 

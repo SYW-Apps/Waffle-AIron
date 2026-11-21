@@ -308,12 +308,11 @@ describe('stage 6 — the membership verbs', () => {
   });
 });
 
-describe('stage 6 — detach and adopt on the reference family (canonicalized by the chaining migration)', () => {
+describe('stage 6 — detach and adopt on the reference family', () => {
   it('core — with a member of its own and consumers on both sides — detaches and is adopted back: its specs and its own member byte-identical, every configuration semantically identical', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const r = buildReferenceFamily();
     try {
-      migrate(r.top, { verb: 'chaining' });
       widen(r.core);
       // core names shared (a sibling) through the family, so detach writes it: its configuration comes back
       // semantically identical (a first write materializes the schema's defaults, as every save does);

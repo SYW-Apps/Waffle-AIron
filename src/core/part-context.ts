@@ -14,7 +14,6 @@ import {
   type InterfaceSpec,
   type ParentExcerpt,
   type TypeSpec,
-  retiredMountsOf,
 } from '../models/index.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
@@ -96,7 +95,6 @@ function referencedKeys(part: ScannedPart, types: TypeSpec[]): Set<string> {
     c.dependsOn.forEach(add);
     (c.owns ?? []).forEach(add);
     (c.dispatch ?? []).forEach((b) => add(b.component));
-    retiredMountsOf(c).mounts.forEach((m) => add(m.portal));
   }
   for (const i of loadInterfaceSpecs().filter((x) => own.has(x.id))) {
     add(i.component);

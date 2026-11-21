@@ -212,7 +212,7 @@ export interface CanvasModel {
  * A node per member project of the graph, keyed by the member's key so the
  * engine's containment (`key::…`) hangs the member's specs under it. It shows
  * the alias the member is declared under, and the description its parent's
- * declaration gives it (a `members` entry or a legacy mount), or its own
+ * declaration gives it (a `members` entry), or its own
  * name. Ids stay honest: a subsystem `billing::billing`
  * keeps that id and shows its own name.
  */

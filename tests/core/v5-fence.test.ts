@@ -2,9 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import {
-  aiDirAt, getProjectRoot, legacyFolderAt, readsV5Forms, runInV5Reading, runWithProjectBinding, runWithProjectRoot, setProjectRoot,
-} from '../../src/utils/fs.js';
+import { aiDirAt, setProjectRoot } from '../../src/utils/fs.js';
 import {
   getLoaderIssues, invalidateSpecCache, loadComponentSpecs, loadInterfaceSpecs, loadSubsystemSpecs, loadSystemSpec, saveComponentSpec,
 } from '../../src/core/specs.js';
@@ -17,14 +15,11 @@ import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
-// The v5 reading, and the fence around it.
+// The refusal of the forms wairon 5 wrote.
 //
-// The core reads only the running major's forms. The forms wairon 5 wrote are
-// read under ONE binding — runInV5Reading, which `wairon upgrade` binds around
-// its rehearsal — and anywhere else a spec, a configuration or a lock holding
-// one is refused as a load error that names the form and what replaces it.
-// Each family of form is proved both ways on a real temp tree: refused outside
-// the fence, read inside it.
+// The core reads only the running major's forms. A spec, a configuration or a
+// lock holding a wairon 5 form is refused as a load error that names the form
+// and what replaces it. Each family of form is proved on a real temp tree.
 // ---------------------------------------------------------------------------
 
 const now = '2026-10-18T00:00:00.000Z';
@@ -75,50 +70,7 @@ function loadErrors(read: () => unknown): string[] {
   return getLoaderIssues().filter((i) => i.severity === 'error').map((i) => i.message);
 }
 
-describe('the v5 reading binding', () => {
-  it('is bound nowhere by default, and only inside runInV5Reading', () => {
-    expect(readsV5Forms()).toBe(false);
-    expect(runInV5Reading(() => readsV5Forms())).toBe(true);
-    expect(readsV5Forms()).toBe(false);
-  });
-
-  it('is kept by a nested root binding and a nested request binding, and ends with the call', async () => {
-    const root = project();
-    const inner = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-fence-inner-')));
-    roots.push(inner);
-    runInV5Reading(() => {
-      expect(runWithProjectRoot(inner, () => readsV5Forms())).toBe(true);
-      expect(runWithProjectBinding(inner, { topRoot: root, parentReach: true }, () => readsV5Forms())).toBe(true);
-    });
-    // The other way round: a root binding around the fence still reads the bound root.
-    expect(runWithProjectRoot(inner, () => runInV5Reading(() => getProjectRoot()))).toBe(path.resolve(inner));
-    // An async body is held across its awaits.
-    const seen = await runInV5Reading(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1));
-      return readsV5Forms();
-    });
-    expect(seen).toBe(true);
-    expect(readsV5Forms()).toBe(false);
-    // Binding it without a root leaves the override in charge of the root.
-    expect(runInV5Reading(() => getProjectRoot())).toBe(root);
-  });
-
-  it('makes the spec scan re-read the tree: what one reading refuses the other reads', () => {
-    const root = project();
-    spec(root, '.index.yaml', system());
-    spec(root, 'shop/.index.yaml', subsystem());
-    spec(root, 'shop/old/.index.yaml', component('old', { componentType: 'Specialist' }));
-    expect(loadErrors(() => loadComponentSpecs())).toHaveLength(1);
-    expect(loadComponentSpecs()).toEqual([]);
-    runInV5Reading(() => {
-      expect(loadErrors(() => loadComponentSpecs())).toEqual([]);
-      expect(loadComponentSpecs().map((c) => c.id)).toEqual(['old']);
-    });
-    expect(loadComponentSpecs()).toEqual([]);
-  });
-});
-
-describe('retired reach forms are refused outside the fence', () => {
+describe('retired reach forms are refused', () => {
   const portalWithPortalType = (): string => {
     const root = project();
     spec(root, '.index.yaml', system());
@@ -134,10 +86,6 @@ describe('retired reach forms are refused outside the fence', () => {
     expect(errors[0]).toContain('`portalType` is a wairon 5 form; wairon 6 reads `transport`');
     expect(errors[0]).toContain('web');
     expect(loadComponentSpecs()).toEqual([]);
-    runInV5Reading(() => {
-      expect(loadErrors(() => loadComponentSpecs())).toEqual([]);
-      expect(loadComponentSpecs()[0]).toMatchObject({ id: 'web', transport: 'HTTP' });
-    });
   });
 
   it('a listener\'s `mounts`', () => {
@@ -147,7 +95,6 @@ describe('retired reach forms are refused outside the fence', () => {
     spec(root, 'shop/host/.index.yaml', component('host', { componentType: 'Portal', transport: 'HTTP', mounts: [{ portal: 'web', prefixes: ['/web'] }] }));
     const errors = loadErrors(() => loadComponentSpecs());
     expect(errors.join('\n')).toContain('`mounts` (a listener\'s mounts) is a wairon 5 form');
-    runInV5Reading(() => expect(loadErrors(() => loadComponentSpecs())).toEqual([]));
   });
 
   it('an `invokedBy` kind of `external` or `sibling-subsystem`', () => {
@@ -162,7 +109,6 @@ describe('retired reach forms are refused outside the fence', () => {
     const errors = loadErrors(() => loadInterfaceSpecs()).join('\n');
     expect(errors).toContain('`invokedBy: { kind: external }` is a wairon 5 form');
     expect(errors).toContain('`invokedBy: { kind: sibling-subsystem }` is a wairon 5 form');
-    runInV5Reading(() => expect(loadErrors(() => loadInterfaceSpecs())).toEqual([]));
   });
 
   it('an export entry\'s authored `type`, in an L1 subsystem and in the L0', () => {
@@ -174,11 +120,6 @@ describe('retired reach forms are refused outside the fence', () => {
     loadErrors(() => loadSystemSpec());
     expect(loadSystemSpec()).toBeNull();
     expect(getLoaderIssues().map((i) => i.message).join('\n')).toContain('an export entry\'s `type` is a wairon 5 form');
-    runInV5Reading(() => {
-      invalidateSpecCache();
-      expect(loadSystemSpec()).not.toBeNull();
-      expect(loadErrors(() => loadSubsystemSpecs())).toEqual([]);
-    });
   });
 
   it('names every form of a document, by the pure reader', () => {
@@ -189,7 +130,7 @@ describe('retired reach forms are refused outside the fence', () => {
   });
 });
 
-describe('retired stereotypes are refused outside the fence', () => {
+describe('retired stereotypes are refused', () => {
   for (const [type, replacement] of [['Specialist', 'an Orchestrator with a `dependencyClass`'], ['Gateway', 'a Portal with `variant: gateway`']] as const) {
     it(`a ${type}`, () => {
       const root = project();
@@ -199,22 +140,19 @@ describe('retired stereotypes are refused outside the fence', () => {
       const errors = loadErrors(() => loadComponentSpecs());
       expect(errors).toHaveLength(1);
       expect(errors[0]).toContain(`\`componentType: ${type}\` is a wairon 5 form; wairon 6 reads ${replacement}`);
-      runInV5Reading(() => expect(loadComponentSpecs()[0]).toMatchObject({ id: 'old', componentType: type }));
     });
   }
 
-  it('is not written by a component save outside the fence', () => {
+  it('is not written by a component save', () => {
     const root = project();
     spec(root, '.index.yaml', system());
     spec(root, 'shop/.index.yaml', subsystem());
     const old = { ...component('old'), componentType: 'Specialist' } as unknown as ComponentSpec;
     expect(() => saveComponentSpec(old)).toThrow(/wairon 5 form/);
-    runInV5Reading(() => saveComponentSpec(old));
-    runInV5Reading(() => expect(loadComponentSpecs().map((c) => c.id)).toEqual(['old']));
   });
 });
 
-describe('legacy mounts and long-form member paths are refused outside the fence', () => {
+describe('legacy mounts and long-form member paths are refused', () => {
   it('an L1 subsystem carrying `projectPath`', () => {
     const root = project();
     spec(root, '.index.yaml', system());
@@ -222,26 +160,20 @@ describe('legacy mounts and long-form member paths are refused outside the fence
     const errors = loadErrors(() => loadSubsystemSpecs());
     expect(errors.join('\n')).toContain('`projectPath` (a legacy L1 mount) is a wairon 5 form; wairon 6 declares the member under `members` in .wai/project.yaml');
     expect(loadSubsystemSpecs()).toEqual([]);
-    // In the v5 reading the mount is a member declaration, never a subsystem.
-    runInV5Reading(() => {
-      expect(loadErrors(() => loadSubsystemSpecs())).toEqual([]);
-      expect(loadSubsystemSpecs()).toEqual([]);
-    });
   });
 
   it('a `members` entry\'s long-form `path`', () => {
     const members = { billing: { path: 'services/billing', description: 'Invoices' } };
-    const outside = declaredMembers({ members });
-    expect(outside[0].problem).toBe('the member "billing" uses `path`, a wairon 5 form; wairon 6 reads `source` — `wairon upgrade` rewrites a tree wairon 5 wrote');
-    const inside = runInV5Reading(() => declaredMembers({ members }));
-    expect(inside[0]).toMatchObject({ alias: 'billing', path: 'services/billing', deprecatedPath: true });
-    expect(inside[0].problem).toBeUndefined();
-    // The current form reads the same in both.
-    expect(declaredMembers({ members: { billing: { source: 'services/billing' } } })[0]).toMatchObject({ path: 'services/billing', deprecatedPath: false });
+    const declared = declaredMembers({ members });
+    expect(declared[0].problem).toBe('the member "billing" uses `path`, a wairon 5 form; wairon 6 reads `source` — `wairon upgrade` rewrites a tree wairon 5 wrote');
+    // The current form reads.
+    const current = declaredMembers({ members: { billing: { source: 'services/billing' } } })[0];
+    expect(current).toMatchObject({ path: 'services/billing' });
+    expect(current.problem).toBeUndefined();
   });
 });
 
-describe('the deprecated reference forms do not bind outside the fence', () => {
+describe('the deprecated reference forms do not bind', () => {
   const project = (namespace: string, over: Partial<ReadableProject> = {}): ReadableProject => ({
     namespace, aliases: new Map(), declaredAliases: new Set(), subsystems: new Set(), ...over,
   });
@@ -260,13 +192,8 @@ describe('the deprecated reference forms do not bind outside the fence', () => {
     expect(landReference(family, 'billing::deep::invoice', '')).toEqual({ kind: 'unresolved', form: 'path' });
   });
 
-  it('bind in the v5 reading, and `alias::name` binds in both', () => {
-    runInV5Reading(() => {
-      expect(landReference(family, '::billing::invoice', '')).toMatchObject({ kind: 'project', form: 'leading', project: 'billing', name: 'invoice' });
-      expect(landReference(family, 'super::invoice', 'billing')).toMatchObject({ kind: 'project', form: 'super', project: '', name: 'invoice' });
-    });
+  it('`alias::name` binds', () => {
     expect(landReference(family, 'billing::invoice', '')).toMatchObject({ kind: 'project', form: 'alias', project: 'billing', name: 'invoice' });
-    runInV5Reading(() => expect(landReference(family, 'billing::invoice', '')).toMatchObject({ kind: 'project', form: 'alias' }));
   });
 });
 
@@ -279,18 +206,16 @@ describe('a lock record an earlier wairon major wrote is refused, naming the way
   };
 
   for (const [label, extra, format] of [['1 (no format)', {}, 1], ['2', { format: 2, members: {} }, 2], ['3', { format: 3, specs: {} }, 3]] as const) {
-    it(`format ${label}: named, with the way forward, in every reading`, () => {
+    it(`format ${label}: named, with the way forward`, () => {
       const root = project();
       writeLock(root, extra);
-      for (const read of [() => readLockRecord(), () => runInV5Reading(() => readLockRecord())]) {
-        let thrown: unknown;
-        try { read(); } catch (e) { thrown = e; }
-        expect(thrown).toBeInstanceOf(LockRecordUnreadableError);
-        const message = (thrown as Error).message;
-        expect(message).toContain(`it is lock record format ${format}, written by an earlier wairon major (this release reads format 4)`);
-        expect(message).toContain('wairon upgrade');
-        expect(message).not.toContain('delete it and run');
-      }
+      let thrown: unknown;
+      try { readLockRecord(); } catch (e) { thrown = e; }
+      expect(thrown).toBeInstanceOf(LockRecordUnreadableError);
+      const message = (thrown as Error).message;
+      expect(message).toContain(`it is lock record format ${format}, written by an earlier wairon major (this release reads format 4)`);
+      expect(message).toContain('wairon upgrade');
+      expect(message).not.toContain('delete it and run');
     });
   }
 
@@ -301,19 +226,13 @@ describe('a lock record an earlier wairon major wrote is refused, naming the way
   });
 });
 
-describe('the `.wairon` folder is not a project\'s folder outside the fence', () => {
-  it('resolves the legacy folder only in the v5 reading', () => {
+describe('the `.wairon` folder is not a project\'s folder', () => {
+  it('is never resolved: the project folder is `.wai`', () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-fence-legacy-')));
     roots.push(root);
     fs.mkdirSync(path.join(root, '.wairon'), { recursive: true });
-    expect(legacyFolderAt(root)).toBeNull();
     expect(aiDirAt(root, 'project.yaml')).toBe(path.join(root, '.wai', 'project.yaml'));
-    runInV5Reading(() => {
-      expect(legacyFolderAt(root)).toBe(path.join(root, '.wairon'));
-      expect(aiDirAt(root, 'project.yaml')).toBe(path.join(root, '.wairon', 'project.yaml'));
-    });
-    // A `.wai` folder always wins, in both.
     fs.mkdirSync(path.join(root, '.wai'));
-    runInV5Reading(() => expect(legacyFolderAt(root)).toBeNull());
+    expect(aiDirAt(root, 'project.yaml')).toBe(path.join(root, '.wai', 'project.yaml'));
   });
 });

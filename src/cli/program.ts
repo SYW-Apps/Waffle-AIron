@@ -952,7 +952,7 @@ export function buildProgram(): Command {
 
   memberCmd
     .command('move <alias> <path>')
-    .description('Relocate a member: move its directory and point its `members` entry there (a legacy L1 mount is moved into `members` first)')
+    .description('Relocate a member: move its directory and point its `members` entry there')
     .action(async (alias: string, memberPath: string) => {
       await runMemberMove(alias, memberPath);
     });

@@ -7,7 +7,7 @@ import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import {
   saveSystemSpec, saveSpec, invalidateSpecCache, workspaceFor, loadSubsystemSpecs,
 } from '../../src/core/specs.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { files } from '../io/index.js';
 import * as path from 'path';
-import { getHostedLookup, getProjectRoot, getRequestParentReach, readsV5Forms, runWithProjectRoot } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
@@ -1027,51 +1027,6 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
   }
   surfaceRepository.saveSnapshot(snapshot);
   return snapshot;
-}
-
-// ---------------------------------------------------------------------------
-// Stage-1 family pins (listFamilyPins) — the generated family and sibling
-// snapshots `wairon surface pin` once wrote. Nothing reads them since stage 3;
-// the chaining migration converts the family pin into an external and deletes
-// them all, reading them in the v5 reading only (they are a wairon 5 form).
-// ---------------------------------------------------------------------------
-
-/** Whose surface a stage-1 family pin holds: the parent's family surface, or one sibling's published surface. */
-export type FamilyPinRole = 'parent' | 'sibling';
-
-/**
- * family_pin — one stage-1 family pin a project root still holds in
- * .wai/surfaces/: its storage key, whether it pins the parent's family surface
- * or one sibling's, and when it was written.
- */
-export interface FamilyPin {
-  /** The snapshot's storage key: the parent's system name, or `<system>::<subsystem>` for a sibling pin. */
-  key: string;
-  role: FamilyPinRole;
-  /** When the pin was written. */
-  generatedAt?: string;
-}
-
-/**
- * surface_orchestrator.listFamilyPins — the stage-1 family pins the bound root
- * holds: every generated snapshot, classified by its key. Foreign imports
- * (exchanged or authored) are never family pins. Reads only the bound root.
- */
-export function listFamilyPins(): FamilyPin[] {
-  // Step 0: a stage-1 family pin is a wairon 5 form, read only in the v5 reading.
-  if (!readsV5Forms()) return [];
-  // Step 1: the snapshots the bound root holds.
-  const snapshots = listSnapshots();
-  // Step 2: the generated ones, classified by key.
-  const pins = snapshots
-    .filter((snapshot) => snapshot.origin === 'generated')
-    .map((snapshot): FamilyPin => ({
-      key: snapshot.projectName,
-      role: snapshot.projectName.includes('::') ? 'sibling' : 'parent',
-      ...(snapshot.generatedAt ? { generatedAt: snapshot.generatedAt } : {}),
-    }));
-  // Step 3: in key order.
-  return pins.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
 // ---------------------------------------------------------------------------

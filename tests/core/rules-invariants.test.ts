@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { validateProject } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, saveSpec, saveSystemSpec, workspaceFor } from '../../src/core/specs.js';
+import { writeYamlFile } from '../../src/utils/yaml.js';
 
 // ---------------------------------------------------------------------------
 // Invariant registry — the HONEST declaration+backing linter. An entity
@@ -366,7 +366,7 @@ describe('invariant-backing — declaration + assertion, never a proof', () => {
   });
 });
 
-describe('invariants inside a chained subproject — ids resolve through the mount namespace', () => {
+describe('invariants inside a chained subproject — ids resolve through the member namespace', () => {
   const now = new Date().toISOString();
   let rootDir: string;
   afterEach(() => {
@@ -375,7 +375,7 @@ describe('invariants inside a chained subproject — ids resolve through the mou
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  /** A child project mounted at packages/inventory declaring + asserting its own invariant. */
+  /** A child project declared as a member at packages/inventory declaring + asserting its own invariant. */
   function buildChained(asserting: boolean): void {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-inv-chained-'));
     fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
@@ -384,9 +384,8 @@ describe('invariants inside a chained subproject — ids resolve through the mou
       schemaVersion: '1.0.0', name: 'root-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    saveSpec('subsystem', {
-      id: 'inventory', name: 'inventory', description: 'mount', parentSystem: 'root-system',
-      publicInterfaces: [], projectPath: 'packages/inventory', status: 'complete', createdAt: now, updatedAt: now,
+    writeYamlFile(path.join(rootDir, '.wai', 'project.yaml'), {
+      schemaVersion: '1.0.0', name: 'root-system', members: { inventory: 'packages/inventory' }, createdAt: now, updatedAt: now,
     });
 
     const childDir = path.join(rootDir, 'packages', 'inventory');
@@ -437,12 +436,12 @@ describe('invariants inside a chained subproject — ids resolve through the mou
     invalidateSpecCache();
   }
 
-  v5it('an asserted invariant in the child anchors and resolves clean from the parent root', () => {
+  it('an asserted invariant in the child anchors and resolves clean from the parent root', () => {
     buildChained(true);
     expect(invariantIssues(validateProject())).toHaveLength(0);
   });
 
-  v5it('a silent child write is the child\u2019s own UNASSERTED_INVARIANT — judged by its gate, never by the parent\u2019s', () => {
+  it('a silent child write is the child\u2019s own UNASSERTED_INVARIANT — judged by its gate, never by the parent\u2019s', () => {
     buildChained(false);
     // The parent's gate never judges a contained member's specs (stage 4).
     expect(invariantIssues(validateProject())).toHaveLength(0);

@@ -410,7 +410,7 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
  * OWNER's LIVE permission afterwards. `projectId` may be member-qualified
  * ('projectId::alias', nested members composing), scoping the caller's own
  * token INTO a member project — validated at MINT time (each alias must declare
- * a member, in `members` or a legacy L1 mount; an unknown alias or an internal
+ * a member in `members`; an unknown alias or an internal
  * subsystem is rejected with guidance, never stored broken), while permission keeps
  * resolving over the TOP project (the qualifier narrows reach, it never refines
  * grants). Mint a token OWNED BY the caller (ownerSubject AND createdBySubject =

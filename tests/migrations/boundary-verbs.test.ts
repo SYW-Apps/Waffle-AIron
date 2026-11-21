@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -287,7 +286,7 @@ describe('stage 6 — internalize re-points every family consumer of the member'
   });
 });
 
-describe('stage 6 — internalize on the reference family (Waffler in miniature, canonicalized by the chaining migration)', () => {
+describe('stage 6 — internalize on the reference family (Waffler in miniature)', () => {
   let r: ReferenceFamily | undefined;
   afterEach(() => {
     vi.restoreAllMocks();
@@ -297,10 +296,9 @@ describe('stage 6 — internalize on the reference family (Waffler in miniature,
     r = undefined;
   });
 
-  v5it('core — two subsystems, a member of its own, a sibling consumer and a consumer below it — folds into the top: family-consistent', () => {
+  it('core — two subsystems, a member of its own, a sibling consumer and a consumer below it — folds into the top: family-consistent', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     r = buildReferenceFamily();
-    migrate(r.top, { verb: 'chaining' });
     const before = familyFindings(r.top);
     const report = migrate(r.top, { verb: 'internalize', alias: 'core', destination: { home: 'engine', packs: 'drop' } });
     expect(report.applied).toBe(true);
@@ -410,7 +408,6 @@ describe('stage 6 — move-is-free', () => {
   it('`member move` changes no reference: every authored reference reads the same, and the family run is unchanged', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     f = buildReferenceFamily();
-    migrate(f.top, { verb: 'chaining' });
     const refs = (): string[] => at(f!.top, () => projectFamilyGraph()).authoredReferences.map((r) => `${r.specId}|${r.position}|${r.authored}`).sort();
     const beforeRefs = refs();
     const before = familyFindings(f.top);

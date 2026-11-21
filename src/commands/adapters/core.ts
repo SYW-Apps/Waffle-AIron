@@ -68,8 +68,7 @@ export {
   // `wairon doctor`: the bound tree's write lock as its file stands.
   inspectLock,
   diagnoseProjectPacks,
-  // The upgrade report's reads (the chaining migration and its writes moved to
-  // sdd_migrations in stage 6, behind migration_core_adapter).
+  // The upgrade report's reads.
   projectFamily,
   loadTypeSpecs,
   // `wairon doctor --fix` moves a misplaced type group folder or grouped type file (TYPE_GROUP_MISPLACED).

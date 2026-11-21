@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { v5it, inV5Reading } from '../helpers/v5-reading.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
@@ -14,15 +13,14 @@ import { writeSpecFile } from '../../src/core/spec-files.js';
 import { ImplementationSpecSchema, InterfaceSpecSchema } from '../../src/models/index.js';
 import * as migrations from '../../src/migrations/index.js';
 import * as transaction from '../../src/migrations/transaction.js';
-import { plan as planChaining, isEmpty } from '../../src/migrations/chaining-migration.js';
 import type { MigrationPlan } from '../../src/migrations/types.js';
 import { buildReferenceFamily, type ReferenceFamily } from '../helpers/reference-family.js';
 
 // ---------------------------------------------------------------------------
-// Stage 6 — the chaining migration on the family transaction, through the
-// migration portal, over the reference family (Waffler's shape in miniature:
-// a top root, a legacy-mounted vocabulary member, and a member with a member
-// of its own). Real temp directories; nothing mocked.
+// Stage 6 — a family migration (a project rename) on the family transaction,
+// through the migration portal, over the reference family (Waffler's shape in
+// miniature: a top root, a vocabulary member, and a member with a member of
+// its own). Real temp directories; nothing mocked.
 //
 // Covered: plan writes nothing and apply commits the rehearsal's difference;
 // the rehearsal precondition (no writer reads source code); an unfinished
@@ -91,11 +89,12 @@ const at = <T>(dir: string, fn: () => T): T => {
 const changeLines = (p: MigrationPlan, top: string): string[] =>
   p.changes.map((c) => `${path.relative(top, c.project).split(path.sep).join('/') || '.'}|${c.path}|${c.action}|${c.path.startsWith('.wai/externals/') ? 'snapshot' : c.stagedDigest ?? '-'}`);
 
-describe('stage 6 — the chaining migration on the family transaction', () => {
+/** The family migration these tests plan: core's project id renamed, which rewrites every project naming it. */
+const RENAME = { verb: 'rename', project: 'core', newId: 'engine-room' } as const;
+
+describe('stage 6 — a family migration on the family transaction', () => {
   const made: ReferenceFamily[] = [];
   const family = (): ReferenceFamily => {
-    // The wairon 5 forms (a legacy mount, positional references) are what the migration has left to do: a family already
-    // in the canonical form has nothing to plan — its externals are read live, never pinned.
     const f = buildReferenceFamily();
     made.push(f);
     return f;
@@ -114,10 +113,10 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
     }
   });
 
-  v5it('plan rehearses on a copy and writes nothing into the family; apply commits exactly the plan; the next plan is empty', () => {
+  it('plan rehearses on a copy and writes nothing into the family; apply commits exactly the plan', () => {
     const f = family();
     const before = waiState(f.top);
-    const planned = at(f.core, () => migrations.plan({ verb: 'chaining' }));
+    const planned = at(f.top, () => migrations.plan(RENAME));
     expect(planned.refusals).toEqual([]);
     expect(planned.rehearsal?.directory.startsWith(os.tmpdir())).toBe(true);
     expect(planned.changes.length).toBeGreaterThan(0);
@@ -138,26 +137,9 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
     // Nothing of the rehearsal leaks into a live file, and no transaction is left.
     for (const rel of Object.keys(after)) expect(fs.readFileSync(path.join(f.top, rel), 'utf8')).not.toContain('wairon-migration-');
     expect(Object.keys(after).some((rel) => rel.includes('.wai/transactions'))).toBe(false);
-    // Idempotence: the migration re-plans empty, and applying that plan does nothing.
-    expect(isEmpty(at(f.top, () => planChaining()))).toBe(true);
-    const again = at(f.top, () => migrations.plan({ verb: 'chaining' }));
-    expect(again.changes).toEqual([]);
-    expect(at(f.top, () => migrations.apply(again))).toMatchObject({ applied: false, relock: [] });
   });
 
-  v5it('a plan made without a rehearsal (doctor\'s, confirmed as printed) is rehearsed at apply and committed', () => {
-    const f = family();
-    const planned = at(f.top, () => migrations.plan({ verb: 'chaining', rehearse: false }));
-    expect(planned.rehearsal).toBeUndefined();
-    expect(planned.changes).toEqual([]);
-    expect(planned.chaining && !isEmpty(planned.chaining)).toBe(true);
-    const report = at(f.top, () => migrations.apply(planned));
-    expect(report.applied).toBe(true);
-    expect(report.outcome?.written.length).toBeGreaterThan(0);
-    expect(isEmpty(at(f.top, () => planChaining()))).toBe(true);
-  });
-
-  v5it('the rehearsal precondition: no writer on these paths reads source code — absent or unreadable sources plan the same bytes', () => {
+  it('the rehearsal precondition: no writer on these paths reads source code — absent or unreadable sources plan the same bytes', () => {
     const withSource = family();
     addImplementation(withSource);
     fs.mkdirSync(path.join(withSource.transpiler, 'src'), { recursive: true });
@@ -169,16 +151,14 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
     const absent = family();
     addImplementation(absent);
 
-    const a = at(withSource.top, () => migrations.plan({ verb: 'chaining' }));
-    const b = at(unreadable.top, () => migrations.plan({ verb: 'chaining' }));
-    const c = at(absent.top, () => migrations.plan({ verb: 'chaining' }));
+    const a = at(withSource.top, () => migrations.plan(RENAME));
+    const b = at(unreadable.top, () => migrations.plan(RENAME));
+    const c = at(absent.top, () => migrations.plan(RENAME));
     for (const p of [a, b, c]) {
       expect(p.refusals).toEqual([]);
       migrations.discard(p);
     }
     expect(a.changes.length).toBeGreaterThan(0);
-    // The implementation's own spec is among the rewritten ones — the writer re-saved it without its code.
-    expect(a.changes.some((ch) => ch.path.endsWith('lowering-core/.implementation.yaml'))).toBe(true);
     expect(changeLines(b, unreadable.top)).toEqual(changeLines(a, withSource.top));
     expect(changeLines(c, absent.top)).toEqual(changeLines(a, withSource.top));
   });
@@ -186,10 +166,10 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
   it('an unfinished transaction refuses the next plan (transaction-pending) until it is recovered', () => {
     const f = family();
     const before = waiState(f.top);
-    const planned = at(f.top, () => migrations.plan({ verb: 'chaining' }));
+    const planned = at(f.top, () => migrations.plan(RENAME));
     // Staged, then the process died: journals and backups on disk, nothing swapped.
-    transaction.stage(planned.rehearsal!, planned.changes, 'chaining');
-    const refused = at(f.transpiler, () => migrations.plan({ verb: 'chaining' }));
+    transaction.stage(planned.rehearsal!, planned.changes, 'rename');
+    const refused = at(f.transpiler, () => migrations.plan(RENAME));
     expect(refused.refusals.map((r) => r.code)).toEqual(['transaction-pending']);
     expect(refused.refusals[0].detail).toContain('wairon doctor --fix');
     expect(refused.rehearsal).toBeUndefined();
@@ -199,7 +179,7 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
     expect(recovered.map((r) => r.action)).toEqual(['rolled-back']);
     transaction.discard(planned.rehearsal!);
     expect(waiState(f.top)).toEqual(before);
-    const replanned = at(f.top, () => migrations.plan({ verb: 'chaining' }));
+    const replanned = at(f.top, () => migrations.plan(RENAME));
     expect(changeLines(replanned, f.top)).toEqual(changeLines(planned, f.top));
     migrations.discard(replanned);
   });
@@ -216,9 +196,9 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     f = buildReferenceFamily();
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-home-'));
     before = waiState(f.top);
-    const planned = inV5Reading(() => at(f.top, () => migrations.plan({ verb: 'chaining' })));
+    const planned = at(f.top, () => migrations.plan(RENAME));
     // Staged and half-swapped by hand: the coordinator reads swapping, the first owner's files are in.
-    const journals = transaction.stage(planned.rehearsal!, planned.changes, 'chaining');
+    const journals = transaction.stage(planned.rehearsal!, planned.changes, 'rename');
     journals[0].phase = 'swapping';
     touched = planned.changes.map((c) => ({ file: path.join(c.project, ...c.path.split('/')), base: c.baseDigest }));
     try {
@@ -237,25 +217,25 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     }
   });
 
-  v5it('CLI: status and validate lead with a notice naming the transaction; plain doctor reports it; doctor --fix rolls it back first', async () => {
+  it('CLI: status and validate lead with a notice naming the transaction; plain doctor reports it; doctor --fix rolls it back first', async () => {
     expect(waiState(f.top)).not.toEqual(before);
     const status = await cli(f.top, home, 'status');
-    expect(status.stdout).toMatch(/\[TRANSACTION_PENDING\] an unfinished family migration \(chaining, transaction [0-9a-f]{8}, coordinator phase swapping\) — run `wairon doctor --fix`/);
+    expect(status.stdout).toMatch(/\[TRANSACTION_PENDING\] an unfinished family migration \(rename, transaction [0-9a-f]{8}, coordinator phase swapping\) — run `wairon doctor --fix`/);
     const validate = await cli(f.top, home, 'validate');
     expect(validate.stdout).toMatch(/\[TRANSACTION_PENDING\]/);
     // From a member's root too: its journal names the coordinator.
     const fromMember = await cli(f.transpiler, home, 'validate');
     expect(fromMember.stdout).toMatch(/\[TRANSACTION_PENDING\]/);
     const doctor = await cli(f.top, home, 'doctor');
-    expect(doctor.stdout).toMatch(/Unfinished family migration [0-9a-f]{8} \(chaining, coordinator phase swapping/);
+    expect(doctor.stdout).toMatch(/Unfinished family migration [0-9a-f]{8} \(rename, coordinator phase swapping/);
     expect(doctor.code).not.toBe(0);
 
-    // --fix without --yes: the rollback runs first; the chaining migration itself is not confirmed, so not applied.
+    // --fix without --yes: the rollback runs first; the migration itself is not confirmed, so not applied.
     const fixed = await cli(f.top, home, 'doctor', '--fix');
-    expect(fixed.stdout).toMatch(/Rolled back the chaining migration [0-9a-f]{8} \(coordinator phase swapping\)/);
+    expect(fixed.stdout).toMatch(/Rolled back the rename migration [0-9a-f]{8} \(coordinator phase swapping\)/);
     // The recovery reads as the first fix applied: under the heading, never above it.
     expect(fixed.stdout.indexOf('Applying fixes…')).toBeGreaterThanOrEqual(0);
-    expect(fixed.stdout.indexOf('Applying fixes…')).toBeLessThan(fixed.stdout.indexOf('Rolled back the chaining migration'));
+    expect(fixed.stdout.indexOf('Applying fixes…')).toBeLessThan(fixed.stdout.indexOf('Rolled back the rename migration'));
     for (const t of touched) {
       const now = fs.existsSync(t.file) ? `sha256:${crypto.createHash('sha256').update(fs.readFileSync(t.file)).digest('hex')}` : undefined;
       expect(now).toBe(t.base);
@@ -265,7 +245,7 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     expect(clean.stdout).not.toContain('TRANSACTION_PENDING');
   }, 300_000);
 
-  v5it('MCP: sdd_get_status leads with the banner and sdd_validate_tree lists it as a notice', async () => {
+  it('MCP: sdd_get_status leads with the banner and sdd_validate_tree lists it as a notice', async () => {
     const client = new Client({ name: 'wairon-banner-test', version: '0.0.1' });
     const transport = new StdioClientTransport({
       command: process.execPath,
@@ -278,7 +258,7 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     try {
       const status: any = await client.callTool({ name: 'sdd_get_status', arguments: {} });
       const text = status.content.map((c: any) => c.text).join('\n');
-      expect(text).toMatch(/TRANSACTION PENDING: an unfinished family migration \(chaining, transaction [0-9a-f]{8}, coordinator phase swapping\)/);
+      expect(text).toMatch(/TRANSACTION PENDING: an unfinished family migration \(rename, transaction [0-9a-f]{8}, coordinator phase swapping\)/);
       expect(text.indexOf('TRANSACTION PENDING')).toBeLessThan(Math.max(text.indexOf('System'), 1));
       const validated: any = await client.callTool({ name: 'sdd_validate_tree', arguments: {} });
       const notices = validated.structuredContent?.notices ?? [];

@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -9,7 +8,6 @@ import { sameVolume } from '../../src/migrations/family-files.js';
 import { transactionRepository } from '../../src/migrations/transaction-store.js';
 import type { FileChange, MigrationPlan, Rehearsal } from '../../src/migrations/types.js';
 import * as migrations from '../../src/migrations/index.js';
-import { plan as planChaining, isEmpty } from '../../src/migrations/chaining-migration.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { buildReferenceFamily, type ReferenceFamily } from '../helpers/reference-family.js';
@@ -404,23 +402,23 @@ describe('stage 6 — the crash journal', () => {
   });
 });
 
-describe('stage 6 — a crash mid-swap during a chaining migration', () => {
-  v5it('property: nothing is half-migrated — a crash at every swap operation is rolled back to byte-identical, and the migration then applies whole', () => {
+describe('stage 6 — a crash mid-swap during a family migration', () => {
+  it('property: nothing is half-migrated — a crash at every swap operation is rolled back to byte-identical, and the migration then applies whole', () => {
     const plannedOn = (f: ReferenceFamily): MigrationPlan => {
       invalidateSpecCache();
       setProjectRoot(f.top);
       try {
-        return migrations.plan({ verb: 'chaining' });
+        return migrations.plan({ verb: 'rename', project: 'core', newId: 'engine-room' });
       } finally {
         setProjectRoot(null);
       }
     };
-    // How many wrapped operations the chaining migration's swap performs.
+    // How many wrapped operations the migration's swap performs.
     const probe = buildReferenceFamily();
     made.push(probe.top);
     const probePlan = plannedOn(probe);
     expect(probePlan.refusals).toEqual([]);
-    const probeJournals = transaction.stage(probePlan.rehearsal!, probePlan.changes, 'chaining');
+    const probeJournals = transaction.stage(probePlan.rehearsal!, probePlan.changes, 'rename');
     let total = 0;
     hook.before = () => { total++; return undefined; };
     transaction.swap(probeJournals);
@@ -433,7 +431,7 @@ describe('stage 6 — a crash mid-swap during a chaining migration', () => {
       made.push(f.top);
       const before = tree(f.top);
       const planned = plannedOn(f);
-      const journals = transaction.stage(planned.rehearsal!, planned.changes, 'chaining');
+      const journals = transaction.stage(planned.rehearsal!, planned.changes, 'rename');
       let n = 0;
       hook.before = () => (++n === k ? new Error('process died mid-swap') : undefined);
       try { transaction.swap(journals); } catch { /* the process died here */ }
@@ -445,7 +443,7 @@ describe('stage 6 — a crash mid-swap during a chaining migration', () => {
       expect(tree(f.top)).toEqual(before);
     }
 
-    // After a rollback the migration applies whole, and re-plans empty.
+    // After a rollback the migration applies whole, and it is applied.
     const f = buildReferenceFamily();
     made.push(f.top);
     const planned = plannedOn(f);
@@ -453,7 +451,6 @@ describe('stage 6 — a crash mid-swap during a chaining migration', () => {
     setProjectRoot(f.top);
     try {
       expect(migrations.apply(planned).applied).toBe(true);
-      expect(isEmpty(planChaining())).toBe(true);
     } finally {
       setProjectRoot(null);
     }

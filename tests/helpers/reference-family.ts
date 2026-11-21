@@ -18,18 +18,17 @@ import { bareFrom, isolateGlobals, pushChange, serveGit } from './stage8-family.
 // properties (and waves B and C after it).
 //
 //   waffly (top, the bound root)          id waffly
-//   ├── shared   LEGACY L1 mount           id shared  — a vocabulary project:
-//   │            (description + a            project-level types and an L0
-//   │            publicInterfaces entry)     exporting one of them; a duplicate
+//   ├── shared   `members:` entry          id shared  — a vocabulary project:
+//   │            (with a description)        project-level types and an L0
+//   │                                        exporting one of them; a duplicate
 //   │                                        type id; `externals: { core }`
 //   └── core     `members:` entry          id core    — consumes the vocabulary
 //       │                                    (`shared::host-var-values`), owns a
 //       │                                    local subsystem `transpiler` that
 //       │                                    shadows its member alias
 //       └── transpiler  `members:` entry   id transpiler — two levels down;
-//                                            writes `super::`, a member path
-//                                            and a leading `::` (and closes a
-//                                            second loop with core)
+//                                            references core by `alias::name`
+//                                            (and closes a second loop with core)
 //
 // shared -> core (a type field) and core -> shared (a signature) close a
 // cross-project cycle. Every document is written through the writer's own
@@ -103,42 +102,24 @@ function type(file: string, id: string, fields: { name: string; type: string }[]
 }
 
 /**
- * Build the reference family in a fresh temp directory.
- *
- * By default it is written in the forms wairon 5 wrote (a legacy L1 mount, a
- * leading `::`, `super::` and a member path): what the upgrade's migrations read,
- * so the tests that use it run in the v5 reading. With `canonical`, the same
- * family is written in wairon 6's own forms — every member in `members`,
- * `alias::name` for every cross-project reference — for the tests (and the CLI
- * runs) that need a family the core reads outside the v5 reading.
+ * Build the reference family in a fresh temp directory, in wairon's own forms:
+ * every member in `members`, `alias::name` for every cross-project reference.
  */
-export function buildReferenceFamily(options: { canonical?: boolean } = {}): ReferenceFamily {
-  const canonical = options.canonical === true;
+export function buildReferenceFamily(): ReferenceFamily {
   const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-refam-'));
   const shared = path.join(top, 'shared');
   const core = path.join(top, 'core');
   const transpiler = path.join(core, 'transpiler');
 
   // ── waffly: the top project ──────────────────────────────────────────────
-  projectYaml(top, canonical
-    ? ['id: waffly', 'name: Waffly', 'members:', '  core: core', '  shared:', '    source: shared', '    description: The vocabulary every project speaks']
-    : ['id: waffly', 'name: Waffly', 'members:', '  core: core']);
+  projectYaml(top, ['id: waffly', 'name: Waffly', 'members:', '  core: core', '  shared:', '    source: shared', '    description: The vocabulary every project speaks']);
   system(top, 'Waffly');
   subsystem(top, 'Waffly', 'app');
-  // The legacy L1 mount: a description and a publicInterfaces entry of its own.
-  if (!canonical) {
-    writeSpecFile(specs(top, 'shared', '.index.yaml'), SubsystemSpecSchema.parse({
-      id: 'shared', name: 'shared', description: 'The vocabulary every project speaks', parentSystem: 'Waffly',
-      projectPath: 'shared', publicInterfaces: [{ type: 'Custom', details: 'The shared vocabulary' }],
-      trustedLinks: [], status: 'complete', createdAt: STAMP, updatedAt: STAMP,
-    }));
-  }
   // An alias-form reference, exported by core's L0.
   component(top, 'app', 'app-shell', 'Portal', ['core::engine-portal']);
-  // A leading-`::` reference: a member path from the bound root (canonical: the alias form).
-  component(top, 'app', 'app-worker', 'Orchestrator', [canonical ? 'core::engine-portal' : '::core::engine-portal']);
+  component(top, 'app', 'app-worker', 'Orchestrator', ['core::engine-portal']);
 
-  // ── shared: the vocabulary member (legacy mount) ─────────────────────────
+  // ── shared: the vocabulary member ─────────────────────────
   projectYaml(shared, ['id: shared', 'name: Shared', 'externals:', '  core: {}']);
   system(shared, 'Shared', [{ typeDef: 'host-var-values', audience: 'project' }]);
   type(specs(shared, 'types', 'host-var-values.yaml'), 'host-var-values', [{ name: 'values', type: 'list<string>' }]);
@@ -166,16 +147,11 @@ export function buildReferenceFamily(options: { canonical?: boolean } = {}): Ref
   type(specs(core, 'types', 'engine-mode.yaml'), 'engine-mode', [{ name: 'label', type: 'string' }]);
 
   // ── transpiler: a member two levels down ─────────────────────────────────
-  projectYaml(transpiler, canonical ? ['id: transpiler', 'name: Transpiler', 'externals:', '  core: {}'] : ['id: transpiler', 'name: Transpiler']);
+  projectYaml(transpiler, ['id: transpiler', 'name: Transpiler', 'externals:', '  core: {}']);
   system(transpiler, 'Transpiler', [{ from: 'lowering', component: 'lowering-portal', audience: 'project' }]);
   subsystem(transpiler, 'Transpiler', 'lowering', { publicInterfaces: [{ details: 'The lowering surface', component: 'lowering-portal' }] });
   component(transpiler, 'lowering', 'lowering-portal', 'Portal');
-  // `super::` climbs to core; a member path read from the bound root lands
-  // back in transpiler; a leading `::` walks from the top to core again — two
-  // texts binding one target, each carried back as written.
-  component(transpiler, 'lowering', 'lowering-core', 'Orchestrator', canonical
-    ? ['core::engine-portal', 'lowering-portal']
-    : ['super::engine-portal', 'core::transpiler::lowering-portal', '::core::engine-portal']);
+  component(transpiler, 'lowering', 'lowering-core', 'Orchestrator', ['core::engine-portal', 'lowering-portal']);
 
   const specFiles = (): string[] => {
     const out: string[] = [];

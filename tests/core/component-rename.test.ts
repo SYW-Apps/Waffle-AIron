@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -19,7 +18,7 @@ import {
   workspaceFor,
 } from '../../src/core/specs.js';
 import { renameComponent } from '../../src/core/provision.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import { validateProject } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -284,51 +283,6 @@ describe('renameComponent', () => {
     const after = findings(root);
     expect(authSourceFindings(after)).toEqual([]);
     expect(after).toEqual(before);
-  });
-
-  v5it('follows a renamed portal into every listener mount that names it, and the mounts still resolve', () => {
-    // A listener's mount names the portal it serves; left behind by a rename it
-    // would route requests to nothing (MOUNT_TARGET_NOT_PORTAL).
-    root = projectRoot('rename-mount-');
-    setProjectRoot(root);
-    saveSystemSpec({
-      schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], databases: [],
-      publicInterfaces: [], createdAt: now, updatedAt: now,
-    });
-    saveSpec('subsystem', sub('books'));
-    const httpIntf = (id: string, component: string, method: string, routePath: string): InterfaceSpec => {
-      const spec = intf(id, component, [method]);
-      spec.methods[0].endpoint = { transport: 'HTTP', method: 'GET', path: routePath };
-      return spec;
-    };
-    saveComponentSpec(comp('catalog_portal', 'books', 'Portal', { transport: 'HTTP' }));
-    saveInterfaceSpec(httpIntf('icatalog_portal', 'catalog_portal', 'listBooks', '/catalog/books'));
-    saveComponentSpec(comp('loans_portal', 'books', 'Portal', { transport: 'HTTP' }));
-    saveInterfaceSpec(httpIntf('iloans_portal', 'loans_portal', 'listLoans', '/loans'));
-    for (const listener of ['public_listener', 'staff_listener']) {
-      saveComponentSpec(comp(listener, 'books', 'Portal', {
-        transport: 'HTTP',
-        mounts: [
-          { portal: 'catalog_portal', prefixes: ['/catalog'], via: 'handleCatalogRequest' },
-          { portal: 'loans_portal', prefixes: ['/loans'] },
-        ],
-      }));
-    }
-    invalidateSpecCache();
-    const mountFindings = (all: string[]): string[] => all.filter((f) => /MOUNT_TARGET_NOT_PORTAL|UNMOUNTED_PORTAL/.test(f));
-    expect(mountFindings(findings(root))).toEqual([]);
-
-    setProjectRoot(root);
-    const report = renameComponent('catalog_portal', 'shelf_portal');
-
-    expect(report.rewritten).toEqual(expect.arrayContaining(['public_listener', 'staff_listener']));
-    for (const listener of ['public_listener', 'staff_listener']) {
-      expect(stored(root, 'component', listener)[0].mounts).toEqual([
-        { portal: 'shelf_portal', prefixes: ['/catalog'], via: 'handleCatalogRequest' },
-        { portal: 'loans_portal', prefixes: ['/loans'] },
-      ]);
-    }
-    expect(mountFindings(findings(root))).toEqual([]);
   });
 
   it('keeps an interface named otherwise, rewriting its component, while the implementation named after the component moves', () => {

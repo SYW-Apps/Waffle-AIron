@@ -24,7 +24,7 @@ import type { AuditEvent, HostConfig, PrincipalSubject } from './types.js';
 //                                upgrade every hosted tree, register
 //                                the member records, stamp the major.
 // The trees are upgraded before the member records are registered, because a
-// v5 tree declares its members only once its legacy mounts have moved into
+// tree declares its members only once they are in
 // members. A failure stops the start; a tree already upgraded stays upgraded,
 // each family committed whole.
 // ---------------------------------------------------------------------------

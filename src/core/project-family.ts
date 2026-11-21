@@ -17,7 +17,6 @@ import {
   type ResolvedExternal,
   type SubsystemSpec,
   type TypeSpec,
-  retiredMountsOf,
 } from '../models/index.js';
 // project_family_index projects the scan the Spec Index holds — the sanctioned
 // case of an Index over another Index of the same Repository.
@@ -35,7 +34,7 @@ import {
 // project_family_index — the project graph of one scan.
 //
 // The scan already walked every member and bound every reference: it recorded
-// each project root it read (key, parent, alias and form, legacy mount,
+// each project root it read (key, parent, alias,
 // directory, configuration, alias table, the keys its files declared, and every
 // reference with `::` as bound). This Index projects those roots and the
 // scanned specs into one node per project, an owner for every spec key, the
@@ -62,9 +61,7 @@ function makeNodes(roots: ScannedProjectRoot[]): ProjectNode[] {
       ...(root.config ? { name: root.config.name } : {}),
       ...(root.parent !== undefined ? { parent: root.parent } : {}),
       ...(root.mountAlias !== undefined ? { mountAlias: root.mountAlias } : {}),
-      ...(root.mountForm !== undefined ? { mountForm: root.mountForm } : {}),
       ...(root.pathExternal ? { pathExternal: true as const } : {}),
-      legacyMount: root.legacyMount,
       ...(root.memberDescription !== undefined ? { memberDescription: root.memberDescription } : {}),
       hasSystem: root.system !== null,
       ...(root.system?.targetLanguage ? { targetLanguage: root.system.targetLanguage } : {}),
@@ -236,7 +233,6 @@ function crossReferences(family: ProjectFamily, specs: ScannedSpecs): CrossProje
   for (const comp of specs.components) {
     comp.dependsOn.forEach((d) => add(comp.id, 'dependsOn', d));
     comp.dispatch?.forEach((b) => add(comp.id, 'dispatch-table', b.component, b.method));
-    retiredMountsOf(comp).mounts.forEach((m) => add(comp.id, 'mounts', m.portal));
   }
   const calledMethod = new Map<string, string>();
   for (const impl of specs.implementations) {

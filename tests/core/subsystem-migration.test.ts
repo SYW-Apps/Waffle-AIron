@@ -1,5 +1,4 @@
 import { describe, expect, afterEach } from 'vitest';
-import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -20,7 +19,7 @@ import {
 } from '../../src/core/specs.js';
 import { externalizeSubsystem, internalizeMember } from '../../src/core/provision.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../../src/models/index.js';
@@ -56,8 +55,8 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'root-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
 
     // core: a published portal + an orchestrator behind it.
-    saveSpec('subsystem', { id: 'core', name: 'core', description: 'the core', parentSystem: 'root-sys', publicInterfaces: [{ type: 'Custom', details: 'core api', component: 'core_portal' }], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now });
-    saveComponentSpec({ id: 'core_portal', name: 'Core Portal', description: 'front door', subsystem: 'core', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: ['core_orch'], createdAt: now, updatedAt: now } as any);
+    saveSpec('subsystem', { id: 'core', name: 'core', description: 'the core', parentSystem: 'root-sys', publicInterfaces: [{ details: 'core api', component: 'core_portal' }], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now });
+    saveComponentSpec({ id: 'core_portal', name: 'Core Portal', description: 'front door', subsystem: 'core', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: ['core_orch'], createdAt: now, updatedAt: now } as any);
     saveComponentSpec({ id: 'core_orch', name: 'Core Orchestrator', description: 'workflow', subsystem: 'core', componentType: 'Orchestrator', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
 
     // cli: an adapter that crosses into core's published portal (the cross-subsystem ref).
@@ -124,13 +123,6 @@ describe('subsystem migration (externalize <-> internalize)', () => {
     invalidateSpecCache();
     expect(() => externalizeSubsystem('core', 'packages/core2', 'project')).toThrow(/already in a part, or a member/);
     expect(() => internalizeMember('cli', { home: '' })).toThrow(/no member is declared under that alias/);
-  });
-
-  it('externalizes a legacy mount: refused, it is already a member', () => {
-    seed();
-    writeLegacyMount({ id: 'old', name: 'old', description: 'd', parentSystem: 'root-sys', publicInterfaces: [], trustedLinks: [], projectPath: 'packages/old', createdAt: now, updatedAt: now } as SubsystemSpec, 'old');
-    invalidateSpecCache();
-    expect(() => externalizeSubsystem('old', 'packages/old2', 'project')).toThrow(/already in a part, or a member/);
   });
 
   it("re-expresses the moved implementations' file paths against the new root — the same files — and back", () => {
@@ -294,7 +286,7 @@ function projectRoot(prefix: string): string {
 /**
  * A parent whose `billing` subsystem is about to move out. Billing reaches beyond
  * itself in each form a stored reference takes — a bare id into the sibling
- * `shared`, an id qualified by the chained project `ledger`, a root-anchored id —
+ * `shared`, an id qualified by the chained project `ledger` —
  * and uses a type `shared` owns, beside references that stay inside billing.
  */
 function family(): { root: string; childDir: string } {
@@ -302,23 +294,23 @@ function family(): { root: string; childDir: string } {
   setProjectRoot(top);
   saveSystemSpec({ schemaVersion: '1.0.0', name: 'root-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
 
-  saveSpec('subsystem', sub('shared', { publicInterfaces: [{ type: 'Custom', details: 'shared api', component: 'shared_portal' }] } as Partial<SubsystemSpec>));
-  saveComponentSpec(comp('shared_portal', 'shared', 'Portal', { portalType: 'Custom' }));
+  saveSpec('subsystem', sub('shared', { publicInterfaces: [{ details: 'shared api', component: 'shared_portal' }] } as Partial<SubsystemSpec>));
+  saveComponentSpec(comp('shared_portal', 'shared', 'Portal', { transport: 'Custom' }));
   saveInterfaceSpec(intf('ishared_portal', 'shared_portal', 'pay', [{ name: 'amount', type: 'money' }]));
   saveTypeSpec(valueType('money', 'shared', [{ name: 'amount', type: 'number' }]));
 
-  writeLegacyMount(sub('ledger', { projectPath: 'packages/ledger' }), 'ledger');
+  writeMemberProject(sub('ledger', { projectPath: 'packages/ledger' }), 'ledger');
   const ledger = workspaceFor(path.join(top, 'packages', 'ledger'));
-  ledger.save('subsystem', sub('ledger', { parentSystem: 'ledger', publicInterfaces: [{ type: 'Custom', details: 'ledger api', component: 'ledger_portal' }] } as Partial<SubsystemSpec>));
-  ledger.saveComponentSpec(comp('ledger_portal', 'ledger', 'Portal', { portalType: 'Custom' }));
+  ledger.save('subsystem', sub('ledger', { parentSystem: 'ledger', publicInterfaces: [{ details: 'ledger api', component: 'ledger_portal' }] } as Partial<SubsystemSpec>));
+  ledger.saveComponentSpec(comp('ledger_portal', 'ledger', 'Portal', { transport: 'Custom' }));
   ledger.saveInterfaceSpec(intf('iledger_portal', 'ledger_portal', 'post'));
 
   saveSpec('subsystem', sub('billing', {
-    publicInterfaces: [{ type: 'Custom', details: 'billing api', component: 'billing_portal' }],
+    publicInterfaces: [{ details: 'billing api', component: 'billing_portal' }],
     lifecycle: [{ phase: 'init', component: 'billing_portal', method: 'open' }],
   } as Partial<SubsystemSpec>));
   saveComponentSpec(comp('billing_portal', 'billing', 'Portal', {
-    portalType: 'Custom', dependsOn: ['billing_orch'],
+    transport: 'Custom', dependsOn: ['billing_orch'],
     dispatch: [{ capability: 'billing.charge', component: 'billing_orch', method: 'charge' }],
   }));
   saveInterfaceSpec(intf('ibilling_portal', 'billing_portal', 'open'));
@@ -328,7 +320,6 @@ function family(): { root: string; childDir: string } {
   saveComponentSpec(comp('billing_adapter', 'billing', 'Adapter', { dependsOn: ['shared_portal', 'ledger::ledger_portal'] }));
   saveInterfaceSpec(intf('ibilling_adapter', 'billing_adapter', 'charge', [{ name: 'amount', type: 'money' }]));
   saveImplementationSpec(calls('billing_adapter_impl', 'ibilling_adapter', 'charge', [['shared_portal', 'pay'], ['ledger::ledger_portal', 'post']]));
-  saveComponentSpec(comp('billing_audit', 'billing', 'Adapter', { dependsOn: ['::shared_portal'] }));
   saveTypeSpec(valueType('invoice', 'billing', [{ name: 'total', type: 'money' }]));
   invalidateSpecCache();
   return { root: top, childDir: path.join(top, 'packages', 'billing') };
@@ -387,16 +378,14 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     const fam = family();
     root = fam.root;
     const before = referenceFindings(verdict(fam.root));
-    // Stage 3 binds the root-anchored id from the bound root: at the top it names
-    // the top's own shared_portal, so nothing is unresolved before the move.
+    // Nothing is unresolved before the move.
     expect(before).toEqual([]);
 
     externalizeSubsystem('billing', 'packages/billing', 'project');
 
     expect(referenceFindings(verdict(fam.root), 'billing::').filter((f) => !before.includes(f))).toEqual([]);
     // What the member stores: a bare id into the parent names the parent by its
-    // project id; a target qualified by another member stays as written (a
-    // deprecated member path, left to `wairon doctor --fix`)…
+    // project id; a target qualified by another member stays as written…
     expect(stored(fam.childDir, 'billing/billing_adapter/.index.yaml').dependsOn)
       .toEqual(['top::shared_portal', 'ledger::ledger_portal']);
     expect(callTargets(stored(fam.childDir, 'billing/billing_adapter/.implementation.yaml')))
@@ -404,7 +393,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     // …the parent is declared as the member's external, written with its source path (a path
     // external, read live), importing by name the bare type it now owns (stage 4: a bare name resolves locally, then through
     // a `use` import — never by a family-wide suffix match)…
-    expect(projectConfigRepositoryAt(fam.childDir).load()?.externals).toEqual({ top: { source: { path: '../..' }, use: ['money'] } });
+    expect(projectConfigRepositoryAt(fam.childDir).load()?.externals).toEqual({ top: { source: { path: '../..' }, use: ['money'] }, ledger: { source: { path: '../ledger' } } });
     // …and the parent exports what the member reaches across the new boundary:
     // the portal its subsystem already published, and the imported type.
     expect(stored(fam.root, '.index.yaml').publicInterfaces).toEqual([
@@ -414,8 +403,6 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     expect(stored(fam.root, 'shared/.index.yaml').publicInterfaces).toContainEqual({ typeDef: 'money' });
     // The parent's own gate holds no error after the move.
     expect(verdict(fam.root).issues.filter((i) => i.severity === 'error')).toEqual([]);
-    // …a root-anchored target as written: it names the same spec at every depth…
-    expect(stored(fam.childDir, 'billing/billing_audit/.index.yaml').dependsOn).toEqual(['::shared_portal']);
     // …and a type as written: the `use` import above is what now resolves it.
     expect(stored(fam.childDir, 'billing/billing_adapter/.interface.yaml').methods[0].params)
       .toEqual([{ name: 'amount', type: 'money' }]);
@@ -432,12 +419,8 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     // The member declares the parent as a path external: it is read live from its
     // folder, never pinned, so the references into it are judged, not unavailable.
     expect(fromChild.issues.some((i) => i.code === 'EXTERNAL_CHECK_UNAVAILABLE')).toBe(false);
-    // The one exception is the deprecated root-anchored `::shared_portal`: a
-    // leading `::` reads from whichever root loads it, so from the member's own
-    // root it names the member's own (absent) spec — the reason it is
-    // deprecated, and `doctor --fix` rewrites it.
     expect(fromChild.issues.filter((i) => i.code === 'INVALID_DEPENDENCY_REFERENCE' || i.code === 'INVALID_TARGET_COMPONENT_REFERENCE').map((i) => i.specId))
-      .toEqual(['billing_audit']);
+      .toEqual([]);
   });
 
   it('internalizing afterwards restores every reference as the parent wrote it', () => {
@@ -473,43 +456,13 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     expect(stored(fam.childDir, 'billing/billing_adapter/.index.yaml').subsystem).toBe('billing');
   });
 
-  it('a moved super:: whose target lies above the bound root is refused before anything moves', () => {
-    // top ─mounts─▶ par, whose billing subsystem moves out into a project of its own.
-    const top = projectRoot('migrate-hop-');
-    root = top;
-    setProjectRoot(top);
-    saveSystemSpec({ schemaVersion: '1.0.0', name: 'top-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-    saveSpec('subsystem', sub('top_sub', { parentSystem: 'top-sys', publicInterfaces: [{ type: 'Custom', details: 'top api', component: 'top_portal' }] } as Partial<SubsystemSpec>));
-    saveComponentSpec(comp('top_portal', 'top_sub', 'Portal', { portalType: 'Custom' }));
-    saveInterfaceSpec(intf('itop_portal', 'top_portal', 'fetch'));
-    writeLegacyMount(sub('par', { parentSystem: 'top-sys', projectPath: 'packages/par' }), 'par');
-
-    const parDir = path.join(top, 'packages', 'par');
-    invalidateSpecCache();
-    setProjectRoot(parDir);
-    saveSpec('subsystem', sub('billing', { parentSystem: 'par' }));
-    saveComponentSpec(comp('billing_adapter', 'billing', 'Adapter', { dependsOn: ['super::top_portal'] }));
-    saveInterfaceSpec(intf('ibilling_adapter', 'billing_adapter', 'charge'));
-    saveImplementationSpec(calls('billing_adapter_impl', 'ibilling_adapter', 'charge', [['super::top_portal', 'fetch']]));
-    invalidateSpecCache();
-    expect(referenceFindings(verdict(top))).toEqual([]);
-
-    // Bound at par, `super::top_portal` climbs above the bound root: its target
-    // cannot be named from here (wairon never writes `super::`), so nothing moves.
-    setProjectRoot(parDir);
-    invalidateSpecCache();
-    expect(() => externalizeSubsystem('billing', 'packages/billing', 'project')).toThrow(/climb.*above this project.*wairon upgrade/);
-    expect(fs.existsSync(path.join(parDir, 'packages', 'billing'))).toBe(false);
-    expect(stored(parDir, 'billing/billing_adapter/.index.yaml').dependsOn).toEqual(['super::top_portal']);
-  });
-
   it('a bare reference back into the parent round-trips through `<parent id>::name`', () => {
     const top = projectRoot('migrate-sib-');
     root = top;
     setProjectRoot(top);
     saveSystemSpec({ schemaVersion: '1.0.0', name: 'top-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
-    saveSpec('subsystem', sub('top_sub', { parentSystem: 'top-sys', publicInterfaces: [{ type: 'Custom', details: 'top api', component: 'top_portal' }] } as Partial<SubsystemSpec>));
-    saveComponentSpec(comp('top_portal', 'top_sub', 'Portal', { portalType: 'Custom' }));
+    saveSpec('subsystem', sub('top_sub', { parentSystem: 'top-sys', publicInterfaces: [{ details: 'top api', component: 'top_portal' }] } as Partial<SubsystemSpec>));
+    saveComponentSpec(comp('top_portal', 'top_sub', 'Portal', { transport: 'Custom' }));
     saveSpec('subsystem', sub('billing', { parentSystem: 'top-sys' }));
     saveComponentSpec(comp('billing_adapter', 'billing', 'Adapter', { dependsOn: ['top_portal'] }));
     invalidateSpecCache();
