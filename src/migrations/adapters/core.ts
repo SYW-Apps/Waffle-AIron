@@ -8,7 +8,7 @@
 // is the rehearsal copy's. The migrations import THIS module, so every call
 // they make into core lands here and resolves to the portal's function.
 //
-// The reads, the chaining migration's writes, and the verbs' own writes
+// The reads and the verbs' own writes
 // (renameId, renameAlias, declareMember, removeMember, repointExternal,
 // removeExternal, rewriteReferences, externalizeSubsystem, internalizeMember).
 // ---------------------------------------------------------------------------
@@ -21,12 +21,9 @@ export {
   projectFamily,
   resolveProjectExports,
   resolveSubsystemExports,
-  exportUsage,
   loadSpec,
-  loadTypeSpecs,
-  // project_config_portal: the configuration and its chaining-migration writes.
+  // project_config_portal: the configuration and the writes of the verbs.
   loadProjectConfig,
-  projectConfigExists,
   setId,
   declareExternal,
   importNames,
@@ -40,18 +37,11 @@ export {
   // approval_portal: a project's lock record, and what moved past it.
   approvalRecord,
   diffAgainstApproval,
-  // spec_maintenance_portal: a legacy mount moved into `members`, and a spec's
-  // references written in their canonical form.
-  moveMountToMembers,
-  normalizeReferences,
   // spec_maintenance_portal: a reference respelled at its parsed position, and
   // a subsystem turned into a member or a member folded back in.
   rewriteReferences,
   externalizeSubsystem,
   internalizeMember,
-  // spec_maintenance_portal (stage 8): a member's declaration changed — the
-  // chaining migration's rewrite of a deprecated long-form `path`.
-  updateMember,
   // spec_maintenance_portal (stage 8): a part made a project in place, and back.
   promoteMember,
   demoteMember,

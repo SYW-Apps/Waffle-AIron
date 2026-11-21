@@ -652,10 +652,10 @@ methods:
         targetMethod: getStatusReport
       - stepNumber: 3
         description: >-
-          Read the members the bound root declares — its project.yaml `members` entries and, in the
-          v5 reading `wairon upgrade` binds, its legacy L1 mounts, each with its alias, path and
-          form — so the context line can name which projects this answer spans; a report that
-          silently covered three projects would read exactly like one that covered this one
+          Read the members the bound root declares — its project.yaml `members` entries, each with
+          its alias, path and form — so the context line can name which projects this answer spans;
+          a report that silently covered three projects would read exactly like one that covered
+          this one
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: listDirectChainedSubprojects
@@ -1174,4 +1174,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-20T00:31:35.400Z'
+updatedAt: '2026-11-21T15:55:51.252Z'

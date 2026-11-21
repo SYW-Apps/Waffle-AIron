@@ -127,8 +127,7 @@ methods:
   - name: listDirectChainedSubprojects
     description: >-
       Forward to the core portal: the direct members of a project root, one level deep — its
-      `members` entries and, in the v5 reading `wairon upgrade` binds, its legacy L1 mounts — each
-      as its directory, alias and form.
+      `members` entries — each as its directory, alias and form.
     signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
     returns: list<ChainedSubprojectDir>
     params:
@@ -738,4 +737,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T00:22:49.505Z'
+updatedAt: '2026-11-21T15:56:05.831Z'

@@ -75,8 +75,9 @@ methods:
         type: int
   - name: resolveChainingParent
     description: >-
-      Report the chaining-mount context of the bound root (parent root + mounting subsystem id), or
-      null — including when the bound request may not read above its root. Pure 1:1 forward.
+      Report the parent context of the bound root (parent root + the alias the parent declares it
+      under), or null — including when the bound request may not read above its root. Pure 1:1
+      forward.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef?
   - name: exportSpecTree
@@ -345,18 +346,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: retiredReachFacts
-    description: >-
-      What the current scan met in the forms the reachability model retired
-      (spec_loader.retiredReachFacts): the stored portalType, listener mounts, retired invokedBy
-      kinds, authored export types and in-process Custom endpoints, which the v5 reading `wairon
-      upgrade` binds still reads. A passthrough read of the spec repository; the validator's
-      entry-declarations rule reports the retired kinds from it.
-    signature: 'retiredReachFacts(): list<RetiredReachFact>'
-    returns: list<RetiredReachFact>
-    params: []
-    guarantees:
-      - idempotent
   - name: resolveExternalCandidate
     description: >-
       One external declaration the bound project does not hold yet, bound to its producer exactly as
@@ -590,4 +579,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T01:30:12.282Z'
+updatedAt: '2026-11-21T16:14:23.720Z'

@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -18,7 +17,6 @@ import {
   loadTypeSpec,
   loadSubsystemSpec,
   getComponentPath,
-  retiredReachFacts,
 } from '../../src/core/specs.js';
 
 const now = new Date().toISOString();
@@ -643,31 +641,6 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     updateSpec('subsystem', 'billing', { trustedLinks: [] });
     invalidateSpecCache();
     expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([]);
-  });
-
-  v5it('retired listener mounts: a delta naming them is refused, and an unrelated update keeps them on the file', () => {
-    // Mounts are a retired form (the reachability model): no longer typed, so
-    // no delta can author them, but read and carried until doctor --fix
-    // rewrites them — never dropped by a write that did not decide to.
-    project();
-    saveSpec('subsystem', { schemaVersion: '1.0.0', id: 'clinic', name: 'Clinic', description: 'd', parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now } as never);
-    const mounts = [
-      { portal: 'booking_portal', prefixes: ['/booking'], via: 'handleBookingRequest' },
-      { portal: 'referral_portal', prefixes: ['/referrals'] },
-    ];
-    saveComponentSpec({
-      id: 'public_listener', name: 'Public listener', description: 'd', subsystem: 'clinic', componentType: 'Portal', transport: 'HTTP',
-      owns: [], dependsOn: [], mounts, createdAt: now, updatedAt: now,
-    } as never);
-    invalidateSpecCache();
-
-    expect(() => updateSpec('component', 'public_listener', { mounts: [{ portal: 'referral_portal', action: 'delete' }] })).toThrow(/unknown field\(s\) "mounts"/);
-    updateSpec('component', 'public_listener', { description: 'the public listener' });
-    invalidateSpecCache();
-    const after = loadComponentSpec('public_listener')!;
-    expect(after.description).toBe('the public listener');
-    expect((after as unknown as { mounts?: unknown }).mounts).toEqual(mounts);
-    expect(retiredReachFacts().filter((f) => f.specId === 'public_listener' && f.form === 'listener-mounts').map((f) => f.at)).toEqual(['booking_portal', 'referral_portal']);
   });
 });
 

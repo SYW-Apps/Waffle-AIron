@@ -48,8 +48,7 @@ methods:
           Parse each against SubsystemSpecSchema, keying it under its project and binding its
           references the way the scan does (listProjectRoots: local first, `alias::name` through the
           root's alias table), collecting refusals as loader issues — a bad file never aborts the
-          sweep. A legacy mount subsystem (one carrying projectPath) is not among them: it is a
-          member declaration of its project, recorded on the member's root
+          sweep
         type: local
   - name: loadSubsystemSpec
     narrative:
@@ -228,10 +227,10 @@ methods:
     detail: intent
     intent: >-
       Walks the members exactly as the scan recurses — each path resolved against its declaring
-      project and contained by that project's root, lexically and through links, whether declared
-      under `members` or as a legacy L1 mount — collecting the followable roots in walk order and
-      every refused member (escapes, missing, cyclic, too-deep) with its key, alias, form, declared
-      path and reason; listChainedRoots returns the roots half.
+      project and contained by that project's root, lexically and through links, declared under
+      `members` — collecting the followable roots in walk order and every refused member (escapes,
+      missing, cyclic, too-deep) with its key, alias, form, declared path and reason;
+      listChainedRoots returns the roots half.
   - name: loadTypeSpec
     narrative:
       - stepNumber: 1
@@ -290,14 +289,9 @@ methods:
       - stepNumber: 3
         description: >-
           Read the root's member declarations: project_config.declaredMembers() — each with its one
-          source parsed (contained path, `../` sibling path, git at a commit, hosted record), the
-          `as` it asserts if any, and whether it used the deprecated long-form `path` — and, in the
-          v5 reading `wairon upgrade` binds, every top-level L1 subsystem of the root carrying
-          projectPath — a legacy mount, recorded with every field as written on the member it
-          declares and never loaded as a subsystem, since a mount carries no content. A `members`
-          entry and a legacy mount under one alias are one member, the `members` entry winning; an
-          alias declared both as a member and as an external is an alias-conflict problem; a
-          declaration with a problem is recorded and not followed
+          source parsed (contained path, `../` sibling path, git at a commit, hosted record) and the
+          `as` it asserts if any. An alias declared both as a member and as an external is an
+          alias-conflict problem; a declaration with a problem is recorded and not followed
         type: local
       - stepNumber: 4
         description: >-
@@ -403,10 +397,10 @@ methods:
           compared by reference_resolution.nameKey as local resolution always has — inside it
           (`key::id`); a reference whose first segment (before `::` or `.`) is the root's own id
           binds locally too and is recorded as a self-prefix (form path, binding local, rewrite the
-          bare local id), the form stage 3 left and stage 4's positional step rewrites; set aside
-          every other bare name that names none, for the import binding; and record every reference
-          with `::` exactly as written, with its spec and position, before binding erases the form.
-          Type expressions are read per identifier, builtins and generic parameters excepted
+          bare local id), a deprecated form the loader reports; set aside every other bare name that
+          names none, for the import binding; and record every reference with `::` exactly as
+          written, with its spec and position, before binding erases the form. Type expressions are
+          read per identifier, builtins and generic parameters excepted
         type: local
       - stepNumber: 13
         label: members
@@ -551,9 +545,9 @@ methods:
       - stepNumber: 24
         description: >-
           Record per root its key, parent, alias and form, the description its parent's declaration
-          gives it, legacy mount, L0, configuration, alias table, tables, spec keys, its parts, and
-          authored references, and the family problems met (its members' part-unavailable and
-          kind-mismatch problems included)
+          gives it, L0, configuration, alias table, tables, spec keys, its parts, and authored
+          references, and the family problems met (its members' part-unavailable and kind-mismatch
+          problems included)
         type: local
       - stepNumber: 25
         description: Answer the recorded roots, bound root first
@@ -570,7 +564,7 @@ methods:
       - stepNumber: 2
         description: >-
           Answer the path the workspace's index records under the id exactly as given (a member's
-          spec is recorded under its member key), or the file of the legacy L1 mount the id names
+          spec is recorded under its member key)
         type: local
       - stepNumber: 3
         description: >-
@@ -581,8 +575,7 @@ methods:
         description: >-
           A bare id is the bound project's own: ids are per project, so a recorded key that ends in
           the id answers it only when it is of the same project — a member's same-named subsystem
-          never does (only a deprecated legacy L1 mount still answers a bare id by suffix, until
-          doctor --fix rewrites it)
+          never does
         type: local
       - stepNumber: 5
         description: >-
@@ -670,19 +663,6 @@ methods:
         description: Answer the type-spelling facts the scan kept on the index
         type: return
         outcome: TypeSpellingFacts
-  - name: retiredReachFacts
-    narrative:
-      - stepNumber: 1
-        description: Serve the workspace scan, rescanning when the tree's file signature no longer holds
-        type: call
-        targetComponent: spec_index
-        targetMethod: listProjectRoots
-      - stepNumber: 2
-        description: >-
-          Answer the retired reachability forms the scan recorded on the index while it read them
-          compatibly
-        type: return
-        outcome: list<RetiredReachFact>
   - name: typePath
     narrative:
       - stepNumber: 1
@@ -752,4 +732,4 @@ methods:
     symbol: loadGroupSpecs
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-11-20T14:17:00.541Z'
+updatedAt: '2026-11-21T16:16:31.154Z'

@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -26,7 +25,7 @@ import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
 import { createMember } from '../../src/core/provision.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { seedChainedMember, seedSubsystem } from './helpers.js';
@@ -411,7 +410,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(events[0]).toMatchObject({ projectId: 'billing', target: 'billing' });
   });
 
-  v5it('an unqualified lock still locks the project itself and never touches the child (no regression)', () => {
+  it('an unqualified lock still locks the project itself and never touches the child (no regression)', () => {
     const { parent, child } = seedChainedSubproject('confine-plain', 'billing');
 
     const outcome = lockProject(cfg, MASTER, 'confine-plain');
@@ -548,7 +547,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });
 
-  v5it('a member lock CONFINES to the member tree: its own state governs, and drift makes only the member stale', () => {
+  it('a member lock CONFINES to the member tree: its own state governs, and drift makes only the member stale', () => {
     const { parent, child } = seedChainedSubproject('confine-promo', 'billing');
 
     // Locking the PARENT leaves the child unlocked — the trees are independent.
@@ -612,7 +611,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(parent))).toBe(false);
   });
 
-  v5it('an approved UNQUALIFIED lock still locks the project itself (no regression)', () => {
+  it('an approved UNQUALIFIED lock still locks the project itself (no regression)', () => {
     const { parent, child } = seedChainedSubproject('confine-appr2', 'billing');
     const requester = mintToken('ca2', 'u-ca2');
     allow('u-ca2', 'project:write', 'project', 'confine-appr2', 'approval');

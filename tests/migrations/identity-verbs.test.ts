@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -182,10 +181,9 @@ describe('stage 6 — the identity verbs', () => {
     expect(dirHash(f.top)).toEqual(before);
   });
 
-  v5it('rename-reaches-every-reference on the reference family, once the chaining migration canonicalized it: every project naming core follows; family-consistent', () => {
+  it('rename-reaches-every-reference on the reference family: every project naming core follows; family-consistent', () => {
     const r = buildReferenceFamily();
     try {
-      migrate(r.top, { verb: 'chaining' });
       const before = familyFindings(r.top);
       const report = migrate(r.top, { verb: 'rename', project: 'core', newId: 'engine-room' });
       expect(report.applied).toBe(true);
@@ -193,21 +191,6 @@ describe('stage 6 — the identity verbs', () => {
       expect(graph.authoredReferences.filter((x) => /(^|::)core::/.test(x.authored)).map((x) => `${x.specId} ${x.authored}`)).toEqual([]);
       expect(graph.nodes.flatMap((n) => [...n.aliases.keys()])).not.toContain('core');
       expect(newFindings(before, familyFindings(r.top)), familyLines(r.top).join('\n')).toEqual([]);
-    } finally {
-      r.cleanup();
-    }
-  });
-
-  it('rename refuses reference-unwritable — writing nothing — when a deprecated member path runs through the alias that must follow the id', () => {
-    const r = buildReferenceFamily();
-    try {
-      const before = dirHash(r.top);
-      // transpiler writes `core::transpiler::lowering-portal`, a member path read from the top through its alias `core`.
-      const planned = plan(r.top, { verb: 'rename', project: 'core', newId: 'engine-room' });
-      expect(planned.refusals.map((x) => x.code)).toContain('reference-unwritable');
-      expect(planned.refusals.find((x) => x.code === 'reference-unwritable')!.detail).toContain('core::transpiler::lowering-portal');
-      expect(at(r.top, () => migrations.apply(planned)).applied).toBe(false);
-      expect(dirHash(r.top)).toEqual(before);
     } finally {
       r.cleanup();
     }
@@ -261,17 +244,16 @@ function write(root: string, rel: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
 }
-const projectYaml = (name: string): string => dump({ name, targets: [], rules: {}, extensions: { packs: [], useGlobalPacks: false } });
+const projectYaml = (name: string, extra: Record<string, unknown> = {}): string => dump({ name, ...extra, targets: [], rules: {}, extensions: { packs: [], useGlobalPacks: false } });
 
 /** Stage 2c's fleet in miniature: a parent mounting billing (defaulted id `billing-service`), which a lock approved under that id. */
 function fleet(): { root: string; billing: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-idlock-'));
-  write(root, '.wai/project.yaml', projectYaml('FleetWorks'));
+  write(root, '.wai/project.yaml', projectYaml('FleetWorks', { members: { billing: 'packages/billing' } }));
   write(root, '.wai/specs/.index.yaml', dump({ name: 'FleetWorks', vision: 'Delivery fleet platform.' }));
   write(root, '.wai/specs/subsystems/operations.yaml', dump({ id: 'operations', name: 'Operations', description: 'The console.', parentSystem: 'FleetWorks' }));
-  write(root, '.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'Chained billing member.', parentSystem: 'FleetWorks', projectPath: 'packages/billing' }));
   const b = 'packages/billing/.wai';
-  write(root, `${b}/project.yaml`, projectYaml('Billing Service'));
+  write(root, `${b}/project.yaml`, projectYaml('Billing Service', { id: 'billing-service' }));
   write(root, `${b}/specs/.index.yaml`, dump({ name: 'BillingService', vision: 'Invoices.' }));
   write(root, `${b}/specs/subsystems/invoicing.yaml`, dump({ id: 'invoicing', name: 'Invoicing', description: 'Invoicing.', parentSystem: 'BillingService' }));
   invalidateSpecCache();
@@ -290,11 +272,10 @@ describe("stage 6 — a rename unblocks stage 3's id-locked member", () => {
     for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
   });
 
-  v5it('the member kept the id its lock approved (id-locked); renaming it to its alias, then re-locking, succeeds', async () => {
+  it('the member kept the id its lock approved (id-locked); renaming it to its alias, then re-locking, succeeds', async () => {
     const f = fleet();
     roots.push(f.root);
     expect(await lockAt(f.billing)).toBe('billing-service');
-    migrate(f.root, { verb: 'chaining' });
     expect(configOf(f.billing).id).toBe('billing-service');
     const planned = plan(f.root, { verb: 'rename', project: 'billing', newId: 'billing' });
     expect(planned.refusals).toEqual([]);

@@ -1,8 +1,8 @@
 id: family_migration_orchestrator_impl
 name: Family Migration Orchestrator Implementation
 description: >-
-  src/migrations/orchestrator.ts. The climb is the chaining migration's: one hop at a time through
-  resolveChainingParent, which answers null where the request may not read above its root.
+  src/migrations/orchestrator.ts. The climb is one hop at a time through resolveChainingParent,
+  which answers null where the request may not read above its root.
 contract: ifamily_migration_orchestrator
 sourcePath: src/migrations/orchestrator.ts
 methods:
@@ -70,8 +70,6 @@ methods:
             step: 19
           - value: externalize
             step: 19
-          - value: chaining
-            step: 21
           - value: promote
             step: 19
           - value: demote
@@ -85,7 +83,7 @@ methods:
       - stepNumber: 10
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 21
       - stepNumber: 11
         label: detach
         description: Plan the detach
@@ -95,7 +93,7 @@ methods:
       - stepNumber: 12
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 21
       - stepNumber: 13
         label: adopt
         description: Plan the adopt
@@ -105,7 +103,7 @@ methods:
       - stepNumber: 14
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 21
       - stepNumber: 15
         label: rename
         description: Plan the project rename
@@ -115,7 +113,7 @@ methods:
       - stepNumber: 16
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 21
       - stepNumber: 17
         label: rename-alias
         description: Plan the alias rename
@@ -125,7 +123,7 @@ methods:
       - stepNumber: 18
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 21
       - stepNumber: 19
         label: boundary
         description: >-
@@ -137,16 +135,8 @@ methods:
       - stepNumber: 20
         description: Planned
         type: jump
-        toStep: 22
+        toStep: 21
       - stepNumber: 21
-        label: chaining
-        description: >-
-          Plan the chaining migration with its own climb, and carry it as the plan's `chaining`
-          part: its blocking findings become refusals, its projects and rewrites become edits
-        type: call
-        targetComponent: chaining_migration_orchestrator
-        targetMethod: plan
-      - stepNumber: 22
         label: planned
         description: >-
           Restore the caller's binding, then rehearse the plan (an already-refused plan comes back
@@ -154,7 +144,7 @@ methods:
         type: call
         targetComponent: family_migration_orchestrator
         targetMethod: rehearse
-      - stepNumber: 23
+      - stepNumber: 22
         description: Answer the plan
         type: return
         outcome: MigrationPlan
@@ -200,10 +190,10 @@ methods:
       - stepNumber: 5
         description: Run the verb's own writes on the copy; a core writer's refusal ends the region
         type: try
-        endStep: 14
+        endStep: 13
         catches:
           - error: a core writer's refusal
-            step: 24
+            step: 23
       - stepNumber: 6
         description: Which writer?
         type: switch
@@ -223,8 +213,6 @@ methods:
             step: 11
           - value: externalize
             step: 11
-          - value: chaining
-            step: 13
       - stepNumber: 7
         label: membership
         description: Write the attach, detach or adopt into the rehearsal roots
@@ -234,7 +222,7 @@ methods:
       - stepNumber: 8
         description: Written
         type: jump
-        toStep: 14
+        toStep: 13
       - stepNumber: 9
         label: identity
         description: Write the rename or alias rename into the rehearsal roots
@@ -244,7 +232,7 @@ methods:
       - stepNumber: 10
         description: Written
         type: jump
-        toStep: 14
+        toStep: 13
       - stepNumber: 11
         label: boundary
         description: Write the internalize or externalize into the rehearsal roots
@@ -254,26 +242,17 @@ methods:
       - stepNumber: 12
         description: Written
         type: jump
-        toStep: 14
+        toStep: 13
       - stepNumber: 13
-        label: chaining
-        description: >-
-          Write the chaining migration into the rehearsal roots: ids, exports, externals, the
-          position migration's imports, moves, rewrites and pin deletions, and last the pins a git
-          or hosted external is owed — its order unchanged
-        type: call
-        targetComponent: chaining_migration_orchestrator
-        targetMethod: write
-      - stepNumber: 14
         label: written
         description: The verb's writes are on the copy
         type: local
-      - stepNumber: 15
+      - stepNumber: 14
         description: 'Diff the copy against the live family: the plan''s file changes'
         type: call
         targetComponent: family_transaction
         targetMethod: diff
-      - stepNumber: 16
+      - stepNumber: 15
         label: reach
         description: >-
           Judge the changes against the request's write reach: may the request write every project
@@ -285,20 +264,20 @@ methods:
         condition: >-
           a changed owner is unwritable at the project rung, or the write reach denies a subsystem
           of a changed owner
-        onFalseStep: 19
-      - stepNumber: 17
+        onFalseStep: 18
+      - stepNumber: 16
         description: Drop the rehearsal
         type: call
         targetComponent: family_transaction
         targetMethod: discard
-      - stepNumber: 18
+      - stepNumber: 17
         description: >-
           Answer the plan refused: family-partial for each owner it may not write, and
           subsystem-denied for each denied subsystem of an owner it changes, naming the subsystem
           and the rung that decided it
         type: return
         outcome: refused plan
-      - stepNumber: 19
+      - stepNumber: 18
         label: findings-before
         description: >-
           When the request asks for it (announce — the CLI and MCP doors do; an internal re-plan
@@ -315,7 +294,7 @@ methods:
         type: call
         targetComponent: migration_validator_adapter
         targetMethod: validateFamily
-      - stepNumber: 20
+      - stepNumber: 19
         description: >-
           Read the rule set, and keep each run's design half: drop every finding whose code a
           code-judging rule declares, and keep error and warning severity. Name each finding the
@@ -329,7 +308,7 @@ methods:
         type: call
         targetComponent: migration_validator_adapter
         targetMethod: listRules
-      - stepNumber: 21
+      - stepNumber: 20
         label: relock
         description: >-
           Read each changed owner's lock record; an owner that carries one is a project to re-lock.
@@ -342,7 +321,7 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 22
+      - stepNumber: 21
         description: >-
           For a storage move (every planned edit a move or a delete), compare each such owner's
           rehearsed tree with its approval: an owner whose diff names no added, changed or removed
@@ -350,17 +329,17 @@ methods:
         type: call
         targetComponent: migration_core_adapter
         targetMethod: diffAgainstApproval
-      - stepNumber: 23
+      - stepNumber: 22
         description: Answer the plan with its rehearsal, file changes and re-lock list
         type: return
         outcome: rehearsed plan
-      - stepNumber: 24
+      - stepNumber: 23
         label: refused-on-copy
         description: Drop the rehearsal
         type: call
         targetComponent: family_transaction
         targetMethod: discard
-      - stepNumber: 25
+      - stepNumber: 24
         description: >-
           Answer the plan with the writer's refusal (internalize-refused, externalize-refused) and
           its message
@@ -384,9 +363,7 @@ methods:
         outcome: not applied
       - stepNumber: 4
         label: rehearsed
-        description: >-
-          Was it planned without a rehearsal (doctor's chaining plan, confirmed as the chaining plan
-          it printed)?
+        description: Was it planned without a rehearsal (a counts-only plan, confirmed as the plan it printed)?
         type: branch
         condition: the plan carries no rehearsal
         onFalseStep: 6
@@ -449,4 +426,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-11-20T19:40:54.337Z'
+updatedAt: '2026-11-21T16:05:32.850Z'

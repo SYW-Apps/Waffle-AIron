@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -70,7 +69,7 @@ describe('wairon externals and the externals MCP tools', () => {
     }
   });
 
-  v5it('pin, list and status answer as JSON; an unknown action is refused', async () => {
+  it('pin, list and status answer as JSON; an unknown action is refused', async () => {
     root = family();
     const out: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk: any) => { out.push(String(chunk)); return true; });
@@ -92,7 +91,7 @@ describe('wairon externals and the externals MCP tools', () => {
     await expect(runExternals('sync', [])).rejects.toThrow(UnknownExternalsActionError);
   });
 
-  v5it('sdd_pin_externals and sdd_get_externals_status answer with structured content; the old discovery tool is gone', async () => {
+  it('sdd_pin_externals and sdd_get_externals_status answer with structured content; the old discovery tool is gone', async () => {
     root = family();
     const server = createMcpServer();
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

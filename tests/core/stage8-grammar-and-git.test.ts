@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -65,27 +64,27 @@ describe('the one location grammar (member_declaration.source)', () => {
     expect(parseMemberSource('hosted:').problem).toMatch(/names no hosted record/);
   });
 
-  v5it('reads the long form — source, as, ref, dir — and the deprecated `path` in the v5 reading, flagged', () => {
+  it('reads the long form — source, as, ref, dir', () => {
     const members = declaredMembers(config({
       members: {
         scheduling: 'services/scheduling',
         admin: { source: '../admin', as: 'part', description: 'The admin console' },
         payments: { source: `git@host.example:acme/payments.git#${COMMIT}`, ref: 'main', dir: 'services/payments', as: 'project', use: ['payment-portal'] },
-        ledger: { path: 'services/ledger' },
+        ledger: { source: 'services/ledger' },
       },
     }));
     expect(members).toEqual([
-      { alias: 'scheduling', path: 'services/scheduling', use: [], source: { path: 'services/scheduling' }, storage: 'contained', deprecatedPath: false },
-      { alias: 'admin', description: 'The admin console', use: [], as: 'part', source: { path: '../admin' }, storage: 'path', deprecatedPath: false },
+      { alias: 'scheduling', path: 'services/scheduling', use: [], source: { path: 'services/scheduling' }, storage: 'contained' },
+      { alias: 'admin', description: 'The admin console', use: [], as: 'part', source: { path: '../admin' }, storage: 'path' },
       {
-        alias: 'payments', use: ['payment-portal'], as: 'project', storage: 'git', deprecatedPath: false,
+        alias: 'payments', use: ['payment-portal'], as: 'project', storage: 'git',
         source: { git: 'git@host.example:acme/payments.git', commit: COMMIT, ref: 'main', dir: 'services/payments' },
       },
-      { alias: 'ledger', path: 'services/ledger', use: [], source: { path: 'services/ledger' }, storage: 'contained', deprecatedPath: true },
+      { alias: 'ledger', path: 'services/ledger', use: [], source: { path: 'services/ledger' }, storage: 'contained' },
     ]);
   });
 
-  v5it('records each declaration problem rather than dropping the entry', () => {
+  it('records each declaration problem rather than dropping the entry', () => {
     const problems = declaredMembers(config({
       members: {
         both: { source: 'a', path: 'a' },
@@ -97,7 +96,7 @@ describe('the one location grammar (member_declaration.source)', () => {
       },
     })).map((m) => [m.alias, m.problem]);
     expect(problems).toEqual([
-      ['both', expect.stringContaining('names both `source` and the deprecated `path`')],
+      ['both', expect.stringContaining('uses `path`, a wairon 5 form')],
       ['none', expect.stringContaining('declares no source')],
       ['marketplace', expect.stringContaining('a hosted source is a project')],
       ['bad', expect.stringContaining('asserts `as: module`')],
@@ -132,23 +131,6 @@ describe('a part\'s configuration: partOf, isPart, setPartOf, updateMember', () 
     const before = fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8');
     expect(() => projectConfigRepositoryAt(root).setPartOf({ project: 'hospital' })).toThrow(/declares `id`, `members`, `targets`.*member demote/);
     expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).toBe(before);
-  });
-
-  v5it('updateMember rewrites the deprecated `path` to `source` — the shorthand when nothing else remains — and writes nothing twice', () => {
-    const root = project({ members: { ledger: { path: 'services/ledger' }, billing: { path: 'services/billing', description: 'Invoices' } } });
-    const repo = projectConfigRepositoryAt(root);
-    expect(repo.updateMember('ledger', {})).toBe(true);
-    expect(repo.updateMember('billing', {})).toBe(true);
-    expect(repo.load()?.members).toEqual({ ledger: 'services/ledger', billing: { source: 'services/billing', description: 'Invoices' } });
-    expect(repo.updateMember('ledger', {})).toBe(false);
-    // A git member's commit moves; `as` and `use` drop with an empty value.
-    repo.updateMember('billing', { as: 'part' });
-    expect(repo.load()?.members?.billing).toEqual({ source: 'services/billing', as: 'part', description: 'Invoices' });
-    repo.updateMember('billing', { as: '' });
-    expect(repo.load()?.members?.billing).toEqual({ source: 'services/billing', description: 'Invoices' });
-    expect(() => repo.updateMember('crm', {})).toThrow(/declares no "crm"/);
-    expect(() => repo.updateMember('ledger', { source: 'git@host.example:acme/ledger.git' })).toThrow(/names no commit/);
-    expect(() => repo.updateMember('ledger', { as: 'module' })).toThrow(/a member is a part or a project/);
   });
 });
 

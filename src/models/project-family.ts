@@ -1,8 +1,6 @@
 import * as path from 'path';
 import type { ExportUsage, ExportUse } from './exports.js';
 import type { DeclaredExternal } from './project.js';
-import type { SubsystemSpec } from './specs.js';
-import { readsV5Forms } from '../utils/fs.js';
 // TYPE-ONLY: a part is recorded by the scan that read it (spec_index), and the graph carries it as read.
 import type { ScannedPart, WritableSpecKind } from '../core/specs.js';
 
@@ -14,7 +12,7 @@ import type { ScannedPart, WritableSpecKind } from '../core/specs.js';
 // only through its L0 exports, and only as a dependency it declared — a member
 // it declares, or an external it names in project.yaml. A cross-project
 // reference is `alias::name` (stage 3); the leading `::`, `super::` and
-// member-path forms bind only in the v5 reading `wairon upgrade` binds. These are the shapes the
+// member-path forms are wairon 5 forms that bind nowhere. These are the shapes the
 // project family index answers with, and the pure lookups every consumer of
 // the graph asks it. Nothing here does I/O, and nothing here judges.
 // ---------------------------------------------------------------------------
@@ -38,7 +36,7 @@ export type ReferenceBinding = 'exported' | 'unexported' | 'undeclared' | 'outsi
 export interface AuthoredReference {
   /** The in-memory key of the spec that holds the reference. */
   specId: string;
-  /** Where in that spec (dependsOn, owns, dispatch, mounts, lifecycle, publicInterfaces, trustedLinks, contract, subsystem, narrative, calls, auth, type). */
+  /** Where in that spec (dependsOn, owns, dispatch, lifecycle, publicInterfaces, trustedLinks, contract, subsystem, narrative, calls, auth, type). */
   position: string;
   /** The reference exactly as written. */
   authored: string;
@@ -93,7 +91,7 @@ export interface ReferenceResolution {
 export interface CrossProjectReference {
   /** The in-memory key of the referring spec. */
   specId: string;
-  /** dependsOn | call | register | dispatch | calls | dispatch-table | mounts | lifecycle | auth | reexport | type */
+  /** dependsOn | call | register | dispatch | calls | dispatch-table | lifecycle | auth | reexport | type */
   position: string;
   /** The in-memory key the reference names: a component, a subsystem (a re-export source) or a type. */
   target: string;
@@ -158,9 +156,6 @@ export interface ResolvedExternal {
 /** Where a family node's id came from. */
 export type ProjectIdOrigin = 'declared' | 'name' | 'none';
 
-/** How a parent declares a member root: a members entry, or a legacy L1 mount subsystem. */
-export type MountForm = 'members' | 'mount';
-
 /** project_node — one project root of the family the scan read, keyed by its in-memory key. */
 export interface ProjectNode {
   /** '' for the bound root, else its effective project id (or its alias path when the id is taken or missing). */
@@ -174,13 +169,9 @@ export interface ProjectNode {
   parent?: string;
   /** The alias the parent declares it under; absent for the bound root. */
   mountAlias?: string;
-  /** How the parent declares it; absent for the bound root. */
-  mountForm?: MountForm;
   /** True for a path external (`../x` under `externals`): a live node judged for validity only, never a member. */
   pathExternal?: true;
-  /** The legacy L1 mount subsystem as its parent wrote it; null otherwise. */
-  legacyMount: SubsystemSpec | null;
-  /** What the parent's declaration says the member is (the `members` description, or a legacy mount's); shown on its canvas node. */
+  /** What the parent's declaration says the member is (the `members` description); shown on its canvas node. */
   memberDescription?: string;
   /** Whether the project has an L0 of its own. */
   hasSystem: boolean;
@@ -438,91 +429,31 @@ export type ReferenceLanding =
   | { kind: 'unresolved'; form: ReferenceForm };
 
 /**
- * Walk a member path from `start`: every segment but the last is an alias of
- * the project reached so far (a subsystem segment qualifies the item and is
- * skipped), the last a local id.
- */
-function walkMemberPath(
-  byKey: Map<string, ReadableProject>,
-  start: ReadableProject,
-  segments: string[],
-): { project: ReadableProject; name: string } | 'outside' | null {
-  let node = start;
-  for (const segment of segments.slice(0, -1)) {
-    const next = node.aliases.get(segment);
-    if (next !== undefined) {
-      const found = byKey.get(next);
-      if (!found) return null;
-      node = found;
-      continue;
-    }
-    if (node.declaredAliases.has(segment)) return 'outside';
-    if (node.subsystems.has(segment)) continue;
-    return null;
-  }
-  return { project: node, name: segments[segments.length - 1] };
-}
-
-/**
  * Read a reference from the project `from` the way the scan binds one, without
  * position: an id without `::` is local; `alias::name` goes through `from`'s
  * alias table; a first segment naming one of `from`'s own subsystems qualifies
- * a local item. The deprecated forms bind only in the v5 reading — a leading
- * `::` is a member path from the bound root, each `super::` climbs one
- * containing project and reads the rest there, and a first segment `from` does
- * not declare is a member path from the bound root, else a family project id;
- * anywhere else such a reference lands nowhere (unresolved, with the form it
- * was written in), and the reference rules report it.
+ * a local item. Every other form — a leading `::`, `super::`, a member path
+ * through an alias or from the root — is a wairon 5 form and lands nowhere
+ * (unresolved, with the form it was written in); the reference rules report it.
  */
 export function landReference(projects: ReadableProject[], reference: string, from: string): ReferenceLanding {
   const byKey = new Map(projects.map((p) => [p.namespace, p] as const));
   const origin = byKey.get(from);
-  const root = byKey.get('');
   if (!reference.includes('::')) return { kind: 'project', project: from, name: reference };
-  const land = (form: ReferenceForm, start: ReadableProject | undefined, segments: string[]): ReferenceLanding => {
-    if (!start) return { kind: 'unresolved', form };
-    const walked = walkMemberPath(byKey, start, segments);
-    if (walked === 'outside') return { kind: 'outside', form };
-    if (walked) return { kind: 'project', form, project: walked.project.namespace, name: walked.name };
-    return { kind: 'unresolved', form };
-  };
-  // Step 1: a deprecated form lands only in the v5 reading.
-  const v5 = readsV5Forms();
-  if (reference.startsWith('::')) return v5 ? land('leading', root, reference.slice(2).split('::')) : { kind: 'unresolved', form: 'leading' };
+  if (reference.startsWith('::')) return { kind: 'unresolved', form: 'leading' };
   const segments = reference.split('::');
-  if (segments[0] === 'super') {
-    if (!v5) return { kind: 'unresolved', form: 'super' };
-    let node = origin;
-    while (segments[0] === 'super') {
-      segments.shift();
-      if (!node || node.parent === undefined) return { kind: 'outside', form: 'super' };
-      node = byKey.get(node.parent);
-    }
-    if (segments.length === 0 || !node) return { kind: 'unresolved', form: 'super' };
-    return land('super', node, segments);
-  }
+  if (segments[0] === 'super') return { kind: 'unresolved', form: 'super' };
   if (!origin) return { kind: 'unresolved', form: 'path' };
   const [first] = segments;
   if (origin.aliases.has(first) || origin.declaredAliases.has(first)) {
-    // A member path through an alias (`alias::sub::name`) is the deprecated form.
-    if (!v5 && segments.length !== 2) return { kind: 'unresolved', form: 'path' };
+    // A member path through an alias (`alias::sub::name`) is a wairon 5 form.
+    if (segments.length !== 2) return { kind: 'unresolved', form: 'path' };
     if (!origin.aliases.has(first)) return { kind: 'outside', form: 'alias' };
-    return land(segments.length === 2 ? 'alias' : 'path', origin, segments);
+    const target = byKey.get(origin.aliases.get(first)!);
+    return target ? { kind: 'project', form: 'alias', project: target.namespace, name: segments[1] } : { kind: 'unresolved', form: 'alias' };
   }
   if (origin.subsystems.has(first)) return { kind: 'project', project: from, name: segments[segments.length - 1] };
-  if (!v5) return { kind: 'unresolved', form: 'path' };
-  const fromRoot = root ? walkMemberPath(byKey, root, segments) : null;
-  if (fromRoot && fromRoot !== 'outside') return { kind: 'project', form: 'path', project: fromRoot.project.namespace, name: fromRoot.name };
-  // A first segment naming a project of the family by its id (or key) — the
-  // bound root itself included, as a path written from a root above it reads —
-  // walks on from that project.
-  const byId = projects.filter((p) => p.id === first || (p.namespace !== '' && p.namespace === first));
-  if (byId.length === 1) {
-    const walked = walkMemberPath(byKey, byId[0], segments.slice(1));
-    if (walked === 'outside') return { kind: 'outside', form: 'path' };
-    if (walked) return { kind: 'project', form: 'path', project: walked.project.namespace, name: walked.name };
-  }
-  return { kind: fromRoot === 'outside' ? 'outside' : 'unresolved', form: 'path' };
+  return { kind: 'unresolved', form: 'path' };
 }
 
 /** The in-memory key of a local id in a project. */

@@ -1326,8 +1326,7 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
   if (kind === 'system') {
     throw new Error('Refusing to delete the L0 System spec: it is the root every other spec hangs from, and is never deleted. Nothing was deleted.');
   }
-  // Steps 4-6: a spec of a legacy L1 mount read through this tree keeps the
-  // single-document delete it always had: its subtree is not this project's to plan.
+  // Steps 4-6: a qualified id keeps the single-document delete: its subtree is not this project's to plan.
   if (kind !== 'type' && id.includes('::')) {
     const deleted = dryRun ? loadSpec(kind, id) !== null : coreDeleteSpec(kind, id);
     if (!deleted && loadSpec(kind, id) === null) throw new Error(crossProjectWriteRefusal([{ kind, id }], 'sdd_delete_spec', undefined, true) ?? missingRefusal(kind, id, scanAllSpecs({ memberDepth: 0 }), undefined));

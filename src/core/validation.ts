@@ -30,7 +30,6 @@ import {
   signatureFacts,
   resolveSignatures,
   typeSpellingFacts,
-  retiredReachFacts,
   loadExtensionsFor,
 } from './adapters/validator-core.js';
 import type { SignatureFacts } from './signature-sources.js';
@@ -128,8 +127,6 @@ import { aiPathsAt } from '../config/paths.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import {
   ComponentSpecSchema,
-  attachRetiredMounts,
-  readRetiredReachForms,
   ImplementationSpecSchema,
   InterfaceSpecSchema,
   SubsystemSpecSchema,
@@ -1029,8 +1026,6 @@ function runOwnersGate(
       ...(boundConfig?.network ? { network: boundConfig.network } : {}),
       // The bound project's practice selection, for practice-references.
       ...(boundConfig?.practices ? { practiceSelection: boundConfig.practices } : {}),
-      // The retired reachability forms the scan met in the v5 reading, for entry-declarations.
-      retiredReachFacts: retiredReachFacts(),
       surfaceSnapshots,
       codeModel,
       roundTripIssues,
@@ -1141,14 +1136,8 @@ function readExcerptSpecs(excerpt: ParentExcerpt): ExcerptSpecs {
       if (parsed.success) out.system = parsed.data;
     } else if ('parentSystem' in doc) take(out.subsystems, SubsystemSpecSchema.safeParse(doc));
     else if ('componentType' in doc) {
-      // Retired reachability forms read in the v5 reading, as the loader reads them.
-      readRetiredReachForms('component', doc);
-      const parsed = ComponentSpecSchema.safeParse(doc);
-      take(out.components, parsed.success ? { success: true, data: attachRetiredMounts(parsed.data, doc) } : parsed);
-    } else if ('component' in doc) {
-      readRetiredReachForms('interface', doc);
-      take(out.interfaces, InterfaceSpecSchema.safeParse(doc));
-    }
+      take(out.components, ComponentSpecSchema.safeParse(doc));
+    } else if ('component' in doc) take(out.interfaces, InterfaceSpecSchema.safeParse(doc));
     else if ('contract' in doc) take(out.implementations, ImplementationSpecSchema.safeParse(doc));
     else if ('kind' in doc) take(out.types, TypeSpecSchema.safeParse(doc));
   }

@@ -38,10 +38,9 @@ import {
   resolveSubsystemExports,
   resolveProjectExports,
   getSubsystemPath,
-  // The member moves (moveMountToMembers, normalizeReferences) read the graph
-  // and write through the spec repository's two maintenance writes.
+  // The member moves read the graph and write through the spec repository's
+  // maintenance writes.
   graph,
-  deleteMount,
   normalizeReferences as normalizeSpecReferences,
   rewriteReferences as rewriteSpecReferences,
   // The ONE reference-field table (see core/specs.ts). A rename drives it
@@ -66,7 +65,7 @@ import { aiPathsAt } from '../config/paths.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
 import * as gitSource from './adapters/git-source.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
-import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive, removeFile, renamePath, restoreFile, readsV5Forms, ignoreWriteLock } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive, removeFile, renamePath, restoreFile, ignoreWriteLock } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
@@ -224,10 +223,9 @@ export function ensureProjectInitialized(fallbackName: string, id?: string, visi
 // Members (stage 3)
 //
 // A member is a project the bound project contains: declared in its
-// project.yaml `members` (or, in the v5 reading only, by a legacy L1 subsystem that
-// carries projectPath). It is never a subsystem of its parent and carries no
+// project.yaml `members`. It is never a subsystem of its parent and carries no
 // content there. These writers keep the two halves — the declaration and the
-// member project — in step, and never write the L1 mount form.
+// member project — in step.
 // ---------------------------------------------------------------------------
 
 /** Whether an existing member directory holds a part: no id, no L0 and no lock (stage 8). */
@@ -240,14 +238,11 @@ interface MemberAt {
   alias: string;
   /** The path as written, relative to the declaring root. */
   path: string;
-  form: 'members' | 'mount';
 }
 
 /**
- * The members a root declares: its `members` entries first (read through that
- * root's binding), then — in the v5 reading only — each legacy L1 mount of its own
- * spec tree whose alias `members` does not hold. A declaration with a problem,
- * or a mount whose alias `externals` also declares, is not followed.
+ * The members a root declares: its `members` entries (read through that root's
+ * binding). A declaration with a problem is not followed.
  */
 function memberDeclarationsAt(dir: string): MemberAt[] {
   let config: ProjectConfig | null = null;
@@ -257,44 +252,24 @@ function memberDeclarationsAt(dir: string): MemberAt[] {
     config = null;
   }
   const out: MemberAt[] = [];
-  const seen = new Set<string>();
   for (const member of config ? declaredMembers(config) : []) {
-    seen.add(member.alias);
     // A part (stage 8) is no chained project: its subsystems are this root's
     // own, generated, briefed and backfilled with it — never as a root of its own.
     if (member.problem || member.path === undefined || isPartDirectory(path.resolve(dir, member.path))) continue;
-    out.push({ alias: member.alias, path: member.path, form: 'members' });
-  }
-  // A legacy L1 mount (a subsystem carrying projectPath) is a wairon 5 form, read only in the v5 reading.
-  const specsDir = aiPathsAt(dir).specsDir();
-  if (!readsV5Forms() || !ioFiles.exists(specsDir)) return out;
-  for (const file of listFilesRecursive(specsDir, '.yaml')) {
-    let raw: unknown;
-    try {
-      raw = readYamlFile(file);
-    } catch {
-      continue;
-    }
-    if (!(raw && typeof raw === 'object' && 'parentSystem' in raw)) continue;
-    const pp = (raw as { projectPath?: unknown }).projectPath;
-    const id = (raw as { id?: unknown }).id;
-    if (typeof pp !== 'string' || pp.trim() === '' || typeof id !== 'string') continue;
-    if (seen.has(id) || ownGet(config?.externals, id) !== undefined) continue;
-    seen.add(id);
-    out.push({ alias: id, path: pp, form: 'mount' });
+    out.push({ alias: member.alias, path: member.path });
   }
   return out;
 }
 
 /**
  * core_orchestrator.listDirectChainedSubprojects — the DIRECT members of a
- * project, one level deep: its `members` entries and, in the v5 reading only, its
- * legacy L1 mounts, each resolved inside the project root as the member's
- * directory, alias and form. An absolute or escaping path is skipped. Used by
- * layered `wairon generate` to cascade one level at a time.
+ * project, one level deep: its `members` entries, each resolved inside the
+ * project root as the member's directory and alias. An absolute or escaping
+ * path is skipped. Used by layered `wairon generate` to cascade one level at
+ * a time.
  */
-export function listDirectChainedSubprojects(projectRoot: string): { dir: string; alias: string; form: 'members' | 'mount' }[] {
-  const out: { dir: string; alias: string; form: 'members' | 'mount' }[] = [];
+export function listDirectChainedSubprojects(projectRoot: string): { dir: string; alias: string }[] {
+  const out: { dir: string; alias: string }[] = [];
   // Steps 1-2: the member declarations, `members` entries first.
   for (const member of memberDeclarationsAt(projectRoot)) {
     // Step 3: resolved inside the root; an absolute or escaping path is skipped.
@@ -304,8 +279,8 @@ export function listDirectChainedSubprojects(projectRoot: string): { dir: string
     } catch {
       continue;
     }
-    // Step 4: the member's directory, alias and form.
-    out.push({ dir, alias: member.alias, form: member.form });
+    // Step 4: the member's directory and alias.
+    out.push({ dir, alias: member.alias });
   }
   // Step 5.
   return out;
@@ -619,34 +594,6 @@ function scaffoldMemberProject(alias: string, memberDir: string, description?: s
 }
 
 /**
- * core_orchestrator.updateMember — change an existing member's declaration
- * through the project config Repository (stage 8): the write behind `doctor
- * --fix` rewriting a deprecated long-form `path` to the one location key, and
- * `member update` moving a git member's `#<commit>`. A contained source in the
- * changes is held to the containment guard. Never writes a kind: what a
- * member is follows from its content. Returns whether it wrote.
- */
-export function updateMember(alias: string, changes: MemberDeclaration): boolean {
-  // Step 1: the containment guard, on a contained path the changes carry.
-  const location = memberLocationOf(changes);
-  const contained = location !== undefined && parseMemberSource(location).storage === 'contained';
-  if (contained) {
-    const root = getProjectRoot();
-    const resolved = path.resolve(root, location);
-    let escapes = false;
-    try {
-      escapes = path.resolve(assertContainedProjectPath(root, toPosixPath(location))) === path.resolve(root);
-    } catch {
-      escapes = true;
-    }
-    // Step 4: a contained path outside the project root.
-    if (escapes) throw new WaironError(`PROJECTPATH_ESCAPE: the member "${alias}" source "${location}" resolves to ${resolved}, outside the project root`);
-  }
-  // Steps 2-3: the write, through the Repository.
-  return projectConfigRepository.updateMember(alias, changes);
-}
-
-/**
  * core_orchestrator.declareMember — declare an EXISTING project as a member of
  * the bound project: the write behind `member attach` and `member adopt`,
  * which scaffold nothing (createMember scaffolds). The containment guard comes
@@ -686,9 +633,7 @@ export function rewriteReferences(kind: WritableSpecKind, id: string, edits: Ref
 
 /**
  * core_orchestrator.moveMember — relocate a member of the bound project: move
- * its directory on disk and point its `members` entry there. A member still
- * declared by a legacy L1 mount is first moved into `members`
- * (moveMountToMembers), so wairon never rewrites the L1 form.
+ * its directory on disk and point its `members` entry there.
  */
 export function moveMember(alias: string, newPath: string): void {
   // Step 1: the graph of the bound root — the member the alias declares: a
@@ -701,7 +646,7 @@ export function moveMember(alias: string, newPath: string): void {
   }
   const member = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias)
     ?? (bound?.parts.some((p) => p.alias === alias) || bound?.externals.some((e) => e.role === 'member' && e.alias === alias)
-      ? { mountForm: 'members' as const, legacyMount: null } : undefined);
+      ? true : undefined);
   // Steps 2-3: guard that the alias declares a member.
   if (!member) {
     throw new WaironError(`no member is declared under that alias: the bound project declares no member "${alias}".`);
@@ -710,23 +655,10 @@ export function moveMember(alias: string, newPath: string): void {
     moveSibling(alias, declaredAs.source.path ?? '', newPath, bound?.parts.some((p) => p.alias === alias) ?? false);
     return;
   }
-  // Step 4: a legacy declaration moves into `members` first.
-  if (member.mountForm === 'mount') {
-    // Steps 5-6: never when the mount carries a field the move cannot carry.
-    const carried = mountFieldsBeyondPath(member.legacyMount);
-    if (carried.length > 0) {
-      throw new WaironError(
-        `Refusing to move the member "${alias}": its legacy L1 mount carries ${carried.join(', ')}, which a move cannot carry `
-        + 'and never drops. Run `wairon upgrade` — its chaining migration carries them into the member plan-first — then move it.',
-      );
-    }
-    // Steps 7-8.
-    moveMountToMembers(alias);
-  }
   // Step 9: relocate the directory under the containment guard.
   const root = getProjectRoot();
   const declared = declaredMembers(projectConfigRepository.load() ?? {}).find((m) => m.alias === alias);
-  const currentPath = declared?.path ?? member.legacyMount?.projectPath ?? '';
+  const currentPath = declared?.path ?? '';
   const nextPath = toPosixPath(newPath);
   const oldDir = assertContainedProjectPath(root, currentPath);
   const newDir = assertContainedProjectPath(root, nextPath);
@@ -772,23 +704,6 @@ function moveSibling(alias: string, currentPath: string, newPath: string, isPart
   }
   projectConfigRepository.setMemberPath(alias, nextPath);
   invalidateSpecCache();
-}
-
-/**
- * The fields of a legacy mount beyond its path and description that its member
- * would have to hold — each named once, empty when a move loses nothing.
- */
-function mountFieldsBeyondPath(mount: SubsystemSpec | null): string[] {
-  if (!mount) return [];
-  const out: string[] = [];
-  if (mount.publicInterfaces.length > 0) out.push('publicInterfaces');
-  if (mount.trustedLinks.length > 0) out.push('trustedLinks');
-  if ((mount.lint?.allow ?? []).length > 0) out.push('lint');
-  for (const field of ['lifecycle', 'profile', 'targetLanguage', 'designDepth', 'ext'] as const) {
-    const value = mount[field];
-    if (value !== undefined && !(Array.isArray(value) && value.length === 0)) out.push(field);
-  }
-  return out;
 }
 
 /** Normalize a filesystem path to forward-slash form for portable storage. */
@@ -2204,8 +2119,6 @@ export function internalizeMember(alias: string, destination: InternalizeDestina
   // What crosses the old boundary, read BEFORE anything moves.
   const intoMember = crossingReferences(family, '', member.namespace);
   const backOut = crossingReferences(family, member.namespace, '');
-  // Step 11: a legacy mount document goes first, so a moved subsystem can take its folder.
-  deleteMount(alias);
   // Step 12: every subsystem and project-level type moves in.
   const rewritten = moveMemberSpecs(scan, (ref) => intoMember.get(ref) ?? backOut.get(ref) ?? ref);
   // Step 13: what the member held for its subsystems.
@@ -4829,8 +4742,8 @@ function localOf(id: string): string {
  * so another project's spec — named through its alias, its key, or a bare id
  * only a member holds — is refused as living in another project, naming which
  * one and the call to make there, and an id no project holds as missing. A
- * spec read under a qualified key the boundary let through (a legacy L1
- * mount's) is still never written across. `keyOf` answers the stored key.
+ * spec read under a qualified key the boundary let through is still never
+ * written across. `keyOf` answers the stored key.
  */
 function writeTarget<T>(kind: WritableSpecKind, id: string, tool: string, call: string, read: () => T | null, keyOf?: (spec: T) => string): T {
   const refusal = crossProjectWriteRefusal([{ kind, id }], tool, call, true);
@@ -5561,51 +5474,6 @@ function respellPlaceholder<E extends { transport: string; path?: string } | und
 /** The file the loader keeps a type in, by its id, owner and group. */
 function typeFileOf(id: string, type: TypeSpec): string {
   return getTypePath(id, type.subsystem, type.group);
-}
-
-// ---------------------------------------------------------------------------
-// Stage 3's member moves (core_orchestrator moveMountToMembers /
-// normalizeReferences) — the two writes the chaining migration drives per
-// member: a legacy L1 mount becomes a `members` entry, and a spec's
-// references are re-written in their canonical form.
-// ---------------------------------------------------------------------------
-
-/**
- * core_orchestrator.moveMountToMembers — move one legacy L1 mount of the bound
- * project into its `members`: its projectPath as the member's path and its
- * description as the member's description, then delete the L1 document. The
- * caller carries the mount's other fields first. Idempotent: a mount already
- * moved writes nothing.
- */
-export function moveMountToMembers(alias: string): boolean {
-  // Step 1: the graph of the bound root — the member the alias declares, with its legacy mount.
-  const family = graph();
-  const member = family.nodes.find((n) => n.parent === '' && n.mountAlias === alias);
-  const mount = member?.legacyMount ?? null;
-  // Steps 2-3: no legacy mount under the alias — already moved, or nothing to move.
-  if (!mount || member?.mountForm !== 'mount') {
-    if (member?.mountForm === 'members') return false;
-    throw new WaironError(`Refusing to move "${alias}" into \`members\`: the bound project declares no legacy L1 mount under that alias, and no member.`);
-  }
-  // Step 4: declare the member — refused there when the alias holds a different one.
-  projectConfigRepository.declareMember(alias, {
-    source: mount.projectPath!,
-    ...(mount.description ? { description: mount.description } : {}),
-  });
-  // Step 5: delete the L1 mount document, so the member is declared in one place.
-  deleteMount(alias);
-  // Step 6: it wrote.
-  return true;
-}
-
-/**
- * core_orchestrator.normalizeReferences — re-save one spec of the family with
- * every reference in its canonical stage-3 form through the spec repository;
- * targets never change.
- */
-export function normalizeReferences(kind: WritableSpecKind, id: string): boolean {
-  // Step 1.
-  return normalizeSpecReferences(kind, id);
 }
 
 /** An external declaration's source in its object form, whichever form was written (readExternalSource). */

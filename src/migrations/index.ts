@@ -13,7 +13,7 @@ import type {
 
 // ---------------------------------------------------------------------------
 // migration_portal — the published surface of the family migrations, shared by
-// the CLI (`wairon doctor`'s chaining migration and transaction recovery, the
+// the CLI (`wairon doctor`'s transaction recovery, the
 // status and validate banners), the MCP server and the hosted server: plan,
 // apply a confirmed plan, discard one, recover (or only report) unfinished
 // transactions. It also

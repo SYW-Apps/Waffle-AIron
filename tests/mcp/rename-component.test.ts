@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -16,7 +15,7 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -124,7 +123,7 @@ describe('sdd_rename_component', () => {
     expect(loadComponentSpec('books_orch')?.dependsOn).toEqual(['journal']);
   });
 
-  v5it('resolves a bare id naming a chained component to its qualified id, so core refuses it as chained', async () => {
+  it('resolves a bare id naming a chained component to its qualified id, so core refuses it as chained', async () => {
     root = books();
     client = await connect(createMcpServer());
 

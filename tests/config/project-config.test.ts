@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -424,20 +423,6 @@ describe('project config index', () => {
     const root = tempRoot();
     writeDoc(root, ['name: [unclosed']);
     expect(projectConfigRepositoryAt(root).specsDir()).toBe(path.join(path.resolve(root), '.wai', 'specs'));
-  });
-
-  v5it('reads and writes a legacy .wairon configuration', () => {
-    const root = tempRoot();
-    writeDoc(root, minimal(), '.wairon');
-    const repo = projectConfigRepositoryAt(root);
-
-    expect(repo.exists()).toBe(true);
-    expect(repo.load()?.name).toBe('demo');
-    expect(repo.specsDir()).toBe(path.join(path.resolve(root), '.wairon', 'specs'));
-
-    repo.setProjectType('monorepo');
-    expect(readDoc(root, '.wairon').projectType).toBe('monorepo');
-    expect(fs.existsSync(path.join(root, '.wai'))).toBe(false);
   });
 
   it('declaresGlobalPacks reports whether the document sets extensions.useGlobalPacks', () => {

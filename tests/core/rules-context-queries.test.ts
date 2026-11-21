@@ -29,7 +29,7 @@ const intf = (id: string, component: string, methodNames: string[]) =>
 function family(members: [string, string][], owners: [string, string][] = []): ProjectFamily {
   const node = (namespace: string, parent?: string) => ({
     namespace, idSource: 'declared' as const, ...(parent !== undefined ? { parent } : {}),
-    legacyMount: null, hasSystem: true, directory: `/${namespace}`, members: [], aliases: new Map<string, string>(), externals: [], imports: [],
+    hasSystem: true, directory: `/${namespace}`, members: [], aliases: new Map<string, string>(), externals: [], imports: [],
   });
   return {
     nodes: [node(''), ...members.map(([key, parent]) => node(key, parent))],

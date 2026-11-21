@@ -56,7 +56,7 @@ function configAt(dir: string): ProjectConfig | null {
 
 /** The positions a reference may stand at, by the kinds of spec that hold them. */
 const KINDS_AT: Record<string, WritableSpecKind[]> = {
-  dependsOn: ['component'], owns: ['component'], dispatch: ['component'], mounts: ['component'],
+  dependsOn: ['component'], owns: ['component'], dispatch: ['component'],
   lifecycle: ['subsystem'], publicInterfaces: ['subsystem'], trustedLinks: ['subsystem'],
   contract: ['implementation', 'interface'], narrative: ['implementation'], calls: ['implementation'], auth: ['implementation'],
   subsystem: ['component', 'type'], group: ['type'], type: ['interface', 'type', 'implementation'],

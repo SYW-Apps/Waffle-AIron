@@ -677,14 +677,6 @@ methods:
         targetMethod: typeSpellingFacts
       - stepNumber: 50
         description: >-
-          Read the retired reachability forms the scan met while it read them compatibly
-          (portalType, listener mounts, retired invokedBy kinds) through the core adapter, for the
-          entry-declarations rule
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: retiredReachFacts
-      - stepNumber: 51
-        description: >-
           Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
           the signature facts, the type-spelling facts, the foreign surface snapshots, the pinned
           externals, the code model, the round-trip findings, the known issue codes, the pack data
@@ -701,25 +693,25 @@ methods:
           never read here: a parent's requirements do not reach any member's own gate, and whether
           members adopt this project's requirements is the family run's question
         type: local
-      - stepNumber: 52
+      - stepNumber: 51
         description: For each rule in the run sequence
         type: loop
         loopKind: forEach
         over: the rule run sequence read in step 20 (built-ins, then pack rules, lint-allows last)
-        endStep: 53
-      - stepNumber: 53
+        endStep: 52
+      - stepNumber: 52
         label: run-rule
         description: >-
           Run the rule's check against the rule context; the rule reports its findings through
           ctx.addIssue
         type: local
-      - stepNumber: 54
+      - stepNumber: 53
         label: hint
         description: Does the project declare externals?
         type: branch
         condition: the pinned externals read in step 10 are not empty
-        onFalseStep: 56
-      - stepNumber: 55
+        onFalseStep: 55
+      - stepNumber: 54
         description: >-
           Add the one-line hint to the result: its externals were judged against their pins alone;
           the advisory live comparison beside this verdict reads their live producers (offline), and
@@ -728,7 +720,7 @@ methods:
           composes them against their live producers (a project that declares externals runs its
           family run whether or not it declares members)
         type: local
-      - stepNumber: 56
+      - stepNumber: 55
         label: code-reading
         description: >-
           Ask which compiler an exact-grade analysis read the code with, through the source analysis
@@ -749,7 +741,7 @@ methods:
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: compilerIdentity
-      - stepNumber: 57
+      - stepNumber: 56
         label: done
         description: Return the project's verdict — the same from every root
         type: return
@@ -904,4 +896,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-20T14:17:13.311Z'
+updatedAt: '2026-11-21T16:08:30.962Z'

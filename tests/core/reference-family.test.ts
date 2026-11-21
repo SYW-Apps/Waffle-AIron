@@ -1,5 +1,4 @@
 import { afterEach, describe, expect } from 'vitest';
-import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
@@ -8,14 +7,10 @@ import {
   listProjectRoots,
   loadComponentSpecs,
   loadSubsystemSpecs,
-  normalizeReferences,
   workspaceFor,
 } from '../../src/core/specs.js';
 import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { buildCanvasModel } from '../../src/core/canvas.js';
-import { moveMountToMembers } from '../../src/core/provision.js';
-import { deleteMount } from '../../src/core/specs.js';
-import * as yaml from 'js-yaml';
 import { validateProject } from '../../src/core/validation.js';
 import { buildReferenceFamily, type ReferenceFamily } from '../helpers/reference-family.js';
 
@@ -63,21 +58,6 @@ describe('reference family: the loader without position', () => {
     expect(dependsOnOf('engine-portal')).toEqual(['transpiler::lowering-portal']);
   });
 
-  it('binds the deprecated forms in the v5 reading, each with its rewrite', () => {
-    family = buildReferenceFamily();
-    bind(family.top);
-    // leading `::` from the top, through the member alias.
-    expect(dependsOnOf('app-worker')).toEqual(['core::engine-portal']);
-    // super:: climbs to core; a member path lands back home; `::` walks from the top.
-    expect(dependsOnOf('transpiler::lowering-core')).toEqual(['core::engine-portal', 'transpiler::lowering-portal', 'core::engine-portal']);
-    const refs = projectFamilyGraph().authoredReferences.filter((r) => r.specId === 'transpiler::lowering-core');
-    expect(refs.map((r) => [r.authored, r.form, r.binding, r.rewrite])).toEqual([
-      ['super::engine-portal', 'super', 'undeclared', 'core::engine-portal'],
-      ['core::transpiler::lowering-portal', 'path', 'local', 'lowering-portal'],
-      ['::core::engine-portal', 'leading', 'undeclared', 'core::engine-portal'],
-    ]);
-  });
-
   it('writes every untouched spec back byte for byte (writer-is-inverse)', () => {
     family = buildReferenceFamily();
     const before = new Map(family.specFiles().map((f) => [f, fs.readFileSync(f)]));
@@ -107,21 +87,6 @@ describe('reference family: the loader without position', () => {
     expect(written.dependsOn).toEqual(['core::engine-portal', 'lowering-core', 'waffly::app-worker']);
   });
 
-  it('normalizes the references of a spec to their canonical text, once', () => {
-    family = buildReferenceFamily();
-    bind(family.top);
-    expect(normalizeReferences('component', 'transpiler::lowering-core')).toBe(true);
-    const text = fs.readFileSync(path.join(family.transpiler, '.wai', 'specs', 'lowering', 'lowering-core', '.index.yaml'), 'utf8');
-    const dependsOn = text.split(/\r?\n/).filter((line) => line.startsWith('  - '));
-    // Two texts bound one target; dependsOn is a set, so the canonical write keeps it once.
-    expect(dependsOn).toEqual(['  - core::engine-portal', '  - lowering-portal']);
-    expect(text).not.toMatch(/super::|- ::/);
-    bind(family.top);
-    // The targets did not move, and a second run writes nothing.
-    expect(dependsOnOf('transpiler::lowering-core')).toEqual(['core::engine-portal', 'transpiler::lowering-portal']);
-    expect(normalizeReferences('component', 'transpiler::lowering-core')).toBe(false);
-  });
-
   it('makes a local id that shadows an alias visible, and keeps the member reachable (shadowing-reachable)', () => {
     family = buildReferenceFamily();
     // The shadowing is core's own finding: its gate reports it, the parent's never does (stage 4).
@@ -135,7 +100,7 @@ describe('reference family: the loader without position', () => {
     expect(loadSubsystemSpecs().map((s) => s.id)).toContain('core::transpiler');
   });
 
-  it('gives a member no L1 spec in its parent, in either form (mount-carries-no-content)', () => {
+  it('gives a member no L1 spec in its parent (member-carries-no-content)', () => {
     family = buildReferenceFamily();
     bind(family.top);
     const subsystems = loadSubsystemSpecs().map((s) => s.id).sort();
@@ -144,10 +109,7 @@ describe('reference family: the loader without position', () => {
     expect(top.specIds).not.toContain('shared');
     expect(top.specIds).not.toContain('core');
     const shared = projectFamilyGraph().nodes.find((n) => n.namespace === 'shared')!;
-    expect(shared.mountForm).toBe('mount');
-    expect(shared.legacyMount?.description).toBe('The vocabulary every project speaks');
-    expect(shared.legacyMount?.publicInterfaces).toHaveLength(1);
-    expect(projectFamilyGraph().nodes.find((n) => n.namespace === 'core')!.legacyMount).toBeNull();
+    expect(shared.memberDescription).toBe('The vocabulary every project speaks');
   });
 
   it('reports the family findings stage 3 introduces', () => {
@@ -174,32 +136,6 @@ describe('reference family: the loader without position', () => {
     // A member's own subsystems keep their honest keys, under its node.
     expect(model.subsystems.map((s) => s.id)).toContain('core::engine');
     expect(model.components.find((c) => c.id === 'core::engine-portal')?.subsystem).toBe('core::engine');
-  });
-
-  it('moves a legacy mount into `members` — its path and description — and deletes the L1 document, once', () => {
-    family = buildReferenceFamily();
-    bind(family.top);
-    const mountFile = path.join(family.top, '.wai', 'specs', 'shared', '.index.yaml');
-    expect(fs.existsSync(mountFile)).toBe(true);
-    expect(moveMountToMembers('shared')).toBe(true);
-    expect(fs.existsSync(mountFile)).toBe(false);
-    const config = yaml.load(fs.readFileSync(path.join(family.top, '.wai', 'project.yaml'), 'utf8')) as { members: unknown };
-    expect(config.members).toEqual({ core: 'core', shared: { source: 'shared', description: 'The vocabulary every project speaks' } });
-    bind(family.top);
-    const shared = projectFamilyGraph().nodes.find((n) => n.namespace === 'shared')!;
-    expect(shared.mountForm).toBe('members');
-    // Moved already: nothing to write.
-    expect(moveMountToMembers('shared')).toBe(false);
-    expect(() => moveMountToMembers('nowhere')).toThrow(/no legacy L1 mount/);
-  });
-
-  it('deletes only a legacy mount by its alias, refusing a subsystem with content', () => {
-    family = buildReferenceFamily();
-    bind(family.top);
-    expect(() => deleteMount('app')).toThrow(/not a member declaration/);
-    expect(deleteMount('nothing-here')).toBe(false);
-    expect(deleteMount('shared')).toBe(true);
-    expect(deleteMount('shared')).toBe(false);
   });
 });
 

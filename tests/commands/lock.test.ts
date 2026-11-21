@@ -17,7 +17,7 @@ import {
   specPathsInScope,
 } from '../../src/core/specs.js';
 import { diffAgainstApproval } from '../../src/core/approval.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import { surfaceRepository } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';

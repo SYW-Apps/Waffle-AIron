@@ -7,7 +7,6 @@
  * retired in stage 3) is never written.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -112,7 +111,7 @@ describe('wairon member add|move|internalize', () => {
     await expect(runMemberAdd('billing', 'services/billing')).rejects.toThrow(/Not inside an initialized wairon project/);
   });
 
-  v5it('member move relocates a member, and moves a legacy L1 mount into `members` first', async () => {
+  it('member move relocates a member', async () => {
     const root = parentProject();
     const output = captureOutput();
     await runMemberAdd('billing', 'services/billing', { project: true });
@@ -120,17 +119,6 @@ describe('wairon member add|move|internalize', () => {
     expect(membersOf(root)).toEqual({ billing: 'modules/billing' });
     expect(fs.existsSync(path.join(root, 'modules', 'billing', '.wai', 'project.yaml'))).toBe(true);
     expect(output()).toContain('Moved member "billing" → modules/billing');
-
-    // A legacy mount, as a pre-stage-3 wairon wrote it.
-    saveSpec('subsystem', {
-      id: 'claims', name: 'claims', description: 'Claims', parentSystem: 'Clinic', publicInterfaces: [], trustedLinks: [],
-      projectPath: 'services/claims', createdAt: now, updatedAt: now,
-    } as SubsystemSpec);
-    fs.mkdirSync(path.join(root, 'services', 'claims', '.wai', 'specs'), { recursive: true });
-    invalidateSpecCache();
-    await runMemberMove('claims', 'modules/claims');
-    expect(membersOf(root)).toEqual({ billing: 'modules/billing', claims: { source: 'modules/claims', description: 'Claims' } });
-    expect(fs.existsSync(path.join(root, '.wai', 'specs', 'claims', '.index.yaml'))).toBe(false);
   });
 
   it('member move requires a new path', async () => {

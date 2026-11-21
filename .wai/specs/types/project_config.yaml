@@ -62,8 +62,8 @@ fields:
       by identifier.problemAs project-id — at most 64 characters, never a Windows device name and
       never super, which every consumer would write as a namespace hop. When absent, the effective
       id is `name` slugified (see effectiveId) and no save writes it in, because the default can be
-      wrong: an existing chained child answers to its mount's subsystem id, which a plain save
-      cannot know. Only deliberate writers set it: init and provisioning
+      wrong: an existing member answers to the alias its parent declares it under, which a plain
+      save cannot know. Only deliberate writers set it: init and provisioning
     optional: true
     key: primary
   - name: externals
@@ -96,9 +96,8 @@ fields:
       reaches it only as `alias::name` through its L0 exports — or bare, for the names the long
       form's `use` imports; a contained one is read live, any other is judged against its pin.
       Together with `externals` it is this project's alias table, and one alias names one member or
-      external. Written by hand, by `member add` / `promote` / `demote` / `update`, or by `wairon
-      upgrade` through the registry (which rewrites the deprecated long-form `path`); the L1
-      `projectPath` form still loads in the v5 reading `wairon upgrade` binds.
+      external. Written by hand, or by `member add` / `promote` / `demote` / `update`; the long-form
+      `path` key and the L1 `projectPath` form are wairon 5 forms the loader refuses.
     optional: true
   - name: composition
     type: CompositionConfig
@@ -199,14 +198,13 @@ methods:
     returns: string?
     description: >-
       The declared id when there is one, as written; otherwise `name` slugified — in every reader,
-      the project graph included, so a project answers to one id wherever it is read (a chained
-      child that declares none is not given its mount's subsystem id here: PROJECT_ID_DEFAULTED
-      names that id as the one to declare, and 2c's doctor --fix writes it). Slugifying lower-cases
-      the name, collapses each run of characters outside [a-z0-9-_.] to one '-', cuts it to 64
-      characters and trims the result until it starts and ends alphanumeric. Returns null when no
-      declared id exists and no slug can be made — a slug the project-id grammar still refuses (a
-      Windows device name, super) included: it never invents a fallback, and the identity reports
-      the missing id.
+      the project graph included, so a project answers to one id wherever it is read (a member that
+      declares none is not given its alias here: PROJECT_ID_DEFAULTED names that alias as the id to
+      declare, and doctor --fix writes it). Slugifying lower-cases the name, collapses each run of
+      characters outside [a-z0-9-_.] to one '-', cuts it to 64 characters and trims the result until
+      it starts and ends alphanumeric. Returns null when no declared id exists and no slug can be
+      made — a slug the project-id grammar still refuses (a Windows device name, super) included: it
+      never invents a fallback, and the identity reports the missing id.
     symbol: effectiveProjectId
   - name: identity
     signature: 'identity(lockedProjectId?: string): ProjectIdentity'
@@ -240,12 +238,11 @@ methods:
     returns: list<DeclaredMember>
     description: >-
       The configuration's `members`, one DeclaredMember per alias in declaration order: the source
-      string (the shorthand, the long form's `source`, or, in the v5 reading `wairon upgrade` binds,
-      the deprecated `path`, flagged) parsed into its object form and storage, the asserted `as`,
-      the description and `use` copied as written; an alias outside [a-z0-9-_]+, a missing or
-      unparseable source, a git source without its commit, a bad `as`, a hosted source asserted to
-      be a part, an alias `externals` also declares, or a malformed `use` entry is recorded as the
-      entry's problem rather than dropped. Empty when nothing is declared.
+      string (the shorthand or the long form's `source`) parsed into its object form and storage,
+      the asserted `as`, the description and `use` copied as written; an alias outside [a-z0-9-_]+,
+      a missing or unparseable source, a git source without its commit, a bad `as`, a hosted source
+      asserted to be a part, an alias `externals` also declares, or a malformed `use` entry is
+      recorded as the entry's problem rather than dropped. Empty when nothing is declared.
   - name: withPack
     signature: 'withPack(entry: PackSelection | string, remove?: boolean): ProjectConfig'
     returns: ProjectConfig
@@ -281,4 +278,4 @@ methods:
       into the project for. Empty when no target names the plugin.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-11-15T02:12:47.256Z'
+updatedAt: '2026-11-21T16:16:48.866Z'

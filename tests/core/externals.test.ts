@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -53,7 +52,7 @@ function write(root: string, rel: string, text: string): void {
   fs.writeFileSync(file, text);
 }
 
-function projectYaml(id: string | undefined, name: string, externals?: Record<string, unknown>): string {
+function projectYaml(id: string | undefined, name: string, externals?: Record<string, unknown>, members?: Record<string, unknown>): string {
   return dump({
     ...(id !== undefined ? { id } : {}),
     name,
@@ -61,17 +60,16 @@ function projectYaml(id: string | undefined, name: string, externals?: Record<st
     rules: {},
     extensions: { packs: [], useGlobalPacks: false },
     ...(externals ? { externals } : {}),
+    ...(members ? { members } : {}),
   });
 }
 
 /** The FleetWorks family on disk; answers the root and the two member directories. */
 function fleet(o: FleetOptions = {}): { root: string; billing: string; dispatch: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-'));
-  write(root, '.wai/project.yaml', projectYaml('fleetworks', 'FleetWorks', o.rootExternals));
+  write(root, '.wai/project.yaml', projectYaml('fleetworks', 'FleetWorks', o.rootExternals, { billing: 'packages/billing', dispatch: 'packages/dispatch' }));
   write(root, '.wai/specs/.index.yaml', dump({ name: 'FleetWorks', vision: 'Delivery fleet platform.' }));
   write(root, '.wai/specs/subsystems/operations.yaml', dump({ id: 'operations', name: 'Operations', description: 'The console.', parentSystem: 'FleetWorks' }));
-  write(root, '.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'Chained billing member.', parentSystem: 'FleetWorks', projectPath: 'packages/billing' }));
-  write(root, '.wai/specs/subsystems/dispatch.yaml', dump({ id: 'dispatch', name: 'Dispatch', description: 'Chained dispatch member.', parentSystem: 'FleetWorks', projectPath: 'packages/dispatch' }));
 
   const b = 'packages/billing/.wai';
   write(root, `${b}/project.yaml`, projectYaml(o.billingId ?? 'billing', 'Billing Service'));
@@ -107,7 +105,7 @@ function fleet(o: FleetOptions = {}): { root: string; billing: string; dispatch:
   write(root, `${d}/specs/subsystems/dispatch.yaml`, dump({ id: 'dispatch', name: 'Dispatch', description: 'Routes.', parentSystem: 'DispatchService' }));
   write(root, `${d}/specs/components/route-planner.yaml`, dump({
     id: 'route-planner', name: 'Route Planner', description: 'Plans routes and bills them.', subsystem: 'dispatch',
-    componentType: 'Orchestrator', owns: [], dependsOn: [o.plannerRef ?? 'super::billing::invoice-portal'],
+    componentType: 'Orchestrator', owns: [], dependsOn: [o.plannerRef ?? 'billing::invoicing'],
   }));
   write(root, `${d}/specs/interfaces/iroute-planner.yaml`, dump({
     id: 'iroute-planner', name: 'Route Planner Interface', description: 'Plan.', component: 'route-planner',
@@ -115,7 +113,7 @@ function fleet(o: FleetOptions = {}): { root: string; billing: string; dispatch:
   }));
   write(root, `${d}/specs/implementations/route-planner-impl.yaml`, dump({
     id: 'route-planner-impl', name: 'Route Planner Impl', description: 'Closes routes.', contract: 'iroute-planner',
-    methods: [{ name: 'closeRoute', narrative: [{ stepNumber: 1, type: 'call', description: 'Bill the route.', targetComponent: o.plannerRef ?? 'super::billing::invoice-portal', targetMethod: 'issueInvoice' }] }],
+    methods: [{ name: 'closeRoute', narrative: [{ stepNumber: 1, type: 'call', description: 'Bill the route.', targetComponent: o.plannerRef ?? 'billing::invoicing', targetMethod: 'issueInvoice' }] }],
   }));
   invalidateSpecCache();
   return { root, billing: path.join(root, 'packages', 'billing'), dispatch: path.join(root, 'packages', 'dispatch') };
@@ -177,7 +175,7 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   // ---- the scan and the graph -------------------------------------------------
 
-  v5it('the scan records one root per project, bound root first, each with its own L0 qualified into its namespace', () => {
+  it('the scan records one root per project, bound root first, each with its own L0 qualified into its namespace', () => {
     const f = family();
     const roots = at(f.root, () => listProjectRoots());
     expect(roots.map((r) => r.namespace)).toEqual(['', 'billing', 'dispatch']);
@@ -206,7 +204,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     });
   });
 
-  v5it('producerOf, ownerOf and declares read the graph', () => {
+  it('producerOf, ownerOf and declares read the graph', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     at(f.root, () => {
       const fam = graph();
@@ -214,8 +212,6 @@ describe('stage 2b — the project graph and declared externals', () => {
       expect(producerOf(fam, 'billing::invoice-portal')?.namespace).toBe('billing');
       // A missing item still lands in the project whose namespace prefixes it.
       expect(producerOf(fam, 'billing::no-such-thing')?.namespace).toBe('billing');
-      expect(producerOf(fam, 'super::billing::invoice-portal', 'dispatch')?.namespace).toBe('billing');
-      expect(producerOf(fam, 'super::super::x', 'dispatch')).toBeNull();
       expect(declares(fam, 'dispatch', 'billing')).toBe(true);
       expect(declares(fam, '', 'billing')).toBe(true); // a member needs no declaration
       expect(declares(fam, 'billing', 'dispatch')).toBe(false);
@@ -227,7 +223,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     });
   });
 
-  v5it('an edit to a root\'s project.yaml re-scans: the externals join the graph without an invalidate', () => {
+  it('an edit to a root\'s project.yaml re-scans: the externals join the graph without an invalidate', () => {
     const f = family();
     at(f.root, () => expect(familyNode(graph(), 'dispatch')?.externals).toEqual([]));
     write(f.root, 'packages/dispatch/.wai/project.yaml', projectYaml('dispatch', 'Dispatch Service', { billing: {} }));
@@ -237,7 +233,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     runWithProjectRoot(f.root, () => expect(familyNode(graph(), 'dispatch')?.externals.map((e) => e.alias)).toEqual(['billing']));
   });
 
-  v5it('a member project table follows the member\'s own L0; a widening re-export is a problem', () => {
+  it('a member project table follows the member\'s own L0; a widening re-export is a problem', () => {
     const f = family();
     write(f.root, '.wai/specs/.index.yaml', dump({
       name: 'FleetWorks', vision: 'Delivery fleet platform.',
@@ -254,7 +250,7 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   // ---- the findings --------------------------------------------------------------
 
-  v5it('stage 4: a member\'s references are its own gate\'s — the parent never reports them, the member does', () => {
+  it('stage 4: a member\'s references are its own gate\'s — the parent never reports them, the member does', () => {
     const f = family({ plannerRef: 'billing::invoicing' });
     const fromRoot = at(f.root, () => validateProject());
     expect(codes(fromRoot, 'EXTERNAL_UNDECLARED')).toEqual([]);
@@ -263,12 +259,9 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(codes(fromChild, 'EXTERNAL_UNDECLARED')).toEqual(['error @route-planner', 'error @route-planner-impl']);
     const finding = fromChild.issues.find((i) => i.code === 'EXTERNAL_UNDECLARED')!;
     expect(finding.resolution).toMatchObject({ outcome: 'forbidden', owner: 'dispatch', canonicalTarget: 'billing::invoicing' });
-    // A deprecated form that names no alias is unavailable from the member's own root — never a pass.
-    const legacy = family();
-    expect(codes(at(legacy.dispatch, () => validateProject()), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @route-planner', 'warning @route-planner-impl']);
   });
 
-  v5it('property: not-exported-is-reported — judged against the producer\'s own pin, which exports nothing public', () => {
+  it('property: not-exported-is-reported — judged against the producer\'s own pin, which exports nothing public', () => {
     const f = family({ dispatchExternals: { billing: 'git' }, billingExports: [], plannerRef: 'billing::invoice-portal' });
     const res = at(f.root, () => validateProject());
     expect(codes(res, 'EXTERNAL_UNDECLARED')).toEqual([]);
@@ -401,7 +394,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(() => at(f.dispatch, () => externalsFileAdapter.readLock())).toThrow(/inputs\.lock\.yaml/);
   });
 
-  v5it('exportUsage maps the consumer\'s references onto the producer\'s public names', () => {
+  it('exportUsage maps the consumer\'s references onto the producer\'s public names', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     at(f.root, () => {
       expect(exportUsage('dispatch', 'billing')).toEqual({

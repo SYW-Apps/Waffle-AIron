@@ -120,9 +120,6 @@ export {
   // spec_tree_portal typeSpellingFacts: what the scan's type canonicalisation
   // recorded — a passthrough read of the spec repository (spec_loader).
   typeSpellingFacts,
-  // spec_tree_portal retiredReachFacts: the retired reachability forms the
-  // scan met in the v5 reading — a passthrough read of the spec repository.
-  retiredReachFacts,
   // spec_tree_portal lockTree / unlockTree: the bound tree's
   // cross-process write lock, taken around every spec-write tool; and
   // readPinnedSpec: an external's spec read from its pinned snapshot.
@@ -191,19 +188,12 @@ export {
   moveMember,
   externalizeSubsystem,
   internalizeMember,
-  // spec_maintenance_portal moveMountToMembers / normalizeReferences: the
-  // chaining migration's member move and reference normalization.
-  moveMountToMembers,
-  normalizeReferences,
   // spec_maintenance_portal rewriteReferences: the family migrations'
   // reference write, at parsed positions (stage 6).
   rewriteReferences,
   // project_config_portal declareMember: an existing project declared as a
   // member under the containment guard (member attach / adopt).
   declareMember,
-  // spec_maintenance_portal updateMember (stage 8): an existing member's
-  // declaration changed — doctor --fix's `path` → `source` rewrite.
-  updateMember,
   // spec_maintenance_portal promoteMember / demoteMember / advanceMember
   // (stage 8): a part made a project in place and back, and a git member's
   // pinned commit moved.
@@ -500,7 +490,7 @@ export {
   recordProfileSelection,
   setExecutionTier,
   // project_config_portal setId / declareExternal: the deliberate identity and
-  // dependency declarations `doctor --fix`'s chaining migration writes. The
+  // dependency declarations. The
   // portal's setId IS the orchestrator's setProjectId, by identity.
   setProjectId as setId,
   declareExternal,

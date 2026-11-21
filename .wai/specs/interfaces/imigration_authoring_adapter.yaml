@@ -1,6 +1,6 @@
 id: imigration_authoring_adapter
 name: Migration Authoring Client Adapter Interface
-description: The two gated writes the chaining migration makes, at the project root the caller has bound.
+description: The gated write the membership migration makes, at the project root the caller has bound.
 component: migration_authoring_adapter
 methods:
   - name: updateSpecGated
@@ -25,14 +25,6 @@ methods:
         type: bool
         description: Answer what the delta would do and write nothing
         optional: true
-  - name: writeSpec
-    description: Forward a whole-spec restatement to authoring_portal.writeSpec; answers the write receipt.
-    signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
-    returns: SpecWriteReceipt
-    params:
-      - name: restatement
-        type: SpecRestatement
-        description: The spec as the migration states it
 status: complete
 createdAt: '2026-09-30T20:45:34.881Z'
-updatedAt: '2026-10-04T23:37:41.640Z'
+updatedAt: '2026-11-21T16:17:58.287Z'

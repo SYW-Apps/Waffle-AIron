@@ -35,20 +35,8 @@ fields:
     optional: true
   - name: mountAlias
     type: string
-    description: >-
-      The alias the parent declares it under (its `members` key, or the legacy mount subsystem's
-      local id); absent for the bound root.
+    description: The alias the parent declares it under (its `members` key); absent for the bound root.
     optional: true
-  - name: mountForm
-    type: MountForm
-    description: How the parent declares it; absent for the bound root.
-    optional: true
-  - name: legacyMount
-    type: SubsystemSpec?
-    description: >-
-      The legacy L1 mount subsystem as its parent wrote it, for the migration to carry; null
-      otherwise.
-    optional: false
   - name: hasSystem
     type: bool
     description: >-
@@ -61,7 +49,7 @@ fields:
     optional: false
   - name: members
     type: list<string>
-    description: The keys of the projects this one declares as members, either form.
+    description: The keys of the projects this one declares as members.
     optional: false
   - name: aliases
     type: map<string, string>
@@ -81,9 +69,9 @@ fields:
   - name: memberDescription
     type: string
     description: >-
-      What the parent's declaration says the member is — the `members` long form's description, or a
-      legacy mount's description — which the canvas shows on the member's project node; absent for
-      the bound root and for a member declared without one.
+      What the parent's declaration says the member is — the `members` long form's description —
+      which the canvas shows on the member's project node; absent for the bound root and for a
+      member declared without one.
     optional: true
   - name: imports
     type: list<ProjectImport>
@@ -116,4 +104,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-11-20T20:50:08.612Z'
+updatedAt: '2026-11-21T16:11:40.763Z'

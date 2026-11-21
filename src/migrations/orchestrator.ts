@@ -3,13 +3,11 @@ import * as path from 'path';
 import * as core from './adapters/core.js';
 import * as validator from './adapters/validator.js';
 import type { ValidationIssue } from '../core/validation.js';
-import * as chaining from './chaining-migration.js';
 import * as membership from './membership.js';
 import * as identity from './identity.js';
 import * as boundary from './boundary.js';
 import * as transaction from './transaction.js';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, getWriteReach, runWithHostedLookup, runWithProjectBinding, runWithProjectRoot, writeReachDenials } from '../utils/fs.js';
-import type { ChainingMigrationPlan } from './chaining-migration.js';
 import { dependencyCycles, type ProjectFamily } from '../models/project-family.js';
 import {
   blocked,
@@ -19,8 +17,6 @@ import {
   type FileChange,
   type MigrationPlan,
   type MigrationRequest,
-  type PlannedEdit,
-  type PlannedEditKind,
   type RecoveredTransaction,
   type Rehearsal,
   type TransactionScope,
@@ -71,10 +67,10 @@ export function plan(request: MigrationRequest): MigrationPlan {
   // relocation's coordinator too, which journals a hosted detach or adopt.
   const pending = unfinished(top, bound, request.relocation?.coordinator);
   if (pending.length > 0) return refusedForPending(request, top, whole, pending);
-  // Steps 8-23: the verb's planner — a verb reads the live family under the top root's binding; the chaining migration climbs from the caller's.
-  const planned = request.verb === 'chaining' ? route(request, family, boundKey) : runWithProjectRoot(top, () => route(request, family, boundKey));
+  // Steps 8-23: the verb's planner — a verb reads the live family under the top root's binding.
+  const planned = runWithProjectRoot(top, () => route(request, family, boundKey));
   // Steps 24-25: rehearse (an already-refused plan comes back unchanged).
-  return rehearse(request.verb === 'chaining' ? planned : { ...planned, familyRoot: top, whole });
+  return rehearse({ ...planned, familyRoot: top, whole });
 }
 
 /** Step 5: the transactions a crash left under the family root and the bound root, writing nothing. */
@@ -121,47 +117,9 @@ function route(request: MigrationRequest, family: ProjectFamily, bound: string):
     case 'demote':
       // Step 19: a boundary or storage verb, through the boundary migration's one entry.
       return boundary.plan(family, bound, request);
-    case 'chaining':
-      // Step 21: its own climb, from the caller's binding.
-      return fromChaining(request, chaining.plan());
     default:
-      throw new Error(`there is no "${request.verb}" family migration: attach | detach | adopt | rename | rename-alias | internalize | externalize | promote | demote | chaining`);
+      throw new Error(`there is no "${request.verb}" family migration: attach | detach | adopt | rename | rename-alias | internalize | externalize | promote | demote`);
   }
-}
-
-/** Step 21: the chaining migration's plan carried whole — its blocking findings become refusals, its writes edits. */
-function fromChaining(request: MigrationRequest, plan: ChainingMigrationPlan): MigrationPlan {
-  return {
-    request,
-    familyRoot: plan.familyRoot,
-    whole: plan.whole,
-    edits: chainingEdits(plan),
-    refusals: plan.findings.filter((f) => f.blocking).map((f) => ({ code: f.kind, project: f.project, detail: f.detail })),
-    changes: [],
-    relock: [],
-    notes: [],
-    chaining: plan,
-  };
-}
-
-/** A chaining plan's writes as the semantic edits a person reads, owners in walk order. */
-function chainingEdits(plan: ChainingMigrationPlan): PlannedEdit[] {
-  const edits: PlannedEdit[] = [];
-  for (const p of plan.projects) {
-    const add = (kind: PlannedEditKind, detail: string): void => { edits.push({ project: p.project, kind, detail }); };
-    if (p.idToWrite !== undefined) add('id', `id: ${p.idToWrite}`);
-    if (p.createsSystem) add('export', 'a minimal L0');
-    for (const e of p.exports) add('export', `export ${e.component ?? e.typeDef} as ${e.publicName}`);
-    for (const e of p.externals) add('external', `externals: ${e.alias}`);
-    for (const m of p.members) add('member', `members: ${m.alias} (moved from its legacy mount)`);
-    for (const i of p.imports) add('reference', `use ${i.alias}::${i.name}`);
-    for (const key of p.supersededPins) add('pin', `family pin ${key} removed`);
-    for (const alias of p.pins) add('pin', `pin ${alias}`);
-  }
-  for (const r of plan.rewrites) {
-    edits.push({ project: r.project, kind: 'reference', detail: `${r.specId} (${r.position}): ${r.from} → ${r.to}`, reference: { kind: r.kind, specId: r.specId, position: r.position, from: r.from, to: r.to } });
-  }
-  return edits;
 }
 
 /** ifamily_migration_orchestrator.rehearse — run the verb's writes on a copy; its difference is the plan's file changes. */
@@ -449,10 +407,6 @@ function writeVerb(plan: MigrationPlan, rehearsal: Rehearsal): void {
       // Step 11.
       boundary.write(plan, rehearsal);
       return;
-    case 'chaining':
-      // Step 13: ids, exports, externals, the position migration, and pins LAST — its order unchanged.
-      chaining.write(plan.chaining!, rehearsal);
-      return;
     default:
       throw new Error(`there is no "${plan.request.verb}" family migration`);
   }
@@ -517,7 +471,7 @@ export function apply(plan: MigrationPlan): FamilyMigrationReport {
     if (plan.rehearsal) transaction.discard(plan.rehearsal);
     return { plan: plan, applied: false, relock: [] };
   }
-  // Steps 4-5: a plan made without a rehearsal (doctor's chaining plan, confirmed as printed) is rehearsed now.
+  // Steps 4-5: a plan made without a rehearsal (confirmed as printed) is rehearsed now.
   const current = plan.rehearsal ? plan : rehearse({ ...plan, request: { ...plan.request, rehearse: true } });
   // Steps 6-8: refused on the copy, or nothing to do.
   if (blocked(current) || isEmpty(current)) {

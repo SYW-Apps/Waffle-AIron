@@ -357,41 +357,6 @@ methods:
         type: throw
         error: no member is declared under that alias
       - stepNumber: 5
-        label: legacy
-        description: Is the member still declared in the legacy L1 form?
-        type: branch
-        condition: the member is declared by a legacy L1 mount
-        onFalseStep: 10
-      - stepNumber: 6
-        label: carries-fields
-        description: Does the legacy mount carry more than a path and a description?
-        type: branch
-        condition: >-
-          the mount's L1 spec carries a field beyond projectPath and description that its member
-          would have to hold: a non-empty publicInterfaces or trustedLinks, a lint allow, a
-          lifecycle, profile, targetLanguage, designDepth or ext
-        onFalseStep: 8
-      - stepNumber: 7
-        description: >-
-          Refuse before anything is written, naming the fields and pointing at `wairon doctor
-          --fix`, whose chaining migration carries them into the member plan-first — a move never
-          drops a field
-        type: throw
-        error: the legacy mount carries fields a move cannot carry
-      - stepNumber: 8
-        label: declare
-        description: >-
-          Move the declaration into `members` first (its current path, the mount's description), so
-          wairon never rewrites the L1 form
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: declareMember
-      - stepNumber: 9
-        description: Delete the L1 mount document
-        type: call
-        targetComponent: spec_loader
-        targetMethod: deleteMount
-      - stepNumber: 10
         label: relocate
         description: >-
           Resolve the old and new member directories from the bound project root — a contained one
@@ -399,12 +364,12 @@ methods:
           the storage, a target on another volume, and one that already exists; relocate the
           directory on disk; a sibling part's PartOf path is re-expressed from its new place
         type: local
-      - stepNumber: 11
+      - stepNumber: 6
         description: Point the `members` entry at the new path
         type: call
         targetComponent: project_config_repository
         targetMethod: setMemberPath
-      - stepNumber: 12
+      - stepNumber: 7
         description: Drop the spec loader's cache, so the next read sees the member where it now lives
         type: call
         targetComponent: spec_loader
@@ -422,9 +387,7 @@ methods:
           Guard the subsystem exists, is a subsystem, and lives in the bound project's own specs
           folder (not already in a part or a member)
         type: branch
-        condition: >-
-          the subsystem is missing, is a legacy mount (a member declaration, not a subsystem), or is
-          read from a part
+        condition: the subsystem is missing or is read from a part
         onFalseStep: 4
       - stepNumber: 3
         description: 'Reject: cannot externalize a missing subsystem, one already in a part, or a member'
@@ -551,14 +514,6 @@ methods:
         type: throw
         error: 'cannot internalize: the member cannot be taken in whole'
       - stepNumber: 11
-        label: take-in
-        description: >-
-          Delete its legacy L1 mount document first (false, writing nothing, for a member declared
-          in `members`), so a moved subsystem can take the folder the mount document held
-        type: call
-        targetComponent: spec_loader
-        targetMethod: deleteMount
-      - stepNumber: 12
         description: >-
           Move every subsystem subtree of the member and its project-level types under the bound
           project's specs, their keys becoming local, and re-express each moved implementation's
@@ -570,14 +525,14 @@ methods:
           generic argument (`list<alias::x>`), an optional (`alias::x?`), a union and a returns
           alike, so no position keeps the alias the internalize retires
         type: local
-      - stepNumber: 13
+      - stepNumber: 12
         description: Is there a project boundary to dissolve, or only storage to move?
         type: branch
         condition: >-
           the member is a project (stage 8: a part's specs are already the project's own, and it
           holds no metadata to place)
-        onFalseStep: 21
-      - stepNumber: 14
+        onFalseStep: 20
+      - stepNumber: 13
         description: >-
           Place what the member held for its subsystems: append its L0 vision to the home
           subsystem's description as a paragraph naming the member, and stamp its targetLanguage,
@@ -590,7 +545,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 15
+      - stepNumber: 14
         description: >-
           Place what the member held as a project in the bound project's L0: its boundaries,
           globalRequirements and databases merged by identity (an equal entry once), its re-exports
@@ -599,7 +554,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 16
+      - stepNumber: 15
         description: >-
           Declare each of the member's own members as the bound project's member under the same
           alias, its path re-expressed from the bound root, its description and `use` kept (an equal
@@ -607,39 +562,37 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: declareMember
-      - stepNumber: 17
+      - stepNumber: 16
         description: >-
           Declare each of the member's externals other than the parent as the bound project's
           external under the same alias, a relative source re-expressed from the bound root
         type: call
         targetComponent: project_config_repository
         targetMethod: declareExternal
-      - stepNumber: 18
+      - stepNumber: 17
         description: >-
           Import the names each carried external's `use` held, so the moved specs' bare names still
           resolve
         type: call
         targetComponent: project_config_repository
         targetMethod: importNames
-      - stepNumber: 19
+      - stepNumber: 18
         description: Does the destination adopt the member's packs?
         type: branch
         condition: the destination says adopt and the member selects a pack the bound project does not
-        onFalseStep: 21
-      - stepNumber: 20
+        onFalseStep: 20
+      - stepNumber: 19
         description: Select each such pack in the bound project, pinned at the member's version and digest
         type: call
         targetComponent: project_config_repository
         targetMethod: upsertPackSelection
-      - stepNumber: 21
+      - stepNumber: 20
         label: remove
-        description: >-
-          Remove the member from `members` (false, writing nothing, for a member declared in the
-          legacy form)
+        description: Remove the member from `members`
         type: call
         targetComponent: project_config_repository
         targetMethod: removeMember
-      - stepNumber: 22
+      - stepNumber: 21
         description: >-
           Place in the bound project what it keeps of the member's .wai — each variant and vendored
           pack file it lacks, named in placed (one equal to its own is simply deleted); a design
@@ -649,7 +602,7 @@ methods:
           surfaces, workbook and host bindings; for a part its PartOf configuration and its pin of
           the parent — recording each file in the result's deleted list under its group
         type: local
-      - stepNumber: 23
+      - stepNumber: 22
         description: >-
           Drop the spec loader's cache now the member's files have moved in and its .wai is gone, so
           the references below are re-saved from the tree as it now stands - and once more after the
@@ -657,7 +610,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 24
+      - stepNumber: 23
         description: >-
           Re-save every spec that referenced across the old boundary, targets unchanged: the
           parent's `alias::name` references and the moved specs' `<parent id>::name` references
@@ -668,7 +621,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
-      - stepNumber: 25
+      - stepNumber: 24
         description: >-
           Member internalized: answer what moved, where each piece went, the carried externals and
           what was deleted
@@ -870,11 +823,9 @@ methods:
         description: >-
           Read the project's member declarations at that root: its project.yaml `members`
           (project_config.declaredMembers(), read through that root's binding, as the scan reads a
-          root's configuration) and, in the v5 reading `wairon upgrade` binds, the subsystem specs
-          of its own tree carrying a projectPath; a `members` entry wins over a legacy mount under
-          the same alias. A PART (stage 8: a contained member whose folder holds no id, no L0 and no
-          lock) is no chained project — its subsystems are this root's own, generated, briefed and
-          backfilled with it — so it is not listed
+          root's configuration). A PART (stage 8: a contained member whose folder holds no id, no L0
+          and no lock) is no chained project — its subsystems are this root's own, generated,
+          briefed and backfilled with it — so it is not listed
         type: local
       - stepNumber: 3
         description: Walk the member declarations
@@ -1997,55 +1948,6 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: declareExternal
-  - name: moveMountToMembers
-    sourcePath: src/core/provision.ts
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Read the project graph of the bound root: the member the alias declares, with its legacy
-          mount as written (projectPath, description)
-        type: call
-        targetComponent: spec_loader
-        targetMethod: graph
-      - stepNumber: 2
-        description: Is there a legacy mount under the alias?
-        type: branch
-        condition: the bound root declares no member under the alias in the legacy L1 form
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Nothing to move: answer false when the alias is already an equal member, else refuse
-          naming the alias
-        type: return
-        outcome: already moved
-      - stepNumber: 4
-        label: declare
-        description: >-
-          Declare the member under the alias — the mount's projectPath as its path, its description
-          when it has one — through the project config Repository; a different member under the
-          alias is refused there and nothing below runs
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: declareMember
-      - stepNumber: 5
-        description: >-
-          Delete the L1 mount document through the spec repository, so the member is declared in one
-          place
-        type: call
-        targetComponent: spec_loader
-        targetMethod: deleteMount
-      - stepNumber: 6
-        description: Answer that it wrote
-        type: return
-        outcome: moved
-  - name: normalizeReferences
-    sourcePath: src/core/provision.ts
-    narrative:
-      - stepNumber: 1
-        description: Re-save the spec with its references in canonical form through the spec repository
-        type: call
-        targetComponent: spec_loader
-        targetMethod: normalizeReferences
   - name: importNames
     narrative:
       - stepNumber: 1
@@ -2116,29 +2018,6 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: rewriteReferences
-  - name: updateMember
-    sourcePath: src/core/provision.ts
-    narrative:
-      - stepNumber: 1
-        description: Containment guard on a contained path
-        type: branch
-        condition: >-
-          the changes carry a contained path that resolves strictly within the bound project root,
-          lexically and through links, or carry none
-        onFalseStep: 4
-      - stepNumber: 2
-        description: Write through the project config Repository
-        type: call
-        targetComponent: project_config_repository
-        targetMethod: updateMember
-      - stepNumber: 3
-        description: Answer whether it wrote
-        type: return
-        outcome: written or unchanged
-      - stepNumber: 4
-        description: Reject a contained path that resolves outside the project root
-        type: throw
-        error: PROJECTPATH_ESCAPE
   - name: promoteMember
     sourcePath: src/core/provision.ts
     narrative:
@@ -3249,13 +3128,10 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
-          Decide whether the target lands in another project: a member project declared in `members`
-          (a legacy L1 mount keeps its old cross-tree writes), or an alias the bound project
-          declares as an external
+          Decide whether the target lands in another project: a member project declared in
+          `members`, or an alias the bound project declares as an external
         type: branch
-        condition: >-
-          the key lies in a member project that is no legacy mount, or the first segment is an
-          external's alias
+        condition: the key lies in a member project, or the first segment is an external's alias
         onFalseStep: 6
       - stepNumber: 5
         label: chained-spec
@@ -3280,7 +3156,7 @@ methods:
       - stepNumber: 7
         description: >-
           Read the member projects holding a spec of that kind under that bare id (none for a
-          qualified id; a legacy mount's specs are this tree's own and never counted)
+          qualified id)
         type: local
       - stepNumber: 8
         description: Does a member hold it?
@@ -3971,4 +3847,4 @@ methods:
         targetMethod: reviseProject
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T19:41:47.918Z'
+updatedAt: '2026-11-21T16:15:53.009Z'

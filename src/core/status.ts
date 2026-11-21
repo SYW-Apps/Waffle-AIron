@@ -508,14 +508,13 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
     });
     members.forEach((member, j) => {
       const isLast = ownSubs.length + j === total - 1;
-      const form = member.mountForm === 'mount' ? mark.draft(' [mount form]') : '';
       // A member in a `../` sibling checkout is composed like a contained one; its label says where it is stored.
       const top = family.nodes.find((n) => n.namespace === '')?.directory;
       const sibling = top !== undefined && path.relative(top, member.directory).startsWith('..') ? ` · ${storageOf('path', member.directory, undefined)}` : '';
       const label = `[Project] ${member.mountAlias ?? member.namespace} (${member.id ?? 'no id'})${sibling}`;
       // Step 9: the member's approval state and pin — read, never recomputed.
       const approval = approvalTag(options.approvals?.find((a) => a.key === member.namespace));
-      output += `${mark.structure(indent + (isLast ? '└── ' : '├── '))}${mark.layer('project', label)}${form}${approval}\n`;
+      output += `${mark.structure(indent + (isLast ? '└── ' : '├── '))}${mark.layer('project', label)}${approval}\n`;
       renderProject(member.namespace, indent + (isLast ? '    ' : '│   '));
     });
     const prefix = (k: number): string => mark.structure(indent + (ownSubs.length + members.length + k === total - 1 ? '└── ' : '├── '));

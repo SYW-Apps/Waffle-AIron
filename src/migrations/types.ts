@@ -1,5 +1,4 @@
 import * as path from 'path';
-import type { ChainingMigrationPlan } from './chaining-migration.js';
 import type { InternalizeDestination } from '../models/project.js';
 import type { ReferenceEdit } from '../models/project-family.js';
 
@@ -11,7 +10,7 @@ import type { ReferenceEdit } from '../models/project-family.js';
 // ---------------------------------------------------------------------------
 
 /** The family migrations a request can ask for. */
-export type MigrationVerb = 'attach' | 'rename' | 'rename-alias' | 'detach' | 'adopt' | 'internalize' | 'externalize' | 'promote' | 'demote' | 'chaining';
+export type MigrationVerb = 'attach' | 'rename' | 'rename-alias' | 'detach' | 'adopt' | 'internalize' | 'externalize' | 'promote' | 'demote';
 
 /** migration_request — one family migration as a person or an agent asks for it. */
 export interface MigrationRequest {
@@ -73,7 +72,7 @@ export interface PlannedEdit {
   /** One line naming the edit as the report prints it. */
   detail: string;
   reference?: ReferenceEdit;
-  /** The write that realizes it (a membership, identity or boundary verb); absent for a chaining edit. */
+  /** The write that realizes it (a membership, identity or boundary verb). */
   write?: PlannedWrite;
 }
 
@@ -214,7 +213,6 @@ export interface MigrationPlan {
   relock: string[];
   notes: string[];
   rehearsal?: Rehearsal;
-  chaining?: ChainingMigrationPlan;
 }
 
 /** family_migration_report — the answer of applying a family migration. */

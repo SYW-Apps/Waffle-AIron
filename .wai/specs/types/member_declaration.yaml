@@ -18,16 +18,14 @@ fields:
   - name: path
     type: string
     description: >-
-      DEPRECATED (stage 8): the pre-stage-8 long-form key for a contained member's root. Read in the
-      v5 reading `wairon upgrade` binds as `source`; `wairon upgrade` rewrites it to `source` (or
-      the shorthand). Never written. An entry naming both `path` and `source` is a declaration
-      problem.
+      DEPRECATED (stage 8): the pre-stage-8 long-form key for a contained member's root. A wairon 5
+      form the loader refuses; `source` (or the shorthand) replaces it. Never written. An entry
+      naming both `path` and `source` is a declaration problem.
     optional: true
   - name: description
     type: string
     description: >-
-      What the member is to this project, in the declaring project's words. The home of a legacy L1
-      mount's description when the chaining migration moves the mount here; the canvas shows it on
+      What the member is to this project, in the declaring project's words; the canvas shows it on
       the member's project node.
     optional: true
   - name: use
@@ -74,4 +72,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:30.244Z'
-updatedAt: '2026-10-18T19:09:05.692Z'
+updatedAt: '2026-11-21T16:14:52.536Z'

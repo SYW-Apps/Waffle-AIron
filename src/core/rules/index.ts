@@ -18,7 +18,6 @@ import {
   isTypeVocabulary,
   isProvidedBy,
   sameContract,
-  typeMatchesRef,
   resolveTypeRef as resolveTypeRefOver,
   isOwnComponentEntry,
   nameKey,
@@ -30,7 +29,6 @@ import type { ResolvedExportTable } from '../../models/exports.js';
 import type { TypeRefResolution } from '../../models/type-references.js';
 import { createHash } from 'crypto';
 import { canonicalize } from '../../utils/canonical-json.js';
-import { readsV5Forms } from '../../utils/fs.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
@@ -270,8 +268,6 @@ export interface BuildContextOptions {
   network?: import('../../models/project.js').NetworkDeclaration;
   /** The bound project's practice selection (see RuleContext.practiceSelection); absent when it selects none. */
   practiceSelection?: import('../../models/project.js').PracticeSelection;
-  /** The retired reachability forms the scan met (see RuleContext.retiredReachFacts). */
-  retiredReachFacts?: import('../../models/specs.js').RetiredReachFact[];
   /** The resolved export tables (see RuleContext.exportTables); absent when none were gathered. */
   exportTables?: import('../../models/exports.js').ResolvedExportTable[];
   /** The project graph of the run's scan (see RuleContext.projectFamily); absent on a candidate run. */
@@ -457,7 +453,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
   /**
    * Whether a finding's spec is one a contained member owns: its owner in the
    * graph, else a key strictly under a member's key. A member's own key names
-   * the bound project's declaration of it (a legacy mount, a member entry),
+   * the bound project's declaration of it (a member entry),
    * which this project's gate judges.
    */
   const ownedByMember = (specId: string): boolean => {
@@ -552,14 +548,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     // Local first: the bound project's own types, compared by nameKey per segment.
     // An ambiguous match counts as resolved here: the type-ref-scope rule reports it once.
     if (resolveTypeRefOver(ref, from, ownTypes).outcome !== 'none') return true;
-    const [first, ...rest] = ref.split(/::|\./);
+    const [, ...rest] = ref.split(/::|\./);
     if (!rest.length) {
       // A bare name through the imports; any outcome but none is
       // project-boundaries' single finding (or no finding at all).
       return importOf(ref, 'type').outcome !== 'none';
     }
-    // The project's own id used as a prefix is its own name (a wairon 5 form, read only in the v5 reading).
-    if (readsV5Forms() && ownerId && nameKey(first) === nameKey(ownerId)) return ownTypes.some((spec) => typeMatchesRef(spec, rest.join('::')));
     // A `::` reference the scan recorded as leaving the project is project-boundaries' to judge.
     if (ref.includes('::') && authoredTypeRefs.has(ref)) return true;
     // The dotted form names a subsystem's type: a first segment that is an
@@ -1104,7 +1098,6 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
       ? { projectLanguages: new Map(family.nodes.filter((n) => n.targetLanguage).map((n) => [n.namespace, normalizeLanguage(n.targetLanguage!)] as const)) }
       : {}),
     ...(opts.groups ? { groups: opts.groups, groupFiles: opts.groupFiles ?? {}, typeFiles: opts.typeFiles ?? {} } : {}),
-    ...(opts.retiredReachFacts ? { retiredReachFacts: opts.retiredReachFacts } : {}),
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),
     ...(opts.exportUsages ? { exportUsages: opts.exportUsages } : {}),

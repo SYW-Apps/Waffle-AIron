@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -16,9 +15,7 @@ import { readLockRecord } from '../../src/core/lockfile.js';
 import { pinExternals } from '../../src/core/surfaces.js';
 import { runLock } from '../../src/commands/lock.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { plan } from '../../src/migrations/chaining-migration.js';
-import { apply } from '../helpers/chaining-transaction.js';
-import { buildReferenceFamily, buildContractFamily } from '../helpers/reference-family.js';
+import { buildReferenceFamily } from '../helpers/reference-family.js';
 import {
   ComponentSpecSchema,
   SubsystemSpecSchema,
@@ -194,7 +191,7 @@ describe('stage 8 — kind from content, and parts read into their parent', () =
     expect(loadComponentSpec('appointment-planner')?.dependsOn).toEqual(['patient-registry']);
   });
 
-  v5it('reads a member whose content declares an id, holds an L0 or carries a lock as a project, exactly as before', () => {
+  it('reads a member whose content declares an id, holds an L0 or carries a lock as a project, exactly as before', () => {
     const f = buildReferenceFamily();
     cleanups.push(() => f.cleanup());
     bind(f.top);
@@ -453,45 +450,4 @@ describe('property: part-alone-judges-against-pin', () => {
     expect(alone).toContain('CROSS_SUBSYSTEM_PRIVATE_ACCESS');
     expect(alone).toEqual(fromParent.filter((code) => code !== 'UNUSED_COMPONENT'));
   });
-});
-
-describe('property: existing-members-unchanged', () => {
-  /** A family's verdict at its top. */
-  function familyVerdict(top: string): string[] {
-    bind(top);
-    return validateFamily({}).issues
-      .map((i) => `${i.severity} ${i.code} @${i.specId ?? '-'}`).sort();
-  }
-
-  v5it('the reference family and a stage-7-style family validate identically before and after the path → source rewrite', () => {
-    for (const build of [buildReferenceFamily, buildContractFamily]) {
-      const f = build();
-      cleanups.push(() => f.cleanup());
-      const configFile = path.join(f.top, '.wai', 'project.yaml');
-      const original = familyVerdict(f.top);
-      // Every member written in the pre-stage-8 long form.
-      const config = yaml.load(fs.readFileSync(configFile, 'utf8')) as { members: Record<string, unknown> };
-      const longForm = Object.fromEntries(Object.entries(config.members).map(([alias, value]) => [alias, { path: value, description: `The ${alias} member` }]));
-      fs.writeFileSync(configFile, yaml.dump({ ...config, members: longForm }));
-      bind(f.top);
-      expect(familyVerdict(f.top)).toEqual(original);
-      expect(projectFamilyGraph().problems.filter((p) => p.kind === 'kind-mismatch' || p.kind === 'part-unavailable')).toEqual([]);
-      // doctor --fix: the one stage-8 step.
-      bind(f.top);
-      const planned = plan();
-      expect(planned.projects.find((p) => p.project === '')?.locations.sort()).toEqual(Object.keys(longForm).sort());
-      apply(planned);
-      const after = yaml.load(fs.readFileSync(configFile, 'utf8')) as { members: Record<string, Record<string, unknown>> };
-      for (const alias of Object.keys(longForm)) {
-        expect(after.members[alias]).toEqual({ source: longForm[alias].path, description: `The ${alias} member` });
-      }
-      // The same family never written in the long form, migrated by the same
-      // doctor run: the stage-8 step changed nothing a verdict reads.
-      const twin = build();
-      cleanups.push(() => twin.cleanup());
-      bind(twin.top);
-      apply(plan());
-      expect(familyVerdict(f.top)).toEqual(familyVerdict(twin.top));
-    }
-  }, 60_000); // ~10 full family validations: heavy under a loaded full-suite run
 });

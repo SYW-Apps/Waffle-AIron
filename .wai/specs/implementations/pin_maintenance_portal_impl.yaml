@@ -8,13 +8,6 @@ description: >-
 contract: ipin_maintenance_portal
 sourcePath: src/core/pin-maintenance-portal.ts
 methods:
-  - name: listFamilyPins
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: listFamilyPins
   - name: renamePin
     narrative:
       - stepNumber: 1
@@ -31,4 +24,4 @@ methods:
         targetMethod: unpin
 status: complete
 createdAt: '2026-10-04T18:29:31.085Z'
-updatedAt: '2026-10-04T18:29:37.856Z'
+updatedAt: '2026-11-21T16:09:12.928Z'

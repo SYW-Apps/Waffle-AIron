@@ -137,17 +137,12 @@ methods:
       Relocate a member of the bound project — a contained or `../` sibling project member, or a
       part (stage 8) — move its directory on disk from its current location to the new one and point
       its `members` entry there; a part stored in a sibling checkout has its PartOf path
-      re-expressed from its new place. A member still declared in the legacy L1 form is first moved
-      into `members` (as moveMountToMembers does), so wairon never writes the L1 form. Throws, each
-      before anything is written, if the alias declares no member, if the member is fetched from git
-      (its files are the fetch cache's) or a hosted record, if a legacy mount carries a field beyond
-      its path and description (a non-empty publicInterfaces or trustedLinks, a lint allow, a
-      lifecycle, profile, targetLanguage, designDepth or ext) — a move never drops a field, and
-      `wairon doctor --fix` carries them plan-first — if the move would change its storage (a
-      contained member stays contained, a sibling stays a sibling: that is externalize/internalize),
-      if a contained target does not resolve strictly within the owning project root (absolute or
-      inner-`..` targets are rejected), if the target lies on another volume, or if it already
-      exists.
+      re-expressed from its new place. Throws, each before anything is written, if the alias
+      declares no member, if the member is fetched from git (its files are the fetch cache's) or a
+      hosted record, if the move would change its storage (a contained member stays contained, a
+      sibling stays a sibling: that is externalize/internalize), if a contained target does not
+      resolve strictly within the owning project root (absolute or inner-`..` targets are rejected),
+      if the target lies on another volume, or if it already exists.
     signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
     params:
@@ -396,9 +391,8 @@ methods:
   - name: listDirectChainedSubprojects
     description: >-
       The DIRECT members of a project, one level deep: its project.yaml `members` entries (read
-      through that root's binding) and, in the v5 reading `wairon upgrade` binds, its legacy L1
-      mounts, each resolved inside the project root, as the member's directory, alias and form. An
-      absolute or escaping path is skipped.
+      through that root's binding), each resolved inside the project root, as the member's
+      directory, alias and form. An absolute or escaping path is skipped.
     signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
     returns: list<ChainedSubprojectDir>
     params:
@@ -852,40 +846,6 @@ methods:
         description: The value under the alias
     guarantees:
       - idempotent
-  - name: moveMountToMembers
-    description: >-
-      Move one legacy L1 mount of the bound project into its `members`: declare the member under the
-      mount's alias with the mount's projectPath as its path and the mount's description as its
-      description, then delete the L1 mount document. The caller carries the mount's other fields
-      into the member first; this moves only the declaration and the description, which are the
-      parent's own words about its member. Refuses when the alias names no legacy mount of the bound
-      project and no equal member, or when the alias already holds a different member declaration.
-      Idempotent: a mount already moved (an equal member, no L1 document) writes nothing. Returns
-      whether it wrote.
-    signature: 'moveMountToMembers(alias: string): bool'
-    returns: bool
-    params:
-      - name: alias
-        type: string
-        description: The mount subsystem's local id, which becomes the member's alias
-    guarantees:
-      - idempotent
-  - name: normalizeReferences
-    description: >-
-      Re-save one spec of the family with every reference in its canonical stage-3 form (a bare
-      local id, or `alias::publicName`) through the spec repository; targets never change. Returns
-      whether the stored text changed.
-    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
-    returns: bool
-    params:
-      - name: kind
-        type: WritableSpecKind
-        description: The kind of spec the id names (the L0 holds no references to normalize)
-      - name: id
-        type: string
-        description: The spec's in-memory key, from the family's top root
-    guarantees:
-      - idempotent
   - name: importNames
     description: >-
       Add public names to the `use` of the bound project's external or member under an alias,
@@ -1019,22 +979,6 @@ methods:
         description: The edits for this spec
     guarantees:
       - idempotent
-  - name: updateMember
-    description: >-
-      Change an existing member's declaration through the project config Repository (stage 8) — the
-      write behind `member update` moving a git member's `#<commit>`, and `doctor --fix` rewriting a
-      deprecated long-form `path` to the one location key. A contained source in the changes is held
-      to the containment guard. Never writes a kind: what a member is follows from its content.
-      Returns whether it wrote.
-    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
-    returns: bool
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
-      - name: changes
-        type: MemberDeclaration
-        description: The fields to set (source, ref, dir, description)
   - name: promoteMember
     description: >-
       Promote a part of the bound project to an independent project IN PLACE (stage 8, `member
@@ -1376,9 +1320,8 @@ methods:
       project does not hold is refused too: as living in another project when only a member holds
       that bare id (a bare id stays the bound project's own — the sentence says where the spec
       lives, it never writes there), else with the one missing sentence every write tool shares
-      (spec-missing: this project has no <kind> "<id>"). Undefined when every target passes. A
-      legacy L1 mount keeps its old cross-tree writes and is never refused here. A read: writes
-      nothing.
+      (spec-missing: this project has no <kind> "<id>"). Undefined when every target passes. A read:
+      writes nothing.
     signature: >-
       crossProjectWriteRefusal(targets: list<SpecRef>, tool: string, call?: string, existing?:
       bool): string?
@@ -1696,4 +1639,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T01:30:15.446Z'
+updatedAt: '2026-11-21T16:14:07.693Z'

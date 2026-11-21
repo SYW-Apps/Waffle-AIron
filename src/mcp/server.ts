@@ -148,17 +148,17 @@ export function statusFamilyContext(): string {
       lines.push(
         `Family: this project is a member of ` +
           `${parentName ? `the parent project "${parentName}"` : 'its parent project'}, declared as "${parent.alias}"` +
-          `${parent.form === 'mount' ? ' by a legacy L1 mount' : ''} — ` +
+          ' — ' +
           'what it consumes is declared under `externals` (sdd_get_externals_status).',
       );
     }
-    // Step 2: the members this root declares, either form.
+    // Step 2: the members this root declares.
     const root = getProjectRoot();
     const members = listDirectChainedSubprojects(root);
     if (members.length > 0) {
       const described = members.map((m) => {
         const rel = path.relative(root, m.dir).split(path.sep).join('/') || '.';
-        return `${m.alias} (${rel}${m.form === 'mount' ? ', legacy L1 mount' : ''})`;
+        return `${m.alias} (${rel})`;
       });
       lines.push(`Family: member projects declared here — ${described.join(', ')}.`);
     }
@@ -2435,7 +2435,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ alias: string; newPath: string }>(server,
     'sdd_move_member',
     {
-      description: "Relocate a member's directory on disk and point its `members` entry there in one step (a member still declared in the legacy L1 form is moved into `members` first). Errors if the alias declares no member, or the new path escapes the project or already exists.",
+      description: "Relocate a member's directory on disk and point its `members` entry there in one step. Errors if the alias declares no member, or the new path escapes the project or already exists.",
       inputSchema: {
         alias: z.string().describe("The member's alias"),
         newPath: z.string().describe("The member's new root, relative to the bound project"),

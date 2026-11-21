@@ -7,7 +7,7 @@
 // collaborator those functions reached counted as an undeclared hop of the
 // portal. Client adapters import from here, never from ./surfaces.ts.
 //
-// The family migrations' pin maintenance (renamePin, unpin, listFamilyPins) is
+// The family migrations' pin maintenance (renamePin, unpin) is
 // NOT here: it is pin_maintenance_portal (./pin-maintenance-portal.ts), an
 // internal portal published to sdd_migrations only, so this one — published on
 // the package's library entry — never offers a pin carried without re-pinning.

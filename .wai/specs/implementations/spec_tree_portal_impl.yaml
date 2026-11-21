@@ -264,13 +264,6 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: typeSpellingFacts
-  - name: retiredReachFacts
-    narrative:
-      - stepNumber: 1
-        description: Forward the passthrough read to the spec repository
-        type: call
-        targetComponent: spec_loader
-        targetMethod: retiredReachFacts
   - name: resolveExternalCandidate
     narrative:
       - stepNumber: 1
@@ -406,4 +399,4 @@ methods:
         targetMethod: familyMembers
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T01:30:12.802Z'
+updatedAt: '2026-11-21T16:08:35.970Z'

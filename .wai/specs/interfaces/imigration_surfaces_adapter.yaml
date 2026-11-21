@@ -48,23 +48,6 @@ methods:
     signature: 'listExternals(): list<ExternalListing>'
     returns: list<ExternalListing>
     params: []
-  - name: listFamilyPins
-    description: >-
-      Forward to pin_maintenance_portal.listFamilyPins: the stage-1 family pins the bound root still
-      holds, which a migration drops because path producers are read live.
-    signature: 'listFamilyPins(): list<FamilyPin>'
-    returns: list<FamilyPin>
-    params: []
-  - name: removeSnapshot
-    description: >-
-      Forward to surface_portal.removeSnapshot: remove one stored snapshot of the bound root by its
-      key; false when there was none.
-    signature: 'removeSnapshot(projectName: string): bool'
-    returns: bool
-    params:
-      - name: projectName
-        type: string
-        description: The snapshot's storage key
   - name: getExternalsStatus
     description: >-
       Forward to surface_portal.getExternalsStatus: each declared external of the bound project
@@ -88,4 +71,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-30T20:31:55.432Z'
-updatedAt: '2026-11-20T19:40:34.170Z'
+updatedAt: '2026-11-21T16:18:01.926Z'

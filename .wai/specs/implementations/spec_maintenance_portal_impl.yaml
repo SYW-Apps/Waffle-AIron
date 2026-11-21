@@ -77,20 +77,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: findLegacySpecFiles
-  - name: moveMountToMembers
-    narrative:
-      - stepNumber: 1
-        description: Forward the mount move to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: moveMountToMembers
-  - name: normalizeReferences
-    narrative:
-      - stepNumber: 1
-        description: Forward the reference normalization to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: normalizeReferences
   - name: createMember
     narrative:
       - stepNumber: 1
@@ -119,13 +105,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: demoteMember
-  - name: updateMember
-    narrative:
-      - stepNumber: 1
-        description: Route the write through the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: updateMember
   - name: advanceMember
     narrative:
       - stepNumber: 1
@@ -191,4 +170,4 @@ methods:
         targetMethod: renameSpecId
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-11-20T01:27:02.576Z'
+updatedAt: '2026-11-21T16:10:58.196Z'

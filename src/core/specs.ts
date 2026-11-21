@@ -24,7 +24,7 @@ import {
   type ProjectChange,
   type ProjectRevision,
 } from '../models/project.js';
-import { ensureDir, listFiles, pathExists, getProjectRoot, renamePath, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, readsV5Forms, type WriteReach } from '../utils/fs.js';
+import { ensureDir, listFiles, pathExists, getProjectRoot, renamePath, runWithProjectRoot, getRequestParentReach, currentRootBinding, getHostedLookup, getWriteReach, writeReachPermits, type WriteReach } from '../utils/fs.js';
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, writeLockRecord as persistLockRecord, type LockRecord } from './lockfile.js';
@@ -101,12 +101,6 @@ import {
   type StoredInterfaceSpec,
   type StoredTypeSpec,
   type ProjectRelations,
-  type RetiredReachFact,
-  attachRetiredMounts,
-  carryRetiredReachForms,
-  readRetiredReachForms,
-  retiredInvocationReadAs,
-  retiredMountsOf,
   v5FormsIn,
   type V5FormHolder,
 } from '../models/index.js';
@@ -142,7 +136,7 @@ import { projectConfigRepositoryAt } from '../config/project-config.js';
 // The project family index is an owned face of this Repository: the facade
 // forwards its graph 1:1 (spec_loader graph).
 import { projectFamilyGraph } from './project-family.js';
-import type { ExternalConsumer, ImportSection, MountForm } from '../models/project-family.js';
+import type { ExternalConsumer, ImportSection } from '../models/project-family.js';
 import type { WebGraphModel } from '../server/types.js';
 // The pure signature resolver the scan runs last, once every reference of the
 // family is bound: sourced methods filled, every params-bearing method's text derived.
@@ -201,14 +195,6 @@ export interface SpecIndex {
    * only place the stored spellings are still visible.
    */
   typeSpellings: TypeSpellingFacts;
-  /**
-   * What the scan met in the forms the reachability model retired (each
-   * Portal's portalType and listener mounts, each invokedBy of a retired kind,
-   * each authored export type, each in-process Custom endpoint), with what the
-   * stored spec held there. The loaded specs hold the compatible reading, so
-   * this is the only place the stored form is still visible to the migration.
-   */
-  retiredReach: RetiredReachFact[];
 }
 
 // spec_index.retiredBy is pure and lives with the trace schemas
@@ -246,13 +232,9 @@ export interface ScannedProjectRoot {
   parent?: string;
   /** The alias its parent declares it under. */
   mountAlias?: string;
-  /** How the parent declares it; absent for the bound root. */
-  mountForm?: MountForm;
   /** True when the parent declares it under `externals` with a path source: a live scan node judged for validity, never a member. */
   pathExternal?: true;
-  /** The legacy L1 mount subsystem as the parent wrote it; null for a members-declared root and the bound root. */
-  legacyMount: SubsystemSpec | null;
-  /** What its parent's declaration says the member is (the `members` description, or a legacy mount's). */
+  /** What its parent's declaration says the member is (the `members` description). */
   memberDescription?: string;
   /** The root directory, absolute. */
   directory: string;
@@ -450,7 +432,6 @@ function emptyIndex(): SpecIndex {
     duplicates: dict<string>(),
     signatures: { sources: [], staleTexts: [] },
     typeSpellings: emptyTypeSpellingFacts(),
-    retiredReach: [],
   };
 }
 
@@ -466,59 +447,18 @@ function storedDocument(file: string): Record<string, unknown> | null {
 }
 
 /**
- * The wairon 5 forms a stored document holds, which this reading refuses: each
- * as a sentence naming the form and what wairon 6 reads instead. None in the v5
- * reading `wairon upgrade` binds, which reads them (and rewrites them).
+ * The wairon 5 forms a stored document holds, which the loader refuses: each
+ * as a sentence naming the form and what wairon 6 reads instead.
  */
 function refusedV5Forms(holder: V5FormHolder, doc: unknown): string[] {
-  if (readsV5Forms() || !doc || typeof doc !== 'object' || Array.isArray(doc)) return [];
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return [];
   return v5FormsIn(holder, doc as Record<string, unknown>);
 }
 
-/** Refuse a stored document holding a wairon 5 form as a load error, naming each form; a no-op in the v5 reading. */
+/** Refuse a stored document holding a wairon 5 form as a load error, naming each form. */
 function refuseV5Forms(holder: V5FormHolder, doc: unknown): void {
   const forms = refusedV5Forms(holder, doc);
   if (forms.length > 0) throw new Error(`${forms.join('; ')} — \`wairon upgrade\` rewrites it`);
-}
-
-/** A stored interface document with every method's invokedBy of one retired kind left out (a copy; the document is not touched). */
-function withoutRetiredKind(doc: Record<string, unknown> | null, kind: string): Record<string, unknown> | null {
-  if (!doc || !Array.isArray(doc.methods)) return doc;
-  const methods = doc.methods.map((m) => {
-    if (!m || typeof m !== 'object') return m;
-    const invokedBy = (m as Record<string, unknown>).invokedBy as Record<string, unknown> | undefined;
-    if (invokedBy?.kind !== kind) return m;
-    const { invokedBy: _retired, ...rest } = m as Record<string, unknown>;
-    return rest;
-  });
-  return { ...doc, methods };
-}
-
-/**
- * The retired reachability forms only the whole family can read, once every
- * spec is keyed and every reference bound: a method's stored `external`
- * invokedBy is an entry when its contract belongs to a Portal (the per-file
- * read made it a runtime hook), and a Portal whose retired portalType was
- * Custom and that binds no endpoint on any verb is recorded as in-process,
- * the reading the migration rewrites it to. In place, on the index.
- */
-function readRetiredReachAcrossSpecs(index: SpecIndex): void {
-  if (!readsV5Forms()) return;
-  const componentsById = new Map(index.components.map((c) => [c.id, c]));
-  for (const fact of index.retiredReach) {
-    if (fact.form !== 'invoked-by-kind' || fact.stored !== 'external' || fact.at === undefined) continue;
-    const intf = index.interfaces.find((i) => i.id === fact.specId);
-    if (!intf || componentsById.get(intf.component)?.componentType !== 'Portal') continue;
-    const method = intf.methods.find((m) => m.name === fact.at);
-    if (method?.invokedBy) method.invokedBy = { ...method.invokedBy, kind: retiredInvocationReadAs('external', true) };
-  }
-  for (const fact of [...index.retiredReach]) {
-    if (fact.form !== 'portal-type' || fact.stored !== 'Custom') continue;
-    const portal = componentsById.get(fact.specId);
-    if (!portal || portal.componentType !== 'Portal') continue;
-    const binds = index.interfaces.some((i) => i.component === portal.id && i.methods.some((m) => m.endpoint !== undefined));
-    if (!binds) index.retiredReach.push({ form: 'in-process-endpoint', specId: portal.id, stored: { transport: 'Custom', endpoints: [] } });
-  }
 }
 
 /** True when `file` is the same as, or nested under, directory `dir`. */
@@ -623,35 +563,26 @@ export function assertContainedProjectPath(projectRoot: string, projectPath: str
 export interface ChainingParentRef {
   /** Absolute root directory of the parent project that declares this project's root as a member. */
   parentRoot: string;
-  /** The alias the parent declares this project under: its `members` key, or the legacy mount subsystem's id. */
+  /** The alias the parent declares this project under: its `members` key. */
   alias: string;
-  /** Which form the parent declares it in. */
-  form: MountForm;
 }
 
-/** One member a project declares, in either form, as read before its directory is looked at. */
+/** One member a project declares, as read before its directory is looked at. */
 interface MemberDeclarationRead {
   alias: string;
   /** The location as written, relative to the declaring root (a git source's URL for git). */
   path: string;
-  form: MountForm;
-  /** contained | path | git | hosted (stage 8); a legacy mount is contained. */
+  /** contained | path | git | hosted (stage 8). */
   storage: MemberStorage;
-  /** The source parsed (members form). */
+  /** The source parsed. */
   source?: ExternalSource;
   /** The `as` the declaration asserts. */
   as?: string;
   /** The declaration's `use`. */
   use: string[];
-  /** Whether the entry used the deprecated long-form `path` key. */
-  deprecatedPath?: boolean;
   /** Decided from the member's content by the scan (stage 8). */
   kind?: MemberKind;
   description?: string;
-  /** The legacy L1 mount subsystem as written, for the mount form (and a mount a `members` entry shadows). */
-  legacyMount?: SubsystemSpec;
-  /** The spec file the legacy mount is stored in. */
-  legacyFile?: string;
   /** Why the declaration is not followed. */
   problem?: string;
   /** True for a path external read live as a scan node: judged for validity, never a member. */
@@ -768,87 +699,28 @@ function contentDigestOf(dir: string, files: string[]): string {
   return `sha256:${crypto.createHash('sha256').update(canonicalize(documents)).digest('hex')}`;
 }
 
-/** Every legacy L1 mount a root's spec files declare (a subsystem carrying projectPath), with its file. */
-function legacyMountsAt(dir: string): { spec: SubsystemSpec; file: string }[] {
-  // A legacy mount is a wairon 5 form, read only in the v5 reading.
-  if (!readsV5Forms()) return [];
-  const specsDir = aiPathsAt(dir).specsDir();
-  if (!pathExists(specsDir)) return [];
-  const out: { spec: SubsystemSpec; file: string }[] = [];
-  for (const file of listSpecFiles(specsDir)) {
-    let raw: unknown;
-    try {
-      raw = readSpecFile(file);
-    } catch {
-      continue;
-    }
-    if (!raw || typeof raw !== 'object' || !('parentSystem' in raw)) continue;
-    const projectPath = (raw as { projectPath?: unknown }).projectPath;
-    if (typeof projectPath !== 'string' || projectPath.trim() === '') continue;
-    const parsed = SubsystemSpecSchema.safeParse(raw);
-    if (parsed.success) out.push({ spec: parsed.data, file });
-  }
-  return out;
-}
-
 /**
- * The members a root declares: its `members` entries first, in declaration
- * order, then each legacy L1 mount whose alias `members` does not hold. A
- * `members` entry and a mount under one alias are one member, the entry
- * winning (the mount is kept on it, to be reported as ignored); an alias also
- * declared under `externals` is not followed.
+ * The members a root declares: its `members` entries, in declaration order; an
+ * alias also declared under `externals` is not followed.
  */
-function memberDeclarationsOf(config: ProjectConfig | null, mounts: { spec: SubsystemSpec; file: string }[]): MemberDeclarationRead[] {
-  const out: MemberDeclarationRead[] = [];
-  const byAlias = new Map<string, { spec: SubsystemSpec; file: string }>(mounts.map((m) => [m.spec.id, m]));
-  for (const member of config ? declaredMembers(config) : []) {
-    const shadowed = byAlias.get(member.alias);
-    out.push({
-      alias: member.alias,
-      path: member.path ?? member.source.path ?? member.source.git ?? member.source.hosted ?? '',
-      form: 'members',
-      storage: member.storage,
-      source: member.source,
-      ...(member.as !== undefined ? { as: member.as } : {}),
-      use: member.use,
-      deprecatedPath: member.deprecatedPath,
-      ...(member.description !== undefined ? { description: member.description } : {}),
-      ...(shadowed ? { legacyMount: shadowed.spec, legacyFile: shadowed.file } : {}),
-      ...(member.problem ? { problem: member.problem } : {}),
-    });
-    byAlias.delete(member.alias);
-  }
-  for (const mount of mounts) {
-    if (!byAlias.has(mount.spec.id)) continue;
-    const conflict = ownGet(config?.externals, mount.spec.id) !== undefined
-      ? `the alias "${mount.spec.id}" is also declared under \`externals\` — one alias names one project`
-      : undefined;
-    out.push({
-      alias: mount.spec.id,
-      path: mount.spec.projectPath!,
-      form: 'mount',
-      storage: 'contained',
-      use: [],
-      kind: 'project',
-      ...(mount.spec.description ? { description: mount.spec.description } : {}),
-      legacyMount: mount.spec,
-      legacyFile: mount.file,
-      ...(conflict ? { problem: conflict } : {}),
-    });
-  }
-  return out;
-}
-
-/** The members a root declares, read from its configuration and its spec files. */
 function memberDeclarationsAt(dir: string): MemberDeclarationRead[] {
-  return memberDeclarationsOf(configAt(dir), legacyMountsAt(dir));
+  const config = configAt(dir);
+  return (config ? declaredMembers(config) : []).map((member): MemberDeclarationRead => ({
+    alias: member.alias,
+    path: member.path ?? member.source.path ?? member.source.git ?? member.source.hosted ?? '',
+    storage: member.storage,
+    source: member.source,
+    ...(member.as !== undefined ? { as: member.as } : {}),
+    use: member.use,
+    ...(member.description !== undefined ? { description: member.description } : {}),
+    ...(member.problem ? { problem: member.problem } : {}),
+  }));
 }
 
 /**
  * Walk UP from a project root to find a PARENT wairon project that declares it
- * as a member — a `members` entry of its configuration or, in the v5 reading only, a
- * legacy L1 subsystem whose `projectPath` resolves to this exact root. Returns
- * the parent root with the alias and form, or null when this is a top-level
+ * as a member — a `members` entry of its configuration that resolves to this
+ * exact root. Returns the parent root with the alias, or null when this is a top-level
  * root.
  *
  * Only a member the ancestor itself would follow counts: its path stays within
@@ -873,7 +745,7 @@ export function findChainingParent(childRoot: string, ceiling?: string): Chainin
         try {
           const memberDir = path.resolve(dir, member.path);
           if (chainDirKey(memberDir) === chainDirKey(childResolved) && !projectPathEscapesRoot(dir, member.path, memberDir)) {
-            return { parentRoot: dir, alias: member.alias, form: member.form };
+            return { parentRoot: dir, alias: member.alias };
           }
         } catch {
           /* a malformed path is not our member */
@@ -897,15 +769,14 @@ export type ChainedRootSkipReason = 'escapes' | 'missing' | 'cyclic' | 'too-deep
 export interface ChainedRootsInspection {
   /** Project-relative POSIX roots in walk order, parents before their own members. */
   roots: string[];
-  /** Members that cannot be followed: the member's key, its alias and form, its path as declared, and why. */
-  skipped: { mount: string; alias: string; form: 'members' | 'mount'; projectPath: string; reason: ChainedRootSkipReason }[];
+  /** Members that cannot be followed: the member's key, its alias and form (always `members`), its path as declared, and why. */
+  skipped: { mount: string; alias: string; form: 'members'; projectPath: string; reason: ChainedRootSkipReason }[];
 }
 
 /**
  * Walk DOWN from a project root over every member beneath it, exactly as the
  * scan recurses: each path resolved against the project that declares it and
- * contained by that project's root, whether declared under `members` or as a
- * legacy L1 mount. A member that escapes its project, points at a missing
+ * contained by that project's root. A member that escapes its project, points at a missing
  * directory, forms a cycle, or nests past the walk bound is reported in
  * `skipped` rather than silently dropped. A directory two members reach is
  * listed once.
@@ -933,11 +804,11 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
       else if (!ioFiles.exists(childDir)) reason = 'missing';
       else if (depth >= 32) reason = 'too-deep'; // the bound on chain depth
       if (reason) {
-        inspection.skipped.push({ mount: key, alias: member.alias, form: member.form, projectPath: member.path, reason });
+        inspection.skipped.push({ mount: key, alias: member.alias, form: 'members', projectPath: member.path, reason });
         continue;
       }
       // A part is its declaring project's own subsystems, not a root of its own (stage 8).
-      if (member.form === 'members' && !projectContentAt(childDir)) continue;
+      if (!projectContentAt(childDir)) continue;
       const dirKey = chainDirKey(childDir);
       if (listed.has(dirKey)) continue;
       listed.add(dirKey);
@@ -1072,9 +943,6 @@ function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper
         owns: (c.owns ?? []).map((o) => map('owns', o)),
         dependsOn: (c.dependsOn ?? []).map((d) => map('dependsOn', d)),
         ...(c.dispatch ? { dispatch: c.dispatch.map((b) => ({ ...b, component: map('dispatch', b.component) })) } : {}),
-        // Retired listener mounts stay read (untyped) until the reachability
-        // migration rewrites them, so their portal references bind as before.
-        ...(retiredMountsOf(c).declared ? { mounts: retiredMountsOf(c).mounts.map((m) => ({ ...m, portal: map('mounts', m.portal) })) } : {}),
       } as unknown as T;
     }
     case 'interface': {
@@ -1207,7 +1075,7 @@ function typeSlotReferences(kind: string, spec: unknown): string[] {
 }
 
 /** The positions whose bare names may be bound through a `use` import (stage 4): collaborators. */
-const IMPORTABLE_POSITIONS = new Set(['dependsOn', 'dispatch', 'mounts', 'narrative']);
+const IMPORTABLE_POSITIONS = new Set(['dependsOn', 'dispatch', 'narrative']);
 
 /**
  * The bare names (no `::`) a spec writes in positions the loader leaves raw
@@ -1329,7 +1197,6 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
       each(doc, 'owns', 'owns');
       each(doc, 'dependsOn', 'dependsOn');
       for (const b of list(doc.dispatch)) at(b, 'component', 'dispatch');
-      for (const m of list(doc.mounts)) at(m, 'portal', 'mounts');
       break;
     case 'interface':
       at(doc, 'component', 'contract');
@@ -1518,8 +1385,6 @@ interface RawRoot {
   dir: string;
   /** Its specs: as written in phase one, keyed and bound after. */
   index: SpecIndex;
-  /** Its legacy L1 mounts, with their files. */
-  mounts: { spec: SubsystemSpec; file: string }[];
   members: MemberDeclarationRead[];
   /** Each followed member's alias → its key. */
   memberKeys: Map<string, string>;
@@ -2174,14 +2039,6 @@ export interface SaveSpecOptions {
    * lines per spec where the status flip alone is one.
    */
   preserveUpdatedAt?: boolean;
-  /**
-   * The reachability migration's own write: the retired reachability forms it
-   * rewrote are retired, not carried back — a component's stored listener
-   * `mounts`, an interface method's stored retired invokedBy kind, and a stored
-   * endpoint the written method leaves out (an in-process Custom address the
-   * migration dropped). Every other write keeps carrying them.
-   */
-  retireReachForms?: boolean;
 }
 
 /**
@@ -2657,10 +2514,6 @@ export function rewriteSpecRefs(
     // A Portal's dispatch table carries component refs of its own, each with
     // the method that component serves the capability with.
     for (const binding of entries(raw.dispatch)) rewritePair(binding, 'component', 'method');
-    // A listener's mount names the portal it serves. It carries no method, so
-    // it reads like a dependsOn entry: left out, renaming a mounted portal
-    // leaves the listener routing requests to nothing.
-    for (const mount of entries(raw.mounts)) rewrite(mount, 'portal', 'component');
   } else if (kind === 'subsystem') {
     // Lifecycle entrypoints name components (same-subsystem by rule, but
     // rewrite defensively so a legacy/misdeclared tree can't silently dangle
@@ -2761,8 +2614,6 @@ function identityKeyOf(field: string, item: unknown): string | null {
   switch (field) {
     case 'publicInterfaces':   return publicInterfaceKey(o);
     case 'dispatch':           return str(o.capability);
-    // A listener mounts each portal once, so the portal IS the mount's identity.
-    case 'mounts':             return str(o.portal);
     case 'lifecycle':          return `${String(o.phase)} ${String(o.component)} ${String(o.method)}`;
     case 'emits':
     case 'subscribesTo':       return `${String(o.topic)} ${o.event === undefined ? '' : String(o.event)}`;
@@ -3346,8 +3197,6 @@ export class SpecWorkspace {
   readonly paths: WaiPaths;
 
   private cachedIndex: SpecIndex | null = null;
-  /** Whether the cached scan was read in the v5 reading. */
-  private cachedV5 = false;
   private cachedDepth: number | null = null;
   private cachedSpecDirs: string[] = [];
   private cachedSignature: string | null = null;
@@ -3410,8 +3259,6 @@ export class SpecWorkspace {
 
   scanAll(options?: SpecScanOptions): SpecIndex {
     const maxDepth = options?.memberDepth ?? Infinity;
-    // A scan is read under one reading: the v5 reading and the current one see different trees.
-    if (this.cachedIndex && this.cachedV5 !== readsV5Forms()) this.invalidate();
     if (this.cachedIndex && this.cachedDepth === maxDepth) {
       // Cache hit — but the files may have been edited externally (hand edits,
       // another process) since we scanned. Re-verify via mtime signature at
@@ -3426,7 +3273,6 @@ export class SpecWorkspace {
 
     this.loaderIssues = [];
     this.cachedDepth = maxDepth;
-    this.cachedV5 = readsV5Forms();
     this.scanVisitedSpecDirs = [];
     this.scanVisitedConfigFiles = [];
     this.scanVisitedInputFiles = [];
@@ -3498,12 +3344,7 @@ export class SpecWorkspace {
       index.groups.push(...raw.index.groups);
       for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) Object.assign(index.paths[kind], raw.index.paths[kind]);
       Object.assign(index.duplicates, raw.index.duplicates);
-      index.retiredReach.push(...raw.index.retiredReach.map((fact) => ({ ...fact, specId: keyIn(raw.record.namespace, fact.specId) })));
     }
-    // The retired reachability forms that need the whole family to read:
-    // `external` on a Portal's contract is an entry, and a retired Custom
-    // portalType whose Portal binds no endpoint at all is an in-process one.
-    readRetiredReachAcrossSpecs(index);
     // Step 22: once every reference of the family is bound, its signatures —
     // sourced methods filled, every params-bearing method's text derived; the
     // facts kept on the index, the one place the stored form stays visible.
@@ -3562,9 +3403,8 @@ export class SpecWorkspace {
     const record: ScannedProjectRoot = {
       namespace: key,
       ...(parent ? { parent: parent.record.namespace } : {}),
-      ...(member ? { mountAlias: member.alias, mountForm: member.form } : {}),
+      ...(member ? { mountAlias: member.alias } : {}),
       ...(member?.pathExternal ? { pathExternal: true as const } : {}),
-      legacyMount: member?.legacyMount ?? null,
       ...(member?.description !== undefined ? { memberDescription: member.description } : {}),
       directory: path.resolve(dir),
       system: null,
@@ -3579,14 +3419,14 @@ export class SpecWorkspace {
       referenced: [],
     };
     const raw: RawRoot = {
-      record, aliasPath, dir: path.resolve(dir), index: emptyIndex(), mounts: [], members: [],
+      record, aliasPath, dir: path.resolve(dir), index: emptyIndex(), members: [],
       memberKeys: new Map(), rawSystem: null, localSubsystems: new Set(), pending: [], pendingImports: [],
     };
     raws.push(raw);
     // Step 4: every spec document as written, and the root's own L0.
     this.readRootSpecs(raw);
-    // Step 3: the member declarations — `members`, then legacy mounts.
-    raw.members = memberDeclarationsOf(config, raw.mounts);
+    // Step 3: the member declarations — the `members` entries.
+    raw.members = memberDeclarationsAt(dir);
     // Steps 6-11 (stage 8): what each member is, from its content; each part
     // read into THIS root before anything is keyed or bound — its specs are
     // the root's own, at every depth bound.
@@ -3667,7 +3507,7 @@ export class SpecWorkspace {
       const dir = path.resolve(raw.dir, decl.sourcePath);
       const key = chainDirKey(dir);
       if (raws.some((r) => chainDirKey(r.dir) === key) || !ioFiles.exists(dir)) continue;
-      out.push({ alias: decl.alias, path: decl.sourcePath, form: 'members', storage: 'path', source: { path: decl.sourcePath }, use: decl.use, kind: 'project', pathExternal: true });
+      out.push({ alias: decl.alias, path: decl.sourcePath, storage: 'path', source: { path: decl.sourcePath }, use: decl.use, kind: 'project', pathExternal: true });
     }
     return out;
   }
@@ -3679,7 +3519,6 @@ export class SpecWorkspace {
    */
   private followableMember(raw: RawRoot, decl: MemberDeclarationRead, ancestors: ReadonlySet<string>): string | null {
     const memberKey = keyIn(raw.record.namespace, decl.alias);
-    const by = decl.form === 'mount' ? 'subsystem' : 'member';
     const absolute = path.isAbsolute(decl.path) || path.win32.isAbsolute(decl.path);
     if (decl.problem && !absolute) {
       if (decl.problem.includes('`externals`')) {
@@ -3693,7 +3532,7 @@ export class SpecWorkspace {
       this.loaderIssues.push({
         severity: 'error',
         code: 'PROJECTPATH_ESCAPE',
-        message: `Subproject path "${decl.path}" declared by ${by} "${memberKey}" escapes the root of the project declaring it, "${raw.dir}" (resolves to "${childDir}"); absolute, ../-escaping and link-escaping paths are rejected. Skipping this subproject.`,
+        message: `Subproject path "${decl.path}" declared by member "${memberKey}" escapes the root of the project declaring it, "${raw.dir}" (resolves to "${childDir}"); absolute, ../-escaping and link-escaping paths are rejected. Skipping this subproject.`,
         specId: memberKey,
       });
       return null;
@@ -3702,7 +3541,7 @@ export class SpecWorkspace {
       this.loaderIssues.push({
         severity: 'error',
         code: 'CIRCULAR_SUBPROJECT_REFERENCE',
-        message: `Circular reference detected: ${by === 'subsystem' ? 'Subsystem' : 'Member'} "${memberKey}" refers to subproject "${childDir}" which is already loaded.`,
+        message: `Circular reference detected: Member "${memberKey}" refers to subproject "${childDir}" which is already loaded.`,
         specId: memberKey,
       });
       return null;
@@ -3722,7 +3561,7 @@ export class SpecWorkspace {
     return childDir;
   }
 
-  /** Read every spec document of one root as written; a legacy mount is a declaration, never a subsystem. */
+  /** Read every spec document of one root as written. */
   private readRootSpecs(raw: RawRoot): void {
     const projectPaths = aiPathsAt(raw.dir);
     const systemYaml = path.normalize(projectPaths.specsSystem());
@@ -3741,7 +3580,6 @@ export class SpecWorkspace {
           }
           raw.rawSystem = null;
         } else {
-          if (doc && typeof doc === 'object') raw.index.retiredReach.push(...readRetiredReachForms('system', doc as Record<string, unknown>));
           raw.rawSystem = SystemSpecSchema.parse(doc);
           this.reportUnknownKeys(systemYaml, 'system', doc, raw.rawSystem, keyIn(raw.record.namespace, 'system'));
         }
@@ -3771,7 +3609,6 @@ export class SpecWorkspace {
    * reports why, exactly as before stage 8.
    */
   private readMemberKind(raw: RawRoot, decl: MemberDeclarationRead): void {
-    if (decl.form === 'mount') return;
     const asserted = decl.as;
     if (decl.problem) {
       this.reportDeclarationProblem(raw, decl);
@@ -3939,14 +3776,12 @@ export class SpecWorkspace {
   /**
    * A spec file's keys its schema does not know — which the parse drops, so
    * they would mean nothing without a word — reported as UNKNOWN_SPEC_KEY,
-   * once per file. A retired reachability form is read in the v5 reading and
-   * reported by its own rule, so a component's `mounts` is no unknown key.
-   */
+   * once per file.   */
   private reportUnknownKeys(file: string, kind: string, doc: unknown, parsed: unknown, specId: string): void {
     const unknown: string[] = [];
     unknownKeysIn(doc, parsed, '', unknown);
     const keys = unknown.map((entry) => entry.slice(0, entry.indexOf(':')))
-      .filter((key) => !(kind === 'component' && key.startsWith('mounts')) && !TOLERATED_KEYS.has(key));
+      .filter((key) => !TOLERATED_KEYS.has(key));
     if (keys.length === 0) return;
     const hint = keys.map((key) => UNKNOWN_KEY_HINTS[`${kind}.${key}`]).filter(Boolean);
     this.loaderIssues.push({
@@ -4040,31 +3875,18 @@ export class SpecWorkspace {
           refuseV5Forms('subsystem', doc);
           const parsed = SubsystemSpecSchema.parse(doc);
           this.reportUnknownKeys(file, 'subsystem', doc, parsed, keyIn(key, parsed.id));
-          // A legacy mount (projectPath) is a wairon 5 form: only the v5 reading gets this far with one.
-          if (!(parsed.projectPath && parsed.projectPath.trim() !== '')) {
-            index.retiredReach.push(...readRetiredReachForms('subsystem', doc as Record<string, unknown>));
-          }
-          if (parsed.projectPath && parsed.projectPath.trim() !== '') raw.mounts.push({ spec: parsed, file });
-          else keep('subsystem', index.subsystems, parsed, file);
+          keep('subsystem', index.subsystems, parsed, file);
         } else if ('componentType' in doc) {
           detectedType = 'component';
-          // Retired reachability forms are read in the v5 reading only and kept as facts;
-          // a listener's mounts stay read (untyped) on the loaded spec there.
           refuseV5Forms('component', doc);
-          const facts = readRetiredReachForms('component', doc as Record<string, unknown>);
-          const parsed = attachRetiredMounts(ComponentSpecSchema.parse(doc), doc as Record<string, unknown>);
+          const parsed = ComponentSpecSchema.parse(doc);
           this.reportUnknownKeys(file, 'component', doc, parsed, keyIn(key, parsed.id));
-          index.retiredReach.push(...facts);
           keep('component', index.components, parsed, file);
         } else if ('component' in doc) {
           detectedType = 'interface';
-          // A retired invokedBy kind reads as runtime here; the scan re-reads
-          // `external` as an entry once it knows the contract is a Portal's.
           refuseV5Forms('interface', doc);
-          const facts = readRetiredReachForms('interface', doc as Record<string, unknown>);
           const parsed = InterfaceSpecSchema.parse(doc);
           this.reportUnknownKeys(file, 'interface', doc, parsed, keyIn(key, parsed.id));
-          index.retiredReach.push(...facts);
           keep('interface', index.interfaces, parsed, file);
         } else if ('contract' in doc) {
           detectedType = 'implementation';
@@ -4137,31 +3959,13 @@ export class SpecWorkspace {
     const index = raw.index;
     raw.localSubsystems = new Set(index.subsystems.map((s) => s.id));
     // Step 6: a bare name binds locally when it names a spec of the root
-    // (compared by nameKey, as local resolution always has); its own id used
-    // as a prefix binds locally too and is recorded as a self-prefix; every
-    // other bare name in an importable position is set aside for the imports.
-    const ownId = idOf(raw);
-    // A member that declares no id answers after `doctor --fix` to the alias its
-    // parent declares it under, so that alias used as a prefix names its own spec too.
-    const ownIds = [ownId, raw.record.config?.id === undefined ? raw.record.mountAlias : undefined]
-      .filter((id): id is string => id !== undefined).map(nameKey);
+    // (compared by nameKey, as local resolution always has); every other bare
+    // name in an importable position is set aside for the imports.
     const localKeys = new Set([
       ...index.subsystems, ...index.components, ...index.interfaces,
       ...index.implementations, ...index.types, ...index.groups,
     ].map((s) => nameKey(s.id.split('::').pop()!)));
     const rawTypes = index.types;
-    const selfPrefixed = (value: string): string | undefined => {
-      const dot = value.indexOf('.');
-      // A project's own id as a prefix is a wairon 5 form, bound only in the v5 reading.
-      if (!readsV5Forms() || ownIds.length === 0 || dot <= 0 || value.includes('::')) return undefined;
-      const rest = value.slice(dot + 1);
-      return ownIds.includes(nameKey(value.slice(0, dot))) && rest && !rest.includes('.') ? rest : undefined;
-    };
-    const recordSelfPrefix = (specKey: string, position: string, value: string, local: string): void => {
-      raw.record.authoredReferences.push({
-        specId: specKey, position, authored: value, form: 'path', binding: 'local', resolved: keyIn(key, local), producer: key, rewrite: local,
-      });
-    };
     // A signatureFrom's head binds as a component only when it names one: local
     // first, then `alias::component` through phase three. Anything else is a
     // type reference (`billing.change_listener`), which stays as written.
@@ -4171,11 +3975,6 @@ export class SpecWorkspace {
       if (value.includes('::')) {
         raw.pending.push({ kind, specKey, position, authored: value, raw: false });
         return value;
-      }
-      const self = selfPrefixed(value);
-      if (self !== undefined) {
-        recordSelfPrefix(specKey, position, value, self);
-        return keyIn(key, self);
       }
       if (IMPORTABLE_POSITIONS.has(position) && !localKeys.has(nameKey(value))) {
         raw.pendingImports.push({ kind, specKey, position, authored: value, raw: false });
@@ -4189,8 +3988,6 @@ export class SpecWorkspace {
       // matches, and a bare declared-call target no local spec names.
       for (const r of bareRawReferences(kind, spec)) {
         if (r.position === 'type') {
-          const self = selfPrefixed(r.value);
-          if (self !== undefined) { recordSelfPrefix(specKey, 'type', r.value, self); continue; }
           if (r.value.includes('.') || rawTypes.some((t) => typeMatchesRef(t, r.value))) continue;
         } else if (localKeys.has(nameKey(r.value))) continue;
         raw.pendingImports.push({ kind, specKey, position: r.position, authored: r.value, raw: true });
@@ -4248,17 +4045,6 @@ export class SpecWorkspace {
       }
       if (producer) raw.record.aliases.set(decl.alias, producer.record.namespace);
     }
-  }
-
-  /** The file of the legacy L1 mount a key names (its declaring root's key, then its alias), if any. */
-  private legacyMountFile(key: string): string | undefined {
-    // A legacy mount is a wairon 5 form: it exists only in the v5 reading.
-    if (!readsV5Forms()) return undefined;
-    for (const raw of this.cachedRawRoots) {
-      const mount = raw.mounts.find((m) => keyIn(raw.record.namespace, m.spec.id) === key);
-      if (mount) return mount.file;
-    }
-    return undefined;
   }
 
   /** ispec_index.listProjectRoots — the project roots the current scan read, bound root first. */
@@ -4455,15 +4241,12 @@ export class SpecWorkspace {
 
   /**
    * Whether a stored key may answer a path built for `id`: it is in the same
-   * project (the same deepest member key, '' for the bound project's own), or
-   * — in the v5 reading only — `id` is bare and the key is a legacy L1
-   * mount's, whose cross-tree writes the upgrade's rewrites keep.
+   * project (the same deepest member key, '' for the bound project's own).
    */
   private inHomeOf(key: string, id: string): boolean {
     const home = this.getSubprojectPrefix(key) ?? '';
     const wanted = this.getSubprojectPrefix(id) ?? '';
-    if (home === wanted) return true;
-    return readsV5Forms() && wanted === '' && this.rootCovering(home)?.legacyMount != null;
+    return home === wanted;
   }
 
   /** The member root whose key is the namespace, or its longest prefix. */
@@ -4495,7 +4278,7 @@ export class SpecWorkspace {
   /**
    * Bind one reference written in the project `rootKey` the way the scan binds
    * it: a bare id is local, `alias::name` goes through the alias table to the
-   * producer's public name, a deprecated form lands where the v5 reading scan reads it (nowhere else).
+   * producer's public name, a deprecated form lands nowhere.
    * The write-side twin of phase three, for a delta written with local names.
    */
   bindReference(rootKey: string, reference: string): string {
@@ -4802,10 +4585,6 @@ export class SpecWorkspace {
     if (index.paths.subsystem[id]) {
       return index.paths.subsystem[id];
     }
-    // A legacy mount is never a subsystem, but its document stays addressable
-    // by its alias, so a writer of the old form still finds its file.
-    const mount = this.legacyMountFile(id);
-    if (mount) return mount;
     if (id.includes('::')) {
       const parts = id.split('::');
       const childProj = this.resolveSubprojectForNamespace(parts.slice(0, -1).join('::'));
@@ -4816,7 +4595,6 @@ export class SpecWorkspace {
 
     // A bare id is the bound project's own: ids are per project, so one a
     // member also holds names a NEW local subsystem, never the member's file.
-    // Only a legacy L1 mount (deprecated) still answers a bare id by suffix.
     const suffix = `::${id}`;
     const matches = Object.keys(index.paths.subsystem).filter(key => key.endsWith(suffix) && this.inHomeOf(key, id));
     if (matches.length === 1) {
@@ -5125,7 +4903,7 @@ export class SpecWorkspace {
     if (typeof raw !== 'object' || Array.isArray(raw)) return `it holds ${Array.isArray(raw) ? 'a list' : `a ${typeof raw}`}, not an L0 mapping`;
     const parsed = SystemSpecSchema.safeParse(raw);
     if (parsed.success) {
-      // A wairon 5 form in the L0 (an export entry's type, id or subsystem) is refused outside the v5 reading.
+      // A wairon 5 form in the L0 (an export entry's type, id or subsystem) is refused.
       const v5 = refusedV5Forms('system', raw);
       return v5.length > 0 ? v5.join('; ') : null;
     }
@@ -5301,12 +5079,10 @@ export class SpecWorkspace {
   /**
    * The subsystem writer behind save('subsystem', ...). Private: the generic
    * save is the one write door, and a subsystem is never a mount — the
-   * authoring seam refuses a projectPath before anything reaches here, and a
-   * stored legacy mount is read as a member declaration, not loaded as a
-   * subsystem, so no mount document is re-saved through this path.
+   * authoring seam refuses a projectPath before anything reaches here.
    */
   private writeSubsystemSpec(spec: SubsystemSpec, opts?: SaveSpecOptions): void {
-    // A legacy mount (projectPath) or an authored export `type` is a wairon 5 form: written only in the v5 reading.
+    // A legacy mount (projectPath) or an authored export `type` is a wairon 5 form: never written.
     refuseV5Forms('subsystem', spec);
     const p = this.getSubsystemPath(spec.id);
     this.assertHomeWritable(p);
@@ -5386,8 +5162,7 @@ export class SpecWorkspace {
       const raw = readSpecFile(p) as Record<string, unknown>;
       if (!storedUnder(raw.id, id)) return null;
       refuseV5Forms('component', raw);
-      readRetiredReachForms('component', raw);
-      return attachRetiredMounts(ComponentSpecSchema.parse(raw), raw);
+      return ComponentSpecSchema.parse(raw);
     } catch (e: any) {
       this.loaderIssues.push({
         severity: 'error',
@@ -5407,11 +5182,8 @@ export class SpecWorkspace {
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareComponentForWrite(spec);
-    // A retired stereotype is a wairon 5 form: written only in the v5 reading (the upgrade's own rewrites).
+    // A retired stereotype is a wairon 5 form: never written.
     refuseV5Forms('component', { componentType: specToWrite.componentType });
-    // A caller still handing the retired portalType is read as the loader
-    // reads a stored file: the spelling becomes the transport it names.
-    readRetiredReachForms('component', specToWrite as unknown as Record<string, unknown>);
 
     const existing = this.loadComponentSpec(spec.id);
     if (existing) {
@@ -5434,13 +5206,6 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     const componentOut = parseOrThrow(ComponentSpecSchema, specToWrite, 'component', spec.id);
-    // Retired listener mounts the schema no longer types: the spec's own (read
-    // untyped by the loader), else the stored file's, until doctor --fix
-    // rewrites them — never dropped by a write that did not decide to.
-    const retainedMounts = retiredMountsOf(specToWrite).declared
-      ? { mounts: (specToWrite as unknown as Record<string, unknown>).mounts }
-      : storedDocument(p);
-    if (!opts?.retireReachForms) carryRetiredReachForms('component', retainedMounts, componentOut as unknown as Record<string, unknown>);
     this.writeHome(p, componentOut, 'component');
     registryInvalidateCache();
     // Keep the physical layout in sync with ownership: nest owned members under
@@ -5522,9 +5287,7 @@ export class SpecWorkspace {
     try {
       const raw = readSpecFile(p) as Record<string, unknown>;
       if (!storedUnder(raw.id, id)) return null;
-      const owner = typeof raw.component === 'string' ? index.components.find((c) => c.id === raw.component) : undefined;
       refuseV5Forms('interface', raw);
-      readRetiredReachForms('interface', raw, owner?.componentType === 'Portal');
       // A file the scan did not index is resolved alone, against the index's components and types.
       return resolveTree([interfaceCanonicalTypes(InterfaceSpecSchema.parse(raw)).spec], index.components, index.types).interfaces[0];
     } catch (e: any) {
@@ -5580,10 +5343,6 @@ export class SpecWorkspace {
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareInterfaceForWrite(spec);
-    // A caller still handing a retired invokedBy kind is read as the loader
-    // reads a stored file (the carry below keeps a stored one as stored).
-    const contractOwner = this.scanAll().components.find((c) => c.id === spec.component);
-    readRetiredReachForms('interface', specToWrite as unknown as Record<string, unknown>, contractOwner?.componentType === 'Portal');
 
     const existing = this.loadInterfaceSpec(spec.id);
     if (existing && existing.component !== spec.component
@@ -5598,9 +5357,8 @@ export class SpecWorkspace {
       if (!opts?.allowStatusDemotion && existing.status && (!spec.status || spec.status === 'draft')) {
         specToWrite.status = existing.status;
       }
-      // Preserve endpoint bindings for matching methods that don't carry their
-      // own — unless the reachability migration dropped them deliberately.
-      for (const m of opts?.retireReachForms ? [] : specToWrite.methods) {
+      // Preserve endpoint bindings for matching methods that don't carry their own.
+      for (const m of specToWrite.methods) {
         if (m.endpoint) continue;
         const existingMethod = existing.methods.find(x => x.name === m.name);
         if (existingMethod && existingMethod.endpoint) {
@@ -5610,12 +5368,6 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     const interfaceOut = parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id);
-    // A retired invokedBy kind the author left as it was read stays as stored
-    // until doctor --fix rewrites it.
-    // The reachability migration retires every stored retired kind: it rewrites
-    // `external` and drops `sibling-subsystem`, which wairon 6 cannot read.
-    const storedInterface = storedDocument(p);
-    carryRetiredReachForms('interface', opts?.retireReachForms ? withoutRetiredKind(withoutRetiredKind(storedInterface, 'external'), 'sibling-subsystem') : storedInterface, interfaceOut as unknown as Record<string, unknown>);
     this.writeHome(p, interfaceOut, 'interface');
     registryInvalidateCache();
     return notices;
@@ -6019,14 +5771,6 @@ export class SpecWorkspace {
       return [];
     }
     const schema = SPEC_SCHEMAS[kind];
-    // The retired reachability forms are read in the v5 reading, never stripped: a
-    // portalType becomes the transport it names, and a listener's mounts are
-    // carried by the writer until the migration rewrites them.
-    if ((kind === 'component' || kind === 'interface') && raw && typeof raw === 'object' && !Array.isArray(raw)) {
-      raw = { ...(raw as Record<string, unknown>) };
-      readRetiredReachForms(kind, raw as Record<string, unknown>);
-      if (kind === 'component') delete (raw as Record<string, unknown>).mounts;
-    }
     const parsed = schema.safeParse(raw);
     if (!parsed.success) return [];
     const out: string[] = [];
@@ -6071,29 +5815,6 @@ export class SpecWorkspace {
   }
 
   /**
-   * spec_registry.deleteMount (removeLegacyMount) — delete the bound project's legacy L1 mount
-   * document for one alias: the subsystem carrying projectPath that the scan
-   * reads as a member declaration. A subsystem without projectPath is content,
-   * not a mount, and is refused by name; no document answers false.
-   */
-  removeLegacyMount(alias: string): boolean {
-    // A legacy mount is a wairon 5 form: none exists outside the v5 reading.
-    if (!readsV5Forms()) return false;
-    this.scanAll();
-    const bound = this.cachedRawRoots.find((r) => r.record.namespace === '');
-    const mount = bound?.mounts.find((m) => m.spec.id === alias);
-    if (!mount) {
-      if (bound?.index.subsystems.some((s) => s.id === alias)) {
-        throw new Error(`Refusing to delete "${alias}" as a legacy mount: it is a subsystem of this project with content (it carries no projectPath), not a member declaration.`);
-      }
-      return false;
-    }
-    if (!removeSpecFile(mount.file, this.paths.specsDir())) return false;
-    registryInvalidateCache();
-    return true;
-  }
-
-  /**
    * spec_registry.normalizeReferences (writeCanonicalReferences) — re-save one spec with every reference
    * the loader binds in its canonical form (bare when it lands in the owning
    * project, `alias::publicName` elsewhere), targets unchanged. Refuses before
@@ -6109,7 +5830,7 @@ export class SpecWorkspace {
     }
     const spec = this.load(refKind, id);
     if (!spec) throw new Error(`Cannot normalize the references of ${kind} "${id}": no such spec.`);
-    const bound = new Set(['publicInterfaces', 'lifecycle', 'subsystem', 'owns', 'dependsOn', 'dispatch', 'mounts', 'contract', 'narrative', 'group']);
+    const bound = new Set(['publicInterfaces', 'lifecycle', 'subsystem', 'owns', 'dependsOn', 'dispatch', 'contract', 'narrative', 'group']);
     const stuck = this.cachedRoots
       .flatMap((r) => r.authoredReferences)
       .filter((r) => r.specId === id && bound.has(r.position) && r.form !== 'alias' && (r.binding === 'outside' || r.binding === 'unresolved'));
@@ -6394,21 +6115,6 @@ export class SpecWorkspace {
   }
 
   /**
-   * ispec_index.retiredReachFacts — what the current scan met in the forms the
-   * reachability model retired, with what the stored spec held there. The
-   * loader reads them compatibly only in the v5 reading (none are recorded anywhere else), so the stored value would
-   * otherwise be gone by the time the migration asks. Read from the cached
-   * scan, rescanning first when the tree changed.
-   */
-  retiredReachFacts(): RetiredReachFact[] {
-    // Step 1: serve the workspace scan, rescanning when the file signature no longer holds.
-    const index: SpecWorkspace = this;
-    index.listProjectRoots();
-    // Step 2: the retired forms the scan recorded on the index.
-    return this.cachedIndex!.retiredReach;
-  }
-
-  /**
    * ispec_index.typeSpellingFacts — what the current scan's type
    * canonicalisation recorded: every stored type position that is an alias of
    * its canonical spelling, and every one that is not canonical at all. Read
@@ -6658,9 +6364,8 @@ export class SpecWorkspace {
         const member = deeper !== null && (namedDir === null
           || (deeperDir !== null && isWithin(namedDir, deeperDir)))
           ? deeper : named;
-        // Step 4: a member project — a legacy mount keeps its cross-tree writes.
+        // Step 4: a member project.
         if (member !== null) {
-          if (this.rootCovering(member)?.legacyMount) continue;
           // Held under the id as written, else under the one spec the member spells another way (letter case, or its name).
           const qualified = stored ?? (writable ? this.spelledAs(target.kind, `${member}::${localOf(target.id)}`) : undefined) ?? target.id;
           // Step 5.
@@ -6706,8 +6411,7 @@ export class SpecWorkspace {
 
   /**
    * The boundary's sentence for a qualified id the boundary passed but a write
-   * still cannot take — a legacy L1 mount's spec, which a rename never writes
-   * across: the member covering it (else its first segment) as the project.
+   * still cannot take: the member covering it (else its first segment) as the project.
    */
   foreignSpecRefusal(id: string, call: string): string {
     return this.foreignSpecSentence(id, [this.getSubprojectPrefix(id) ?? id.slice(0, Math.max(0, id.indexOf('::')))], call);
@@ -6749,7 +6453,7 @@ export class SpecWorkspace {
 
   /**
    * The member projects (by key) that hold a spec of this kind under a bare
-   * id — a legacy L1 mount's specs are this tree's own and never counted.
+   * id.
    */
   private membersHolding(kind: WritableSpecKind, id: string): string[] {
     if (kind === 'system') return [];
@@ -6762,7 +6466,7 @@ export class SpecWorkspace {
     const holders = new Set<string>();
     for (const spec of listed) {
       const member = this.getSubprojectPrefix(spec.id);
-      if (member === null || this.rootCovering(member)?.legacyMount) continue;
+      if (member === null) continue;
       const rest = spec.id.slice(member.length + 2);
       if (rest === id || (kind === 'type' && rest.endsWith(`::${id}`) && !rest.slice(0, -(id.length + 2)).includes('::'))) holders.add(member);
     }
@@ -6820,8 +6524,7 @@ export class SpecWorkspace {
     // every other write tool refuses it: from here the write would change a
     // design the member approves on its own, unnoticed until its lock-check.
     if (kind !== 'system') {
-      // A member declared in `members` is its own project; a legacy L1 mount
-      // (deprecated, `doctor --fix` rewrites it) keeps its old cross-tree writes.
+      // A member declared in `members` is its own project.
       const refusal = this.crossProjectWriteRefusal([{ kind, id: String((result as { id?: string }).id ?? id) }], 'sdd_update_spec');
       if (refusal !== undefined) throw new Error(refusal);
     }
@@ -7714,10 +7417,6 @@ export class SpecWorkspace {
           if (Array.isArray(out.dispatch)) {
             out.dispatch = out.dispatch.map((b: any) =>
               (typeof b?.component === 'string' ? { ...b, component: q(b.component) } : b));
-          }
-          if (Array.isArray(out.mounts)) {
-            out.mounts = out.mounts.map((m: any) =>
-              (typeof m?.portal === 'string' ? { ...m, portal: q(m.portal) } : m));
           }
           break;
         case 'interface':
@@ -9436,11 +9135,6 @@ export function typeSpellingFacts(): TypeSpellingFacts {
   return current().typeSpellingFacts();
 }
 
-/** ispec_loader.retiredReachFacts — forwarded 1:1 to the index read face. */
-export function retiredReachFacts(): RetiredReachFact[] {
-  return current().retiredReachFacts();
-}
-
 /** Restore files captured by snapshotSpecFiles(). Caller invalidates the cache. */
 export function restoreSpecFiles(snapshot: Map<string, string>): void {
   for (const [file, content] of snapshot) {
@@ -9506,11 +9200,6 @@ export function updateSpec(
  * failed write restores what it already wrote, because a half-moved method
  * leaves callers naming a home it no longer has.
  */
-/** spec_loader.deleteMount — forwarded 1:1 to the registry write face. */
-export function deleteMount(alias: string): boolean {
-  return current().removeLegacyMount(alias);
-}
-
 /** spec_loader.normalizeReferences — forwarded 1:1 to the registry write face. */
 export function normalizeReferences(kind: WritableSpecKind, id: string): boolean {
   return current().writeCanonicalReferences(kind, id);

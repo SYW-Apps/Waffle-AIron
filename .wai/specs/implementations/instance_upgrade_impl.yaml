@@ -2,7 +2,7 @@ id: instance_upgrade_impl
 name: Data Dir Upgrade Implementation
 description: >-
   src/server/upgrade.ts. The trees are upgraded before the member records are registered, because a
-  v5 tree declares its members only once its legacy mounts have moved into members.
+  tree declares its members only once they are in `members`.
 contract: iinstance_upgrade
 sourcePath: src/server/upgrade.ts
 methods:
@@ -246,4 +246,4 @@ previousIds:
   - data_dir_upgrade_impl
 status: draft
 createdAt: '2026-10-18T14:29:29.842Z'
-updatedAt: '2026-10-24T11:32:17.492Z'
+updatedAt: '2026-11-21T16:15:55.521Z'

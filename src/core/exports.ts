@@ -26,7 +26,6 @@ import {
 // export_index projects the tables the Spec Index's scan resolved — the one
 // sanctioned case of an Index over another Index of the same Repository.
 import { listProjectRoots, loadComponentSpecs, loadImplementationSpecs } from './specs.js';
-import { readsV5Forms } from '../utils/fs.js';
 // ...and over the Project Family Index of the same Repository, for the
 // the references the scan bound, counted into each consumer's usage (never in
 // a cycle: the family index depends on the Spec Index alone).
@@ -69,11 +68,9 @@ const IMPLEMENTABLE: ReadonlySet<string> = new Set(['Portal', 'Adapter']);
 
 /**
  * The export kind an own component entry is shown as: derived from its backing
- * Portal's transport (transport.exportKind). An authored kind is a wairon 5
- * form, read as the legacy value in the v5 reading only, where no transport
- * derives one.
+ * Portal's transport (transport.exportKind); an authored kind is not read.
  */
-function exportKindOf(comp: ComponentSpec, authored: string | undefined, role?: string): string | undefined {
+function exportKindOf(comp: ComponentSpec, role?: string): string | undefined {
   // A library is called in-process: shown as InProcess, never as the
   // free-form network kind Custom a generator would read as a wire surface.
   if (comp.componentType === 'Portal' && comp.transport === 'InProcess') return 'InProcess';
@@ -83,7 +80,7 @@ function exportKindOf(comp: ComponentSpec, authored: string | undefined, role?: 
   if (role === 'implement' && comp.componentType === 'Adapter') {
     return !comp.transport || comp.transport === 'InProcess' ? 'InProcess' : transportExportKind(comp.transport);
   }
-  return authored;
+  return undefined;
 }
 
 /** The last segment of a possibly-qualified id. */
@@ -380,7 +377,7 @@ function bindOwn(world: ExportWorld, sub: SubsystemSpec, pi: PublicInterface, pr
     component: comp.id,
     ...(narrowed ? { interface: narrowed } : {}),
     componentType: comp.componentType,
-    ...(exportKindOf(comp, legacyType(pi), pi.role) ? { type: exportKindOf(comp, legacyType(pi), pi.role)! } : {}),
+    ...(exportKindOf(comp, pi.role) ? { type: exportKindOf(comp, pi.role)! } : {}),
     ...(pi.details !== undefined ? { details: pi.details } : {}),
     ...(pi.role ? { role: pi.role } : {}),
     via: [],
@@ -415,11 +412,8 @@ function subsystemCandidates(
         group.has(source.id), problems);
       if (!bound) return;
       checkPublicName(bound.publicName, sub.id, problems);
-      // The export kind stays the one derived from the target's transport; an
-      // authored kind is read only where none is derived (the legacy value).
       const entry = {
         ...bound,
-        ...(legacyType(pi) && !bound.type ? { type: legacyType(pi) } : {}),
         ...(pi.details !== undefined ? { details: pi.details } : {}),
         ...(pi.role ? { role: pi.role } : {}),
       };
@@ -592,12 +586,7 @@ export interface ExportSources {
   audienceOf: Map<string, string>;
 }
 
-/** An export entry's wairon 5 authored `type`, read in the v5 reading only; the kind is otherwise derived from the backing Portal's transport. */
-function legacyType(entry: { type?: string }): string | undefined {
-  return readsV5Forms() ? entry.type : undefined;
-}
-
-/** Where an L0 entry re-exports from: `from` (or, in the v5 reading, the wairon 5 `subsystem`), else its item's owner; `own` for a project-level type. */
+/** Where an L0 entry re-exports from: `from`, else its item's owner; `own` for a project-level type. */
 function sourceOf(world: ExportWorld, e: SystemPublicInterface): string | 'own' | undefined {
   const stated = l0ExportFrom(e);
   if (stated) return stated;
@@ -620,9 +609,6 @@ function withEntryMetadata(entry: ResolvedExport, e: SystemPublicInterface): Res
     ...entry,
     audience: e.audience ?? 'instance',
     ...(e.name ? { name: e.name } : {}),
-    // The export kind is derived from the backing Portal's transport; an
-    // authored L0 kind is read only where none is derived (the legacy value).
-    ...(legacyType(e) && !entry.type ? { type: legacyType(e) } : {}),
     ...(e.role ? { role: e.role } : {}),
     ...(e.details !== undefined ? { details: e.details } : {}),
     ...(e.authPolicy ? { authPolicy: e.authPolicy } : {}),

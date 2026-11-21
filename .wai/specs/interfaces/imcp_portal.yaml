@@ -674,9 +674,7 @@ methods:
     previousNames:
       - imcp_portal.sdd_add_member
   - name: moveMember
-    description: >-
-      Tool: relocate a member's directory on disk and point its `members` entry there (a member
-      still declared in the legacy L1 form is moved into `members` first).
+    description: 'Tool: relocate a member''s directory on disk and point its `members` entry there.'
     signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
     params:
@@ -1562,4 +1560,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-20T00:31:30.895Z'
+updatedAt: '2026-11-21T16:13:59.856Z'

@@ -123,20 +123,6 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: internalizeMember
-  - name: projectConfigExists
-    narrative:
-      - stepNumber: 1
-        description: Forward to the project config portal
-        type: call
-        targetComponent: project_config_portal
-        targetMethod: projectConfigExists
-  - name: exportUsage
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec tree portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: exportUsage
   - name: loadSpec
     narrative:
       - stepNumber: 1
@@ -144,34 +130,6 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadSpec
-  - name: loadTypeSpecs
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec tree portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: loadTypeSpecs
-  - name: resolveSubsystemExports
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec tree portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: resolveSubsystemExports
-  - name: moveMountToMembers
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: moveMountToMembers
-  - name: normalizeReferences
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: normalizeReferences
   - name: promoteMember
     narrative:
       - stepNumber: 1
@@ -186,13 +144,6 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: demoteMember
-  - name: updateMember
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: updateMember
   - name: diffAgainstApproval
     narrative:
       - stepNumber: 1
@@ -214,6 +165,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: unlockTree
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSubsystemExports
 status: complete
 createdAt: '2026-09-30T20:31:36.988Z'
-updatedAt: '2026-10-09T16:55:57.431Z'
+updatedAt: '2026-11-21T17:27:51.168Z'

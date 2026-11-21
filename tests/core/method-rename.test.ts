@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot, listFilesRecursive } from '../../src/utils/fs.js';
 import { invalidateSpecCache, workspaceFor } from '../../src/core/specs.js';
 import { renameMethod } from '../../src/core/provision.js';
-import { writeMemberProject } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/member-project.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 

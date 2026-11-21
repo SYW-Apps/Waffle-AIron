@@ -32,9 +32,9 @@ fields:
       The write that realizes it, for a membership, identity or boundary verb: the owner root to
       bind and the adapter call to make there. The verb's writer makes these calls in its phases
       (references, then configuration, then last the pins a git or hosted external is owed), never
-      recomputing them. Absent for a chaining edit, whose writes the chaining plan carries.
+      recomputing them.
     optional: true
 methods: []
 sourcePath: src/migrations/types.ts
 createdAt: '2026-09-30T20:24:08.010Z'
-updatedAt: '2026-11-20T19:40:27.341Z'
+updatedAt: '2026-11-21T16:14:54.114Z'

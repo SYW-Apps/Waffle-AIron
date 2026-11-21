@@ -39,8 +39,7 @@ export class YamlSyntaxError extends WaironError {
  * gated" — so every reader fails closed on it, with one line naming the file,
  * what is wrong, and the two ways out. A WaironError: every command prints it
  * as one `✖` line and exits non-zero. A record an older major wrote (format 1
- * or 2) is read only in the v5 reading `wairon upgrade` binds; anywhere else it
- * is refused with `remedy` naming the upgrade instead of the two ways out.
+ * or 2) is refused with `remedy` naming the upgrade instead of the two ways out.
  */
 export class LockRecordUnreadableError extends WaironError {
   constructor(readonly file: string, readonly reason: string, remedy?: string) {
@@ -102,18 +101,6 @@ export class NetworkOptionsError extends WaironError {
   constructor(detail: string) {
     super(`wairon network: ${detail}`);
     this.name = 'NetworkOptionsError';
-  }
-}
-
-/**
- * Thrown when the chaining migration refuses to apply a plan, before its first
- * write: the family was only partly in reach, or a project the plan writes has
- * no configuration. `reasons` names each blocking finding.
- */
-export class ChainingMigrationRefusedError extends WaironError {
-  constructor(readonly reasons: string[]) {
-    super(`The chaining migration was not applied; nothing was written:\n${reasons.map((r) => `  - ${r}`).join('\n')}`);
-    this.name = 'ChainingMigrationRefusedError';
   }
 }
 

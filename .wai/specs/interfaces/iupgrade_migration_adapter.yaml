@@ -1,8 +1,8 @@
 id: iupgrade_migration_adapter
 name: Upgrade Migration Adapter Contract
 description: >-
-  The family transaction an upgrade is planned and applied through, and the chaining migration while
-  it still lives in sdd_migrations. Every method forwards to migration_portal.
+  The family transaction an upgrade is planned and applied through. Every method forwards to
+  migration_portal.
 component: upgrade_migration_adapter
 methods:
   - name: rehearse
@@ -19,4 +19,4 @@ methods:
     signatureFrom: migration_portal.drop
 status: draft
 createdAt: '2026-10-18T13:06:21.470Z'
-updatedAt: '2026-11-20T01:26:41.538Z'
+updatedAt: '2026-11-21T16:13:07.841Z'

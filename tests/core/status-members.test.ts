@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { getStatusReport } from '../../src/core/status.js';
@@ -30,7 +29,7 @@ function bind(root: string): void {
 }
 
 describe('status: members print as projects', () => {
-  v5it('nests each member as a [Project] holding its own subsystems, the mount form noted', () => {
+  it('nests each member as a [Project] holding its own subsystems', () => {
     family = buildReferenceFamily();
     bind(family.top);
     const report = getStatusReport({});
@@ -41,20 +40,20 @@ describe('status: members print as projects', () => {
     expect(lines[0]).toMatch(/^● System: Waffly /);
     expect(lines).toContain('├── [Subsystem] app (20%)');
     expect(lines).toContain('├── [Project] core (core)');
-    expect(lines).toContain('└── [Project] shared (shared) [mount form]');
+    expect(lines).toContain('└── [Project] shared (shared)');
     // core's own subsystems by their local names, and its own member nested under it.
     expect(lines).toContain('│   ├── [Subsystem] engine (50%)');
     expect(lines).toContain('│   ├── [Subsystem] transpiler (0%)');
     expect(lines).toContain('│   └── [Project] transpiler (transpiler)');
     expect(lines).toContain('│       └── [Subsystem] lowering (20%)');
     // A member holding no subsystem (shared: a vocabulary of types) still prints.
-    expect(lines[lines.length - 2]).toBe('└── [Project] shared (shared) [mount form]');
+    expect(lines[lines.length - 2]).toBe('└── [Project] shared (shared)');
     // A member never prints as a subsystem of its parent.
     expect(report.text).not.toMatch(/\[Subsystem\] (core|shared)\b/);
     expect(report.text).not.toMatch(/\[Subsystem\] \S*::/);
   });
 
-  v5it('marks a project line with its own role, so a caller can colour it', () => {
+  it('marks a project line with its own role, so a caller can colour it', () => {
     family = buildReferenceFamily();
     bind(family.top);
     const report = getStatusReport({}, { layer: (kind, text) => `«${kind}:${text}»` });
@@ -72,9 +71,9 @@ describe('status: members print as projects', () => {
     expect(report.text.split('\n')[2]).toBe('└── [Subsystem] lowering (20%)');
   });
 
-  v5it('the MCP status line lists every member the root declares, legacy mounts included', () => {
+  it('the MCP status line lists every member the root declares', () => {
     family = buildReferenceFamily();
     bind(family.top);
-    expect(statusFamilyContext()).toContain('Family: member projects declared here — core (core), shared (shared, legacy L1 mount).');
+    expect(statusFamilyContext()).toContain('Family: member projects declared here — core (core), shared (shared).');
   });
 });

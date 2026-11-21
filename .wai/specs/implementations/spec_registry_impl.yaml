@@ -208,18 +208,6 @@ methods:
         description: Invalidate the index cache when something was removed, and answer whether it was
         type: return
         outcome: removed
-  - name: deleteMount
-    narrative: []
-    detail: intent
-    intent: >-
-      Finds the bound project's own subsystem document for the alias among the files the scan read
-      and deletes it only when it carries projectPath — a legacy mount; a subsystem without
-      projectPath is refused by name (it is content, not a mount), and no document answers false
-      without writing. Drops the index cache after removing it, so the next read sees the member
-      only through `members`.
-    calls:
-      - spec_file_store.remove
-    symbol: removeLegacyMount
   - name: normalizeReferences
     narrative: []
     detail: intent
@@ -322,4 +310,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-24T11:35:07.538Z'
+updatedAt: '2026-11-21T16:11:04.331Z'

@@ -1167,7 +1167,7 @@ async function confirmOutsideWrites(options: DoctorOptions): Promise<boolean> {
   return confirmed;
 }
 
-// ── the chaining migration ──────────────────────────────────────────────────
+// ── transaction recovery ────────────────────────────────────────────────────
 
 /** doctor --fix, first: roll back (or clean up) every family migration a crash left unfinished under this root. */
 function recoverTransactions(tally: Tally): void {

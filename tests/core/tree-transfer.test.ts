@@ -1,5 +1,4 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -11,6 +10,8 @@ import {
   inspectChainedRoots,
 } from '../../src/core/specs.js';
 import { exportSpecTree, importSpecTree } from '../../src/core/treetransfer.js';
+import { declareMember } from '../../src/core/provision.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -32,7 +33,7 @@ function mkTmp(prefix: string): string {
 
 function initProject(dir: string, systemName: string): void {
   fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), `schemaVersion: 1.0.0\nname: ${systemName}\n`);
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), `schemaVersion: 1.0.0\nname: ${systemName}\ncreatedAt: '${now}'\nupdatedAt: '${now}'\n`);
   setProjectRoot(dir);
   invalidateSpecCache();
   saveSystemSpec({
@@ -82,7 +83,7 @@ describe('inspectChainedRoots().roots', () => {
     expect(inspectChainedRoots().roots).toEqual([]);
   });
 
-  v5it('walks nested chains, and skips a mount whose directory is missing', () => {
+  it('walks nested chains, and skips a member whose directory is missing', () => {
     const root = mkTmp('wai-chain-nested-');
     initProject(root, 'parent');
     const child = path.join(root, 'packages', 'billing');
@@ -93,16 +94,16 @@ describe('inspectChainedRoots().roots', () => {
     // Re-bind to the parent and declare the chain top-down.
     setProjectRoot(child);
     invalidateSpecCache();
-    saveSpec('subsystem', subsystem('ledger', 'billing', 'vendor/ledger'));
+    declareMember('ledger', { source: 'vendor/ledger' });
     setProjectRoot(root);
     invalidateSpecCache();
-    saveSpec('subsystem', subsystem('billing', 'parent', 'packages/billing'));
-    saveSpec('subsystem', subsystem('ghost', 'parent', 'packages/missing'));
+    declareMember('billing', { source: 'packages/billing' });
+    declareMember('ghost', { source: 'packages/missing' });
 
     expect(inspectChainedRoots().roots).toEqual(['packages/billing', 'packages/billing/vendor/ledger']);
   });
 
-  it('skips a mount that escapes the project root', () => {
+  it('skips a member that escapes the project root', () => {
     const base = mkTmp('wai-chain-escape-');
     const root = path.join(base, 'proj');
     initProject(root, 'contained');
@@ -110,14 +111,9 @@ describe('inspectChainedRoots().roots', () => {
     initProject(outside, 'victim');
     setProjectRoot(root);
     invalidateSpecCache();
-    // The write guard refuses to persist it, so plant the escaping mount directly.
-    fs.mkdirSync(path.join(root, '.wai', 'specs', 'subsystems'), { recursive: true });
-    fs.writeFileSync(
-      path.join(root, '.wai', 'specs', 'subsystems', 'escape.yaml'),
-      `id: escape\nname: escape\ndescription: escaping mount\nparentSystem: contained\n` +
-        `publicInterfaces: []\ntrustedLinks: []\nstatus: draft\nprojectPath: ../victim\n` +
-        `createdAt: '${now}'\nupdatedAt: '${now}'\n`,
-    );
+    // The write guard refuses to persist it, so plant the escaping member directly.
+    projectConfigRepositoryAt(root).declareMember('escape', { source: '../victim' });
+    invalidateSpecCache();
     expect(inspectChainedRoots().roots).toEqual([]);
   });
 });
@@ -136,13 +132,13 @@ describe('exportSpecTree', () => {
     expect(result.archive.byteLength).toBeGreaterThan(0);
   });
 
-  v5it('packs every chained subproject alongside the parent', () => {
+  it('packs every chained subproject alongside the parent', () => {
     const root = mkTmp('wai-export-chain-');
     initProject(root, 'parent');
     initProject(path.join(root, 'packages', 'billing'), 'billing');
     setProjectRoot(root);
     invalidateSpecCache();
-    saveSpec('subsystem', subsystem('billing', 'parent', 'packages/billing'));
+    declareMember('billing', { source: 'packages/billing' });
 
     const result = exportSpecTree();
     expect(result.roots).toEqual(['.', 'packages/billing']);
@@ -157,13 +153,13 @@ describe('exportSpecTree', () => {
     expect(() => exportSpecTree()).toThrow(/no spec tree to export/);
   });
 
-  v5it('refuses a partial export, naming the missing mount, unless allowPartial is set', () => {
+  it('refuses a partial export, naming the missing member, unless allowPartial is set', () => {
     const root = mkTmp('wai-export-missing-');
     initProject(root, 'parent');
     setProjectRoot(root);
     invalidateSpecCache();
-    // 'ghost' declares a mount whose directory was never created.
-    saveSpec('subsystem', subsystem('ghost', 'parent', 'packages/missing'));
+    // 'ghost' declares a member whose directory was never created.
+    declareMember('ghost', { source: 'packages/missing' });
 
     expect(() => exportSpecTree()).toThrow(/ghost/);
     expect(() => exportSpecTree()).toThrow(/missing/);
@@ -173,24 +169,6 @@ describe('exportSpecTree', () => {
     expect(result.roots).toEqual(['.']);
     expect(result.skipped).toEqual([{ mount: 'ghost', projectPath: 'packages/missing', reason: 'missing' }]);
     expect(result.archive.byteLength).toBeGreaterThan(0);
-  });
-
-  v5it('skips a chained root whose directory exists but holds no .wai, as no-spec-tree', () => {
-    const root = mkTmp('wai-export-nospec-');
-    initProject(root, 'parent');
-    // The directory is real, but never provisioned as a wairon project.
-    fs.mkdirSync(path.join(root, 'packages', 'empty'), { recursive: true });
-    setProjectRoot(root);
-    invalidateSpecCache();
-    saveSpec('subsystem', subsystem('empty', 'parent', 'packages/empty'));
-
-    expect(() => exportSpecTree()).toThrow(/no-spec-tree/);
-
-    const result = exportSpecTree(undefined, true);
-    expect(result.roots).toEqual(['.']);
-    expect(result.skipped).toEqual([
-      { mount: 'packages/empty', projectPath: 'packages/empty', reason: 'no-spec-tree' },
-    ]);
   });
 });
 
@@ -267,13 +245,13 @@ describe('importSpecTree', () => {
     expect(fs.readFileSync(backedUp, 'utf8')).toContain('old');
   });
 
-  v5it('recreates a chained subproject layout at the destination', () => {
+  it('recreates a chained subproject layout at the destination', () => {
     const src = mkTmp('wai-chain-src-');
     initProject(src, 'parent');
     initProject(path.join(src, 'packages', 'billing'), 'billing');
     setProjectRoot(src);
     invalidateSpecCache();
-    saveSpec('subsystem', subsystem('billing', 'parent', 'packages/billing'));
+    declareMember('billing', { source: 'packages/billing' });
     const archive = exportSpecTree().archive;
 
     const dest = mkTmp('wai-chain-dest-');
