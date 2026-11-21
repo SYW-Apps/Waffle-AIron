@@ -80,14 +80,16 @@ methods:
       function BODY as well: at exact grade one must be reachable under the symbol, here or through
       the imports and republications this file forwards it by, so a signature, an ambient or
       interface declaration or a plain value binding stops reading as an implementation
-      (METHOD_BODY_NOT_FOUND). Findings carry the analysis grade (exact AST | pattern table |
-      generic scan) so weaker analysis is visible. A dial turned off is said once per implementation
-      as a notice (REALIZATION_UNCHECKED) naming the methods it covers: the dial is code linkage,
-      outside the approval, so without it one line in an implementation spec would switch the
-      realization checks off — method, parameters, async, whether narrated calls are found — with no
-      surface saying so; the doctrine checks still run. Methods whose file escapes the root, is
-      missing or could not be analyzed are left to source-file-linkage, and implementations under
-      chained subsystems (projectPath) validate standalone in their own project run.
+      (METHOD_BODY_NOT_FOUND) — except on an abstraction, whose methods are the interface, trait or
+      Protocol members its file declares and which is never asked for a body. Findings carry the
+      analysis grade (exact AST | pattern table | generic scan) so weaker analysis is visible. A
+      dial turned off is said once per implementation as a notice (REALIZATION_UNCHECKED) naming the
+      methods it covers: the dial is code linkage, outside the approval, so without it one line in
+      an implementation spec would switch the realization checks off — method, parameters, async,
+      whether narrated calls are found — with no surface saying so; the doctrine checks still run.
+      Methods whose file escapes the root, is missing or could not be analyzed are left to
+      source-file-linkage, and implementations under chained subsystems (projectPath) validate
+      standalone in their own project run.
     signature: 'methodRealization(ctx: RuleContext): void'
     returns: void
     params:
@@ -506,7 +508,11 @@ methods:
       component the Portal calls is its downstream collaborator, so that component importing the
       Portal back runs against the declared edge — an import cycle, UNDECLARED_DEPENDENCY on the
       importer, the finding naming the edge it inverts — and such a reverse import realizes no edge
-      of a Portal that calls.
+      of a Portal that calls. An abstraction's interface file stands for it: a call or edge through
+      the abstraction's declared interface type that lands on an implementer's class is justified by
+      the caller's dependsOn on the abstraction, never UNDECLARED_DEPENDENCY on the implementer, and
+      the caller's import of that interface file, type-only included, realizes its dependsOn on the
+      abstraction.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1451,4 +1457,4 @@ methods:
           yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-11-16T06:55:32.707Z'
+updatedAt: '2026-11-21T23:33:52.840Z'

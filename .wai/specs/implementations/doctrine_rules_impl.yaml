@@ -478,7 +478,9 @@ methods:
         description: >-
           Report ARCHITECTURE_VIOLATION_PORTAL_DEP (error, on edge.from.id; draft context
           edge.draftContext) naming both components: Portals and Observers are top-level entry
-          points and subscribers, never dependencies
+          points and subscribers, never dependencies. When edge.to is a Portal the message adds the
+          two legal shapes of a Portal over a Portal: a gateway (the variant) in front of the
+          services it guards, or two implementations of one Portal abstraction
         type: local
       - stepNumber: 6
         description: >-
@@ -1025,12 +1027,13 @@ methods:
           Is this a Portal whose transport requires an endpoint on each verb? expected =
           comp.transport, when comp.transport.requiresEndpoint() holds. A Portal without a transport
           (the portal-fields rule reports that), an InProcess one (its verbs are its contract
-          methods) or a Custom one carries no endpoint obligation, and a component that is not a
-          Portal is non-portal-endpoints' subject
+          methods), a Custom one, or an abstract one (it binds no endpoint: each implementer Portal
+          binds its own) carries no endpoint obligation, and a component that is not a Portal is
+          non-portal-endpoints' subject
         type: branch
         condition: >-
-          comp.componentType is Portal, comp.transport is set, and comp.transport.requiresEndpoint()
-          holds
+          comp.componentType is Portal, comp.abstract is not true, comp.transport is set, and
+          comp.transport.requiresEndpoint() holds
         onFalseStep: 1
       - stepNumber: 3
         description: isDraftCtx = ctx.isComponentDraft(comp.id)
@@ -1635,6 +1638,251 @@ methods:
         type: local
     symbol: check
     exportedVia: libraryCallsRule
+  - name: abstractionShape
+    sourcePath: src/core/rules/doctrine/abstraction-shape.ts
+    narrative:
+      - stepNumber: 1
+        label: comp
+        description: For each component
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 12
+      - stepNumber: 2
+        description: Is the component not an abstraction? Nothing here concerns it
+        type: branch
+        condition: comp.abstract is not true
+        onTrueStep: 12
+        onFalseStep: 3
+      - stepNumber: 3
+        label: placement
+        description: Is the mark where it cannot stand?
+        type: branch
+        condition: comp is an Observer, a pattern (comp.isPattern()) or a UI block (a View)
+        onFalseStep: 6
+      - stepNumber: 4
+        description: >-
+          Report ABSTRACT_NOT_ALLOWED (error, on comp.id; draft context
+          ctx.isComponentDraft(comp.id)) naming the stereotype: an Observer is reached by its topic,
+          a pattern owns its members and a UI block presents, so none is substituted by callers; an
+          abstraction is a Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry or
+          Adapter
+        type: local
+      - stepNumber: 5
+        description: Nothing further is judged on a component whose mark is refused
+        type: jump
+        toStep: 12
+      - stepNumber: 6
+        label: portalBinds
+        description: Does an abstract Portal bind what only an implementer Portal binds?
+        type: branch
+        condition: >-
+          comp is a Portal that declares a transport, basePath, auth, dispatch or invokedBy, or
+          whose contract methods bind an endpoint or an invokedBy of their own
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report ABSTRACT_PORTAL_BINDS (error, on comp.id; draft context
+          ctx.isComponentDraft(comp.id)) naming each field and method that binds: an abstract Portal
+          states only the verbs, and each implementer Portal binds its own transport, endpoints,
+          auth, basePath, dispatch and entry
+        type: local
+      - stepNumber: 8
+        label: behaviour
+        description: For each L4 of the abstraction, which may carry only code linkage
+        type: loop
+        loopKind: forEach
+        over: >-
+          each implementation of ctx.implementationsByContract for each interface of
+          ctx.interfacesByComponent for comp.id
+        endStep: 11
+      - stepNumber: 9
+        description: Does it carry behaviour?
+        type: branch
+        condition: >-
+          the implementation has a method with a narrative, an intent or calls, or declares
+          technologies
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report ABSTRACTION_HAS_BEHAVIOUR (error, on the implementation id; draft context
+          ctx.isImplementationDraft(impl)) naming each narrative, intent, call or technology: an
+          abstraction's implementation names only the file and symbol declaring the interface, trait
+          or Protocol, and its methods are realized by declaration
+        type: local
+      - stepNumber: 11
+        label: implEnd
+        description: Continue with the next implementation
+        type: local
+      - stepNumber: 12
+        label: compEnd
+        description: Continue with the next component
+        type: local
+    symbol: check
+    exportedVia: abstractionShapeRule
+  - name: abstractions
+    sourcePath: src/core/rules/doctrine/abstractions.ts
+    narrative:
+      - stepNumber: 1
+        label: setup
+        description: >-
+          implementing = for each local entry (no `::`) of each interface of ctx.interfaces that
+          declares implements, the abstraction component id it names mapped to the interfaces naming
+          it, so each abstraction's implementers are the components of those interfaces. exposed =
+          the component ids that an entry with role implement of ctx.exportTables resolves to: an
+          abstraction published as an extension point for other projects to implement. ownership =
+          ctx.ownershipIndex()
+        type: local
+      - stepNumber: 2
+        label: comp
+        description: For each abstraction
+        type: loop
+        loopKind: forEach
+        over: >-
+          the components of ctx.components whose abstract is true and that are neither Observers,
+          patterns nor UI blocks (abstraction-shape reports those)
+        endStep: 15
+      - stepNumber: 3
+        description: >-
+          impls = the interfaces implementing holds for comp.id; exportedAsPoint = exposed holds
+          comp.id
+        type: local
+      - stepNumber: 4
+        description: >-
+          Has the abstraction neither a local implementer nor another project's implementers to wait
+          for?
+        type: branch
+        condition: impls is empty and exportedAsPoint is false
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report ABSTRACTION_UNIMPLEMENTED (error, on comp.id; draft context
+          ctx.isComponentDraft(comp.id)): no contract implements it; declare implements on the
+          implementers' contracts, export it with role implement, or drop the abstraction and depend
+          on the component itself
+        type: local
+      - stepNumber: 6
+        description: With no implementers there is nothing to compare
+        type: jump
+        toStep: 15
+      - stepNumber: 7
+        label: single
+        description: Does exactly one contract implement it?
+        type: branch
+        condition: impls holds exactly one contract and exportedAsPoint is false
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Report ABSTRACTION_SINGLE_IMPLEMENTER (notice, on comp.id; draft context
+          ctx.isComponentDraft(comp.id)) naming the implementer: several L4 implementations of one
+          component's contract serve one engine per deployment, and an abstraction earns its place
+          by several live implementers used together
+        type: local
+      - stepNumber: 9
+        label: implementer
+        description: >-
+          For each contract implementing the abstraction, implComp = ctx.componentMap of its
+          component
+        type: loop
+        loopKind: forEach
+        over: impls
+        endStep: 14
+      - stepNumber: 10
+        description: Is the implementer another stereotype?
+        type: branch
+        condition: implComp.componentType differs from comp.componentType
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report ABSTRACTION_STEREOTYPE_MISMATCH (error, on implComp.id; draft context
+          ctx.isComponentDraft(implComp.id)) naming both stereotypes: callers substitute
+          implementers for the abstraction, so each is the same kind of block
+        type: local
+      - stepNumber: 12
+        label: containment
+        description: Is the implementer owned elsewhere?
+        type: branch
+        condition: >-
+          the owner ownership holds for implComp.id differs from the owner it holds for comp.id
+          (both unowned, or both owned by the same pattern, is the legal case)
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report ABSTRACTION_CONTAINMENT (error, on implComp.id; draft context
+          ctx.isComponentDraft(implComp.id)) naming both owners: an abstraction and its implementers
+          live under one owner, so a pattern's members stay private to it
+        type: local
+      - stepNumber: 14
+        label: implEnd
+        description: Continue with the next implementing contract
+        type: local
+      - stepNumber: 15
+        label: compEnd
+        description: Continue with the next abstraction
+        type: local
+      - stepNumber: 16
+        label: multiple
+        description: For each contract implementing several abstractions or extension points
+        type: loop
+        loopKind: forEach
+        over: the interfaces of ctx.interfaces whose implements lists more than one entry
+        endStep: 18
+      - stepNumber: 17
+        description: >-
+          Report ABSTRACTION_MULTIPLE (notice, on intf.id; draft context when intf.status is draft
+          or design) naming the entries: legal, and the exception (one vendor client serving two
+          roles); keep the contract to one responsibility serving several roles, and document it
+          with a lint.allow and its reason
+        type: local
+      - stepNumber: 18
+        label: multipleEnd
+        description: Continue with the next contract
+        type: local
+    symbol: check
+    exportedVia: abstractionsRule
+  - name: abstractionBypass
+    sourcePath: src/core/rules/doctrine/abstraction-bypass.ts
+    narrative:
+      - stepNumber: 1
+        label: setup
+        description: >-
+          implementing = for each local entry (no `::`) of each interface of ctx.interfaces that
+          declares implements, the abstraction component id it names mapped to the implementer
+          components of the interfaces naming it
+        type: local
+      - stepNumber: 2
+        label: calls
+        description: For each call that reaches a component method
+        type: loop
+        loopKind: forEach
+        over: >-
+          every call step, register step and declared calls entry of ctx.implementationMethods(),
+          and every dispatch-table binding of ctx.components, with the calling component and the
+          target component and method
+        endStep: 5
+      - stepNumber: 3
+        description: >-
+          Does the call reach, on an implementer, a method its abstraction declares? A method only
+          the implementer declares is its own extra and is never judged
+        type: branch
+        condition: >-
+          the target component is an implementer of an abstraction in implementing, the
+          abstraction's contract declares the target method, and the caller is not that implementer
+          itself
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report ABSTRACTION_BYPASSED (warning, on the calling component's id, sited at the call;
+          draft context ctx.isComponentDraft of the caller) naming the abstraction, the implementer
+          and the method: depend on the abstraction and call it there, so the caller keeps working
+          when an implementer is added or replaced
+        type: local
+      - stepNumber: 5
+        label: callsEnd
+        description: Continue with the next call
+        type: local
+    symbol: check
+    exportedVia: abstractionBypassRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-11-14T19:07:30.085Z'
+updatedAt: '2026-11-21T23:22:00.583Z'

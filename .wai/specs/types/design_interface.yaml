@@ -31,7 +31,19 @@ fields:
   - name: ext
     type: map<string, any>
     optional: true
+  - name: implements
+    type: list<string>
+    description: >-
+      The abstractions the contract realizes, each a component key or `alias::publicName` across
+      projects, in declared order; absent when it implements none
+    optional: true
+  - name: omits
+    type: list<OmittedMethod>
+    description: >-
+      On a Portal implementing a Portal abstraction: the verbs its transport deliberately does not
+      serve, each with its reason; absent otherwise
+    optional: true
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:16.152Z'
-updatedAt: '2026-10-04T15:39:10.409Z'
+updatedAt: '2026-11-21T23:31:08.832Z'

@@ -92,7 +92,13 @@ fields:
       On a Portal that declares one: the entry its verbs inherit, the fact a consumer reads to
       decide what is entered from outside (format 2.0 replaces the listener mounts)
     optional: true
+  - name: abstract
+    type: bool
+    description: >-
+      True on an abstraction: a component whose contract other components implement and callers
+      depend on instead of an implementer; absent otherwise
+    optional: true
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:13.764Z'
-updatedAt: '2026-10-06T12:54:16.021Z'
+updatedAt: '2026-11-21T23:31:07.491Z'

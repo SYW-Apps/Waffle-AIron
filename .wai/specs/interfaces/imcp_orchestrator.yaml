@@ -24,19 +24,20 @@ methods:
     returns: SpecWriteReceipt
   - name: addComponent
     description: >-
-      Verify the parent subsystem exists, then persist an L2 component specification and answer with
-      the receipt for it: which spec was written, at what status, and whether one already held that
-      id.
+      Verify the parent subsystem exists, then persist an L2 component specification, its abstract
+      mark included, and answer with the receipt for it: which spec was written, at what status, and
+      whether one already held that id.
     signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: defineInterface
     description: >-
-      Verify the owning component exists, then persist an L3 interface specification and answer with
-      the receipt for it: which spec was written, at what status, and whether one already held that
-      id. The tool's method items take params, returns, signatureFrom and an optional prose
-      signature: a method states params with returns, or a signatureFrom alone, or a prose signature
-      with returns — the authoring seam refuses a signatureFrom stated beside params or returns
-      (SIGNATURE_SOURCE_RESTATED), and the writer stores the text params derive.
+      Verify the owning component exists, then persist an L3 interface specification, its implements
+      list and omits included, and answer with the receipt for it: which spec was written, at what
+      status, and whether one already held that id. The tool's method items take params, returns,
+      signatureFrom and an optional prose signature: a method states params with returns, or a
+      signatureFrom alone, or a prose signature with returns — the authoring seam refuses a
+      signatureFrom stated beside params or returns (SIGNATURE_SOURCE_RESTATED), and the writer
+      stores the text params derive.
     signature: 'defineInterface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: writeNarrative
@@ -666,4 +667,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-07T02:39:40.470Z'
+updatedAt: '2026-11-21T23:30:52.713Z'

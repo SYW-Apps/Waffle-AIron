@@ -46,14 +46,17 @@ methods:
       variant), so it is authored in one call. An Adapter may state the transport it calls its
       target Portal over; when it states none and the Portals its dependsOn names share one
       transport, the tool fills it in from them and says so (a stated transport that disagrees with
-      the target's is ADAPTER_TRANSPORT_MISMATCH). The input may state the spec's lifecycle status,
-      so a component can be authored straight at design or complete instead of being born draft and
-      needing a follow-up edit nobody remembers. An unstated status means draft for a new spec and
-      the stored status for a re-authoring, and a stated status that would lower the stored one is
-      refused by name: reopening a frozen spec is an update, not a restatement. The answer carries
-      the write receipt as structured content beside the sentence, so a caller learns the status
-      written and whether a spec already held that id without parsing English; the sentence itself
-      is unchanged.
+      the target's is ADAPTER_TRANSPORT_MISMATCH). A component may state `abstract: true` to be an
+      abstraction several other components implement, on any building block but an Observer (an
+      abstract Portal states no transport, endpoints, auth, basePath or entry, and an abstract Store
+      no durability); the tool carries the mark through and never defaults it. The input may state
+      the spec's lifecycle status, so a component can be authored straight at design or complete
+      instead of being born draft and needing a follow-up edit nobody remembers. An unstated status
+      means draft for a new spec and the stored status for a re-authoring, and a stated status that
+      would lower the stored one is refused by name: reopening a frozen spec is an update, not a
+      restatement. The answer carries the write receipt as structured content beside the sentence,
+      so a caller learns the status written and whether a spec already held that id without parsing
+      English; the sentence itself is unchanged.
     signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -73,10 +76,14 @@ methods:
       `T | null`, `Promise<T>`, `boolean`, `Record<K, V>`, ...) are accepted and stored canonical,
       the receipt's respellings naming each, and a position that is not canonical is refused with
       its replacement (`number`: int or float?; an inline function type: a signature type; a literal
-      union: an enum). The input may state the spec's lifecycle status, so a contract can be
-      authored straight at design or complete instead of being born draft and needing a follow-up
-      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
-      a re-authoring, and a stated status that would lower the stored one is refused by name —
+      union: an enum). The contract may state `implements`, a list of the abstractions it realizes:
+      each a local abstract component id, or `alias::name` for another project's extension point (a
+      single string is read as a one-element list), and, on a Portal that implements a Portal
+      abstraction, `omits`, the verbs this transport deliberately does not serve, each with a
+      reason. The input may state the spec's lifecycle status, so a contract can be authored
+      straight at design or complete instead of being born draft and needing a follow-up edit nobody
+      remembers. An unstated status means draft for a new spec and the stored status for a
+      re-authoring, and a stated status that would lower the stored one is refused by name —
       reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
       as structured content beside the sentence, so a caller learns the status written and whether a
       spec already held that id without parsing English; the sentence itself is unchanged.
@@ -1560,4 +1567,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-21T16:13:59.856Z'
+updatedAt: '2026-11-21T23:30:50.586Z'

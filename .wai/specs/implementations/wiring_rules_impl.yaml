@@ -607,12 +607,13 @@ methods:
         description: >-
           Collect the base roots: every Observer, seeding all its contract methods; each lifecycle
           entrypoint of ctx.subsystems, seeding its one method; every method of each interface in
-          ctx.interfaces that declares `implements` (an imported extension point the producer
-          calls); and every MessageBus subscribe verb of a Portal whose topic the tree emits (an
-          emits declaration or a MessageBus publish endpoint): the emitted topic reaches it, as an
-          Observer's subscription is reached. A subscribe verb whose topic nothing in the tree emits
-          is not a root: an entry declared for its outside publisher reaches it, and
-          UNSOURCED_SUBSCRIPTION already reports the missing source. A Portal and a published
+          ctx.interfaces that declares an `implements` entry with `::` (an imported extension point
+          the producer calls; a local abstraction is no root, its implementers being reached through
+          the abstraction by the walk); and every MessageBus subscribe verb of a Portal whose topic
+          the tree emits (an emits declaration or a MessageBus publish endpoint): the emitted topic
+          reaches it, as an Observer's subscription is reached. A subscribe verb whose topic nothing
+          in the tree emits is not a root: an entry declared for its outside publisher reaches it,
+          and UNSOURCED_SUBSCRIPTION already reports the missing source. A Portal and a published
           component are no longer roots of their own
         type: local
       - stepNumber: 2
@@ -1065,4 +1066,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-21T21:22:07.016Z'
+updatedAt: '2026-11-21T23:23:36.650Z'

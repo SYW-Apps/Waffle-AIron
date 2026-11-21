@@ -42,7 +42,10 @@ fields:
     optional: false
   - name: components
     type: list<any>
-    description: Each component with what the canvas shows about it, including the findings marked on it.
+    description: >-
+      Each component with what the canvas shows about it, including the findings marked on it and an
+      abstract marker (`abstract`) on an abstraction, drawn as a node mark and no change of grouping
+      or layout.
     optional: false
   - name: edges
     type: list<any>
@@ -51,9 +54,13 @@ fields:
       tagged with its `kind`, the strongest form the specs state it in: `depends` (a `dependsOn`
       entry, or ownership), `calls` (a narrative call or register step naming the target, with no
       `dependsOn` beside it), `uses` (the source uses a type, field or return the target project
-      owns: one project reading another's content), or `declared` (the bound project or a member
-      declares the target as an external or a member, with no use the specs name). One edge per
-      source-target pair and kind, the strongest kind kept when a pair is stated several ways. A
+      owns: one project reading another's content), `declared` (the bound project or a member
+      declares the target as an external or a member, with no use the specs name), or `implements`
+      (the source component's contract names the target abstraction in its `implements`: one edge
+      per implemented abstraction, from the implementer to the abstraction, drawn like a UML
+      realization, a dashed line with a hollow head; it is a relation of the design, never a
+      dependency, and an implements edge is never folded into or replaced by another kind). One edge
+      per source-target pair and kind, the strongest kind kept when a pair is stated several ways. A
       dependency on a referenced project's public name, or on a declared external's, lands on that
       project's node (a consumption edge, stage 8). A consumption edge — one whose source and target
       lie in different projects of the family, or that lands on a referenced or external project
@@ -118,4 +125,4 @@ fields:
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-11-13T16:01:20.922Z'
+updatedAt: '2026-11-21T23:31:21.576Z'

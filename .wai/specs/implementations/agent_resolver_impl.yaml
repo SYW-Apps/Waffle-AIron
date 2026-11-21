@@ -330,6 +330,26 @@ methods:
           (OPEN_ROUTE_CALL). An agent that implements nothing gets none of these
         type: local
       - stepNumber: 16
+        label: abstractionBrief
+        description: >-
+          Fold in the abstractions the record's components take part in, in a '## Abstractions'
+          section ahead of the project guidance. For a component that IMPLEMENTS one (its contract
+          names a local abstract component in implements): the abstraction's contract is added to
+          readPaths and its methods are listed, and the section names the interface, trait or
+          Protocol to implement — the declaration in the abstraction's own file (its
+          implementation's sourcePath and symbol) — that this component's code must satisfy with
+          every method, the effects and dependencyClass no wider than the abstraction's, and, for a
+          Portal, the omits it states with their reasons; it binds its own transport, endpoints,
+          auth and entry. An `alias::name` extension point it implements is the externals section's,
+          unchanged. For an ABSTRACTION itself (a component marked abstract): the section says to
+          declare the interface, trait or Protocol only, in the one file its implementation names —
+          no behaviour, no body, no narrative, no technology — and lists its implementers so the
+          declaration serves them all; its methods are realized by that declaration. A CALLER of an
+          abstraction gets its dependency's contract as for any dependency and is told to hold the
+          abstraction's interface type, never an implementer's. An agent that touches no abstraction
+          gets no such section
+        type: local
+      - stepNumber: 17
         description: >-
           Return the AgentBrief: rendered instructions plus the structured scope fields (ownedPaths,
           readPaths, codeFence, sharedPaths, domainRoot, template)
@@ -352,4 +372,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-21T15:55:45.745Z'
+updatedAt: '2026-11-21T23:31:41.877Z'

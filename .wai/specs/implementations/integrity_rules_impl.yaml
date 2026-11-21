@@ -1389,53 +1389,6 @@ methods:
         type: return
     symbol: check
     exportedVia: renameTracesRule
-  - name: implementsContracts
-    sourcePath: src/core/rules/integrity/implements-contracts.ts
-    narrative:
-      - stepNumber: 1
-        label: contracts
-        description: For each interface in ctx.interfaces within scope that declares `implements`
-        type: loop
-        loopKind: forEach
-        over: the in-scope interfaces of ctx.interfaces that declare implements
-        endStep: 6
-      - stepNumber: 2
-        description: >-
-          Resolve the reference to its contract entry (rule_context.resolveCrossProject, then the
-          entry's methods)
-        type: local
-      - stepNumber: 3
-        description: An unresolved or unexported reference is project-boundaries' finding
-        type: branch
-        condition: the reference resolved to an entry exported with role implement
-        onFalseStep: 1
-      - stepNumber: 4
-        label: methods
-        description: For each method of the extension point
-        type: loop
-        loopKind: forEach
-        over: the entry's methods
-        endStep: 6
-      - stepNumber: 5
-        description: >-
-          Does the interface declare it with the same params and returns? Types are compared
-          semantically, not by spelling: every type expression in canonical form, the extension
-          point's named types read as the public names its producer exports them by, and the
-          implementer's `alias::name` and the bare name its `use` imports from that alias both read
-          as `name` — so `geo::coordinate` and the producer's own `coordinate` are one type
-        type: branch
-        condition: the interface lacks the method, or declares it with other params or returns
-        onFalseStep: 4
-      - stepNumber: 6
-        label: methodsEnd
-        description: >-
-          Report IMPLEMENTS_MISMATCH (error, on intf.id, sited at the method; draft context when
-          intf.status is draft or design) naming the extension point, the method and what differs —
-          and, when the interface lacks the method but still declares a former name the producer's
-          rename trace records for it, that it was renamed from that name, to rename it
-        type: local
-    symbol: check
-    exportedVia: implementsContractsRule
   - name: memberNames
     sourcePath: src/core/rules/integrity/member-names.ts
     narrative:
@@ -1763,6 +1716,235 @@ methods:
         type: local
     symbol: check
     exportedVia: loweredSeveritiesRule
+  - name: implementsContracts
+    sourcePath: src/core/rules/integrity/implements-contracts.ts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: For each in-scope contract that implements an abstraction or extension point
+        type: loop
+        loopKind: forEach
+        over: the in-scope interfaces of ctx.interfaces that declare implements
+        endStep: 12
+      - stepNumber: 2
+        description: >-
+          entries = the interface's implements as a list (a single string is a one-element list);
+          implementer = ctx.componentMap of its component
+        type: local
+      - stepNumber: 3
+        label: entries
+        description: For each entry the contract implements
+        type: loop
+        loopKind: forEach
+        over: entries
+        endStep: 11
+      - stepNumber: 4
+        description: >-
+          Resolve the entry to the methods it asks for. An `alias::name` entry goes to its contract
+          entry (rule_context.resolveCrossProject, then the entry's methods): a contained member's
+          live table, or a declared external's pin. A local entry goes to
+          ctx.interfaceMethodsOf(entry), the contract of that abstract component
+        type: local
+      - stepNumber: 5
+        description: >-
+          An unresolved or unexported reference is project-boundaries' finding, and a local entry
+          that is no abstraction is implements-compatibility's
+        type: branch
+        condition: >-
+          an `alias::name` entry resolved to an entry exported with role implement, or a local entry
+          names an abstract component
+        onFalseStep: 11
+      - stepNumber: 6
+        label: methods
+        description: For each method of the abstraction or extension point
+        type: loop
+        loopKind: forEach
+        over: the entry's methods
+        endStep: 10
+      - stepNumber: 7
+        description: Does the interface declare it with the same params and returns?
+        type: branch
+        condition: >-
+          the interface lacks the method, or declares it with other params or returns. Types are
+          compared semantically, not by spelling: every type expression in canonical form, the
+          extension point's named types read as the public names its producer exports them by, and
+          the implementer's `alias::name` and the bare name its `use` imports from that alias both
+          read as `name` — so `geo::coordinate` and the producer's own `coordinate` are one type
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Is it a verb this transport deliberately does not serve? A Portal parity abstraction lets
+          an implementer leave out a verb with a stated reason
+        type: branch
+        condition: >-
+          the interface lacks the method and lists it in omits, the implementer and the abstraction
+          both being Portals
+        onTrueStep: 10
+        onFalseStep: 9
+      - stepNumber: 9
+        description: >-
+          Report IMPLEMENTS_MISMATCH (error, on intf.id, sited at the method; draft context when
+          intf.status is draft or design) naming the extension point or abstraction, the method and
+          what differs — and, when the interface lacks the method but still declares a former name
+          the producer's rename trace records for it, that it was renamed from that name, to rename
+          it; for a Portal implementer lacking the verb, that it is to be served or listed in omits
+          with a reason
+        type: local
+      - stepNumber: 10
+        label: methodsEnd
+        description: Continue with the next method
+        type: local
+      - stepNumber: 11
+        label: entryEnd
+        description: Continue with the next entry
+        type: local
+      - stepNumber: 12
+        label: contractEnd
+        description: Continue with the next contract
+        type: local
+    symbol: check
+    exportedVia: implementsContractsRule
+  - name: implementsCompatibility
+    sourcePath: src/core/rules/integrity/implements-compatibility.ts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: >-
+          For each in-scope contract that implements something; implementer = ctx.componentMap of
+          its component
+        type: loop
+        loopKind: forEach
+        over: the in-scope interfaces of ctx.interfaces that declare implements
+        endStep: 14
+      - stepNumber: 2
+        label: entries
+        description: For each entry the contract implements
+        type: loop
+        loopKind: forEach
+        over: the contract's implements entries (a single string is a one-element list)
+        endStep: 13
+      - stepNumber: 3
+        description: Is it a local entry that is no abstraction?
+        type: branch
+        condition: the entry has no `::` and names no abstract component of ctx.componentMap
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 4
+        description: >-
+          Report IMPLEMENTS_NOT_ABSTRACT (error, on intf.id; draft context when intf.status is draft
+          or design) naming the entry and whether it names a component that is not abstract or none
+          at all: an implements entry names an abstraction, so mark that component abstract or
+          implement one that is
+        type: local
+      - stepNumber: 5
+        description: Nothing to compare against
+        type: jump
+        toStep: 13
+      - stepNumber: 6
+        description: >-
+          Resolve the entry to its methods as implements-contracts does; an `alias::name` entry that
+          does not resolve with role implement is project-boundaries' finding and is skipped
+        type: local
+      - stepNumber: 7
+        label: methods
+        description: For each method the contract declares of the abstraction or extension point
+        type: loop
+        loopKind: forEach
+        over: the entry's methods the interface declares
+        endStep: 10
+      - stepNumber: 8
+        description: >-
+          Is the implemented method's effect wider than the one callers were promised? A side that
+          states none is not judged
+        type: branch
+        condition: >-
+          both sides state an effect and the implementer's is wider than the abstraction's or
+          extension point's (none ⊂ read ⊂ lifecycle ⊂ write; io matches only io or none)
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report IMPLEMENTS_EFFECT_WIDER (error, on intf.id, sited at the method; draft context when
+          intf.status is draft or design) naming both effects: a caller may rely on the
+          abstraction's effect, so an implementer does no more than it states
+        type: local
+      - stepNumber: 10
+        label: methodsEnd
+        description: Continue with the next method
+        type: local
+      - stepNumber: 11
+        description: Does the implementer depend on more than callers were promised?
+        type: branch
+        condition: >-
+          the implementer's dependencyClass is wider than the abstraction's or extension point's
+          (pure ⊂ read ⊂ unset, a workflow), judged where the entry states one
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Report IMPLEMENTS_EFFECT_WIDER (error, on the implementer's component id; draft context
+          ctx.isComponentDraft) naming both classes: logic that callers rely on as pure or read
+          stays so in every implementer
+        type: local
+      - stepNumber: 13
+        label: entryEnd
+        description: Continue with the next entry
+        type: local
+      - stepNumber: 14
+        label: contractEnd
+        description: Continue with the next contract
+        type: local
+    symbol: check
+    exportedVia: implementsCompatibilityRule
+  - name: implementsConsistency
+    sourcePath: src/core/rules/integrity/implements-consistency.ts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: >-
+          For each in-scope contract that implements something or states omissions; implementer =
+          ctx.componentMap of its component
+        type: loop
+        loopKind: forEach
+        over: the in-scope interfaces of ctx.interfaces that declare implements or omits
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Do two implemented abstractions or extension points ask one method name to be two things?
+          Each entry's methods are read as implements-contracts reads them; one that does not
+          resolve is skipped
+        type: branch
+        condition: >-
+          the contract implements two or more entries, and a method name occurs in more than one of
+          them with different params, returns or effect
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report IMPLEMENTS_CONFLICT (error, on intf.id, sited at the method; draft context when
+          intf.status is draft or design) naming both entries and what differs: one method cannot
+          serve both, so split the contract or align the abstractions
+        type: local
+      - stepNumber: 4
+        label: omissions
+        description: >-
+          Are the contract's omissions where only a Portal implementing a Portal abstraction may
+          state them?
+        type: branch
+        condition: >-
+          intf.omits is set, and the implementer is not a Portal implementing a Portal abstraction,
+          or an omission names a method no implemented Portal abstraction declares
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report OMISSION_NOT_ALLOWED (error, on intf.id, sited at the omission; draft context when
+          intf.status is draft or design) naming the method and why: omits states the verbs one
+          transport deliberately does not serve of an abstract Portal it implements, each with its
+          reason
+        type: local
+      - stepNumber: 6
+        label: contractEnd
+        description: Continue with the next contract
+        type: local
+    symbol: check
+    exportedVia: implementsConsistencyRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-11-21T01:07:05.431Z'
+updatedAt: '2026-11-21T23:29:57.976Z'

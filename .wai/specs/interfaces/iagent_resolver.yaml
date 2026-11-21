@@ -31,10 +31,13 @@ methods:
       rule that governs them, and the stop-and-report line for a shared file that would need a
       responsibility of its own —, for a Portal the handler shape its code takes and, for every
       implementer, that injectedParams are code linkage it declares once its code takes such a
-      parameter, the optional user-owned project guidance file (.wai/agents/<agentId>.md, read live)
-      and, when a type dialect is shipped for the language the agent's implementations are written
-      in, the type mapping (how the contracts' neutral types are spelled in that language), and
-      return the structured AgentBrief — rendered instructions plus
+      parameter, for a component taking part in an abstraction what that asks of its code (an
+      implementer gets each abstraction's contract and the interface its class declares it
+      implements; an abstraction declares the interface, trait or Protocol only; a caller holds the
+      abstraction's type, never an implementer's), the optional user-owned project guidance file
+      (.wai/agents/<agentId>.md, read live) and, when a type dialect is shipped for the language the
+      agent's implementations are written in, the type mapping (how the contracts' neutral types are
+      spelled in that language), and return the structured AgentBrief — rendered instructions plus
       ownedPaths/readPaths/codeFence/sharedPaths and typeMapping. Always reflects the CURRENT spec
       tree and guidance, so a re-lock or a guidance edit changes the next call's result with no
       session restart; an unknown agentId (or an alias that names no direct member) throws. A hosted
@@ -64,4 +67,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-06T21:45:15.613Z'
+updatedAt: '2026-11-21T23:33:01.957Z'

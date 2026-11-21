@@ -1,0 +1,19 @@
+kind: value-object
+id: omitted_method
+name: OmittedMethod
+description: >-
+  A verb a Portal implementer deliberately does not serve: the abstract Portal's method it leaves
+  out, with the reason this transport has no form of it.
+fields:
+  - name: method
+    type: string
+    description: The name of a method the implemented Portal abstraction declares
+    optional: false
+  - name: reason
+    type: string
+    description: Why this transport does not serve it, for example that streaming has no form on a command line
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-11-21T23:16:40.082Z'
+updatedAt: '2026-11-21T23:16:40.484Z'

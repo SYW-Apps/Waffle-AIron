@@ -124,7 +124,7 @@ methods:
         over: >-
           each edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf targets,
           then its reexportTargetsOf and throughBarrelsOf targets not already among them, each once
-        endStep: 7
+        endStep: 8
       - stepNumber: 5
         description: >-
           justified = the private edgeJustified over realization.componentsAt(fromPath) and
@@ -139,11 +139,24 @@ methods:
           declaresSurfaceEdge)
         type: local
       - stepNumber: 6
+        label: abstractionJustification
+        description: >-
+          Abstractions justify edges too. An implementer component cg of an abstraction a that cf
+          dependsOn is reached through a: a runtime edge or a call landing on an implementer class
+          through the abstraction's declared interface type (the type the caller holds, the
+          interface, trait or Protocol in the abstraction's own file) is justified by cf's dependsOn
+          on a, with no dependsOn on the implementer. A declared dependsOn on an abstraction is
+          realized by cf's import of the file its implementation names (the interface file), a
+          type-only import counting as it does for any edge, and by a call the checker lands in a
+          file of an implementer of it. The abstraction's own file is the target of that edge, never
+          the implementers' files, which no caller of it imports
+        type: local
+      - stepNumber: 7
         description: A justified edge continues with the next edge
         type: branch
         condition: justified is false
         onFalseStep: 4
-      - stepNumber: 7
+      - stepNumber: 8
         label: undeclaredReport
         description: >-
           Report UNDECLARED_DEPENDENCY (warning; spec the first of
@@ -157,7 +170,7 @@ methods:
           against that declared edge — an import cycle between the two — and is no Portal mounting
           onto its host
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         label: compLoop
         description: >-
           Every declared edge should leave a trace. A trace is a runtime import or a re-export
@@ -171,29 +184,29 @@ methods:
           allowed)
         type: loop
         over: ctx.components
-        endStep: 14
-      - stepNumber: 9
+        endStep: 15
+      - stepNumber: 10
         description: >-
           A component with no file to trace from continues with the next component: its exact-grade
           files, else — a component realized in Python — the files the Python reader read its
           imports in
         type: branch
         condition: fromFiles = filesOf(component.id), else pyFilesOf(component.id), is non-empty
-        onFalseStep: 8
-      - stepNumber: 10
+        onFalseStep: 9
+      - stepNumber: 11
         label: targetLoop
         description: Check each declared edge
         type: loop
         over: >-
           the distinct ids of component.dependsOn then component.owns (targetId), so a target
           declared under both is one edge
-        endStep: 14
-      - stepNumber: 11
+        endStep: 15
+      - stepNumber: 12
         description: An unresolvable target continues with the next target
         type: branch
         condition: ctx.componentMap resolves targetId to target
-        onFalseStep: 10
-      - stepNumber: 12
+        onFalseStep: 11
+      - stepNumber: 13
         description: >-
           toFiles = across subsystems, the exact-grade files of
           realization.filesIn(target.subsystem) minus fromFiles: UNREALIZED_DEPENDENCY accepts an
@@ -204,7 +217,7 @@ methods:
           so an edge into a component realized only in the other language has no toFiles and is not
           judged
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         label: traceGuard
         description: >-
           An empty toFiles is Level 1 territory (an unmapped target, or a target subsystem whose
@@ -236,8 +249,8 @@ methods:
           no return drift (param conformance's returnDrifts), and, for Python fromFiles, no import
           on pyGraph connects them, no unrealized package `__init__.py` a fromFile imports holds a
           toFile in its folder, and no call site of a fromFile names a contract method of the target
-        onFalseStep: 10
-      - stepNumber: 14
+        onFalseStep: 11
+      - stepNumber: 15
         label: unrealizedReport
         description: >-
           Report UNREALIZED_DEPENDENCY (warning; spec the first of mappedImplsOf(component.id), else
@@ -248,7 +261,7 @@ methods:
           across subsystems or the target's files: the collaboration is wired indirectly (DI) or the
           declared edge is stale
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         label: callLoop
         description: >-
           Every call a mapped file makes through a collaborator is collaboration, whatever the form
@@ -266,8 +279,8 @@ methods:
           unowned code it lands on, carrying the hops — else the shape facts' call sites closed over
           the Portal's methods; and, for every mapped file, each call site of its
           source_file_facts.functionCallSites
-        endStep: 19
-      - stepNumber: 16
+        endStep: 20
+      - stepNumber: 17
         description: >-
           toPaths = for a resolved call, the files of its targets other than fromPath — the
           declaration the checker resolved the callee to, whatever the receiver's spelling, and for
@@ -283,7 +296,7 @@ methods:
           object, so in a file several components share, the same-named module function beside it is
           another body
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           A Portal file calling a write- or lifecycle-effect contract method of a Repository, Index,
           Store or Registry that its own narrative does not already claim (the design rule reports a
@@ -292,14 +305,14 @@ methods:
         condition: >-
           a component at fromPath is a Portal, the called method's effect is write or lifecycle on a
           data component at a toPath, and no implementation of the Portal claims that call
-        onFalseStep: 19
-      - stepNumber: 18
+        onFalseStep: 20
+      - stepNumber: 19
         description: >-
           Report PORTAL_WRITE_SHORTCUT_IN_CODE (error; site `<fromPath> -> <component>.<method>`)
           naming the call and its target: route the mutation through an Orchestrator that owns the
           workflow
         type: local
-      - stepNumber: 19
+      - stepNumber: 20
         label: typeOnlyEdge
         description: >-
           For each toPath that the file does not import at runtime, re-export or import through an
@@ -328,7 +341,7 @@ methods:
           -> <name>`, or the candidates when no name was written): the analysis could not follow it,
           and fails closed rather than passing it
         type: local
-      - stepNumber: 20
+      - stepNumber: 21
         label: portWrite
         description: >-
           A call of the Portal's own code that the checker lands only on a PORT no written class
@@ -352,7 +365,7 @@ methods:
           f(x)`) is such a call too. Each is reported once per site and per function it is written
           in, so one shortcut never hides another of the same name
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           Build each technology's home: for every implementation declaring technologies, its
           component, the components it owns and the pattern that owns it, keyed by every package the
@@ -362,7 +375,7 @@ methods:
           implementation binds gets an EMPTY home under its packages: the design never says where it
           lives, so every importer is outside it
         type: local
-      - stepNumber: 22
+      - stepNumber: 23
         label: techLoop
         description: Every package a mapped file imports
         type: loop
@@ -374,8 +387,8 @@ methods:
           eight, each specifier carrying the modules it was reached through; a module a component
           realizes stops the walk, its imports judged as its own), local packages of this repository
           excluded
-        endStep: 23
-      - stepNumber: 23
+        endStep: 24
+      - stepNumber: 24
         description: >-
           When the specifier's package name (`@scope/name` or its first segment) equals a technology
           token exactly and no component realized at the file is in that technology's home, report
@@ -385,7 +398,7 @@ methods:
           that owns the vendor call. A package reached through unowned modules names them, in order,
           as the hops it was imported through
         type: local
-      - stepNumber: 24
+      - stepNumber: 25
         label: crossProjectImports
         description: >-
           For every file of the code model, report each of its source_file_facts.crossProjectImports
@@ -1248,10 +1261,13 @@ methods:
       - stepNumber: 14
         description: >-
           A weak string anchor claims no function (the anchored tier's registration is deliberate),
-          a weaker grade measures no bodies, and a reachable body is realization: continue with the
-          next method
+          a weaker grade measures no bodies, a reachable body is realization, and an abstraction's
+          method is realized by its declaration alone (the interface, trait or Protocol member in
+          the file its sourcePath names, never asked for a body): continue with the next method
         type: branch
-        condition: inDeclared, facts.analysisGrade is exact, and reachable is false
+        condition: >-
+          component.abstract is not true, inDeclared, facts.analysisGrade is exact, and reachable is
+          false
         onFalseStep: 6
       - stepNumber: 15
         label: bodyReport
@@ -2612,4 +2628,4 @@ methods:
     exportedVia: callMannerConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-11-15T19:35:14.218Z'
+updatedAt: '2026-11-21T23:24:04.104Z'
