@@ -127,18 +127,25 @@ methods:
         targetMethod: resolveProjectExports
       - stepNumber: 9
         description: >-
+          For each component a moved component names outside the moved subtree, read the resolved
+          export table of that component's subsystem
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveSubsystemExports
+      - stepNumber: 10
+        description: >-
           From the graph, find each reference of the moved subtree back into the bound project at a
           component whose subsystem does not publish it: externalize-refused, naming it — publishing
           is a design decision to make first
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Check every other family project consuming the bound project: each public name it uses
           that the moved subsystem realizes must stay exported through the bound project's
           re-pointed re-exports; one that would not is externalize-refused. Nothing is planned for
           them: the names they use do not move (externalize-updates-siblings)
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           As a project: under each family project that consumes the bound project, read its
           externals' status: a use that stays valid needs nothing after the move, one already broken
@@ -146,7 +153,7 @@ methods:
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: getExternalsStatus
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Plan the core's externalize, the new member's externals declared in the member — its
           external for the bound project, written with its source path (`source: { path: <relative>
@@ -155,7 +162,7 @@ methods:
           hosted and owed. The references the move respells and the externals it declares are listed
           when the plan is rehearsed, from what the core answers
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Answer the plan
         type: return
         outcome: the externalize plan
@@ -465,4 +472,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-11-20T19:37:54.288Z'
+updatedAt: '2026-11-21T17:27:52.582Z'

@@ -165,6 +165,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: unlockTree
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSubsystemExports
 status: complete
 createdAt: '2026-09-30T20:31:36.988Z'
-updatedAt: '2026-11-21T16:17:43.670Z'
+updatedAt: '2026-11-21T17:27:51.168Z'

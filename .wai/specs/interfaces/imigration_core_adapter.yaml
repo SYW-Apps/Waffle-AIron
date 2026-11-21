@@ -257,6 +257,14 @@ methods:
     signature: 'unlockTree(): void'
     returns: void
     params: []
+  - name: resolveSubsystemExports
+    description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-11-21T16:17:54.684Z'
+updatedAt: '2026-11-21T17:27:50.292Z'
