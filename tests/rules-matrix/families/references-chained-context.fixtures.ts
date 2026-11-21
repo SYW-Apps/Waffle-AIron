@@ -134,9 +134,9 @@ const pinnedChildTree = () => {
       name: 'edge-telemetry-child',
       targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
       rules: {},
-      externals: { fleet: { project: 'fleetworks' } },
+      externals: { fleet: { project: 'fleetworks', source: 'https://example.invalid/fleetworks.git' } },
     }),
-    [`${child}/externals.lock.yaml`]: yaml.dump({ externals: { fleet: { project: 'fleetworks', snapshot: '.wai/externals/fleet.yaml', digest: 'sha256:pinned', used: {} } } }),
+    [`${child}/inputs.lock.yaml`]: yaml.dump({ externals: { fleet: { project: 'fleetworks', snapshot: '.wai/externals/fleet.yaml', digest: 'sha256:pinned', used: {} } } }),
     [`${child}/externals/fleet.yaml`]: yaml.dump(hubSnapshot, { noRefs: true, lineWidth: 200 }),
   };
   for (const [file, text] of Object.entries(files)) {

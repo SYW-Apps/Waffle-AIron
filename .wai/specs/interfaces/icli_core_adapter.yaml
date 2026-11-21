@@ -415,9 +415,9 @@ methods:
       - idempotent
   - name: approvalVerdict
     description: >-
-      Forward to approval_portal.approvalVerdict: what the lock says about the tree, given the pin
-      tree the validator computed (members whose pin moved, members drifted or never approved, and
-      the stage-5 upgrade note).
+      Forward to approval_portal.approvalVerdict: what the lock says about the tree, given the
+      approvals the validator computed (each member's own state, drifted or never approved, and the
+      inputs the build owes).
     signature: 'approvalVerdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
     returns: ApprovalVerdict
     params:
@@ -738,4 +738,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T02:43:10.304Z'
+updatedAt: '2026-11-20T00:22:49.505Z'

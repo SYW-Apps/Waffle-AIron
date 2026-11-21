@@ -26,7 +26,7 @@ run from the parent (or: make the folder its own repository with `git init` and
 re-run `wairon init` for an independent project).
 
 **What to commit.** All of `.wai/` — the specs, `project.yaml`, `lock.json`,
-`externals/` and `externals.lock.yaml`, vendored packs: the gate reads committed
+`externals/` and `inputs.lock.yaml`, vendored packs: the gate reads committed
 files only (a migration's scratch folder, `.wai/transactions/`, ignores itself).
 The one exception is `.wai/.spec-write.lock`, the short-lived lock every write
 into `.wai` takes so two sessions never lose a write: `wairon init` writes
@@ -318,8 +318,10 @@ warnings as errors (notices are printed and counted, never fatal).
   see [Using it in GitHub Actions](#using-it-in-github-actions)); a member in
   its own repository adds the root's run to its pipeline or relies on the root
   repository's.
-- **Externals, compared live (advisory: the pin gates).** The gate judges each
-  external against its pin. Then every external the run did not compose is
+- **Externals, compared live (advisory where pinned: the pin gates).** The gate
+  judges each hosted or git external against its pin; a path external (`../x`)
+  is never pinned and is judged from its live producer, so a use it no longer
+  fits fails the build there (adapt the uses — there is nothing to re-pin). Then every external the run did not compose is
   compared with its **live** producer, offline, and printed in its own section:
   `EXTERNAL_LIVE_INCOMPATIBLE` (warning: a used member changed at signature
   level, was renamed — the new name is given — or is gone; it names the specs
@@ -601,7 +603,7 @@ included, with the draft-related warnings CI waives counted apart), or that it
 would pass. Run `validate --ci` until it passes before asking someone to
 approve a design meant to be finished. Re-running it when nothing it records moved
 keeps the record on file — its `lockedAt` included — so `.wai/lock.json` stays
-unmodified; a change of approver, verdict or member pin writes a new record. A
+unmodified; a change of approver or verdict writes a new record. A
 new wairon release writes nothing by itself: when its built-in design rules are
 the same as the ones the record was taken under (the record's `gateParts.release`
 is unchanged), the approval simply still matches and the record — its release
@@ -656,7 +658,7 @@ was taken in, each spec's approved status recovered from its digest — and
 A **format-2** record (written before code linkage left the approval) still passes
 `lock-check` while nothing it covered moved. `wairon upgrade` re-expresses it
 as format 3 in place — before any other step touches a spec — keeping
-`lockedAt`, `lockedBy`, the results and the member pins, and recording
+`lockedAt`, `lockedBy` and the results, and recording
 `reexpressed: { at, fromAlgorithm, fromReading, by }`. When no spec file moved
 but the record still does not match, what moved is the **gate** it was judged
 under — the design rules of a newer wairon release, the project's rule tuning,
@@ -693,13 +695,11 @@ a human is actually answering:
 subsystem of an approved design: the identity a lock certifies is always the
 whole design's, so it is refused as a first approval (run `wairon lock`), and
 refused whenever a spec outside the subsystem — or an input the identity covers
-besides the design (rule tuning, packs, network, a pin, a member's approval,
-the release) — moved since the approval; when it passes, the rest stays approved
+besides the design (rule tuning, packs, network) moved since the approval; when it passes, the rest stays approved
 exactly as it was, and the record is the one a full lock would write. A
 member project's subsystem (`--subsystem payments_svc::payments` at a parent) is
 refused: a member's subsystem is approved at the member's own root
-(`wairon lock --subsystem payments` in its folder), then the parent locks to pin
-its new approval. When
+(`wairon lock --subsystem payments` in its folder). When
 nothing changed, `lock` leaves the approval on record as it is — its `lockedAt`
 and restamp trace — and `.wai/lock.json` untouched by that run; only evidence
 recorded *beside* the approval (the code results, the design counts, gate parts
@@ -711,12 +711,7 @@ or packs moved, it prints the inputs it records — projectType, each rule
 severity override, the selected packs, a declared network, `composition` — so
 the tuning you approve is shown, not only digested.
 
-**In a family, lock bottom-up.** A parent's record pins each member's approval,
-so lock every member that is not approved at its own root first, then the
-parent: three projects cost three locks. A parent locked first records the
-member as drifted, its `lock-check` fails until the member re-locks, and it
-must lock again to pin the new approval — `lock` warns before it writes when a
-direct member is not covered by its own approval.
+**In a family, each project locks at its own root.** A project's approval covers its own design and its own policy only: a parent's record names no member, and a member re-locking never moves its parent. A member that is not approved is no reason to lock it first, unless the parent sets `composition.requireApprovedMembers`, which makes it a debt the parent reports (see *Inputs* below). `wairon lock` reads each member's own committed lock and writes nothing below the project it runs in.
 Another approver locking an unchanged design records their own approval. A shell
 with no terminal and no `--yes` writes nothing.
 
@@ -737,7 +732,8 @@ record counts too, so commit it before you rely on a local pass.
 | `.wai/project.yaml` missing while an approval is on record | **fail (1)**, naming the file | **fail (1)** |
 | a member project's own approval does not cover it (spec changes, inputs that moved, a record that predates recorded inputs) | **fail (1)**, in the member's own terms | **fail (1)** |
 | a member project was never approved by anyone | pass, naming it as *not gated* (0) | **fail (1)** |
-| only a member's own approval moved (it re-locked) | **fail (1)**, naming the member: re-lock here to pin its new approval | **fail (1)** |
+| only a member's own approval moved (it re-locked) | pass (0): the root records nothing about it | pass (0) |
+| a build input is owed (an unpinned git or hosted external, a use beyond its pin, an unrecorded pack) | **fail (1)**, naming it and the command | **fail (1)** |
 
 **What plain `lock-check` guarantees:** that a *committed* approval still covers the
 design, and that no member project carries unapproved changes. Nothing more: a
@@ -747,55 +743,13 @@ pull request* — passes, because it reads exactly like one that never opted in.
 `strict: true`) once the project has been locked: then a missing record, or a
 member nobody ever approved, fails.
 
-**Members.** The gate identity pins each direct member's *recorded* approval, so
-the root reads every member project's own approval at its own root too. A member
-whose specs moved past its own approval fails the root's check — run `wairon lock`
-in that member's folder. A member that re-locked is expected (its own approver
-signed it off), and the root is judged by whether its pin of the member is still
-the member's approved one: after a member re-locks it is not, and the verdict says
-exactly that — no own spec moved, run `wairon lock` here to pin the new approval.
-A member whose release stamp `wairon lock` only *refreshed* (a restamp) has not
-re-approved anything: the root pins the subject of the member's human approval,
-which the restamp keeps (`restamped.subject`), so a family carries an upgrade
-over at every root without one re-approval.
+**Members.** The approval covers the project's own design and policy only, so the root records nothing about its members. `lock-check` passes when the root's own record is approved, no build input is owed, and each member project's own approval holds at its own root, read from its last committed lock. A member whose specs moved past its own approval fails the root's check: run `wairon lock` in that member's folder. A member that re-locked changes nothing at the root. A path external (`../x` declared under `externals`) is not a member: it is read live and judged for validity only, never as an approval.
 
-**Upgrading wairon never stales an approval by itself.** A lock records each
-input of its gate identity on its own (`gateParts`: the design, this release's
-built-in rules, the project's rule tuning, its packs, the network declaration,
-`composition`, consumed contract pins, members' approvals). When only the
-release's built-in rules moved — the approved design and every input the project
-decides are as approved — the approved design is **re-validated under the new
-rules in the same command**: clean at the `--ci` standard (no error, no warning
-but the draft-related ones `--ci` waives; notices never count) the approval
-*carries over* and nothing is written — `lock-check`, `status`, `sdd_get_status`,
-`validate` and the family view all say *approved under <old>, re-validated under
-<new>: still approved*, and one `wairon lock` refreshes the record's release
-stamp (`restamped`) without asking for a re-approval. When the new release
-changed no built-in rule at all, there is nothing to re-validate: the approval
-holds as it is, and `lock-check`, `status` and `validate` say so in one notice
-(*approved under wairon <old>; this release (<new>) judges the design by the same
-rules*). If the new rules find
-errors or warnings, the approval is stale for exactly those: *the new release
-finds N issue(s) in the approved design: …*. The project's own rule tuning,
-packs, network and pins stay in the identity: changing one still stales the
-approval, and the verdict names the input that moved (*the network declaration*
-after `wairon network declare`). Only a record that *proves* the project's own inputs unchanged
-carries over. A record from before gate parts (every record written before wairon recorded them) cannot — its rule tuning, packs and pins are only inside its digest — so
-it never carries over automatically: it is stale with one sentence, *approved
-under <old> before wairon recorded its inputs separately — re-lock once to record
-them; later upgrades then carry over*, and `wairon lock` takes a real approval
-(never a restamp). The same holds for gate parts that do not break down the
-`stateId` beside them (they are ignored, with a notice; when the identity still
-matches, `wairon lock` rewrites them keeping the approval), and for a release
-stamp that is no wairon version or is *newer* than the running wairon when the
-identity no longer matches — a record *written by a newer wairon* is never
-re-judged by an older one. When the identity still matches, the identity
-decides: the approval holds, and every surface (`lock-check`, `status`,
-`sdd_get_status`, `validate`) reports the stamp as a notice (`its release stamp
-"banana" is no wairon version`, `… says wairon 9.9.9 took it, a newer release than
-this one`); `wairon lock` replaces it with the running release. A matching
-record that carries no gate parts at all gets the same notice `{}` gets, and
-`lock` rewrites them. A `lock.json` that names one key twice (what a careless
+**Inputs.** What the build consumes is recorded in `.wai/inputs.lock.yaml`: the pin of each git or hosted external, a part's parent, and the packs as they resolve. A path external is read live and never pinned. The lock owes an input when an external is not pinned, a use goes beyond its pin, or a selected pack is not recorded; an owed input fails `lock-check` and is reported beside the approval, never inside it. `wairon lock` refreshes only what is owed, records the packs, then approves; it never moves a pin that is up to date.
+
+**Upgrading wairon never moves an approval.** The approval is the sha256 of the project's own design and policy (its design, rules, composition, network and selections), so a new release, a re-pin or a member's re-lock never re-opens it. A record from wairon 6 is moved by `wairon upgrade`, which carries the approval when it can prove the design, rules, composition and network unchanged and otherwise keeps the old identity, so the record reads stale until one `wairon lock`. A lock record or `externals.lock.yaml` of the earlier form is refused with *run `wairon upgrade`*; a tree written by wairon 5 is first moved with `npx wairon@6 upgrade`.
+
+A `lock.json` that names one key twice (what a careless
 conflict resolution leaves) cannot be read, like one with conflict markers.
 
 **What the identity covers, and what it leaves out.** The project's own *design*
@@ -1478,7 +1432,7 @@ widen it (`EXPORT_WIDENS_AUDIENCE`).
 | `wairon member update <alias> [--ref <ref> \| --commit <sha>] [--report]` | Move a git member's pinned commit to its ref's head (or the ref or commit given), printing the spec files it adds, changes and removes; `--report` writes nothing. The only way a git member's content changes; this project's lock reads stale until re-locked when the content moved |
 | `wairon member move <alias> <path>` | Move a contained member's directory and point its `members` entry there (a legacy L1 mount is moved into `members` first) |
 | `wairon member attach <alias> <path> [--description <text>]` | Make the **existing** project at `<path>` a member, keeping its L0, subsystems, packs and lock; its id is declared when it only defaulted one (the id its lock approved, else its effective id). `<path>` reads as `member add` reads a location: inside this project, or a sibling with a leading `../`. Refused when its id collides with a family project's, and for any other path out of this project (`not-contained`) |
-| `wairon member detach <alias> [--widen]` | Take a member out of the family: this project and every family consumer reach it as an external by `source.path`, this project's pinned. Refused (`audience-too-narrow`, each export named with its users) while a family project uses a name the member exports only to the family; `--widen` instead widens exactly those used exports to `instance` in the member's L0, each shown in the plan |
+| `wairon member detach <alias> [--widen]` | Take a member out of the family: this project and every family consumer reach it as an external by `source.path`, read live by `source.path`, never pinned. Refused (`audience-too-narrow`, each export named with its users) while a family project uses a name the member exports only to the family; `--widen` instead widens exactly those used exports to `instance` in the member's L0, each shown in the plan |
 | `wairon member adopt <alias>` | Make this project's external found by path a member again — detach's inverse. Its source reads as `member attach` reads a location: inside this project, or a sibling with a leading `../` (a sibling member is composed live like a contained one, never pinned) |
 | `wairon member rename-alias <old> <new>` | Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes |
 | `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop] [--export <name>…]` | Fold a member into this project's own specs folder. A **part** is a storage move: its subsystems move in and nothing else changes. A **project** is demoted first — its own metadata goes to a home (its L0 vision onto the `--into` subsystem, its boundaries, requirements and databases into this L0, its language, profile and depth onto the moved subsystems, its members and externals into this configuration, its packs adopted or dropped), what has no home (its lock, pins, derived outputs) is deleted and listed, and every family project that consumed it is re-pointed here |
@@ -1902,7 +1856,7 @@ again.
 | `wairon externals use <alias> [--add a,b\|'*'] [--remove c] [--dry-run] [--json]` | Change one declared external's `use` imports, so the specs may name the producer's public names bare (e.g. so an `implements` of the producer's trait spells its types as the producer does — though `alias::name` and the bare imported name compare as one type either way). An added name the producer does not export to this project is refused. The pin is untouched. Exits 1 on a refusal |
 | `wairon externals remove <alias> [--dry-run] [--json]` | Remove one external: its declaration and its pin (`.wai/externals/<alias>.yaml` and its lock entry) together. An orphaned pin — one whose declaration was deleted by hand, which `externals list` shows — is removed too. Exits 1 when the alias is neither declared nor pinned |
 | `wairon externals consumers [--search <dirs...>] [--json]` | From a producer's root: the projects that consume it — each with the alias and section it declares it under and the public names its specs use — so a producer sees who breaks before it changes its surface. Without `--search`, the family read from the highest root in reach. `--search ..` (any folders) also scans those folders and the project roots directly under them for projects declaring this one as an external by a path that resolves here, or by git — a sibling checkout is found this way. A hosted consumer, or one on another machine, declares its dependency on its own side and is not visible here (`sdd_list_consumers` is the same answer for an assistant) |
-| `wairon externals pin [alias…] [--json]` | Pin declared externals into `.wai/externals/<alias>.yaml` and `.wai/externals.lock.yaml`. The snapshot is rewritten whenever anything it carries moved — not only the signatures the digest covers: a producer that added `abi: c`, changed a transport or a role, or recorded a rename is refreshed by a re-pin. Exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
+| `wairon externals pin [alias…] [--json]` | Pin declared git and hosted externals into `.wai/externals/<alias>.yaml` and `.wai/inputs.lock.yaml`, from the producer's approved state; a path external is read live and never pinned. The snapshot is rewritten whenever anything it carries moved — not only the signatures the digest covers: a producer that added `abi: c`, changed a transport or a role, or recorded a rename is refreshed by a re-pin. Exits 1 when an alias could not be pinned (unresolved or unreachable — its previous pin stays) |
 | `wairon externals status [--json]` | Each pin compared with its live producer per used member — `unchanged`, `changed`, `renamed` (with the new name), `removed`, `unlocked`, `unavailable` — and each external's health (`incompatible`, `not compared`, `drifted`, `ok`); a pinned snapshot that no longer carries what the producer says (a stale `abi`, transport or role) is `drifted`, never `ok`, and names the stale facts. A use the lock does not hold is still compared with the live producer: gone from it, it is `removed` or `renamed`. A contract used whole (a bare `dependsOn`, no call named) stands for every method its pin holds, each compared by name. A used verb of a wire Portal whose endpoint moved or went (an HTTP verb, path or stated status, another transport's address) is `changed` — a client calling it over the wire spells the route, so the external is `incompatible`; an InProcess library binds no route, so it has none to move. Git producers are fetched. The opt-in **live** gate: exits 1 when any external is incompatible, 2 when nothing is incompatible but something could not be compared (never a pass), 0 otherwise |
 | `wairon externals list [--json]` | The declared externals, how each resolves and what is pinned; a malformed declaration, and an orphaned pin whose declaration is gone, are listed with their problem, never hidden |
 | `wairon surface export \| import \| list [--audience <level>] [--format native\|openapi] [--portal <id>] [--out <path>] [--source <path>]` | Exchange a public surface document: export this project's (native snapshot or one OpenAPI 3.1 document per portal), import one, or list them. OpenAPI defaults to the `project` audience, so every HTTP Portal of the project's own is described — one its L0 export table never exports included (a wider `--audience` narrows to what the table shares there); the native snapshot defaults to `instance`. In the OpenAPI document a path placeholder — `{name}`, or the Express spelling `:name`, which is rewritten to `{name}` — is a parameter `in: path`, the other params the query of a GET/DELETE or the JSON body of a POST/PUT/PATCH — the one object-typed param left IS the body, as a client sends it — an optional one or a `T?` too, the body then optional or nullable, never wrapped under its name (named under `x-wairon-body-param`, so `surface import` puts it back), and several are the properties of a body object. The Portal's `basePath` is joined into every path (the document carries no `servers` entry: where it is served is deployment, not design). The parameter that carries the credential the Portal's `auth` binds (a bearer `token`, say) is left out of the parameters and the body — `security` describes it — and named under `x-wairon-credential-param` so a wairon reader can restore it. Each operation answers the success `status` its endpoint states (`sdd_set_endpoints` `status`: `202` Accepted, a `3xx` redirect with a `Location` header and no body, a `201` for a workflow verb that files something), else its conventional code — `204` with no content for a method returning nothing; `201 Created` for a POST that creates: a method whose `effect` is `lifecycle`, or one whose effect is undeclared, `write` or `io` and whose name says it creates (`createHabit`, `placeOrder`, `signUp`); else `200` (a cancel, an archive, a log-in) — and a method returning `result<T, E>` also answers a `default` error response carrying E's schema (`surface import` reads both back). A `custom` auth becomes an `apiKey` scheme only when the Portal's `auth.name` (with `auth.in`, default header) names where the credential travels; naming none, it is an `http` scheme `custom` with the design's description — no header name is invented. Two operations of one Portal on the same verb and path (placeholders compared by position) are refused naming both, never dropped (`validate` reports them as `ENDPOINT_ROUTE_DUPLICATE`). A type another project publishes resolves from its pin, or — for a member project — from what the member exports now; a type nothing resolves is named in a warning (`The document has no schema for N type(s) it names: …`), never passed under a ✔. The components are exactly the types the operations reach, each ONCE — a member's type reached under its alias, its project id or another producer's closure is one component, keyed `<alias>.<id>` (a qualified id's `::` written `.`, so every key matches `^[a-zA-Z0-9._-]+$`); a field or parameter typed `T?` is not `required` (it stays nullable), and a field's description is carried on its property. Every status line goes to stderr, so `surface export --format openapi > api.json` writes the JSON alone; an export that publishes nothing, or of a design `validate` refuses (its error count and codes), is a warning, never a ✔. An unknown `--portal` is refused naming the portals the surface renders |

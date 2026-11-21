@@ -66,7 +66,8 @@ fields:
     description: >-
       The root's alias table: each `members` key (or legacy mount id) and each declared external's
       alias, mapped to the key of the project it names in this scan; an external whose producer the
-      scan did not read maps to nothing and its references bind as outside.
+      scan did not read (a git or hosted external, or a path external whose folder is missing) maps
+      to nothing and its references bind as outside.
     optional: false
   - name: exports
     type: ResolvedExportTable
@@ -127,7 +128,13 @@ fields:
       and is not listed. On a hosted instance a `../` or git source is never read, so none is
       located.
     optional: false
+  - name: pathExternal
+    type: bool
+    description: >-
+      True when the scan followed this root as a path external rather than a declared member: a node
+      of the scan read live, never a member of the project that declared it.
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-26T17:39:58.407Z'
-updatedAt: '2026-10-09T00:59:07.347Z'
+updatedAt: '2026-11-20T20:50:09.941Z'

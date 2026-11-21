@@ -21,13 +21,18 @@ import { pinExternals } from '../../src/core/surfaces.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { renameField, renameMethod, renameParam } from '../../src/core/provision.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
+import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
 
 type ToolResult = { isError?: boolean; content?: { type: string; text?: string }[] };
 
 const roots: string[] = [];
 const clients: Client[] = [];
+const cleanups: (() => void)[] = [];
 afterEach(async () => {
   for (const c of clients.splice(0)) await c.close();
+  for (const c of cleanups.splice(0).reverse()) {
+    try { c(); } catch { /* windows file locks */ }
+  }
   setProjectRoot(null);
   invalidateSpecCache();
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
@@ -104,11 +109,12 @@ const NOT_SPEC_AUTHORING = new Set([
 
 const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, (c) => `\\${c}`);
 
-/** habits, binding the member `legacy` (vendor/legacy) and consuming cal-lib as the external `ext`, pinned. */
+/** habits, binding the member `legacy` (vendor/legacy) and consuming cal-lib as the git external `ext`, pinned. */
 function family(): { app: string; member: string; cal: string } {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-wording-')));
   roots.push(base);
-  // cal: an independent project, consumed as the external `ext`.
+  cleanups.push(isolateGlobals(cleanups));
+  // cal: an independent project, served by a local git repository and consumed as the external `ext`.
   const cal = project(path.join(base, 'cal'), {
     system: { name: 'cal-lib', vision: 'A calendar library.', targetLanguage: 'TypeScript', publicInterfaces: [{ from: 'cal', component: 'cal_portal', as: 'calendar', audience: 'external' }, { from: 'cal', typeDef: 'cadence', audience: 'external' }] },
     subsystems: [{ id: 'cal', status: 'complete', publicInterfaces: [{ component: 'cal_portal', details: 'Calendars.' }, { typeDef: 'cadence', details: 'A cadence.' }] }],
@@ -117,13 +123,14 @@ function family(): { app: string; member: string; cal: string } {
     implementations: [{ id: 'cal_portal_impl', contract: 'ical_portal', methods: [{ name: 'list', narrative: [] }] }],
     types: [{ id: 'cadence', kind: 'value-object', subsystem: 'cal', fields: [{ name: 'n', type: 'int' }] }],
   }, 'cal-lib');
+  const served = serveGit(cleanups, cal, 'cal');
   // habits: the bound project, with the member `legacy` under vendor/legacy.
   const app = project(path.join(base, 'habits'), {
     system: { name: 'habits', vision: 'Habits.', targetLanguage: 'TypeScript' },
     subsystems: [{ id: 'habit', status: 'complete' }],
     components: [{ id: 'habit_flow', subsystem: 'habit', componentType: 'Orchestrator', status: 'complete' }],
     interfaces: [{ id: 'ihabit_flow', component: 'habit_flow', methods: [{ name: 'track', description: 'Track.', params: [], returns: 'void' }] }],
-  }, 'habits', { externals: { ext: { project: 'cal-lib', source: { path: '../cal' } } }, members: { legacy: 'vendor/legacy' } });
+  }, 'habits', { externals: { ext: { project: 'cal-lib', source: { git: served.url } } }, members: { legacy: 'vendor/legacy' } });
   const member = project(path.join(app, 'vendor', 'legacy'), {
     system: { name: 'legacy-api', vision: 'The old API.', targetLanguage: 'TypeScript' },
     subsystems: [{ id: 'old', status: 'complete' }],

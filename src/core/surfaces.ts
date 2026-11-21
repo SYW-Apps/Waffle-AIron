@@ -42,7 +42,9 @@ import {
   type ExternalPin,
   type ExternalStatus,
   type ExternalUseStatus,
-  type ExternalsLock,
+  type InputsLock,
+  type LockedPack,
+  type ProducerPin,
   type PinnedParent,
   type ResolvedExternal,
   isPart,
@@ -65,6 +67,7 @@ import {
   getLoaderIssues,
   approvedRevision,
   memberRevisions,
+  diffAgainstApproval,
 } from './adapters/surfaces-core.js';
 // The pinned-externals aggregate (externals_repository): the lock and the
 // snapshots it names, apart from the legacy .wai/surfaces snapshots.
@@ -578,7 +581,7 @@ export function removeSnapshot(projectName: string): boolean {
  * surface_orchestrator.listPinnedExternals — the owner's gate read of the bound
  * project's pins: each declared external's alias with its lock entry and the
  * snapshot that entry names, read from the bound root's own
- * .wai/externals.lock.yaml and .wai/externals/ through the externals
+ * .wai/inputs.lock.yaml and .wai/externals/ through the externals
  * Repository. It never resolves a producer, never reads another root and never
  * climbs: an alias never pinned, or whose snapshot file is missing or
  * malformed, is answered with its problem instead of a snapshot. Writes nothing.
@@ -593,20 +596,20 @@ export function listPinnedExternals(): PinnedExternal[] {
   try {
     const config = loadProjectConfig();
     declared = config ? [
-      ...declaredExternals(config),
+      ...declaredExternals(config).filter((e) => e.sourceHosted !== undefined || e.sourceGit !== undefined),
       ...declaredMembers(config).filter((m) => !m.problem && m.storage !== 'contained' && m.storage !== 'path').map((m) => ({ alias: m.alias, project: m.alias })),
     ] : [];
   } catch {
     // A configuration that fails its schema is reported by the paths that load it.
     return [];
   }
-  // Step 2: the externals lock; one that cannot be read pins nothing.
-  let lock: ExternalsLock | null = null;
+  // Step 2: the inputs lock; one that cannot be read pins nothing.
+  let lock: InputsLock | null = null;
   let lockProblem: string | undefined;
   try {
     lock = externalsRepository.readLock();
   } catch (e) {
-    lockProblem = `the externals lock cannot be read: ${e instanceof Error ? e.message : String(e)}`;
+    lockProblem = `the inputs lock cannot be read: ${e instanceof Error ? e.message : String(e)}`;
   }
   // Steps 3-5: each declared alias, with its entry and snapshot — or the problem.
   return declared.map(({ alias, project }): PinnedExternal => {
@@ -801,6 +804,12 @@ export function foreignSurfaces(members?: ReadonlyMap<string, SurfaceSnapshot>):
   try {
     const config = loadProjectConfig();
     declared = config ? declaredMembers(config) : [];
+    // A path external (`../x` under `externals`) is read live like a sibling member: it is never pinned.
+    if (config) {
+      for (const e of declaredExternals(config)) {
+        if (e.sourcePath !== undefined) declared.push({ alias: e.alias, source: { path: e.sourcePath }, storage: 'path', ...(e.problem ? { problem: e.problem } : {}) });
+      }
+    }
   } catch {
     declared = [];
   }
@@ -1258,27 +1267,65 @@ function withMoved(detail: { detail?: string }, moved: string[]): { detail?: str
   return { detail: detail.detail ? `${said}; ${detail.detail}` : said };
 }
 
-/** Pin one resolved binding: the snapshot written when its content moved, and the lock entry. */
-function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: ExternalPin; changed: boolean } {
+/**
+ * Why a producer's design cannot be pinned from, or null when it is approved
+ * as it stands: no approval on record (a git producer's commit carries no
+ * lock.json, a hosted one holds no approval), or a spec added, changed or
+ * removed since. Read with the producer's root bound; a pin is taken from the
+ * approved state only.
+ */
+function unapprovedReason(binding: ExternalBinding): string | null {
+  const { external } = binding;
+  const diff = runWithProjectRoot(external.directory!, () => diffAgainstApproval(external.directory!));
+  if (diff === null) {
+    return external.sourceKind === 'git'
+      ? `producer \`${external.alias}\` at \`${external.commit ?? 'its commit'}\` has no approved design: lock it there first`
+      : `producer \`${external.alias}\` has no approved design: it was never approved`;
+  }
+  const moved = [...diff.added.map((p) => `${p} (added)`), ...diff.changed.map((p) => `${p} (changed)`), ...diff.removed.map((p) => `${p} (removed)`)];
+  if (moved.length === 0) return null;
+  return `producer \`${external.alias}\` has unapproved changes: ${moved.join(', ')}`;
+}
+
+/**
+ * isurface_orchestrator.pinProducer — pin one hosted or git producer from its
+ * approved state: bind its root, refuse when its design is not approved as it
+ * stands, project its surface, write the snapshot when anything it carries
+ * moved, and compute the lock entry. A used member the producer renamed or
+ * removed refuses the pin. Writes the snapshot only; the caller writes the lock.
+ */
+export function pinProducer(binding: ExternalBinding, previous?: ExternalLockEntry): ProducerPin {
   const { external } = binding;
   const unexported = binding.usage?.unexported ?? [];
-  // Step 11: bind the producer's root, when it can be read.
+  const unreachable = (reason: string): ProducerPin => ({ pin: { alias: external.alias, outcome: 'unreachable', project: external.project, usedNames: 0, unexported, detail: `${reason}; its previous pin stays` } });
+  // Step 1: bind the producer's root, when it can be read.
   const unreadable = producerUnreadable(external);
+  if (unreadable) return unreachable(readFailure(new Error(unreadable)));
+  // Steps 2-3: a pin is taken from the producer's approved state only.
+  let problem: string | null;
+  try {
+    problem = unapprovedReason(binding);
+  } catch (e) {
+    return unreachable(readFailure(e));
+  }
+  // Step 12: refused, the previous pin staying.
+  if (problem !== null) {
+    return { pin: { alias: external.alias, outcome: 'unresolved', project: external.project, usedNames: 0, unexported, detail: `${problem}; its previous pin stays` } };
+  }
+  // Steps 4-5: project it at the audience ceiling, stamped with that audience.
   let snapshot: SurfaceSnapshot;
   try {
-    if (unreadable) throw new Error(unreadable);
-    // Steps 12-13: project it at the audience ceiling, stamped with that audience.
     snapshot = projectProducer(external);
   } catch (e) {
-    return { pin: { alias: external.alias, outcome: 'unreachable', project: external.project, usedNames: 0, unexported, detail: `${readFailure(e)}; its previous pin stays` }, changed: false };
+    return unreachable(readFailure(e));
   }
   const digest = contentDigest(snapshot);
-  // Steps 14, 16-17: the snapshot is rewritten only when its content moved.
+  // Step 6: the snapshot pinned for the alias now.
   const pinned = externalsRepository.readSnapshot(external.alias);
-  // Step 15: a member the last pin recorded as used that the producer renamed or
+  // Step 7: a member the last pin recorded as used that the producer renamed or
   // removed is followed in the uses first — pinned over, the uses would point at
   // nothing the lock compares, and a second pin and lock would be owed.
-  const gone = goneSincePin(binding, snapshot, ownGet(lock.externals, external.alias));
+  const gone = goneSincePin(binding, snapshot, previous);
   if (gone.length > 0) {
     return {
       pin: {
@@ -1286,31 +1333,30 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
         unexported: [...unexported, ...usedDigests(binding.usage, snapshot, external.alias).uncarried],
         detail: `the producer no longer has ${gone.join(', ')}, which this project uses and the last pin records — follow it in the uses first (\`wairon validate\` names each use; a use edited to the producer's new name reads as not in the pin until the re-pin records it), then pin; its previous pin stays`,
       },
-      changed: false,
     };
   }
   // The removals since the replaced pin, carried forward while they stay absent.
   if (pinned) snapshot = withRetired(snapshot, pinned);
-  // Rewritten whenever anything the snapshot carries moved — not only its
-  // digest: the rules read facts no digest covers (a library's abi, an
+  // Steps 8-9: rewritten whenever anything the snapshot carries moved — not only
+  // its digest: the rules read facts no digest covers (a library's abi, an
   // entry's transport and role), and a re-pin is how they are refreshed.
   const snapshotChanged = !pinned || contentDigest(pinned) !== digest || pinnedContentKey(pinned) !== pinnedContentKey(snapshot);
   if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
   // What moved since the replaced pin that no digest reads — a used verb's
   // route above all: a re-pin never rewrites it without a word.
   const moved = pinned && snapshotChanged ? carriedFactChanges(pinned, snapshot) : [];
-  // Step 18: the lock entry — `used` maps each used member to its digest.
+  // Step 10: the lock entry — `used` maps each used member to its digest.
   const { used, missing, uncarried } = usedDigests(binding.usage, snapshot, external.alias);
   // A used name the producer does export — only narrower than this project
   // reads it — is said so, never as gone.
   const narrower = missing.length > 0 && external.audience !== 'project' ? narrowerExports(external, missing, snapshot) : [];
   const entry: ExternalLockEntry = {
     project: external.project, snapshot: `.wai/externals/${external.alias}.yaml`, digest, used,
-    ...(external.commit !== undefined ? { commit: external.commit } : {}),
+    ...(external.sourceKind === 'git' && external.commit !== undefined ? { commit: external.commit } : {}),
     ...(external.role === 'member' ? { role: 'member' } : {}),
   };
-  const entryChanged = canonicalize(ownGet(lock.externals, external.alias) ?? null) !== canonicalize(entry);
-  lock.externals[external.alias] = entry;
+  const entryChanged = canonicalize(previous ?? null) !== canonicalize(entry);
+  // Step 11.
   return {
     pin: {
       alias: external.alias,
@@ -1322,17 +1368,19 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
       unexported: [...unexported, ...uncarried],
       ...(withMoved(pinDetail(missing, Object.keys(used).length, external.alias, narrower, external.audience), moved)),
     },
-    changed: entryChanged,
+    entry,
   };
 }
 
 /**
- * surface_orchestrator.pinExternals — pin the bound project's declared
- * externals (the named aliases, else all) into .wai/externals/<alias>.yaml and
- * .wai/externals.lock.yaml. An alias the project does not declare is refused
- * before anything is written; an unresolved or unreachable producer is
- * reported and leaves its previous pin in place. With no aliases named, pins
- * for aliases no longer declared are removed.
+ * surface_orchestrator.pinExternals — pin the bound project's declared hosted
+ * and git externals (the named aliases, else all) into .wai/externals/<alias>.yaml
+ * and .wai/inputs.lock.yaml, each from its producer's approved state. A path
+ * producer is read live and never pinned (an earlier pin of it is removed). An
+ * alias the project does not declare is refused before anything is written; an
+ * unresolved, unapproved or unreachable producer is reported and leaves its
+ * previous pin in place. With no aliases named, pins for aliases no longer
+ * declared are removed. The lock's packs section is carried through unchanged.
  */
 export function pinExternals(aliases?: string[]): ExternalPin[] {
   // Steps 1-4 (stage 8): a part declares no externals — what it pins is its parent.
@@ -1350,27 +1398,68 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
   }
   if (unknown.length) throw new UnknownExternalAliasError(unknown, declared);
   const kept = named ? bindings.filter((b) => named.includes(b.external.alias)) : bindings;
-  // Step 8: the current lock (none yet reads as empty).
-  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  // Step 8: the current lock (none yet reads as empty); its packs ride through unchanged.
+  const lock: InputsLock = externalsRepository.readLock() ?? { externals: {}, packs: {} };
   const pins: ExternalPin[] = [];
   let lockChanged = false;
-  // Steps 9-21: each external to pin.
+  // Steps 9-18: each external to pin.
   for (const binding of kept) {
-    if (binding.external.sourceKind === 'unresolved') {
-      // Step 20: its previous pin stays.
-      pins.push({ alias: binding.external.alias, outcome: 'unresolved', project: binding.external.project, usedNames: 0, unexported: [], detail: binding.external.problem });
+    const { external } = binding;
+    if (external.sourceKind === 'unresolved') {
+      // Step 17: its previous pin stays.
+      pins.push({ alias: external.alias, outcome: 'unresolved', project: external.project, usedNames: 0, unexported: [], detail: external.problem });
       continue;
     }
-    const { pin, changed } = pinBinding(binding, lock);
+    if (external.sourceKind === 'family' || external.sourceKind === 'path') {
+      // Steps 11-13: read live, never pinned; an earlier pin of it goes.
+      const earlier = ownGet(lock.externals, external.alias) !== undefined;
+      if (earlier) {
+        delete lock.externals[external.alias];
+        lockChanged = true;
+      }
+      const removed = externalsRepository.removeSnapshot(external.alias);
+      pins.push({ alias: external.alias, outcome: 'unchanged', project: external.project, usedNames: 0, unexported: [], detail: earlier || removed ? 'read live, never pinned; the pin an earlier wairon recorded for it was removed' : 'read live, never pinned' });
+      continue;
+    }
+    // Steps 14-16: the hosted or git producer, from its approved state.
+    const previous = ownGet(lock.externals, external.alias);
+    const { pin, entry } = pinProducer(binding, previous);
     pins.push(pin);
-    lockChanged ||= changed;
+    if (entry !== undefined) {
+      lockChanged ||= canonicalize(previous ?? null) !== canonicalize(entry);
+      lock.externals[external.alias] = entry;
+    }
   }
-  // Step 22: with no aliases named, prune the aliases no longer declared.
+  // Step 19: with no aliases named, prune the aliases no longer declared.
   if (!named) lockChanged = prune(lock, declared) || lockChanged;
-  // Steps 23-24: the lock, written only when an entry was added, changed or pruned.
+  // Steps 20-21: the lock, written only when an entry was added, changed or pruned.
   if (lockChanged) externalsRepository.saveLock(lock);
-  // Step 25: one outcome per external handled, in declaration order.
+  // Step 22: one outcome per external handled, in declaration order.
   return pins;
+}
+
+/**
+ * isurface_orchestrator.lockedPacks — the `packs` section of the bound
+ * project's inputs lock, by pack name; empty when no lock was written.
+ */
+export function lockedPacks(): Record<string, LockedPack> {
+  // Steps 1-2.
+  return externalsRepository.readLock()?.packs ?? {};
+}
+
+/**
+ * isurface_orchestrator.recordPacks — replace the `packs` section of the
+ * bound project's inputs lock with the packs as they resolved now, keeping its
+ * externals and parent as they are. Writes nothing when the section already
+ * says exactly this. Never moves the approval.
+ */
+export function recordPacks(packs: Record<string, LockedPack>): void {
+  // Step 1: the lock (none yet reads as empty).
+  const lock: InputsLock = externalsRepository.readLock() ?? { externals: {}, packs: {} };
+  // Steps 2-3: a sync that resolved nothing new never churns the file.
+  if (canonicalize(lock.packs ?? {}) === canonicalize(packs)) return;
+  // Steps 4-6: the section replaced, the lock written.
+  externalsRepository.saveLock({ ...lock, packs });
 }
 
 /**
@@ -1378,7 +1467,7 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
  * project no longer declares, with its snapshot; answers whether the lock
  * changed. The prune half of a pin with no aliases named.
  */
-export function prune(lock: ExternalsLock, declared: string[]): boolean {
+export function prune(lock: InputsLock, declared: string[]): boolean {
   // Step 1: the entries no longer declared.
   const dropped = Object.keys(lock.externals).filter((alias) => !declared.includes(alias));
   for (const alias of dropped) delete lock.externals[alias];
@@ -1441,7 +1530,7 @@ export function pinParent(aliases?: string[]): ExternalPin[] {
     return [{ alias: project, outcome: 'unreachable', project, usedNames: 0, unexported: [], detail: e instanceof Error ? e.message : String(e) }];
   }
   // Step 4: the part's lock (none yet reads as empty).
-  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  const lock: InputsLock = externalsRepository.readLock() ?? { externals: {}, packs: {} };
   const snapshot = `.wai/externals/${excerpt.project}.yaml`;
   const unchanged = lock.parent?.digest === excerpt.digest && lock.parent.project === excerpt.project
     && externalsRepository.readExcerpt(excerpt.project) !== null;
@@ -1656,7 +1745,7 @@ function wholeContractMembers(pinned: SurfaceSnapshot | null, publicName: string
 }
 
 /** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
-function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null): ExternalUseStatus[] {
+function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null, readLive = false): ExternalUseStatus[] {
   const uses: ExternalUseStatus[] = [];
   const locked = entry?.used ?? {};
   const liveHas = (name: string): boolean => live.interfaces.some((e) => e.id === name) || (live.exportedTypes ?? []).some((t) => t.id === name);
@@ -1706,6 +1795,8 @@ function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | 
   const unlocked = (publicName: string, member?: string): ExternalUseStatus => {
     const present = member === undefined ? liveHas(publicName) : memberDigest(live, publicName, member) !== null;
     if (!present) return goneUse(live, publicName, member, undefined);
+    // A producer read live (a sibling, a path external) owes no pin: a use it still holds is as it is.
+    if (readLive) return { publicName, ...(member !== undefined ? { member } : {}), state: 'unchanged' };
     return { publicName, ...(member !== undefined ? { member } : {}), state: 'unlocked', detail: entry === undefined ? 'used, and present in the live producer, but never pinned — pin it (`wairon externals pin`) to record what it is judged against' : 'used now, but not in the lock — re-pin' };
   };
   for (const use of usage?.used ?? []) {
@@ -1753,7 +1844,7 @@ function unavailableUses(entry: ExternalLockEntry | undefined, reason: string): 
 }
 
 /** The status of one declared external against its live producer. */
-function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): ExternalStatus {
+function externalStatus(binding: ExternalBinding, lock: InputsLock | null): ExternalStatus {
   const { external } = binding;
   const entry = ownGet(lock?.externals, external.alias);
   // Step 4: its pinned snapshot, if any — and the lock entry's digest and
@@ -1791,7 +1882,7 @@ function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): E
   // Step 8: every used member compared at signature level, for every producer
   // alike — family, path, git, hosted, a referenced project (stage 8).
   const snapshot = entry !== undefined ? externalsRepository.readSnapshot(external.alias) : null;
-  const uses = compareUses(entry, binding.usage, live, snapshot);
+  const uses = compareUses(entry, binding.usage, live, snapshot, external.sourceKind === 'family' || external.sourceKind === 'path');
   // A pinned snapshot that no longer carries what the producer says (an abi,
   // a transport, a role) is stale even when its digest is not: never ok.
   const staleFacts = snapshot ? carriedFactChanges(snapshot, live) : [];
@@ -2004,11 +2095,11 @@ export function diff(against?: string): SurfaceDiff {
     label = `the saved surface ${path.resolve(against)}`;
   } else {
     const revision = approvedRevision(against);
-    // Each live member as the baseline's own lock recorded its approval — a
+    // Each live member as its own last approval stood at the baseline — a
     // `../` sibling is no part of the revision's tree, and read live it would
     // compare a member's change since with nothing, or an unchanged member
     // with its types unexpanded (round 10: every verb naming one "changed").
-    const members = membersAsRecordedIn(revision.directory);
+    const members = membersAsRecordedIn(revision.directory, revision.committedAt);
     baseline = runWithProjectRoot(revision.directory, () => withForeignTypes(projectOwnSurface('project', true), foreignSurfaces(members)));
     carriedEmpty = new Set(runWithProjectRoot(revision.directory, () => entriesPublishingNothing()));
     label = revision.label;
@@ -2026,14 +2117,14 @@ export function diff(against?: string): SurfaceDiff {
  * Step 6 of diff: each live member of the bound project, by alias, as the
  * baseline knew it: a member stored inside the bound project's tree as that
  * tree holds it at the revision (`recordedIn`); a member stored outside it (a
- * `../` sibling, which the revision's tree does not hold) as the approval
- * that tree's lock records for it — its own last committed approval when the
- * lock records none — or live when no revision of it can be read.
+ * `../` sibling, which the revision's tree does not hold) as its own last
+ * committed approval stood when the revision was committed (`asOf`), or live
+ * when no revision of it can be read.
  */
-function membersAsRecordedIn(recordedIn: string): Map<string, SurfaceSnapshot> {
+function membersAsRecordedIn(recordedIn: string, asOf: Date): Map<string, SurfaceSnapshot> {
   const out = new Map<string, SurfaceSnapshot>();
   const bound = path.resolve(getProjectRoot());
-  for (const member of memberRevisions(recordedIn)) {
+  for (const member of memberRevisions(asOf)) {
     const inside = path.relative(bound, member.root);
     const contained = inside !== '' && !inside.startsWith('..') && !path.isAbsolute(inside);
     const surface = contained

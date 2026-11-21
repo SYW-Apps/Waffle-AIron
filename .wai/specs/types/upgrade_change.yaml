@@ -18,9 +18,9 @@ fields:
     type: bool
     description: >-
       Whether it changes the approved design (a spec's content), so the project owes a re-lock;
-      false for stamps, file names and lock re-expression.
+      false for stamps, file names and lock-file format rewrites.
     optional: false
 methods: []
 sourcePath: src/upgrade/types.ts
 createdAt: '2026-10-18T13:04:06.739Z'
-updatedAt: '2026-10-18T13:04:07.624Z'
+updatedAt: '2026-11-20T01:30:44.580Z'

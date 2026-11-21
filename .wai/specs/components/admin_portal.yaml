@@ -17,6 +17,7 @@ dependsOn:
   - pack_orchestrator
   - project_lifecycle_orchestrator
   - policy_repository
+  - hosted_producers
 transport: HTTP
 invokedBy:
   kind: entry
@@ -26,4 +27,4 @@ invokedBy:
     landscape_portal; "/operations" to operations_portal
 status: complete
 createdAt: '2026-07-04T12:33:47.174Z'
-updatedAt: '2026-10-06T18:54:53.851Z'
+updatedAt: '2026-11-20T01:02:37.078Z'

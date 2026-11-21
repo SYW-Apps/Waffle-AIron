@@ -232,17 +232,14 @@ methods:
           Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED — or, when
           its entry says approvable is false (nothing below its L0 to approve), as
           MEMBER_NOTHING_APPROVABLE (notice) saying there is nothing to approve there yet, never
-          prescribing a lock that refuses — and each drifted one as MEMBER_DRIFTED, saying so when
-          the drift is only the stage-5 identity upgrade (re-lock once), saying for a release the
-          member's approval was re-validated under that the new release finds N issue(s) in its
-          approved design (naming them), naming the inputs that moved when its entry carries them,
-          and quoting what its approval owes when it carries an `owed` sentence (a moved id, an
-          external to pin) instead of calling it changed; a member whose approval carried over by
-          re-validation is approved and gets none. A referenced project member that could not be
-          opened (offline, its checkout absent, out of reach) is EXTERNAL_CHECK_UNAVAILABLE once,
-          naming why — its gate and its composition did not run, never a pass. Parts get none of
-          these: a part has no lock of its own, its approval is the declaring project's. The root's
-          own lock is not a family finding
+          prescribing a lock that refuses — and each drifted one as MEMBER_DRIFTED, naming the parts
+          of its own approval that moved (partsMoved) when its entry carries them, and quoting its
+          `owed` sentence (a moved id) when it carries one instead of calling it changed. A member's
+          input debts are the member's own build, not a family finding. A referenced project member
+          that could not be opened (offline, its checkout absent, out of reach) is
+          EXTERNAL_CHECK_UNAVAILABLE once, naming why — its gate and its composition did not run,
+          never a pass. Parts get none of these: a part has no lock of its own, its approval is the
+          declaring project's. The root's own lock is not a family finding
         type: local
       - stepNumber: 6
         description: >-
@@ -524,22 +521,27 @@ methods:
           Read the bound root's project graph: its project members at every level — contained or in
           a `../` sibling checkout — with their directories and parents, and its referenced project
           members (a git or hosted source) with the root each is opened at (the fetch cache at the
-          pinned commit, or the hosted record within reach)
+          pinned commit, or the hosted record within reach). A path external (`../x` under
+          `externals`) is not a member: it is a live node of the scan judged for validity only, so
+          it is never selected below, never answered as a member approval and never a member debt
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
       - stepNumber: 2
         description: >-
           Select the projects to answer for: the graph's root, then each member within `depth`
-          levels in walk order. A declared member with no project on disk is answered `never`, with
-          no subject, without binding anything
+          levels in walk order, and one level further below any selected project that sets
+          composition.requireApprovedMembers, so its member debts are judged from real entries. A
+          declared member with no project on disk is answered `never` without binding anything.
+          Order the selection deepest first, so each project's direct members are answered before it
         type: local
       - stepNumber: 3
-        description: For each selected project that loaded
+        label: each
+        description: For each selected project that loaded, deepest first
         type: loop
         loopKind: forEach
         over: the selected projects that loaded
-        endStep: 16
+        endStep: 12
       - stepNumber: 4
         description: >-
           Bind the project's own root for the next calls, restoring the caller's binding afterwards
@@ -547,85 +549,47 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
-          Compute the project's own gate identity — its own tree, doctrine, own inputs, composition
-          and ITS direct members' approval subjects (each member record's
-          lock_record.approvalSubject: a member whose release stamp was only refreshed reads as the
-          approval its human gave, never as a re-approval), never an ancestor's
+          Compute the project's own approval identity — its own design and policy, nothing it
+          consumes, never an ancestor's or a member's
         type: call
         targetComponent: spec_validator
-        targetMethod: computeGateStateId
+        targetMethod: computeApprovalId
       - stepNumber: 6
-        description: Read the project's own lock record
+        description: >-
+          Read the project's own lock record (format 4; an earlier format fails closed, naming
+          `wairon upgrade`)
         type: call
         targetComponent: validator_core_adapter
         targetMethod: readLockRecord
       - stepNumber: 7
         description: >-
           Decide its state: no record is never; a record whose stateId equals the identity just
-          computed is approved; otherwise drifted, marked upgraded when the record's algorithm
-          differs from the current one (the lock predates the stage-5 identity, which says nothing
-          about the design), and carrying inputsMoved when the record has gate parts that break down
-          its identity (lock_record.movedGateParts: the inputs that moved, named by every verdict).
-          Parts that do not break it down (lock_record.partsProblem) name nothing: the entry carries
-          `partsIgnored`, the clause every surface shows as a notice — and so does a record whose
-          identity still matches but that carries no gate parts at all, which every record from
-          5.1.1-dev.111 on carries. A release stamp that is missing, no wairon version or newer than
-          this release (lock_record.stampProblem) is carried as `stampProblem` whatever the identity
-          decided, unless the release verdict already names the stamp: the identity decides the
-          approval, the notice keeps the stamp from passing silently. Its subject is the record's
-          approval subject (lock_record.approvalSubject), absent when never
+          computed is approved; otherwise drifted, carrying partsMoved (lock_record.movedParts
+          against the identity's parts: design, rules, composition, network, selections) when the
+          record's parts break down its identity, and partsIgnored (lock_record.partsProblem, one
+          clause) when they do not
         type: local
       - stepNumber: 8
         description: >-
-          When the identity does not match, ask for the release verdict: carried — the state is
-          approved, with `release` set (re-validated under this release) and never upgraded; not
-          carried — drifted with `release` set, never upgraded, its findings the reason; none — the
-          state as decided above
-        type: call
-        targetComponent: family_validator
-        targetMethod: releaseVerdict
-      - stepNumber: 9
-        description: >-
           Read the project's own configuration, to judge its id against the one its lock record
-          approved: the gate identity does not cover the id, so a project renamed by the rename
+          approved: the approval identity does not cover the id, so a project renamed by the rename
           migration (PROJECT_ID_RENAMED) or with an id changed by hand (PROJECT_ID_CHANGED) would
           otherwise read approved while `lock-check` refuses it. The resolution is
-          project_config.identity(record.projectId) — the one the project-identity rule and
-          `lock-check` judge by
+          project_config.identity(record.projectId), the one the project-identity rule and
+          `lock-check` judge by. A moved id is carried as `owed` (`the project id moved since the
+          approval (<approved> → <now>)`) and makes the state drifted
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
+      - stepNumber: 9
+        description: >-
+          Judge what its build inputs owe, handing it the entries already answered for its direct
+          members (deepest first, so they are there). Carried as `inputs`; it never changes the
+          state
+        type: call
+        targetComponent: family_validator
+        targetMethod: inputs
       - stepNumber: 10
-        description: Read the declared externals this project never pinned
-        type: call
-        targetComponent: family_validator
-        targetMethod: unpinned
-      - stepNumber: 11
-        description: Read the uses of its pinned externals that their pins do not record
-        type: call
-        targetComponent: family_validator
-        targetMethod: unrecorded
-      - stepNumber: 12
-        description: >-
-          Load the extension packs the project's own configuration selects: a selected pack that
-          cannot load (a load error, or a selection that does not resolve) leaves the doctrine the
-          approval was judged under unreadable, and the gate identity — which digests only what
-          loaded — cannot see it
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadProjectExtensions
-      - stepNumber: 13
-        description: >-
-          Decide what the approval on record still owes, when it has a record: the id moved since it
-          (`the project id moved since the approval (<approved> → <now>)`), a declared external
-          never pinned, a use its pin does not record (`external "<alias>" is used beyond its pin:
-          <uses>`), or a selected extension pack that cannot load (`extension pack(s) selected in
-          .wai/project.yaml cannot load: <why>`) — each one a reason `wairon lock-check` refuses and
-          `wairon lock` refuses or must clear. Anything owed makes the state drifted, whatever the
-          identity said, and is carried as `owed`, one sentence; nothing owed leaves the state as
-          decided
-        type: local
-      - stepNumber: 14
         description: >-
           Ask whether the project's own tree holds anything approvable (a subsystem, a type
           anywhere, an L0 export entry or a direct member project), carried on its entry as
@@ -634,21 +598,19 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: holdsDesign
-      - stepNumber: 15
-        description: For a member, read its parent's lock record from the parent's directory
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: approvalRecord
-      - stepNumber: 16
+      - stepNumber: 11
         description: >-
-          Decide how the parent pinned it: the parent's `members` entry for this alias, else (format
-          1, in the v5 reading `wairon upgrade` binds) its `children` entry; matches when that
-          equals the member's subject, moved when it differs (including a member pinned before and
-          never approved now), unpinned when the parent has no record or names no pin for the alias.
-          The root's own entry carries no pin
+          Answer each part the project declares as its own entry: as part, the declaring project's
+          state, no inputs of its own
         type: local
-      - stepNumber: 17
-        description: Return the entries, root first
+      - stepNumber: 12
+        label: next
+        description: The project is answered
+        type: local
+      - stepNumber: 13
+        description: >-
+          Return the entries in walk order, root first, leaving out the projects selected only to
+          judge a requiring project's member debts when they lie beyond `depth`
         type: return
         outcome: ProjectApproval[]
     symbol: projectApprovals
@@ -998,9 +960,11 @@ methods:
         targetComponent: validator_surfaces_adapter
         targetMethod: listPinnedExternals
       - stepNumber: 3
-        description: Answer every declared alias the lock holds no entry for
+        description: >-
+          Answer every declared alias with a hosted or git source the inputs lock holds no entry
+          for; a path external is read live and is left out
         type: return
-        outcome: the aliases with no lock entry, parts left out
+        outcome: the hosted and git aliases with no lock entry, parts and path externals left out
   - name: unrecorded
     narrative:
       - stepNumber: 1
@@ -1048,144 +1012,6 @@ methods:
         description: Answer the sentence, prefixed with its code, or null
         type: return
         outcome: problem or null
-  - name: releaseVerdict
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Read what the record can prove: whether its gateParts break down its stateId
-          (lock_record.partsProblem against the current identity), the inputs those parts say moved
-          (lock_record.movedGateParts) when they do, and its release stamp against the running
-          release (lock_record.releaseStampAgainst: older, same, newer or invalid)
-        type: local
-      - stepNumber: 2
-        description: >-
-          Does the record carry gate parts that break down its identity (every record this release
-          writes does)?
-        type: branch
-        condition: record.gateParts is set and partsProblem is none
-        onFalseStep: 6
-      - stepNumber: 3
-        description: >-
-          Did only the release's part move — every part but `release` (the design, rule tuning,
-          packs, network, composition, consumed contracts, members' subjects) equal to the
-          identity's current one?
-        type: branch
-        condition: the only moved gate part is release
-        onFalseStep: 19
-      - stepNumber: 4
-        description: >-
-          Was the record stamped by an older wairon, or this one? A stamp newer than the running
-          release was written by a newer wairon, whose rules this one cannot judge an approval by; a
-          stamp that is no wairon version says nothing about which release took it
-        type: branch
-        condition: releaseStampAgainst is older or same
-        onTrueStep: 11
-        onFalseStep: 5
-      - stepNumber: 5
-        description: >-
-          Stale, never re-validated: {from, to, carried: false, reason} — `written by a newer wairon
-          (<stamp>) than this one (<running>)`, or a stamp that is no wairon version, so the change
-          cannot be told apart from an edited record; re-lock (or run the newer wairon)
-        type: return
-        outcome: stale with a reason
-      - stepNumber: 6
-        label: legacy
-        description: >-
-          A record that cannot prove its own inputs unchanged: it carries no gate parts (taken
-          before they existed, or stripped), or parts that do not break down its identity
-        type: local
-      - stepNumber: 7
-        description: Compare the own spec files with the approval's per-spec digests
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: diffAgainstApproval
-      - stepNumber: 8
-        description: >-
-          Did no own spec file move, and is every direct member's approval subject (record.members)
-          the one the identity reads now? Otherwise what moved is named by the caller (the specs,
-          the member), not guessed as the release
-        type: branch
-        condition: no own spec moved and every member pin is unchanged
-        onFalseStep: 19
-      - stepNumber: 9
-        description: >-
-          Choose the one sentence (ReleaseVerdict.reason): parts that do not break down the identity
-          are ignored, so whether only the release moved cannot be told; a stamp that is newer or no
-          version; a stamp at or after the first release that records gate parts on a record without
-          them — an earlier wairon wrote it and its stamp was edited, so the release moved and
-          whether the project's own inputs did cannot be told; else `approved under <stamp> before
-          wairon recorded its inputs separately — re-lock once to record them; later upgrades then
-          carry over`. Such a record cannot prove its rule tuning, packs, network or pins unchanged,
-          so it is never carried by re-validation
-        type: local
-      - stepNumber: 10
-        description: >-
-          Stale: {from: the stamp, to: this release, carried: false, reason}. `wairon lock` then
-          takes a real approval, which records the parts
-        type: return
-        outcome: stale with a reason
-      - stepNumber: 11
-        label: cached
-        description: >-
-          Was this record already judged against this identity — in this process, or by an earlier
-          command? Re-validation is a whole owner's gate run (a second code-model build included),
-          and every status, validate and lock-check of an upgraded project asks for the same entry
-          for as long as the approval carries the older stamp. The verdict is kept in memory and in
-          one small file per project root in wairon's user cache (WAIRON_CACHE_DIR, else the OS user
-          cache — never in the tree, so nothing to ignore or commit), keyed by the root, the
-          record's identity, stamp and gate parts, the running release and build, and the current
-          gate identity, which covers the design and every input the verdict reads: any of them
-          moving misses, and a missing or unreadable cache is a miss
-        type: branch
-        condition: a verdict is kept for this root, record identity and current identity
-        onFalseStep: 13
-      - stepNumber: 12
-        description: Answer the cached verdict
-        type: return
-        outcome: ReleaseVerdict
-      - stepNumber: 13
-        label: revalidate
-        description: 'Read the project''s own configuration: its rules and projectType judge it'
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadProjectConfig
-      - stepNumber: 14
-        description: >-
-          Re-validate the approved design under the current rules: the owner's gate at the project's
-          own configuration, each spec at its authored status. A re-validation already running at
-          this root (a rule asking for this entry) is never started again: it answers none
-        type: call
-        targetComponent: spec_validator
-        targetMethod: validateDesign
-      - stepNumber: 15
-        description: >-
-          Keep the design half (validation_result.designOnly) and of it the findings that fail
-          `validate --ci` (validation_result.ciBlocking)
-        type: local
-      - stepNumber: 16
-        description: Is the re-validation clean at the --ci standard?
-        type: branch
-        condition: no finding fails --ci
-        onFalseStep: 18
-      - stepNumber: 17
-        description: >-
-          Carried: {from: the record's validatorVersion, to: this release, carried: true} — approved
-          under the old release, re-validated under this one: still approved. Nothing is written
-          into the project; kept in memory and in the user cache
-        type: return
-        outcome: carried
-      - stepNumber: 18
-        label: stale
-        description: >-
-          Stale for exactly those findings: {from, to, carried: false, count, findings: the first
-          few as `CODE [spec] message`}; cached
-        type: return
-        outcome: stale by release
-      - stepNumber: 19
-        label: none
-        description: 'Not a change of the release: answer none, and the caller judges the staleness as before'
-        type: return
-        outcome: none
   - name: adviseNetwork
     sourcePath: src/core/family-validation.ts
     narrative:
@@ -1240,6 +1066,56 @@ methods:
         type: return
         outcome: ValidationIssue[] (advisory)
     symbol: adviseNetwork
+  - name: inputs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the declared hosted and git externals and referenced project members the inputs lock
+          holds no entry for
+        type: call
+        targetComponent: family_validator
+        targetMethod: unpinned
+      - stepNumber: 2
+        description: Read the uses of the pinned producers their pins do not record
+        type: call
+        targetComponent: family_validator
+        targetMethod: unrecorded
+      - stepNumber: 3
+        description: Load the extension packs the project's own configuration selects
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 4
+        description: Digest each loaded pack's doctrine
+        type: call
+        targetComponent: approval_identity
+        targetMethod: packContents
+      - stepNumber: 5
+        description: Read the pack entries the inputs lock records
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: lockedPacks
+      - stepNumber: 6
+        description: Read the project's own configuration for composition.requireApprovedMembers
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: >-
+          Build the debts, in this order: each unpinned alias (`external "<alias>" is not pinned —
+          run \`wairon externals pin <alias>\``); each alias with unrecorded uses, the uses as
+          detail (`external "<alias>" is used beyond its pin: <uses> — re-pin it`); each selected
+          pack that did not load (`pack "<name>" cannot load: <why>`), that has no lock entry, or
+          whose digest differs from the recorded one (`pack "<name>" changed since it was recorded —
+          run \`wairon pack sync\``); and, when requireApprovedMembers is set, each direct member in
+          `members` whose state is not approved (`member "<alias>" is <drifted|never approved> —
+          lock it at its own root`)
+        type: local
+      - stepNumber: 8
+        description: Answer the debts; empty when the inputs hold
+        type: return
+        outcome: list<InputDebt>
+    symbol: projectInputs
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-30T18:16:05.243Z'
+updatedAt: '2026-11-20T19:41:12.825Z'

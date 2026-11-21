@@ -5,7 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { FixtureTree } from '../rules-matrix/harness';
 import { DIST_CLI, callTool } from './helpers';
-import { createTrialSandbox, readFile, transcript, type TrialSandbox } from './trials-helpers';
+import { createTrialSandbox, readFile, serveGitProducer, transcript, type TrialSandbox } from './trials-helpers';
 import { projectYaml } from '../helpers/conformance-r6-trees';
 
 // ---------------------------------------------------------------------------
@@ -139,24 +139,29 @@ describe('1. sdd_get_spec reads a member\'s L0 by its alias (lib-and-app top-1)'
 });
 
 describe('2. `wairon lock` with a drifted member keeps its word (lib-and-app R11-2)', () => {
-  it('"lockedAt … kept" is true: the member\'s new state is refreshed beside the unchanged approval', async () => {
+  it('"lockedAt … kept" is true: the approval is untouched, and the drifted member is named, never recorded', async () => {
     const { sdk, app } = family('dirty-member');
     for (const dir of [sdk, app]) {
       const lock = await sb.run(['lock', '-y'], dir);
       expect(lock.code, transcript(lock)).toBe(0);
     }
-    const before = JSON.parse(readFile(app, '.wai/lock.json')) as { lockedAt: string; stateId: unknown; members: Record<string, { state: string }> };
+    const before = JSON.parse(readFile(app, '.wai/lock.json')) as { lockedAt: string; stateId: unknown; members?: unknown };
+    // wairon 7: the record never holds a member.
+    expect(before.members).toBeUndefined();
     const rename = await sb.run(['type', 'rename-field', 'coordinate', 'lat', 'latitude'], sdk);
     expect(rename.code, transcript(rename)).toBe(0);
     const relock = await sb.run(['lock', '-y'], app);
     expect(relock.code, transcript(relock)).toBe(0);
     const after = JSON.parse(readFile(app, '.wai/lock.json')) as typeof before;
     // Round 11: the run said "its lockedAt … kept" and wrote a new lockedAt.
-    expect(relock.all).toContain('its lockedAt and any restamp trace are kept');
-    expect(relock.all).toContain('the member state(s) recorded beside their unchanged pins (geo: approved → drifted)');
+    // wairon 7: its lockedAt is kept because nothing of this project's own design moved; the member is named, never recorded.
+    expect(relock.all).toContain('its lockedAt is kept');
+    expect(relock.all).toContain('.wai/lock.json is left untouched by this run');
+    expect(relock.all).toContain('member geo: drifted');
+    expect(relock.all).toContain('this approval never records a member');
     expect(after.lockedAt).toBe(before.lockedAt);
     expect(after.stateId).toEqual(before.stateId);
-    expect(after.members.geo.state).toBe('drifted');
+    expect(after.members).toBeUndefined();
     // The gate's word is unchanged: the member is not covered by its own approval.
     const check = await sb.run(['lock-check', '--strict'], app);
     expect(check.code, transcript(check)).toBe(1);
@@ -204,27 +209,32 @@ function reminders(): FixtureTree {
   };
 }
 
-async function pinnedPair(name: string): Promise<{ producer: string; consumer: string }> {
+/** The producer served over git (wairon 7 pins only hosted and git sources: a `../` sibling is read live) and a consumer that pinned it. */
+async function pinnedPair(name: string): Promise<{ producer: string; consumer: string; release: () => Promise<void> }> {
   const folder = sb.project(name);
   const producer = writeProject(path.join(folder, 'producer'), habitApi(), projectYaml('habitly-api'));
-  const consumer = writeProject(path.join(folder, 'consumer'), reminders(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { path: '../producer' }, use: ['habit_portal'] } } }));
+  const served = await serveGitProducer(sb.run, folder, producer);
+  const consumer = writeProject(path.join(folder, 'consumer'), reminders(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { git: served.source }, use: ['habit_portal'] } } }));
   const pin = await sb.run(['externals', 'pin'], consumer);
   expect(pin.code, transcript(pin)).toBe(0);
-  return { producer, consumer };
+  return { producer, consumer, release: served.publish };
 }
 
 describe('4. a moved wire route is a break for the consumer that calls it (solo-app top-3)', () => {
-  it('`externals status`: incompatible, exit 1, the route named; validate: EXTERNAL_LIVE_INCOMPATIBLE', async () => {
-    const { producer, consumer } = await pinnedPair('route-moved');
+  it('`externals status`: incompatible, exit 1, the route named; validate: EXTERNAL_INCOMPATIBLE', async () => {
+    const { producer, consumer, release } = await pinnedPair('route-moved');
     const rel = `.wai/specs/interfaces/${fs.readdirSync(path.join(producer, '.wai/specs/interfaces')).find((f) => f.startsWith('ihabit_portal'))!}`;
     fs.writeFileSync(path.join(producer, rel), readFile(producer, rel).split('path: /habits/{habitId}/check-ins').join('path: /habits/{habitId}/done'));
+    await release();
     const status = await sb.run(['externals', 'status'], consumer);
     // Round 11: "habit_portal.checkIn: unchanged — endpoint moved: … drifted: re-pin when convenient", exit 0.
     expect(status.code, transcript(status)).toBe(1);
     expect(status.all).toContain('incompatible');
     expect(status.all).toContain('habit_portal.checkIn: changed — endpoint moved: PUT /habits/{habitId}/check-ins → PUT /habits/{habitId}/done');
     const validate = await sb.run(['validate'], consumer);
-    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\][^\n]*"habit_portal\.checkIn" changed since it was pinned: endpoint moved/);
+    // wairon 7: a pinned dependency invalid for the consumer's uses fails the consumer's build.
+    expect(validate.code, transcript(validate)).toBe(1);
+    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_INCOMPATIBLE\][^\n]*"habit_portal\.checkIn"[^\n]*changed since it was pinned: endpoint moved/);
   });
 });
 
@@ -241,23 +251,24 @@ describe('5. `surface export --out <folder>` says what --out takes (solo-app EDG
   });
 });
 
-describe('6. an approval an older release took, carried over with no rule moved, is said once (lib-and-app R11-1)', () => {
-  it('lock-check, status and validate each name the release that took it, as a notice', async () => {
+describe('6. the wairon release never moves an approval (lib-and-app R11-1, wairon 7)', () => {
+  it('a record an earlier release wrote still holds: lock-check, status and validate say nothing about a release', async () => {
     const { sdk } = family('carry-over');
     const lock = await sb.run(['lock', '-y'], sdk);
     expect(lock.code, transcript(lock)).toBe(0);
     const record = JSON.parse(readFile(sdk, '.wai/lock.json')) as Record<string, unknown>;
-    // The record as an earlier release wrote it: only its stamp differs (the release gate part is this release's).
-    fs.writeFileSync(path.join(sdk, '.wai', 'lock.json'), `${JSON.stringify({ ...record, validatorVersion: '5.1.1-dev.1' }, null, 2)}\n`);
-    const said = 'approved under wairon 5.1.1-dev.1; this release';
+    // The record as an earlier release stamped it: only its stamp differs. A release is not an input of the approval.
+    fs.writeFileSync(path.join(sdk, '.wai', 'lock.json'), `${JSON.stringify({ ...record, validatorVersion: '7.0.0-dev.0-earlier' }, null, 2)}
+`);
     const check = await sb.run(['lock-check', '--strict'], sdk);
-    // Round 11: "✔ … approved <date> by <who>." and nothing about the release.
     expect(check.code, transcript(check)).toBe(0);
-    expect(check.all).toContain(said);
+    expect(check.all).toContain('is the approved design');
+    expect(check.all).not.toMatch(/approved under wairon|this release|restamp|gate moved/i);
     const status = await sb.run(['status'], sdk);
-    expect(status.all, transcript(status)).toContain(said);
+    expect(status.all, transcript(status)).not.toMatch(/approved under wairon|restamp|gate moved/i);
     const validate = await sb.run(['validate'], sdk);
     expect(validate.code, transcript(validate)).toBe(0);
-    expect(validate.all).toContain(`Approval notice: ${said}`);
+    expect(validate.all).not.toMatch(/Approval notice|approved under wairon|restamp/i);
+    expect(fs.readFileSync(path.join(sdk, '.wai', 'lock.json'), 'utf8')).toContain('7.0.0-dev.0-earlier');
   });
 });

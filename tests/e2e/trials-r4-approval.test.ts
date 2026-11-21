@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import * as yaml from 'js-yaml';
 import {
   countCode,
@@ -48,7 +49,7 @@ function configYaml(id: string, extra: Record<string, unknown> = {}): string {
 
 /** (Re)write a project's .wai from a fixture tree, keeping its lock record and pins. */
 function writeProject(dir: string, id: string, tree: FixtureTree, extra: Record<string, unknown> = {}): void {
-  const keep = ['lock.json', 'externals.lock.yaml', 'externals'];
+  const keep = ['lock.json', 'inputs.lock.yaml', 'externals'];
   const stash = path.join(dir, '.wai-keep');
   const saved: string[] = [];
   for (const name of keep) {
@@ -197,6 +198,21 @@ function pair(name: string, geo: GeoOptions = {}, studio: StudioOptions = {}): {
   return { geo: geoDir, studio: studioDir, folder };
 }
 
+/**
+ * Serve a producer as a git external: approve it (a git producer is read at its APPROVED state, so it
+ * must be locked and committed), clone it bare and return the `file://` source with the commit pinned.
+ * wairon 7 pins only hosted and git sources; a `../` sibling is read live and never pinned.
+ */
+async function gitSource(folder: string, dir: string): Promise<string> {
+  const lock = await sb.run(['lock', '--yes'], dir);
+  expect(lock.code, transcript(lock)).toBe(0);
+  gitInit(dir);
+  const bare = path.join(folder, `${path.basename(dir)}.git`);
+  execFileSync('git', ['clone', '-q', '--bare', dir, bare], { stdio: 'ignore' });
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir }).toString().trim();
+  return `file:///${bare.split(path.sep).join('/')}#${commit}`;
+}
+
 /** The consumer's project.yaml `externals` block, to carry across a rewrite. */
 function declaredExternals(dir: string): Record<string, unknown> | undefined {
   return (yaml.load(readFile(dir, '.wai/project.yaml')) as { externals?: Record<string, unknown> }).externals;
@@ -230,7 +246,7 @@ describe('1 — status, lock-check and lock agree after `wairon project rename` 
     expect(s.all).toMatch(/drifted/);
     expect(s.all).not.toMatch(/Approval: this project is approved/);
     expect(s.all).toContain('the project was renamed since the approval (route-planner → route-planner-v2)');
-    expect(s.all).toContain('`wairon lock-check` fails until it is cleared');
+    expect(s.all).toContain('`wairon lock` re-approves the unchanged design');
     const lc = await sb.run(['lock-check', '--strict'], dir);
     expect(lc.code, transcript(lc)).toBe(1);
     expect(lc.all).toContain('PROJECT_ID_RENAMED');
@@ -302,45 +318,44 @@ describe('3 — `lock` refuses uses its pin does not record, and lock-check agre
   beforeAll(async () => {
     // Pinned while no spec referenced the producer: the pin records 0 uses.
     p = pair('unrecorded', {}, { usesGeo: false });
-    const add = await sb.run(['externals', 'add', 'geo', '../geo'], p.studio);
+    const source = await gitSource(p.folder, p.geo);
+    const add = await sb.run(['externals', 'add', 'geo', source], p.studio);
     expect(add.code, transcript(add)).toBe(0);
     expect(add.all).toContain('pinned 0 used name(s)');
     writeProject(p.studio, 'studio', tileStudio(), { externals: declaredExternals(p.studio) });
   });
 
-  it('`lock` refuses the design whose uses the pin does not record, names them, and writes nothing', async () => {
-    const lock = await sb.run(['lock', '--yes'], p.studio);
-    expect(lock.code, transcript(lock)).not.toBe(0);
-    expect(lock.all).toContain('external(s) used beyond their pin — "geo": tile-library.tile_for');
-    expect(lock.all).toContain('Re-pin first (`wairon externals pin geo`), then lock. Nothing was written.');
-    expect(fs.existsSync(path.join(p.studio, '.wai', 'lock.json'))).toBe(false);
-  });
-
-  it('after the re-pin it locks, and lock-check is green', async () => {
-    const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
-    expect(pin.code, transcript(pin)).toBe(0);
+  it('`lock` refreshes exactly the owed pin from the producer approved state, then approves — it never refuses over an owed input', async () => {
     const lock = await sb.run(['lock', '--yes'], p.studio);
     expect(lock.code, transcript(lock)).toBe(0);
+    expect(lock.all).toContain('Pinned the external "geo"');
+    expect(fs.existsSync(path.join(p.studio, '.wai', 'lock.json'))).toBe(true);
+    expect(readFile(p.studio, '.wai/inputs.lock.yaml')).toContain('tile_for');
     expect((await sb.run(['lock-check', '--strict'], p.studio)).code).toBe(0);
   });
 
-  it('a declared external never pinned: lock-check fails with the lock\'s own reason, and status says the approval is owed', async () => {
-    const add = await sb.run(['externals', 'add', 'ghost', '../does-not-exist'], p.studio);
-    expect(add.code, transcript(add)).toBe(2);
-    const lc = await sb.run(['lock-check'], p.studio);
-    // Round 4: "✔ The design in this tree is the approved design" while `lock` refused.
-    expect(lc.code, transcript(lc)).toBe(1);
-    expect(lc.all).toContain('declared external(s) never pinned — "ghost"');
-    expect(lc.all).toContain('pin first (`wairon externals pin`), then run `wairon lock`');
-    const s = await sb.run(['status'], p.studio);
-    expect(s.all).toMatch(/drifted/);
-    expect(s.all).toContain('declared external(s) never pinned — "ghost"');
-    const lock = await sb.run(['lock', '--yes'], p.studio);
-    expect(lock.code, transcript(lock)).not.toBe(0);
-    expect(lock.all).toContain('declared external(s) never pinned — "ghost"');
+  it('a pin that is up to date is never advanced by a lock', async () => {
+    const before = readFile(p.studio, '.wai/inputs.lock.yaml');
+    const again = await sb.run(['lock', '--yes'], p.studio);
+    expect(again.code, transcript(again)).toBe(0);
+    expect(readFile(p.studio, '.wai/inputs.lock.yaml')).toBe(before);
   });
 
-  it('removing it restores agreement: green everywhere', async () => {
+  it('a path external is read live, never pinned: no pin is owed for it, lock-check stays green', async () => {
+    const q = pair('live-sibling');
+    const add = await sb.run(['externals', 'add', 'geo', '../geo'], q.studio);
+    expect(add.code, transcript(add)).toBe(0);
+    expect(add.all).toContain('read live, never pinned');
+    writeProject(q.studio, 'studio', tileStudio(), { externals: declaredExternals(q.studio) });
+    const lock = await sb.run(['lock', '--yes'], q.studio);
+    expect(lock.code, transcript(lock)).toBe(0);
+    expect(fs.existsSync(path.join(q.studio, '.wai', 'inputs.lock.yaml'))).toBe(false);
+    expect((await sb.run(['lock-check', '--strict'], q.studio)).code).toBe(0);
+  });
+
+  it('a declared external whose producer is missing is reported, never silently approved', async () => {
+    const add = await sb.run(['externals', 'add', 'ghost', '../does-not-exist'], p.studio);
+    expect(add.code, transcript(add)).toBe(2);
     const rm = await sb.run(['externals', 'remove', 'ghost'], p.studio);
     expect(rm.code, transcript(rm)).toBe(0);
     expect((await sb.run(['lock-check', '--strict'], p.studio)).code).toBe(0);
@@ -487,7 +502,7 @@ describe('8 — implements, undeclared aliases, remove dry run, the externals hi
     expect((await sb.run(['externals', 'add', 'geo', '../geo'], p.studio)).code).toBe(0);
     const dry = await sb.run(['externals', 'remove', 'geo', '--dry-run'], p.studio);
     expect(dry.code, transcript(dry)).toBe(0);
-    expect(dry.stdout).toContain('would remove geo — its declaration and its pin');
+    expect(dry.stdout).toContain('would remove geo — its declaration');
     const rm = await sb.run(['externals', 'remove', 'geo'], p.studio);
     expect(rm.code, transcript(rm)).toBe(0);
     const v = await sb.run(['validate'], p.studio);
@@ -502,10 +517,13 @@ describe('8 — implements, undeclared aliases, remove dry run, the externals hi
     expect(v.code).toBe(0);
     expect(v.all).toContain('outside the project\'s root and was not composed: the advisory live comparison reads it, the pin gates');
     expect(v.all).not.toContain('--family');
-    // A used verb that changed in the sibling since the pin is advisory: the plain gate stays green.
-    writeProject(p.geo, 'geo', geoKit({ returns: 'string' }));
+    // A used verb that was renamed in the live sibling (read live, never pinned) is named by validate, from the producer.
+    const renamed = geoKit();
+    renamed.interfaces[0].methods![0].name = 'tile_at';
+    writeProject(p.geo, 'geo', renamed);
     const drifted = await sb.run(['validate', '--ci'], p.studio);
-    expect(drifted.code).toBe(0);
+    expect(drifted.code, transcript(drifted)).toBe(1); // a live producer that no longer serves a used verb fails the consumer's build
     expect(drifted.all).toContain('EXTERNAL_LIVE_INCOMPATIBLE');
+    expect(drifted.all).toContain('INVALID_TARGET_METHOD_REFERENCE');
   });
 });

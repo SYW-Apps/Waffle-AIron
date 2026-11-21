@@ -85,9 +85,9 @@ function tileStudio(bindingSource: string | null): FixtureTree {
     files: {
       '.wai/project.yaml': yaml.dump({
         schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'tile-studio', targets: [], rules: BASE_FIXTURE_RULES,
-        extensions: { packs: [], useGlobalPacks: false }, externals: { geokit: {} }, createdAt: TS, updatedAt: TS,
+        extensions: { packs: [], useGlobalPacks: false }, externals: { geokit: { source: 'https://example.invalid/geokit.git' } }, createdAt: TS, updatedAt: TS,
       }, { noRefs: true, lineWidth: 200 }),
-      '.wai/externals.lock.yaml': yaml.dump({ externals: { geokit: { project: 'geokit', snapshot: '.wai/externals/geokit.yaml', digest: 'sha256:pinned', used: {} } } }),
+      '.wai/inputs.lock.yaml': yaml.dump({ externals: { geokit: { project: 'geokit', snapshot: '.wai/externals/geokit.yaml', digest: 'sha256:pinned', used: {} } } }),
       '.wai/externals/geokit.yaml': GEOKIT_PIN,
       ...(bindingSource !== null ? { 'src/editor/geokit-binding.ts': bindingSource } : {}),
     },
@@ -161,7 +161,7 @@ function memberBinding(zoom: string): string {
 function tileStudioWithMember(bindingSource: string): FixtureTree {
   const tree = tileStudio(bindingSource);
   const files = { ...tree.files! };
-  delete files['.wai/externals.lock.yaml'];
+  delete files['.wai/inputs.lock.yaml'];
   delete files['.wai/externals/geokit.yaml'];
   files['.wai/project.yaml'] = yaml.dump({
     schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, id: 'tile-studio', name: 'tile-studio', targets: [], rules: BASE_FIXTURE_RULES,

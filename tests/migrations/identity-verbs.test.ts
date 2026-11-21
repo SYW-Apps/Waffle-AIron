@@ -7,7 +7,7 @@ import * as yaml from 'js-yaml';
 import { runWithProjectBinding, setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { validateAsComplete, validateProject, computeGateStateId } from '../../src/core/validation.js';
+import { validateAsComplete, validateProject, computeApprovalId } from '../../src/core/validation.js';
 import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { runLock } from '../../src/commands/lock.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
@@ -33,7 +33,7 @@ import { at, dirHash, familyFindings, familyLines, migrate, newFindings, pinAt, 
 const configOf = (dir: string): Record<string, unknown> => readYamlFile(path.join(dir, '.wai', 'project.yaml')) as Record<string, unknown>;
 /** A project's pinned externals, alias → {project, digest}. */
 const pinsOf = (dir: string): Record<string, { project: string; digest: string }> => {
-  const file = path.join(dir, '.wai', 'externals.lock.yaml');
+  const file = path.join(dir, '.wai', 'inputs.lock.yaml');
   const lock = fs.existsSync(file) ? (readYamlFile(file) as { externals?: Record<string, { project: string; digest: string }> }) : {};
   return Object.fromEntries(Object.entries(lock.externals ?? {}).map(([a, e]) => [a, { project: e.project, digest: e.digest }]));
 };
@@ -46,7 +46,7 @@ async function lockAt(dir: string): Promise<string | undefined> {
   setProjectRoot(dir);
   const config = projectConfigRepositoryAt(dir).load();
   const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
-  return (await runLock({ yes: true }, gate, computeGateStateId()))?.projectId;
+  return (await runLock({ yes: true }, gate, computeApprovalId()))?.projectId;
 }
 
 /** Every text file under the family's .wai trees. */
@@ -81,17 +81,16 @@ describe('stage 6 — the identity verbs', () => {
     const f = family();
     expect(await lockAt(f.ledger)).toBe('ledger');
     const before = familyFindings(f.top);
-    const billingDigest = pinsOf(f.billing).ledger.digest;
     const report = migrate(f.top, { verb: 'rename', project: 'ledger', newId: 'books-ledger' });
     expect(report.applied).toBe(true);
     // Every project written is listed to re-lock, the renamed one first.
     expect(report.relock).toEqual([path.resolve(f.ledger), path.resolve(f.top), path.resolve(f.billing)]);
     // The id moved, the old one kept.
     expect(configOf(f.ledger)).toMatchObject({ id: 'books-ledger', previousIds: ['ledger'] });
-    // The aliases that were the id followed it, their references with them; the pin moved, digest kept.
+    // The aliases that were the id followed it, their references with them; a family external is read live, so no pin moves.
     expect(configOf(f.top).members).toEqual({ 'books-ledger': 'ledger', billing: 'billing' });
     expect(configOf(f.billing).externals).toEqual({ 'books-ledger': {} });
-    expect(pinsOf(f.billing)).toEqual({ 'books-ledger': { project: 'books-ledger', digest: billingDigest } });
+    expect(pinsOf(f.billing)).toEqual({});
     // No text anywhere in the family's .wai trees names the old id as a reference, an alias or a producer.
     for (const [rel, text] of waiTexts(f.top)) {
       if (rel.startsWith('ledger/.wai/project.yaml')) continue; // previousIds keeps it, deliberately
@@ -123,8 +122,9 @@ describe('stage 6 — the identity verbs', () => {
     expect(report.applied).toBe(true);
     expect(configOf(f.top).members).toEqual({ ledger: 'ledger', billing: 'billing' });
     expect(configOf(f.billing).externals).toEqual({ ledger: { project: 'acme.ledger' } });
-    expect(pinsOf(f.billing).ledger.project).toBe('acme.ledger');
-    expect(at(f.billing, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code)).toEqual([]);
+    expect(pinsOf(f.billing)).toEqual({});
+    // From its own root billing reads nothing above it and holds no pin: its references are unavailable (never a pass), but declared and exported.
+    expect(at(f.billing, () => validateProject()).issues.filter((i) => ['EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED'].includes(i.code)).map((i) => i.code)).toEqual([]);
   });
 
   it("rename from a member's own root names the `../` sibling parent declaring it, and writes nothing there (round 11)", () => {
@@ -135,7 +135,7 @@ describe('stage 6 — the identity verbs', () => {
       const planned = plan(pair.ledger, { verb: 'rename', newId: 'acme-ledger' });
       expect(planned.refusals).toEqual([]);
       // Round 11: the plan named the renamed project alone and never the parent.
-      expect(planned.notes).toContain(`Outside this family: billing (${path.join('..', 'billing')}) declares this project as its member "ledger" — nothing there is written. Once this project is re-locked as "acme-ledger", run \`wairon lock\` in ${path.join('..', 'billing')} to pin its new approval.`);
+      expect(planned.notes).toContain(`Outside this family: billing (${path.join('..', 'billing')}) declares this project as its member "ledger" — nothing there is written, and it records nothing about this project: it reads this project's own committed lock, so re-lock this project as "acme-ledger" at its own root.`);
       expect(planned.changes.every((c) => path.resolve(c.project) === path.resolve(pair.ledger))).toBe(true);
       // What a rename never looks for is said as such, with the command that lists it.
       expect(planned.notes).toContain('A project outside this family that declares "ledger" as an external is not looked for by a rename (only a parent composing it as a member is): each must rewrite its own external (its next gate reports the id change); `wairon externals consumers --search <dir>` lists them.');
@@ -213,16 +213,15 @@ describe('stage 6 — the identity verbs', () => {
     }
   });
 
-  it('rename-alias: the bound project alone — its alias rekeyed in place, its references respelled, its pin carried; no member or sibling changes', () => {
+  it('rename-alias: the bound project alone — its alias rekeyed in place, its references respelled; no member or sibling changes', () => {
     const f = family();
     const before = familyFindings(f.top);
     const untouched = Object.fromEntries(Object.entries(waiState(f.top)).filter(([k]) => !k.startsWith('billing/')));
-    const digest = pinsOf(f.billing).ledger.digest;
     const report = migrate(f.billing, { verb: 'rename-alias', alias: 'ledger', newAlias: 'books' });
     expect(report.applied).toBe(true);
     // The alias was the producer id: the external keeps naming ledger explicitly.
     expect(configOf(f.billing).externals).toEqual({ books: { project: 'ledger' } });
-    expect(pinsOf(f.billing)).toEqual({ books: { project: 'ledger', digest } });
+    expect(pinsOf(f.billing)).toEqual({});
     const component = fs.readFileSync(path.join(f.billing, '.wai', 'specs', 'invoicing', 'invoice-poster', '.index.yaml'), 'utf8');
     expect(component).toContain('books::ledger-portal');
     expect(component).not.toContain('ledger::ledger-portal');

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import type { FixtureTree } from '../rules-matrix/harness';
-import { createTrialSandbox, countCode, gitInit, readFile, transcript, writeFile, type TrialSandbox } from './trials-helpers';
+import { createTrialSandbox, countCode, gitInit, readFile, serveGitProducer, transcript, writeFile, type TrialSandbox } from './trials-helpers';
 import { projectYaml } from '../helpers/conformance-r6-trees';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 
@@ -48,9 +48,10 @@ function git(dir: string, ...args: string[]): void {
   });
 }
 
-/** An approval record committed with the tree as it stands: what the member's last approval is. */
-function commitApproval(dir: string, digest: string): void {
-  writeFile(dir, '.wai/lock.json', JSON.stringify({ format: 3, stateId: { algorithm: 'sha256+design-2', digest } }, null, 2));
+/** The member's real approval, committed with the tree as it stands: what its last approval is. */
+async function commitApproval(dir: string): Promise<void> {
+  const lock = await sb.run(['lock', '-y'], dir);
+  expect(lock.code, transcript(lock)).toBe(0);
   git(dir, 'add', '-A');
   git(dir, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'approved');
 }
@@ -135,13 +136,16 @@ function siblingFamily(name: string): { sdk: string; app: string } {
 
 describe('1. a used verb\'s route moving reaches the consumer (tinkerer top-1)', () => {
   it('status, validate and the re-pin each name the moved route', async () => {
+    // wairon 7 pins only hosted and git sources (a `../` sibling is read live), so the producer is served over git.
     const folder = sb.project('linkshort-move');
     const producer = writeProject(path.join(folder, 'linkshort'), statsApi(), projectYaml('linkshort'));
-    const consumer = writeProject(path.join(folder, 'dashboard'), dashboard(), projectYaml('dashboard', { externals: { linkshort: { project: 'linkshort', source: { path: '../linkshort' } } } }));
+    const served = await serveGitProducer(sb.run, folder, producer);
+    const consumer = writeProject(path.join(folder, 'dashboard'), dashboard(), projectYaml('dashboard', { externals: { linkshort: { project: 'linkshort', source: { git: served.source } } } }));
     const pin = await sb.run(['externals', 'pin'], consumer);
     expect(pin.code, transcript(pin)).toBe(0);
     const rel = specFile(producer, 'interfaces', 'istats_portal');
     writeFile(producer, rel, readFile(producer, rel).split('path: /stats/{shortCode}').join('path: /v2/stats/{shortCode}'));
+    await served.publish();
 
     const status = await sb.run(['externals', 'status', '--json'], consumer);
     const [s] = JSON.parse(status.stdout) as { drifted: boolean; uses: { state: string; detail?: string }[] }[];
@@ -150,8 +154,9 @@ describe('1. a used verb\'s route moving reaches the consumer (tinkerer top-1)',
     expect(s.uses[0].detail).toContain('endpoint moved: GET /stats/{shortCode} → GET /v2/stats/{shortCode}');
 
     const validate = await sb.run(['validate'], consumer);
-    // Round 11: a moved route is a break for the client calling it, no longer a drift.
-    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\][^\n]*"stats_portal\.getStats" changed since it was pinned: endpoint moved: GET \/stats\/\{shortCode\} → GET \/v2\/stats\/\{shortCode\}/);
+    // Round 11: a moved route is a break for the client calling it, no longer a drift. wairon 7: it fails the consumer's build.
+    expect(validate.code, transcript(validate)).toBe(1);
+    expect(validate.all, transcript(validate)).toMatch(/\[EXTERNAL_INCOMPATIBLE\][^\n]*"stats_portal\.getStats"[^\n]*changed since it was pinned: endpoint moved: GET \/stats\/\{shortCode\} → GET \/v2\/stats\/\{shortCode\}/);
 
     // Round 9: the re-pin rewrote the path "without a word".
     const repin = await sb.run(['externals', 'pin'], consumer);
@@ -173,7 +178,7 @@ describe('2. the sibling-member model (lib-and-app top-1)', () => {
   it('b: a verb removed from the member since its approval reaches the consumer\'s bare binding export', async () => {
     const { sdk, app } = siblingFamily('sibling-removal');
     git(sdk, 'init', '-q');
-    commitApproval(sdk, 'a'.repeat(64));
+    await commitApproval(sdk);
     for (const kind of ['interfaces', 'implementations']) {
       const rel = specFile(sdk, kind, kind === 'interfaces' ? 'idistance_portal' : 'distance_portal_impl');
       const spec = readYamlFile(path.join(sdk, rel)) as { methods: { name: string }[] };
@@ -214,7 +219,7 @@ describe('3. surface diff names a gateway verb whose local record embeds a renam
       subsystems: [{ id: 'money', description: 'Money.', publicInterfaces: [{ typeDef: 'money' }] }],
       types: [{ id: 'money', kind: 'value-object', subsystem: 'money', name: 'Money', description: 'An amount.', fields: [{ name: 'amountMinor', type: 'int' }, { name: 'currency', type: 'string' }] }],
     }, projectYaml('contracts'));
-    writeFile(shop, '.wai/lock.json', JSON.stringify({ format: 3, stateId: { algorithm: 'sha256+design-2', digest: 'c'.repeat(64) } }));
+    writeFile(shop, '.wai/lock.json', JSON.stringify({ format: 4, parts: {}, stateId: { algorithm: 'sha256+design-2', digest: 'c'.repeat(64) } }));
     gitInit(shop);
     const rel = specFile(contracts, 'types', 'money');
     writeFile(contracts, rel, readFile(contracts, rel).replace('name: currency\n', 'name: currencyCode\n    previousNames:\n      - currency\n'));

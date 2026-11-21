@@ -161,17 +161,16 @@ methods:
       - stepNumber: 5
         label: externals
         description: >-
-          Resolve the bound project's declared externals and its referenced project members (a git
-          or hosted source; a `../` sibling member is composed live like a contained one and never
-          pinned) through the core: each bound to its producer (family, source.path, git at its
-          ref's head or a member's pinned commit, hosted), with the consumer's references into each
-          by public name
+          Resolve the bound project's declared externals and its referenced project members through
+          the core: each bound to its producer (family, source.path, git at its ref's head or a
+          member's pinned commit, hosted), with the consumer's references into each by public name.
+          A `../` sibling member is composed live like a contained one and is not among them
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
       - stepNumber: 6
         description: >-
-          Keep the aliases asked for, or every declared external when none are named — is an alias
+          Keep the aliases asked for, or every declared external when none are named: is an alias
           named that the project does not declare?
         type: branch
         condition: a named alias is not among the declared externals
@@ -185,7 +184,9 @@ methods:
         error: UnknownExternalAliasError
       - stepNumber: 8
         label: read-lock
-        description: Read the current externals lock (none yet reads as empty)
+        description: >-
+          Read the current inputs lock (none yet reads as empty). Its `packs` section is carried
+          through unchanged: packs have their own writer (recordPacks)
         type: call
         targetComponent: externals_repository
         targetMethod: readLock
@@ -194,133 +195,77 @@ methods:
         type: loop
         loopKind: forEach
         over: the kept bindings
-        endStep: 21
+        endStep: 18
       - stepNumber: 10
         description: Is its producer resolved?
         type: branch
         condition: the binding's sourceKind is unresolved
-        onTrueStep: 20
+        onTrueStep: 17
         onFalseStep: 11
       - stepNumber: 11
         description: >-
-          Bind the producer's root read-only — for a git producer the cache directory of the bound
-          commit — restoring the consumer's binding afterwards. The caller must gate on reach
-          itself: a producer root outside the request's reach, missing, unfetchable or holding no
-          project is recorded as unreachable with the reason, and its previous pin stays
-        type: local
+          Is it a path producer: a family or source.path (`../`) external, read live like a Cargo
+          path dependency?
+        type: branch
+        condition: the binding's sourceKind is family or path
+        onFalseStep: 14
       - stepNumber: 12
         description: >-
-          Project the producer's resolved project export table at the external's audience ceiling
-          (project for a family producer, instance for a source.path, git or hosted one), each entry
-          with its stereotype, narrowed interface and full contract, plus the exported types and the
-          type closure of every signature
+          Record the outcome as "read live, never pinned"; when an earlier wairon pinned it, drop
+          its entry from the lock in hand and remove that snapshot
         type: call
-        targetComponent: surface_projector
-        targetMethod: projectOwnSurface
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
       - stepNumber: 13
-        description: >-
-          Read the loader's diagnostics with the producer's root still bound: a spec file that
-          failed to parse leaves its table short, so the producer is recorded unreachable as
-          `producer unreadable: <file>: <error>` (its previous pin stays), never pinned as a
-          producer that removed names. Then restore the consumer's binding, stamp the snapshot with
-          the audience it was filtered to and take its content digest
-          (SurfaceSnapshot.contentDigest)
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: getLoaderIssues
-      - stepNumber: 14
-        description: Read the snapshot pinned for the alias now
-        type: call
-        targetComponent: externals_repository
-        targetMethod: readSnapshot
-      - stepNumber: 15
-        description: >-
-          Does a member the current lock entry records as used no longer exist in the new snapshot —
-          renamed or removed in the producer, not merely exported to a narrower audience?
-        type: branch
-        condition: >-
-          a used member the previous lock entry records is missing from the new snapshot and not
-          exported narrower
-        onTrueStep: 20
-        onFalseStep: 16
-      - stepNumber: 16
-        description: Does the pinned snapshot already say everything the new one says?
-        type: branch
-        condition: >-
-          a snapshot is pinned, its content digest equals the new one, and it carries the same facts
-          beside the signatures (SurfaceSnapshot.carriedFactChanges is empty — an abi, a transport,
-          a role, an export kind, the producer's targetLanguage, a rename trace, an unresolved
-          re-export) and the same prose; provenance (stateId, generatedAt, each entry's retired
-          names) aside
-        onTrueStep: 18
-        onFalseStep: 17
-      - stepNumber: 17
-        description: >-
-          Carry the removals into the new snapshot, then write it to .wai/externals/<alias>.yaml —
-          whenever anything it carries moved, not only its digest: the rules read facts no digest
-          covers (LANGUAGE_BRIDGE_MISSING reads the abi), so a re-pin is the documented way to
-          refresh them. Each kept entry's `retired` lists the method names the replaced snapshot's
-          entry held (or already listed as retired) that the new entry neither holds nor names in
-          any method's `formerly` — a removal, never a rename — so binding conformance can name a
-          removed verb a consumer's binding still declares. And say what moved since the replaced
-          pin: every carried fact the replaced snapshot holds differently from the new one
-          (SurfaceSnapshot.carriedFactChanges — a used verb's wire endpoint moved, a transport, an
-          abi, a rename trace) is named in the pin's detail (`moved since the last pin: endpoint of
-          stats-api.getStats (GET /stats/{code} → GET /v2/stats/{code})`), so a re-pin never
-          rewrites a route a hand-written client spells without a word
-        type: call
-        targetComponent: externals_repository
-        targetMethod: saveSnapshot
-      - stepNumber: 18
-        label: used
-        description: >-
-          Compute the lock entry: the producer id, the snapshot path, the content digest, the role
-          (external, or member for a referenced project member), the commit the binding carries
-          (only a producer in another git repository than the consumer has one: a git producer's
-          fetched commit, or the head of a `../` sibling that is its own repository — a family,
-          contained or same-repository producer records none), and `used` — each public name of the
-          binding's usage mapped to each of its members' SurfaceSnapshot.memberDigest (an empty map
-          for a name only depended on; a member the snapshot does not carry is reported missing and
-          not pinned — and one the producer does export, only to an audience narrower than the one
-          this project reads it at, is said so: the audience it is exported at, the one this project
-          reads at and the ranking, never "gone"). Usage exists for every producer since stage 8, so
-          an outside producer's `used` is filled too
-        type: local
-      - stepNumber: 19
         description: Next external
         type: jump
-        toStep: 21
-      - stepNumber: 20
+        toStep: 18
+      - stepNumber: 14
+        label: pin
+        description: >-
+          Pin the hosted or git producer from its approved state, passing the lock entry pinned for
+          the alias now
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinProducer
+      - stepNumber: 15
+        description: >-
+          Keep the outcome; an entry it answers replaces the alias's entry in the lock in hand, and
+          none leaves the previous pin standing
+        type: local
+      - stepNumber: 16
+        description: Next external
+        type: jump
+        toStep: 18
+      - stepNumber: 17
         label: unresolved-pin
         description: >-
-          Record the outcome as unresolved with the external's problem (or as refused, naming each
-          used member the producer renamed — with the new name — or removed, to follow in the uses
-          before pinning) — for a source.hosted external pinned outside a hosted server,
-          "hosted-only producer `<id>`: available only through the hosted server" — and its previous
-          pin stays
+          Record the outcome as unresolved with the external's problem (the producer could not be
+          resolved; for a source.hosted external pinned outside a hosted server, "hosted-only
+          producer `<id>`: available only through the hosted server"), and its previous pin stays
         type: local
-      - stepNumber: 21
+      - stepNumber: 18
         label: next
         description: The external is handled
         type: local
-      - stepNumber: 22
+      - stepNumber: 19
         description: >-
           With no aliases named, prune every lock entry whose alias is no longer declared, with its
           snapshot
         type: call
         targetComponent: surface_orchestrator
         targetMethod: prune
-      - stepNumber: 23
+      - stepNumber: 20
         description: Did the lock change?
         type: branch
-        condition: any lock entry was added, changed or pruned
-        onFalseStep: 25
-      - stepNumber: 24
+        condition: any lock entry was added, changed or dropped
+        onFalseStep: 22
+      - stepNumber: 21
         description: Write the lock
         type: call
         targetComponent: externals_repository
         targetMethod: saveLock
-      - stepNumber: 25
+      - stepNumber: 22
         label: answer
         description: Answer one outcome per external handled, in declaration order
         type: return
@@ -501,14 +446,14 @@ methods:
       - stepNumber: 1
         description: >-
           Read the bound project's declared externals and its referenced git or hosted members from
-          its configuration through the core — the aliases and producer ids only; no producer is
-          bound and nothing is climbed. A `../` sibling member is composed live (round 8): never
-          listed as pinned
+          its configuration through the core: the aliases and producer ids only; no producer is
+          bound and nothing is climbed. A path producer (a family or source.path external, a `../`
+          sibling member) is read live and never listed as pinned
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 2
-        description: Read the externals lock
+        description: Read the inputs lock
         type: call
         targetComponent: externals_repository
         targetMethod: readLock
@@ -516,7 +461,7 @@ methods:
         description: For each declared alias
         type: loop
         loopKind: forEach
-        over: the declared aliases, in declaration order
+        over: the declared hosted and git aliases, in declaration order
         endStep: 5
       - stepNumber: 4
         description: Read its pinned snapshot, if the lock holds an entry for it
@@ -828,12 +773,11 @@ methods:
         description: >-
           Each live member of the bound project as the baseline knew it: one stored inside the bound
           project's tree as the revision's tree holds it; one stored outside it (a `../` sibling,
-          which the revision's tree does not hold) at the approval the BASELINE's lock records for
-          it (recordedIn: the revision's tree) — its own last committed approval when that lock
-          records none — each projected at its own root, live only when no revision of it can be
-          read: read where the revision's tree locates it, a sibling would expand nothing, and every
-          verb naming one of its types would read "a type it names changed shape" on a tree that did
-          not move
+          which the revision's tree does not hold) at its own last approval committed at or before
+          the revision's commit time (asOf: approved_revision.committedAt), each projected at its
+          own root, live only when no revision of it can be read: read where the revision's tree
+          locates it, a sibling would expand nothing, and every verb naming one of its types would
+          read "a type it names changed shape" on a tree that did not move
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: memberRevisions
@@ -909,7 +853,9 @@ methods:
     sourcePath: src/core/surfaces.ts
     narrative:
       - stepNumber: 1
-        description: Read each live member with its tree at the approval it is judged against
+        description: >-
+          Read each live member with its tree at its own last committed approval (the bound
+          project's lock records no member)
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: memberRevisions
@@ -940,7 +886,7 @@ methods:
     sourcePath: src/core/surfaces.ts
     narrative:
       - stepNumber: 1
-        description: Read each live member with its usage and its tree at the approval it is judged against
+        description: Read each live member with its usage and its tree at its own last committed approval
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: memberRevisions
@@ -974,8 +920,168 @@ methods:
         type: return
         outcome: list<ExternalStatus>
     detail: full
+  - name: lockedPacks
+    narrative:
+      - stepNumber: 1
+        description: Read the inputs lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 2
+        description: Answer its `packs` section, or an empty map when no lock was written
+        type: return
+        outcome: map<string, LockedPack>
+  - name: recordPacks
+    narrative:
+      - stepNumber: 1
+        description: Read the inputs lock (none yet reads as empty)
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 2
+        description: Does the section already say exactly this?
+        type: branch
+        condition: the lock's packs section equals the given packs
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to write: a sync that resolved nothing new never churns the file'
+        type: return
+        outcome: unchanged
+      - stepNumber: 4
+        description: >-
+          Replace the `packs` section with the given packs, keeping `externals` and `parent` as they
+          are
+        type: local
+      - stepNumber: 5
+        description: Write the lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 6
+        description: Done
+        type: return
+        outcome: written
+  - name: pinProducer
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the producer's root read-only (for a git producer the cache directory of the bound
+          commit; for a hosted one its record), restoring the consumer's binding afterwards. The
+          caller must gate on reach itself: a producer root outside the request's reach, missing,
+          unfetchable or holding no project is answered as unreachable with the reason, with no
+          entry
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read the producer's own approval with its root bound: what differs between its tree and
+          the approval it committed (for a git producer, the lock.json at the fetched commit; for a
+          hosted one, its record's lock)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: diffAgainstApproval
+      - stepNumber: 3
+        description: >-
+          A pin is taken from the producer's approved state only: is its design approved as it
+          stands?
+        type: branch
+        condition: the producer has an approval on record and no spec was added, changed or removed since
+        onFalseStep: 12
+      - stepNumber: 4
+        description: >-
+          Project the producer's resolved project export table at the external's audience ceiling
+          (instance for a git or hosted producer), each entry with its stereotype, narrowed
+          interface and full contract, plus the exported types and the type closure of every
+          signature
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 5
+        description: >-
+          Read the loader's diagnostics with the producer's root still bound: a spec file that
+          failed to parse leaves its table short, so the producer is answered unreachable as
+          `producer unreadable: <file>: <error>` with no entry, never pinned as a producer that
+          removed names. Then restore the consumer's binding, stamp the snapshot with the audience
+          it was filtered to and take its content digest (SurfaceSnapshot.contentDigest)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 6
+        description: Read the snapshot pinned for the alias now
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 7
+        description: >-
+          Does a member the previous lock entry records as used no longer exist in the new snapshot:
+          renamed or removed in the producer, not merely exported to a narrower audience?
+        type: branch
+        condition: >-
+          a used member the previous lock entry records is missing from the new snapshot and not
+          exported narrower
+        onTrueStep: 12
+        onFalseStep: 8
+      - stepNumber: 8
+        description: Does the pinned snapshot already say everything the new one says?
+        type: branch
+        condition: >-
+          a snapshot is pinned, its content digest equals the new one, and it carries the same facts
+          beside the signatures (SurfaceSnapshot.carriedFactChanges is empty: an abi, a transport, a
+          role, an export kind, the producer's targetLanguage, a rename trace, an unresolved
+          re-export) and the same prose; provenance (stateId, generatedAt, each entry's retired
+          names) aside
+        onTrueStep: 10
+        onFalseStep: 9
+      - stepNumber: 9
+        description: >-
+          Carry the removals into the new snapshot, then write it to .wai/externals/<alias>.yaml
+          whenever anything it carries moved, not only its digest: the rules read facts no digest
+          covers (LANGUAGE_BRIDGE_MISSING reads the abi), so a re-pin is the documented way to
+          refresh them. Each kept entry's `retired` lists the method names the replaced snapshot's
+          entry held (or already listed as retired) that the new entry neither holds nor names in
+          any method's `formerly`: a removal, never a rename, so binding conformance can name a
+          removed verb a consumer's binding still declares. And say what moved since the replaced
+          pin: every carried fact the replaced snapshot holds differently from the new one
+          (SurfaceSnapshot.carriedFactChanges: a used verb's wire endpoint moved, a transport, an
+          abi, a rename trace) is named in the pin's detail (`moved since the last pin: endpoint of
+          stats-api.getStats (GET /stats/{code} → GET /v2/stats/{code})`), so a re-pin never
+          rewrites a route a hand-written client spells without a word
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 10
+        label: entry
+        description: >-
+          Compute the lock entry: the producer id, the snapshot path, the content digest, the role
+          (external, or member for a referenced project member), the commit for a git producer only
+          (its fetched commit; a hosted producer records none), and `used`: each public name of the
+          binding's usage mapped to each of its members' SurfaceSnapshot.memberDigest (an empty map
+          for a name only depended on; a member the snapshot does not carry is reported missing and
+          not pinned, and one the producer does export, only to an audience narrower than the one
+          this project reads it at, is said so: the audience it is exported at, the one this project
+          reads at and the ranking, never "gone")
+        type: local
+      - stepNumber: 11
+        description: Answer the pinned outcome with its entry
+        type: return
+        outcome: ProducerPin
+      - stepNumber: 12
+        label: refused
+        description: >-
+          The outcome is unresolved with the producer's problem, and no entry, so the previous pin
+          stays: a producer with no approved design ("producer `<alias>` at `<commit>` has no
+          approved design: lock it there first" for a git producer, "producer `<alias>` has
+          unapproved changes: <the specs added, changed or removed>" for a hosted one, or that it
+          was never approved), or a refusal naming each used member the producer renamed (with the
+          new name) or removed, to follow in the uses before pinning
+        type: local
+      - stepNumber: 13
+        description: Answer the refused outcome
+        type: return
+        outcome: ProducerPin
+    detail: full
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-22T09:37:04.157Z'
+updatedAt: '2026-11-20T00:10:49.996Z'

@@ -13,7 +13,7 @@ import { projectFamilyGraph } from '../../src/core/project-family.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as migrations from '../../src/migrations/index.js';
 import { runLock } from '../../src/commands/lock.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { readLockState } from '../../src/core/specs.js';
 import { diffAgainstApproval } from '../../src/core/approval.js';
 import { buildContractFamily, buildReferenceFamily, type ContractFamily, type ReferenceFamily } from '../helpers/reference-family.js';
@@ -38,7 +38,7 @@ const dump = (spec: Record<string, unknown>): string => yaml.dump({ schemaVersio
 const write = (root: string, rel: string, value: Record<string, unknown> | string): void => put(path.join(root, ...rel.split('/')), typeof value === 'string' ? value : dump(value));
 const configOf = (dir: string): Record<string, unknown> => readYamlFile(path.join(dir, '.wai', 'project.yaml')) as Record<string, unknown>;
 const pinsOf = (dir: string): string[] => {
-  const file = path.join(dir, '.wai', 'externals.lock.yaml');
+  const file = path.join(dir, '.wai', 'inputs.lock.yaml');
   return fs.existsSync(file) ? Object.keys((readYamlFile(file) as { externals?: Record<string, unknown> }).externals ?? {}) : [];
 };
 
@@ -79,7 +79,7 @@ function metaFamily(): MetaFamily {
   write(svc, '.wai/specs/pay/.index.yaml', { id: 'pay', name: 'pay', description: 'Takes payments.', parentSystem: 'Svc', publicInterfaces: [{ details: 'Payments', component: 'pay-portal' }], trustedLinks: [] });
   write(svc, '.wai/specs/pay/pay-portal/.index.yaml', { id: 'pay-portal', name: 'pay-portal', description: 'Takes payments.', subsystem: 'pay', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: [] });
   write(svc, '.wai/specs/settle/.index.yaml', { id: 'settle', name: 'settle', description: 'Settles.', parentSystem: 'Svc', publicInterfaces: [], trustedLinks: [] });
-  write(svc, '.wai/lock.json', JSON.stringify({ format: 3, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
+  write(svc, '.wai/lock.json', JSON.stringify({ format: 4, parts: {}, specs: {}, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
   write(svc, '.wai/context/wairon-guide.md', '# derived\n');
 
   config(sub, { id: 'sub', name: 'Sub' });
@@ -141,14 +141,11 @@ describe('stage 6 — internalize: where each piece of the member goes (the desi
     expect(result.notCarried).toEqual([]);
     // Row: the destination's exports → the parent's L0, re-exported from the moved subsystem.
     expect(l0.publicInterfaces).toEqual([{ from: 'pay', component: 'pay-portal', audience: 'project' }]);
-    // Row: what has no home — its project.yaml, lock, pins and derived outputs — is deleted, every file listed.
+    // Row: what has no home — its project.yaml, lock, pins (an external held by git or hosted) and derived outputs — is deleted, every file listed.
     expect(result.deleted).toEqual([
       'L0 (its pieces placed): .wai/specs/.index.yaml',
       'derived outputs: .wai/context/wairon-guide.md',
       'lock: .wai/lock.json',
-      'pins and snapshots: .wai/externals.lock.yaml',
-      'pins and snapshots: .wai/externals/crm.yaml',
-      'pins and snapshots: .wai/externals/hub.yaml',
       'project.yaml: .wai/project.yaml',
     ]);
     expect(fs.existsSync(path.join(f.svc, '.wai'))).toBe(false);
@@ -176,14 +173,15 @@ describe('stage 6 — internalize: where each piece of the member goes (the desi
     expect(result.placed).toContain('pack acme-rules@1.0.0 dropped');
   });
 
-  it('through the family migration: the files each row writes, the carried external pinned in the parent, every deleted file a delete — family-consistent', () => {
+  it('through the family migration: the files each row writes, the carried external read live in the parent, every deleted file a delete — family-consistent', () => {
     const f = family();
     const before = familyFindings(f.top);
     const report = migrate(f.top, { verb: 'internalize', alias: 'svc', destination: { home: 'pay', packs: 'adopt' } });
     expect(report.applied).toBe(true);
     const deletes = report.plan.changes.filter((c) => c.action === 'delete' && path.resolve(c.project) === path.resolve(f.svc)).map((c) => c.path);
-    expect(deletes).toEqual(expect.arrayContaining(['.wai/project.yaml', '.wai/lock.json', '.wai/externals.lock.yaml', '.wai/externals/crm.yaml', '.wai/context/wairon-guide.md']));
-    expect(pinsOf(f.top)).toEqual(['crm']);
+    expect(deletes).toEqual(expect.arrayContaining(['.wai/project.yaml', '.wai/lock.json', '.wai/context/wairon-guide.md']));
+    // A path external is read live: nothing is pinned in the parent.
+    expect(pinsOf(f.top)).toEqual([]);
     expect(fs.existsSync(path.join(f.svc, '.wai'))).toBe(false);
     // The member's approval ends with it: not listed to re-lock; the parent has no lock.
     expect(report.relock).toEqual([]);
@@ -238,17 +236,18 @@ describe('stage 6 — internalize re-points every family consumer of the member'
     }
   });
 
-  it('a consumer with no alias for the parent: its external repointed at the parent, re-pinned; the parent exports what it used; family-consistent', () => {
+  it('a consumer with no alias for the parent: its external repointed at the parent; the parent exports what it used; family-consistent', () => {
     const f = family();
     const before = familyFindings(f.top);
     const report = migrate(f.top, { verb: 'internalize', alias: 'ledger', destination: { home: '' } });
     expect(report.applied).toBe(true);
     expect(configOf(f.top).members).toEqual({ billing: 'billing' });
     expect(configOf(f.billing).externals).toEqual({ ledger: { project: 'house' } });
-    expect(pinsOf(f.billing)).toEqual(['ledger']);
+    expect(pinsOf(f.billing)).toEqual([]);
     const l0 = at(f.top, () => loadSystemSpec())!;
     expect(l0.publicInterfaces).toEqual([{ from: 'books', component: 'ledger-portal', audience: 'project' }]);
-    expect(at(f.billing, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code)).toEqual([]);
+    // From its own root billing reads nothing above it and holds no pin: its references are unavailable (never a pass), but declared and exported.
+    expect(at(f.billing, () => validateProject()).issues.filter((i) => ['EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED'].includes(i.code)).map((i) => i.code)).toEqual([]);
     expect(newFindings(before, familyFindings(f.top)), familyLines(f.top).join('\n')).toEqual([]);
   });
 
@@ -362,7 +361,8 @@ describe('stage 6 — externalize, family-wide', () => {
     expect(fs.readFileSync(path.join(f.top, '.wai', 'specs', 'web', 'web-portal', '.index.yaml'), 'utf8')).toContain('orders::orders-portal');
     // … and not one byte of shop moved.
     expect(waiState(f.shop)).toEqual(shopBytes);
-    expect(at(f.shop, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_')).map((i) => i.code)).toEqual([]);
+    // From its own root shop reads nothing above it and holds no pin: its references are unavailable (never a pass), but declared and exported.
+    expect(at(f.shop, () => validateProject()).issues.filter((i) => ['EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED'].includes(i.code)).map((i) => i.code)).toEqual([]);
     expect(report.relock).toEqual([]);
     // The new member comes with its own state (never locked: MEMBER_UNAPPROVED names it); nothing else is new.
     const itsOwn = (i: { project?: string; message: string }): boolean => i.project === 'orders' || /"orders"/.test(i.message);
@@ -438,7 +438,7 @@ describe('externalize into a part — a storage move — agrees with lock and lo
   const lockTop = async (top: string): Promise<void> => {
     await at(top, async () => {
       invalidateSpecCache();
-      await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+      await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
     });
     invalidateSpecCache();
   };
@@ -456,7 +456,7 @@ describe('externalize into a part — a storage move — agrees with lock and lo
     expect(report.relock).toEqual([]);
     invalidateSpecCache();
     // lock-check's reading and lock's reading agree: approved, no spec changed — only moved.
-    expect(at(f.top, () => readLockState(computeGateStateId()).state)).toBe('locked');
+    expect(at(f.top, () => readLockState(computeApprovalId()).state)).toBe('locked');
     const diff = at(f.top, () => diffAgainstApproval())!;
     expect(diff.added.length + diff.changed.length + diff.removed.length).toBe(0);
     expect(diff.moved.length).toBeGreaterThan(0);

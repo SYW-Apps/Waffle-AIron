@@ -78,62 +78,66 @@ async function lockedHabitly(name: string, unreached = false): Promise<string> {
   return dir;
 }
 
-/** Rewrite the lock record as an older release would have taken it over the same design: only its release part differs. */
-function takenByOlderRelease(dir: string, legacy = false): Record<string, any> {
+/** Rewrite the lock record as an older release would have stamped it over the same design: only its release stamp differs. */
+function takenByOlderRelease(dir: string): Record<string, any> {
   const record = JSON.parse(readFile(dir, '.wai/lock.json'));
-  expect(record.gateParts, 'a lock records its gate parts').toBeDefined();
-  const older = { ...record, stateId: { ...record.stateId, digest: 'e'.repeat(64) }, validatorVersion: '5.1.1-dev.100' };
-  if (legacy) delete older.gateParts;
-  else older.gateParts = { ...record.gateParts, release: 'older-release-doctrine' };
-  writeFile(dir, '.wai/lock.json', `${JSON.stringify(older, null, 2)}\n`);
+  expect(record.parts, 'a format-4 lock records its approval parts').toBeDefined();
+  const older = { ...record, validatorVersion: '5.1.1-dev.100' };
+  writeFile(dir, '.wai/lock.json', `${JSON.stringify(older, null, 2)}
+`);
   return older;
 }
 
-describe('1 — a wairon upgrade never stales an unchanged approval by itself (round 6, M3)', () => {
-  it('re-validates the approved design and carries the approval over, saying so on every surface; `lock` refreshes its stamp without a review', async () => {
+describe('1 — a wairon release never moves an approval (round 6 M3, wairon 7: approval = own design + policy only)', () => {
+  it('a record stamped by another release still approves the unchanged design, on every surface, and nothing writes the record', async () => {
     const dir = await lockedHabitly('carry');
-    const older = takenByOlderRelease(dir);
+    takenByOlderRelease(dir);
     const before = readFile(dir, '.wai/lock.json');
 
     const check = await sb.run(['lock-check', '--strict'], dir);
     expect(check.code, transcript(check)).toBe(0);
-    expect(check.all).toContain('Approved under wairon 5.1.1-dev.100, re-validated under');
-    expect(check.all).not.toContain('an input the gate identity covers');
+    expect(check.all).toContain('The design in this tree is the approved design');
+    // The release is no part of the approval: no re-validation, restamp or release notice anywhere.
+    expect(check.all).not.toContain('re-validated under');
+    expect(check.all).not.toMatch(/release stamp/i);
 
     const status = await sb.run(['status'], dir);
-    expect(status.all).toContain('re-validated under');
+    expect(status.all).not.toContain('re-validated under');
+    expect(status.all).not.toMatch(/drifted/);
     const validate = await sb.run(['validate'], dir);
-    expect(validate.all).toContain('Approval: approved under wairon 5.1.1-dev.100, re-validated under');
-    // Nothing was written by any of them.
+    expect(validate.all).not.toContain('re-validated under');
     expect(readFile(dir, '.wai/lock.json')).toBe(before);
 
-    const lock = await sb.run(['lock'], dir); // no --yes: a refresh asks nothing
+    // `lock` has nothing to approve and leaves the record, release stamp included, exactly as it is.
+    const lock = await sb.run(['lock', '--yes'], dir);
     expect(lock.code, transcript(lock)).toBe(0);
-    expect(lock.all).toContain('release stamp is refreshed');
-    const record = JSON.parse(readFile(dir, '.wai/lock.json'));
-    expect(record.lockedAt).toBe(older.lockedAt);
-    expect(record.restamped).toMatchObject({ fromVersion: '5.1.1-dev.100', by: 'wairon lock' });
-    const after = await sb.run(['lock-check', '--strict'], dir);
-    expect(after.code, transcript(after)).toBe(0);
-    expect(after.all).not.toContain('re-validated under');
+    expect(lock.all).toContain('Nothing has changed since the last approval');
+    expect(lock.all).not.toContain('release stamp is refreshed');
+    expect(readFile(dir, '.wai/lock.json')).toBe(before);
+    expect(JSON.parse(readFile(dir, '.wai/lock.json')).restamped).toBeUndefined();
   });
 
-  it('a record from before gate parts is never carried (round 7): it cannot prove its own inputs unchanged', async () => {
+  it('a record from before approval parts (format 3, wairon 6) is refused by name with the upgrade — never judged, never carried by a check', async () => {
     const dir = await lockedHabitly('carry-legacy');
-    takenByOlderRelease(dir, true);
+    const record = JSON.parse(readFile(dir, '.wai/lock.json'));
+    delete record.parts;
+    record.format = 3;
+    writeFile(dir, '.wai/lock.json', `${JSON.stringify(record, null, 2)}
+`);
     const check = await sb.run(['lock-check'], dir);
     expect(check.code, transcript(check)).toBe(1);
-    expect(check.all).toContain('before wairon recorded its inputs separately');
+    expect(check.all).toContain('it is lock record format 3, written by an earlier wairon major (this release reads format 4)');
+    expect(check.all).toContain('Run `wairon upgrade`');
   });
 
-  it('when the new rules find an issue in the approved design, the approval is stale for exactly that issue', async () => {
+  it('a finding the rules raise on the approved design is for validate to report, never a stale approval: lock-check holds, validate names it', async () => {
     const dir = await lockedHabitly('stale-by-release', true);
     takenByOlderRelease(dir);
-    const check = await sb.run(['lock-check'], dir);
-    expect(check.code, transcript(check)).toBe(1);
-    expect(check.all).toContain('the new release');
-    expect(check.all).toContain('UNUSED_COMPONENT');
-    expect(check.all).not.toContain('an input the gate identity covers');
+    const check = await sb.run(['lock-check', '--strict'], dir);
+    expect(check.code, transcript(check)).toBe(0);
+    expect(check.all).not.toContain('the new release');
+    const validate = await sb.run(['validate'], dir);
+    expect(validate.all).toContain('UNUSED_COMPONENT');
   });
 });
 

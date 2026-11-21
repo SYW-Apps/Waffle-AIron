@@ -1,0 +1,59 @@
+id: iv6_lock_file_adapter
+name: v6 Lock File Adapter Contract
+description: >-
+  Raw reads of a project root's v6 lock files and the writes the v6-to-v7 step makes onto a
+  rehearsal root.
+component: v6_lock_file_adapter
+methods:
+  - name: readRecord
+    description: >-
+      Parse <root>/.wai/lock.json as wairon 6 wrote it; none when absent. A record that is not JSON
+      or names no stateId is refused, naming the file: the step never guesses an approval.
+    signature: 'readRecord(root: string): V6LockRecord?'
+    returns: V6LockRecord?
+    params:
+      - name: root
+        type: string
+        description: The project root
+    effect: io
+  - name: readExternalsLock
+    description: >-
+      Parse <root>/.wai/externals.lock.yaml (the v6 file) into the inputs lock's shape with an empty
+      packs section; none when absent. A malformed file is refused, naming it.
+    signature: 'readExternalsLock(root: string): InputsLock?'
+    returns: InputsLock?
+    params:
+      - name: root
+        type: string
+        description: The project root
+    effect: io
+  - name: writeInputsLock
+    description: >-
+      Write <root>/.wai/inputs.lock.yaml in v7's form, aliases and pack names sorted; a lock with no
+      entry left is not written.
+    signature: 'writeInputsLock(root: string, lock: InputsLock): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+        description: The rehearsal root
+      - name: lock
+        type: InputsLock
+    effect: io
+  - name: removeFile
+    description: >-
+      Remove a file under the root (.wai/externals.lock.yaml, a dropped snapshot under
+      .wai/externals/), pruning an externals directory left empty; reports whether a file existed.
+    signature: 'removeFile(root: string, path: string): bool'
+    returns: bool
+    params:
+      - name: root
+        type: string
+        description: The rehearsal root
+      - name: path
+        type: string
+        description: Root-relative path
+    effect: io
+status: complete
+createdAt: '2026-11-20T01:23:23.588Z'
+updatedAt: '2026-11-20T01:23:24.981Z'

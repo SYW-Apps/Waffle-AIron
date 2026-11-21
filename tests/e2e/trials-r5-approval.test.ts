@@ -2,9 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import * as yaml from 'js-yaml';
 import {
   createTrialSandbox,
+  gitInit,
   readFile,
   transcript,
   writeFile,
@@ -46,7 +48,7 @@ function configYaml(id: string, extra: Record<string, unknown> = {}): string {
 
 /** (Re)write a project's .wai from a fixture tree, keeping its lock record and pins. */
 function writeProject(dir: string, id: string, tree: FixtureTree, extra: Record<string, unknown> = {}): void {
-  const keep = ['lock.json', 'externals.lock.yaml', 'externals'];
+  const keep = ['lock.json', 'inputs.lock.yaml', 'externals'];
   const stash = path.join(dir, '.wai-keep');
   const saved: string[] = [];
   for (const name of keep) {
@@ -315,19 +317,46 @@ function tileStudio(uses = true): FixtureTree {
   };
 }
 
-/** A producer + consumer pair under one folder, the consumer pinned to the producer. */
-async function pinnedPair(name: string, usesAtPin = true): Promise<{ geo: string; studio: string }> {
+/**
+ * A producer + consumer pair under one folder. The producer is a `../geo` sibling the consumer reads LIVE:
+ * wairon 7 never pins a path external, so there is nothing to carry — what the producer is now is what the
+ * consumer is judged against.
+ */
+async function livePair(name: string, uses = true): Promise<{ geo: string; studio: string }> {
   const folder = sb.project(name);
   const geo = path.join(folder, 'geo');
   const studio = path.join(folder, 'studio');
   fs.mkdirSync(geo, { recursive: true });
   fs.mkdirSync(studio, { recursive: true });
   writeProject(geo, 'geo', geoKit());
-  writeProject(studio, 'studio', tileStudio(usesAtPin), { externals: { geo: { source: '../geo' } } });
+  writeProject(studio, 'studio', tileStudio(uses), { externals: { geo: { source: { path: '../geo' } } } });
+  return { geo, studio };
+}
+
+/**
+ * A producer + consumer pair where the consumer pins the producer: the producer is approved and committed, served as
+ * a bare git repository, and the consumer declares it as `file://…#commit`. wairon 7 pins only hosted and git sources,
+ * from the producer's APPROVED state. `usesAtPin` false pins a consumer that references nothing of it yet.
+ */
+async function pinnedPair(name: string, usesAtPin = true): Promise<{ geo: string; studio: string; source: string }> {
+  const folder = sb.project(name);
+  const geo = path.join(folder, 'geo');
+  const studio = path.join(folder, 'studio');
+  fs.mkdirSync(geo, { recursive: true });
+  fs.mkdirSync(studio, { recursive: true });
+  writeProject(geo, 'geo', geoKit());
+  const lock = await sb.run(['lock', '--yes'], geo);
+  expect(lock.code, transcript(lock)).toBe(0);
+  gitInit(geo);
+  const bare = path.join(folder, 'geo.git');
+  execFileSync('git', ['clone', '-q', '--bare', geo, bare], { stdio: 'ignore' });
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: geo }).toString().trim();
+  const source = `file:///${bare.split(path.sep).join('/')}#${commit}`;
+  writeProject(studio, 'studio', tileStudio(usesAtPin), { externals: { geo: { source } } });
   const pin = await sb.run(['externals', 'pin', 'geo'], studio);
   expect(pin.code, transcript(pin)).toBe(0);
-  if (!usesAtPin) writeProject(studio, 'studio', tileStudio(), { externals: { geo: { source: '../geo' } } });
-  return { geo, studio };
+  if (!usesAtPin) writeProject(studio, 'studio', tileStudio(), { externals: { geo: { source } } });
+  return { geo, studio, source };
 }
 
 describe('3 — effect travels through signatureFrom (lib-and-app R5-11, R5-16)', () => {
@@ -374,7 +403,7 @@ describe('4 — field and parameter renames reach the consumer with their new na
   let snapshot: string;
 
   beforeAll(async () => {
-    p = await pinnedPair('renames');
+    p = await livePair('renames');
     snapshot = path.join(p.geo, 'before.yaml');
     const exp = await sb.run(['surface', 'export', '--out', snapshot], p.geo);
     expect(exp.code, transcript(exp)).toBe(0);
@@ -386,8 +415,11 @@ describe('4 — field and parameter renames reach the consumer with their new na
     const diff = await sb.run(['surface', 'diff', '--against', snapshot], p.geo);
     // Round 5: not listed at all.
     expect(diff.all, transcript(diff)).toContain('parameter "zoom" renamed to "level"');
+    // The producer is a live sibling: its rename reaches the consumer's validate from the producer's own trace, never from a pin.
     const st = await sb.run(['externals', 'status'], p.studio);
-    expect(st.all, transcript(st)).toContain('parameter "zoom" of tile-library.tileFor (renamed to "level")');
+    expect(st.all, transcript(st)).toContain('not pinned');
+    const v = await sb.run(['validate'], p.studio);
+    expect(v.code, transcript(v)).toBe(0); // no use of the consumer depends on the parameter's name
   });
 
   it('a field rename: surface diff and the consumer\'s findings say which field moved and to what', async () => {
@@ -396,30 +428,33 @@ describe('4 — field and parameter renames reach the consumer with their new na
     const diff = await sb.run(['surface', 'diff', '--against', snapshot], p.geo);
     expect(diff.all, transcript(diff)).toContain('field "zoom" renamed to "z"');
     expect(diff.all).not.toContain('type shape changed');
+    // A path external is read live and never pinned: there is no earlier fact to name "renamed to" from, and no use of
+    // the consumer depends on the field, so the consumer is still valid.
     const v = await sb.run(['validate'], p.studio);
-    // Round 5: '"tile-key" changed at signature level' — anonymous.
-    expect(v.all, transcript(v)).toContain('field "tile-key.zoom" renamed to "z" (its shape is otherwise unchanged)');
-    expect(v.all).toContain('follow the rename');
-    const st = await sb.run(['externals', 'status'], p.studio);
-    expect(st.all, transcript(st)).toContain('field "tile-key.zoom" renamed to "z"');
+    expect(v.code, transcript(v)).toBe(0);
   });
 });
 
-describe('4 — a use beyond the pin is named by validate, as lock and lock-check name it (lib-and-app R5-21)', () => {
+describe('4 — a use beyond the pin is named by validate, and the lock refreshes it (lib-and-app R5-21)', () => {
   let p: { geo: string; studio: string };
 
   beforeAll(async () => {
     p = await pinnedPair('beyond-pin', false);
   });
 
-  it('validate names the unrecorded use (advisory: validate --ci still passes; the approval gates refuse)', async () => {
+  it('validate names the unrecorded use (a warning, never a pass); lock refreshes the owed pin and approves', async () => {
     const v = await sb.run(['validate', '--ci'], p.studio);
     expect(v.all, transcript(v)).toContain('tile-library.tileFor');
     expect(v.all).toContain('not in the lock');
-    expect(v.code, transcript(v)).toBe(0);
+    expect(v.all).toContain('EXTERNAL_CHECK_UNAVAILABLE'); // never a pass: a warning, so --ci fails until the lock refreshes the pin
+    expect(v.code, transcript(v)).toBe(1);
+    // wairon 7: the lock owes the pin and refreshes exactly it (from the producer's approved state), then approves.
     const lock = await sb.run(['lock', '--yes'], p.studio);
-    expect(lock.code, transcript(lock)).not.toBe(0);
-    expect(lock.all).toContain('used beyond their pin');
+    expect(lock.code, transcript(lock)).toBe(0);
+    expect(lock.all).toContain('Pinned the external "geo"');
+    expect(readFile(p.studio, '.wai/inputs.lock.yaml')).toContain('tileFor');
+    const after = await sb.run(['validate', '--ci'], p.studio);
+    expect(after.all, transcript(after)).not.toContain('not in the lock');
   });
 });
 
@@ -450,7 +485,7 @@ describe('4/5 — the MCP answers: drifted agrees with the health, the rename dr
   let p: { geo: string; studio: string };
 
   beforeAll(async () => {
-    p = await pinnedPair('mcp');
+    p = await livePair('mcp');
   });
 
   it('sdd_rename_method dry run: breaks are narrowed to the public name that publishes the method, with that one member (lib-and-app R5-30)', async () => {
@@ -467,30 +502,46 @@ describe('4/5 — the MCP answers: drifted agrees with the health, the rename dr
     }
   });
 
-  it('sdd_get_externals_status: a fact the pin carries moved — drifted is true wherever the health says drifted (lib-and-app R5-20)', async () => {
+  it('sdd_get_externals_status: a live sibling is read live, never pinned — health and drifted agree, no stale fact to carry (lib-and-app R5-20)', async () => {
     const tree = geoKit();
     (tree.components as Record<string, unknown>[])[0].abi = 'c';
     writeProject(p.geo, 'geo', tree);
     const client = await mcpAt(p.studio);
     try {
       const answer = await structuredOf(client, 'sdd_get_externals_status', {});
-      const geo = (answer.statuses as { alias: string; health: string; drifted?: boolean; staleFacts?: string[] }[]).find((s) => s.alias === 'geo')!;
-      expect(geo.staleFacts).toContain('abi of tile-library');
-      expect(geo.health).toBe('drifted');
-      // Round 5: health "drifted" beside drifted: false.
-      expect(geo.drifted).toBe(true);
+      const geo = (answer.statuses as { alias: string; health: string; pinned: boolean; sourceKind: string; drifted?: boolean; staleFacts?: string[] }[]).find((s) => s.alias === 'geo')!;
+      expect(geo.pinned).toBe(false);
+      expect(geo.sourceKind).toBe('family');
+      expect(geo.staleFacts ?? []).toEqual([]);
+      // Round 5: health "drifted" beside drifted: false — whatever the health says, drifted says too.
+      expect(Boolean(geo.drifted)).toBe(geo.health === 'drifted');
+    } finally {
+      await client.close();
+    }
+  });
+
+  it('a pinned (git) external answers the same way: drifted false beside health ok, the pin recorded (lib-and-app R5-20)', async () => {
+    const q = await pinnedPair('mcp-pinned');
+    const client = await mcpAt(q.studio);
+    try {
+      const answer = await structuredOf(client, 'sdd_get_externals_status', {});
+      const geo = (answer.statuses as { alias: string; health: string; pinned: boolean; drifted?: boolean }[]).find((s) => s.alias === 'geo')!;
+      expect(geo.pinned).toBe(true);
+      expect(geo.health).toBe('ok');
+      expect(geo.drifted).toBe(false);
     } finally {
       await client.close();
     }
   });
 
   it('sdd_remove_external dry run says it is one: dryRun true, nothing removed, what the real run removes apart (platform R5)', async () => {
-    const client = await mcpAt(p.studio);
+    const q = await pinnedPair('mcp-remove'); // a pin to remove exists only for a git or hosted external
+    const client = await mcpAt(q.studio);
     try {
       const dry = await structuredOf(client, 'sdd_remove_external', { alias: 'geo', dryRun: true });
       // Round 5: { removed: true, unpinned: true } — identical to the real run.
       expect(dry).toMatchObject({ alias: 'geo', dryRun: true, removed: false, unpinned: false, wouldRemove: { declaration: true, pin: true } });
-      expect(readFile(p.studio, '.wai/project.yaml')).toContain('geo');
+      expect(readFile(q.studio, '.wai/project.yaml')).toContain('geo');
       const real = await structuredOf(client, 'sdd_remove_external', { alias: 'geo' });
       expect(real).toMatchObject({ alias: 'geo', removed: true, unpinned: true });
       expect(real.dryRun).toBeUndefined();

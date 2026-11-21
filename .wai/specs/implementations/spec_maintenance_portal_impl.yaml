@@ -56,13 +56,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: renameComponent
-  - name: retireSpecialists
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: retireSpecialists
   - name: renameMethod
     narrative:
       - stepNumber: 1
@@ -84,20 +77,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: findLegacySpecFiles
-  - name: findChainingSubprojectsMissingConfig
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: findChainingSubprojectsMissingConfig
-  - name: backfillChainedSubprojectConfigs
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: backfillChainedSubprojectConfigs
   - name: moveMountToMembers
     narrative:
       - stepNumber: 1
@@ -175,13 +154,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: renameType
-  - name: migrateReachability
-    narrative:
-      - stepNumber: 1
-        description: Forward to the reachability migration
-        type: call
-        targetComponent: reachability_migration
-        targetMethod: migrate
   - name: renameField
     narrative:
       - stepNumber: 1
@@ -217,13 +189,6 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: renameSpecId
-  - name: retireGateways
-    narrative:
-      - stepNumber: 1
-        description: Forward to the core orchestrator
-        type: call
-        targetComponent: core_orchestrator
-        targetMethod: retireGateways
 status: complete
 createdAt: '2026-09-25T17:33:05.650Z'
-updatedAt: '2026-10-18T19:11:05.367Z'
+updatedAt: '2026-11-20T01:27:02.576Z'

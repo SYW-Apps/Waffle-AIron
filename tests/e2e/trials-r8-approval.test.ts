@@ -11,12 +11,13 @@ import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from 
 // Each replays a probe the round-8 trials ran by hand and asserts exit codes
 // and the words a person reads.
 //
-//   1  a stamp that is no version or newer than this wairon, deleted gate
-//      parts and a duplicated key are reported; `lock` replaces the stamp
+//   1  a stamp that is no version or newer than this wairon moves nothing (the
+//      release is no part of the approval); deleted approval parts and a
+//      duplicated key are unreadable
 //   2  a committed lock with the whole .wai/specs deleted fails closed; a
 //      deleted project.yaml is named; an unreadable lock fails status and
 //      validate --ci
-//   3  a member whose record predates gate parts is named for that at the
+//   3  a member whose record is an earlier format is named for that at the
 //      root, never for unapproved spec changes
 //   4  `lock --subsystem <member>::<subsystem>` at the root is refused
 //   5  a selected pack that cannot load fails lock-check
@@ -85,40 +86,39 @@ const writeRecord = (dir: string, value: Record<string, unknown>): void => write
 
 describe('1 — stamps and parts never pass silently (round 8: tinkerer, lib-and-app R8-3)', () => {
   for (const stamp of ['banana', '9.9.9'] as const) {
-    it(`validatorVersion ${stamp} on a matching record is reported at every surface, and \`lock\` replaces it`, async () => {
-      const dir = sb.project(`stamp-${stamp.replace(/\W/g, '')}`);
+    it(`validatorVersion ${stamp} on a matching record moves nothing, at any surface; lock leaves the record as it is`, async () => {
+      const dir = sb.project(`stamp-${stamp.replace(/W/g, '')}`);
       habitlyAt(dir, 'habitly');
       await lockIn(dir);
       const approved = record(dir);
       writeRecord(dir, { ...approved, validatorVersion: stamp });
+      const bytes = readFile(dir, '.wai/lock.json');
 
+      // The wairon release never moves the approval: no release-stamp notice anywhere.
       const check = await sb.run(['lock-check', '--strict'], dir);
       expect(check.code, transcript(check)).toBe(0);
-      expect(check.all).toMatch(/Notice: its release stamp .* — the identity alone decided this/);
+      expect(check.all).not.toMatch(/release stamp/i);
       const status = await sb.run(['status'], dir);
-      expect(status.all).toContain('replaces the stamp');
+      expect(status.all).not.toMatch(/release stamp|replaces the stamp/i);
       const validate = await sb.run(['validate'], dir);
-      expect(validate.all).toContain('Approval notice: its release stamp');
+      expect(validate.all).not.toContain('Approval notice: its release stamp');
 
       const relock = await lockIn(dir);
-      expect(relock).toContain('replaced with');
-      expect(record(dir).validatorVersion).not.toBe(stamp);
-      expect(record(dir).lockedAt).toBe(approved.lockedAt);
-      const after = await sb.run(['lock-check', '--strict'], dir);
-      expect(after.all).not.toContain('Notice: its release stamp');
+      expect(relock).toContain('Nothing has changed since the last approval');
+      expect(readFile(dir, '.wai/lock.json')).toBe(bytes);
     });
   }
 
-  it('gateParts deleted is noticed as `{}` is; a duplicated stateId key is unreadable whichever copy comes last', async () => {
+  it('parts deleted is an unreadable record, not a silent pass; a duplicated stateId key is unreadable whichever copy comes last', async () => {
     const dir = sb.project('parts-gone');
     habitlyAt(dir, 'habitly');
     await lockIn(dir);
     const approved = record(dir);
-    const { gateParts: _parts, ...partless } = approved;
+    const { parts: _parts, ...partless } = approved;
     writeRecord(dir, partless);
     const check = await sb.run(['lock-check'], dir);
-    expect(check.code, transcript(check)).toBe(0);
-    expect(check.all).toContain('gate parts are ignored — the record carries none');
+    expect(check.code, transcript(check)).toBe(1);
+    expect(check.all).toContain('its "parts" is not a map of approval part to digest');
 
     const text = `${JSON.stringify(approved, null, 2)}\n`;
     writeFile(dir, '.wai/lock.json', text.replace('{', '{\n  "stateId": { "algorithm": "x", "digest": "0" },'));
@@ -170,21 +170,24 @@ describe('2 — a missing tree or configuration fails closed (round 8: tinkerer 
 });
 
 describe('3/4 — a family root names its members truthfully (round 8: platform, tinkerer)', () => {
-  it('a member whose record predates gate parts is named for that; `lock --subsystem <member>::<sub>` is refused', async () => {
+  it('a member whose record is an earlier format is named for that; `lock --subsystem <member>::<sub>` is refused', async () => {
     const root = sb.project('family');
     const lib = path.join(root, 'libs', 'lib');
     habitlyAt(lib, 'lib');
     habitlyAt(root, 'shop', { members: { lib: 'libs/lib' } });
     await lockIn(lib);
     await lockIn(root);
-    const { gateParts: _parts, ...legacy } = record(lib);
-    writeRecord(lib, { ...legacy, stateId: { ...legacy.stateId, digest: 'd'.repeat(64) }, validatorVersion: '5.1.1-dev.110' });
+    const intact = record(lib);
+    const { parts: _parts, ...legacy } = intact;
+    writeRecord(lib, { ...legacy, format: 3 });
 
     const check = await sb.run(['lock-check', '--strict'], root);
     expect(check.code, transcript(check)).toBe(1);
-    expect(check.all).toContain('its approval predates recorded inputs');
+    expect(check.all).toContain('libs/lib/.wai/lock.json cannot be read as an approval record: it is lock record format 3');
     expect(check.all).not.toContain('spec changes nobody approved');
 
+    // The member's own record is whole again: the scoped lock is refused for what it is, not for an unreadable member.
+    writeRecord(lib, intact);
     const before = readFile(root, '.wai/lock.json');
     const scoped = await sb.run(['lock', '--subsystem', 'lib::habits', '--yes'], root);
     expect(scoped.code, transcript(scoped)).not.toBe(0);
@@ -192,9 +195,12 @@ describe('3/4 — a family root names its members truthfully (round 8: platform,
     expect(scoped.all).not.toContain('Specs locked');
     expect(readFile(root, '.wai/lock.json')).toBe(before);
 
-    // The root lock now warns that the member locks first.
+    // A member that moved since its own approval: the root lock warns that the member locks first.
+    writeRecord(lib, intact);
+    const memberFile = '.wai/specs/components/habit_orchestrator.yaml';
+    writeFile(lib, memberFile, readFile(lib, memberFile).replace(/description: .*/, 'description: Records check-ins, changed since its own approval.'));
     const rootLock = await sb.run(['lock', '--yes'], root);
-    expect(rootLock.all).toContain('The order is bottom-up');
+    expect(rootLock.all).toContain('Lock each member at its own root: this approval never records a member');
   });
 });
 
@@ -206,7 +212,7 @@ describe('5 — a selected pack that cannot load (round 8: solo-app)', () => {
     fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), configYaml('habitly', { extensions: { packs: ['./vendor/no-such-pack'], useGlobalPacks: false } }));
     const check = await sb.run(['lock-check'], dir);
     expect(check.code, transcript(check)).toBe(1);
-    expect(check.all).toContain('cannot load');
+    expect(check.all).toContain('its pack selections');
   });
 });
 

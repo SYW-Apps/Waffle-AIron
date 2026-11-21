@@ -87,8 +87,8 @@ async function lockBoth(sdk: string, app: string): Promise<void> {
   }
 }
 
-describe('1-2. a moved member pin is said as what it is (lib-and-app R11-11, R11-9)', () => {
-  it('status names the member re-approved at its own root and the fix, never "drifted" beside "no spec has changed"', async () => {
+describe('1-2. a moved member approval is said as what it is — wairon 7 never pins a member (lib-and-app R11-11, R11-9)', () => {
+  it('status and lock-check name the member approved at its own root, or not, and never a "pin moved" or "drifted" beside "no spec has changed"', async () => {
     const { sdk, app } = family('pin-moved');
     await lockBoth(sdk, app);
     const rename = await sb.run(['type', 'rename-field', 'coordinate', 'lat', 'latitude'], sdk);
@@ -96,22 +96,30 @@ describe('1-2. a moved member pin is said as what it is (lib-and-app R11-11, R11
     const relock = await sb.run(['lock', '-y'], sdk);
     expect(relock.code, transcript(relock)).toBe(0);
 
+    // The member was re-approved at its own root: this approval pins nothing of it, so nothing here moved.
     const status = await sb.run(['status'], app);
-    // Round 11: "this project is drifted — its approval no longer covers this tree" and "no spec has changed since".
-    expect(status.all, transcript(status)).toContain('none of its own specs changed, but member geo was re-approved at its own root since, and this approval still pins its earlier approval');
-    expect(status.all).toContain('none of this project\'s own specs has changed since; what moved is a member\'s approval.');
-    expect(status.all).toContain('Member pin moved since approval: geo was re-approved at its own root after this approval');
-    expect(status.all).not.toContain('this project is drifted');
-    expect(status.all).not.toContain('— no spec has changed since.');
+    expect(status.all, transcript(status)).toContain('Approval: this project is approved');
+    expect(status.all).toContain('no spec has changed since.');
+    expect(status.all).toContain('geo (geo-sdk) · ../geo-sdk [approved]');
+    expect(status.all).not.toMatch(/Member pin moved|this project is drifted|pins its earlier approval|re-approved at its own root since/);
+    const held = await sb.run(['lock-check'], app);
+    expect(held.code, transcript(held)).toBe(0);
+    expect(held.all).toContain('1 member project(s) approved at their own roots');
 
-    // The member dirtied again: lock-check names what this approval no longer covers.
+    // The member dirtied again: the member's own approval no longer holds, and lock-check names it.
     const again = await sb.run(['type', 'rename-field', 'coordinate', 'lon', 'longitude'], sdk);
     expect(again.code, transcript(again)).toBe(0);
     const check = await sb.run(['lock-check'], app);
     expect(check.code, transcript(check)).toBe(1);
     // Round 11: "This project's own approval is stale too".
     expect(check.all).not.toContain('stale too');
-    expect(check.all).toContain('None of this project\'s own specs changed, but its approval does not cover it either: a member\'s approval moved since it was taken (this approval still pins geo at an earlier approval)');
+    expect(check.all).toContain('Member project(s) carry spec changes nobody approved: geo (changed since its own approval');
+    expect(check.all).toContain('Fix: run `wairon lock` in each member\'s own folder and commit its .wai/lock.json.');
+    const dirty = await sb.run(['status'], app);
+    expect(dirty.all, transcript(dirty)).toContain('Member(s) not approved at their own root: geo (drifted');
+    expect(dirty.all).not.toContain('this project is drifted');
+    // True in wairon 7: this project's own specs did not move; the member's approval is a line of its own.
+    expect(dirty.all).toContain('no spec has changed since.');
   });
 
   it('lock-check: a dirty member beside an approval that still covers this project says so', async () => {
@@ -131,7 +139,8 @@ describe('3. `project rename` from a member\'s root names the parent declaring i
     const before = fs.readFileSync(path.join(app, '.wai', 'project.yaml'), 'utf8');
     const r = await sb.run(['project', 'rename', 'geo-core', '--report'], sdk);
     expect(r.code, transcript(r)).toBe(0);
-    expect(r.all).toContain(`Outside this family: route-planner (${path.join('..', 'route-planner')}) declares this project as its member "geo" — nothing there is written. Once this project is re-locked as "geo-core", run \`wairon lock\``);
+    // wairon 7: the parent records nothing of its member; it reads the member's own committed lock.
+    expect(r.all).toContain(`Outside this family: route-planner (${path.join('..', 'route-planner')}) declares this project as its member "geo" — nothing there is written, and it records nothing about this project: it reads this project's own committed lock, so re-lock this project as "geo-core" at its own root.`);
     expect(fs.readFileSync(path.join(app, '.wai', 'project.yaml'), 'utf8')).toBe(before);
   });
 });

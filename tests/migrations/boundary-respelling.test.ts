@@ -199,9 +199,8 @@ describe('promote, externalize --as project and rename-alias respell every refer
     // The consumers lists that named across the boundary are gone.
     expect(JSON.stringify(readYamlFile(specs(part, 'billing', '.index.yaml')))).not.toContain('consumers');
     expect(JSON.stringify(readYamlFile(specs(root, 'orders', '.index.yaml')))).not.toContain('consumers');
-    // The pin the promote took records what the new project uses.
-    const lock = readYamlFile(path.join(part, '.wai', 'externals.lock.yaml')) as { externals: Record<string, { used: Record<string, unknown> }> };
-    expect(Object.keys(lock.externals.shop.used).sort()).toEqual(['money', 'order', 'order_id', 'orders_portal']);
+    // The new project reads the shop live by path: the promote takes no pin.
+    expect(fs.existsSync(path.join(part, '.wai', 'inputs.lock.yaml'))).toBe(false);
     // Family-consistent: no new error.
     expect(newFindings(before, errorsOf(root))).toEqual([]);
   });
@@ -218,9 +217,9 @@ describe('promote, externalize --as project and rename-alias respell every refer
       'contracts.order_id → contracts::order_id',
       'contracts.currency_code → currency_code',
     ]));
-    // billing pinned shop: its names only move, so it is re-pinned.
-    expect(planned.edits.some((e) => e.kind === 'pin' && /pin shop taken again/.test(e.detail))).toBe(true);
     migrations_apply(root, planned);
+    // billing reads shop live by path: whatever the plan lists as a pin, none is recorded.
+    expect(fs.existsSync(path.join(part, '.wai', 'inputs.lock.yaml'))).toBe(false);
 
     const member = path.join(root, 'libs', 'contracts');
     expect(planWritten(planned, (project) => (project === 'contracts' ? member : root))).toEqual([]);

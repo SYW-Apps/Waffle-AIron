@@ -2,11 +2,12 @@ kind: value-object
 id: dev_approval
 name: DevApproval
 description: >-
-  The served project's approval state for the dev page: whether the design moved since the last lock
-  and which specs, who locked it when, the branch the checkout has, and the project's name. Drives
-  the page's lock bar, the lock confirmation, the header and tab title naming which project the page
-  serves, and what the page says when the checkout switched branches or a review request was made on
-  another branch.
+  The served project's approval state for the dev page: whether the design or its policy moved since
+  the last lock and which specs, who locked it when, the branch the checkout has, the project's
+  name, each member project's own approval with its reason, and the scopes a lock may be narrowed
+  to. Drives the page's lock bar, the lock confirmation, the lock-scope list, the header and tab
+  title naming which project the page serves, and what the page says when the checkout switched
+  branches or a review request was made on another branch.
 fields:
   - name: approved
     type: bool
@@ -37,12 +38,21 @@ fields:
   - name: members
     type: list<ProjectApproval>
     description: >-
-      Each direct member project's approval, judged at its own root, so the page can offer its lock;
-      parts are approved with the served project and are not listed. Absent when the project
-      declares no member project
+      Each direct member project's own approval, judged at its own root, so the page can offer its
+      lock and say WHY one is drifted in the member's own terms (ProjectApproval: its own specs that
+      moved, the approval parts that moved, an owed project id, the inputs its build owes); parts
+      are approved with the served project and are not listed. A member's approval never moves the
+      served project's. Absent when the project declares no member project
     optional: true
+  - name: lockScopes
+    type: list<string>
+    description: >-
+      The subsystems a `wairon lock --subsystem` here may re-approve: the served project's own
+      subsystems, a part's included (a part's subsystems are its own). Never a member project's
+      subsystem: a member is locked at its own root, which the page offers through `members`.
+    optional: false
 methods: []
 componentClass: dev_cockpit_orchestrator
 sourcePath: src/server/dev-commands.ts
 createdAt: '2026-11-07T15:07:10.520Z'
-updatedAt: '2026-11-12T01:02:16.565Z'
+updatedAt: '2026-11-20T00:31:18.968Z'

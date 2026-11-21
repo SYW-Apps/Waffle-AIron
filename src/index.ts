@@ -66,7 +66,7 @@ export {
   validateProjectConfig,
   validateComponentCandidate,
   listRules,
-  computeGateStateId,
+  computeApprovalId,
   findTestsReferencing,
   searchSpecs,
   findReferences,

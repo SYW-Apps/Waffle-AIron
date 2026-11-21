@@ -30,6 +30,7 @@ import type {
   ExternalStatus,
   PinnedExternal,
   PinnedParent,
+  LockedPack,
   SurfaceOrigin,
   SurfaceSnapshot,
 } from '../models/index.js';
@@ -89,6 +90,16 @@ export function memberApprovedSurfaces(): Record<string, SurfaceSnapshot> {
 /** isurface_portal.memberStatuses — each live member compared with the approval it is judged against. Pure 1:1 forward. */
 export function memberStatuses(): ExternalStatus[] {
   return surfaceOrchestrator.memberStatuses();
+}
+
+/** isurface_portal.lockedPacks — the `packs` section of the bound project's inputs lock. Pure 1:1 forward. */
+export function lockedPacks(): Record<string, LockedPack> {
+  return surfaceOrchestrator.lockedPacks();
+}
+
+/** isurface_portal.recordPacks — record the packs as they resolved now in the bound project's inputs lock. Pure 1:1 forward. */
+export function recordPacks(packs: Record<string, LockedPack>): void {
+  surfaceOrchestrator.recordPacks(packs);
 }
 
 /** isurface_portal.unrecordedUses — each pinned external's uses its pin does not record, keyed by alias, counted offline. Pure 1:1 forward. */

@@ -15,7 +15,6 @@ owns: []
 dependsOn:
   - core_orchestrator
   - tree_transfer_orchestrator
-  - reachability_migration
   - demo_orchestrator
 transport: InProcess
 invokedBy:
@@ -26,4 +25,4 @@ invokedBy:
     repairs, tree import, provisioning) in their own process
 status: complete
 createdAt: '2026-09-25T17:32:49.056Z'
-updatedAt: '2026-10-07T22:40:29.864Z'
+updatedAt: '2026-11-20T01:28:11.365Z'

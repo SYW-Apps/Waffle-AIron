@@ -1,0 +1,15 @@
+id: v6_lock_file_adapter
+name: v6 Lock File Adapter
+description: >-
+  The v6-to-v7 step's own reader and writer for the lock files whose v6 forms the core no longer
+  reads: the raw format-2/3 .wai/lock.json, the v6 .wai/externals.lock.yaml, and the files the step
+  removes. It writes the new .wai/inputs.lock.yaml in v7's form on the rehearsal root it is given.
+  Only the step uses it; it goes with the step when the window moves on.
+subsystem: sdd_upgrade
+componentType: Adapter
+owns: []
+dependsOn:
+  - files_adapter
+status: complete
+createdAt: '2026-11-20T01:23:14.236Z'
+updatedAt: '2026-11-20T01:23:14.714Z'

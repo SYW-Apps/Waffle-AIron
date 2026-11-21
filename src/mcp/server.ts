@@ -3790,7 +3790,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ aliases?: string[] }>(server,
     'sdd_pin_externals',
     {
-      description: 'Pin the bound project\'s declared externals (.wai/project.yaml `externals`) — the named aliases, else all — into .wai/externals/<alias>.yaml and .wai/externals.lock.yaml, recording the signature digest of every member the project\'s references use. Answers one outcome per alias (pinned, unchanged, unresolved, unreachable) with the references that land on no public name of the producer (export them from its L0 to pin them). A tree-scoped write: a producer the request may not read is reported unreachable, never read.',
+      description: 'Pin the bound project\'s declared externals (.wai/project.yaml `externals`) — the named aliases, else all — into .wai/externals/<alias>.yaml and the inputs lock (.wai/inputs.lock.yaml), taking each pin from the producer\'s APPROVED state and recording the signature digest of every member the project\'s references use. A path external is read live and never pinned. Answers one outcome per alias (pinned, unchanged, unresolved, unreachable) with the references that land on no public name of the producer (export them from its L0 to pin them). A tree-scoped write: a producer the request may not read is reported unreachable, never read.',
       inputSchema: {
         aliases: z.array(z.string()).optional().describe('The aliases to pin; all declared externals when omitted'),
       },
@@ -4047,7 +4047,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ declared: boolean; description?: string }>(server,
     'sdd_set_network',
     {
-      description: 'Declare (declared: true, with an optional description) or remove (declared: false) the bound project\'s `network` in .wai/project.yaml: that this project and every member below it form one isolated network boundary. It changes which rules fire (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...), so run sdd_validate_tree after it; it is part of the gate identity, so the human re-locks. Use it instead of editing .wai/project.yaml by hand. A project-scoped write.',
+      description: 'Declare (declared: true, with an optional description) or remove (declared: false) the bound project\'s `network` in .wai/project.yaml: that this project and every member below it form one isolated network boundary. It changes which rules fire (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...), so run sdd_validate_tree after it; it is part of the approval identity, so the human re-locks. Use it instead of editing .wai/project.yaml by hand. A project-scoped write.',
       inputSchema: {
         declared: z.boolean().describe('true declares the network, false removes the declaration'),
         description: z.string().optional().describe('What the network encloses, in the project\'s words (shown on the network diagram); only with declared: true'),

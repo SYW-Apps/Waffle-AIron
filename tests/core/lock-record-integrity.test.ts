@@ -23,7 +23,7 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-const VALID = { stateId: { algorithm: 'design-v3', digest: 'abc' }, lockedAt: 't', lockedBy: 'local:me', validatorVersion: '1', validationResult: { valid: true, errors: 0, warnings: 0 }, status: 'ready', format: 3, specs: { 'a.yaml': 'd' } };
+const VALID = { stateId: { algorithm: 'design-v3', digest: 'abc' }, lockedAt: 't', lockedBy: 'local:me', validatorVersion: '1', validationResult: { valid: true, errors: 0, warnings: 0 }, status: 'ready', format: 4, parts: {}, specs: { 'a.yaml': 'd' } };
 
 function write(content: string): void {
   fs.writeFileSync(path.join(root, '.wai', 'lock.json'), content);
@@ -41,7 +41,7 @@ describe('readLockRecordAt — absent is null, present-but-unreadable is refused
     ['a BOM alone', '﻿', 'the file is empty'],
     ['a string', '"str"', 'it holds a string'],
     ['an array', '[]', 'it holds an array'],
-    ['an object with no gate identity', '{"formatVersion": 99}', 'it records no gate identity'],
+    ['an object with no approval identity', '{"formatVersion": 99}', 'it records no approval identity'],
     ['a newer format', JSON.stringify({ ...VALID, format: 99 }), 'it is lock record format 99, written by a newer wairon'],
     ['a malformed format', JSON.stringify({ ...VALID, format: 'x' }), 'its "format" is "x"'],
     ['specs that are no digest map', JSON.stringify({ ...VALID, specs: ['a'] }), 'its "specs" is not a map'],

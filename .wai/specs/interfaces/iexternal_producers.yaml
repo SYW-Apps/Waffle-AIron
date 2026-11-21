@@ -89,24 +89,28 @@ methods:
     effect: io
   - name: memberRevisions
     description: >-
-      Each live member of the bound project — a contained member or a `../` sibling declared under
-      `members`, read where it is stored and never pinned — with its root, the bound project's usage
-      of it by public name (spec_loader.exportUsage) and its tree at the approval it is judged
-      against, materialized read-only in the fetch cache: the commit that introduced the member
-      approval the bound project's lock records for it (its composition subject), else the member's
-      own last committed approval. A member in no git work tree, or whose approval no commit holds,
-      comes back with no revision. Never on a hosted request (answers none). No network.
-    signature: 'memberRevisions(recordedIn?: string): list<member_revision>'
+      Each live member of the bound project (a contained member or a `../` sibling declared under
+      `members`, read where it is stored and never pinned) with its root, the bound project's usage
+      of it by public name (spec_loader.exportUsage), and its tree at its own last committed
+      approval, materialized read-only in the fetch cache. A path external (`../x` declared under
+      `externals`) is not a member: it is read live as a node of the scan and judged for validity
+      only, so it never appears here and never has a revision. The bound project's lock records no
+      member, so the member's own `.wai/lock.json` history is the only source. With `asOf`, the
+      member's last approval committed at or before that moment. A member in no git work tree, or
+      whose approval no commit holds, comes back with no revision. Never on a hosted request
+      (answers none). No network.
+    signature: 'memberRevisions(asOf?: datetime): list<member_revision>'
     returns: list<member_revision>
     params:
-      - name: recordedIn
-        type: string
+      - name: asOf
+        type: datetime
         description: >-
-          Another tree of the bound project (its tree at an earlier revision, in the fetch cache)
-          whose lock records the member approvals to read instead of the bound root's — surface
-          diff's baseline reads each member as THAT approval recorded it
+          Read each member's approval as it stood at this moment (surface diff's baseline passes its
+          revision's commit time); its latest committed approval when omitted
         optional: true
+        previousNames:
+          - recordedIn
     effect: io
 status: complete
 createdAt: '2026-09-26T17:43:52.033Z'
-updatedAt: '2026-10-09T16:50:49.318Z'
+updatedAt: '2026-11-20T19:41:07.187Z'

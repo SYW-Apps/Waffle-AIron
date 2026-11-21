@@ -22,12 +22,13 @@ import { dirHash, pinAt } from '../helpers/family-verbs.js';
 
 const configText = (dir: string): string => fs.readFileSync(path.join(dir, '.wai', 'project.yaml'), 'utf8');
 const lockOf = (dir: string): Record<string, { project: string; digest: string; snapshot: string }> =>
-  (readYamlFile(path.join(dir, '.wai', 'externals.lock.yaml')) as { externals: Record<string, { project: string; digest: string; snapshot: string }> }).externals;
+  (readYamlFile(path.join(dir, '.wai', 'inputs.lock.yaml')) as { externals: Record<string, { project: string; digest: string; snapshot: string }> }).externals;
 
 describe('stage 6 — the verbs\' writes, one at a time', () => {
   const made: ContractFamily[] = [];
-  const family = (): ContractFamily => {
-    const f = buildContractFamily();
+  /** The contract family; with `git`, billing's external for ledger is a git one — the kind of external a pin holds. */
+  const family = (git = false): ContractFamily => {
+    const f = buildContractFamily({ git });
     made.push(f);
     return f;
   };
@@ -140,7 +141,7 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
   });
 
   it('renamePin carries a pin to a new alias and producer id without re-pinning — digest and `used` kept; unpin removes a pin; each answers false when there is nothing to do', () => {
-    const f = family();
+    const f = family(true);
     pinAt(f.billing);
     const pinned = lockOf(f.billing).ledger;
     runWithProjectRoot(f.billing, () => {
@@ -156,7 +157,7 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
       expect(unpin('books')).toBe(false);
     });
     // The last entry gone, the lock file goes with it.
-    expect(fs.existsSync(path.join(f.billing, '.wai', 'externals.lock.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(f.billing, '.wai', 'inputs.lock.yaml'))).toBe(false);
     expect(fs.existsSync(path.join(f.billing, '.wai', 'externals', 'books.yaml'))).toBe(false);
   });
 

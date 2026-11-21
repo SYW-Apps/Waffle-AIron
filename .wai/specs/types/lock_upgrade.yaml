@@ -1,0 +1,36 @@
+kind: value-object
+id: lock_upgrade
+name: LockUpgrade
+description: >-
+  Provenance on a lock record that `wairon upgrade` rewrote from an earlier wairon major's format
+  into this one: who approved and when stay the human's, and this says the record was rewritten by a
+  tool, not re-approved. Carried when the upgrade proved the approved design and policy unchanged;
+  otherwise the record keeps its old identity, reads stale, and one `wairon lock` re-approves it.
+subsystem: sdd_core
+fields:
+  - name: at
+    type: string
+    description: ISO-8601 time the upgrade rewrote the record
+    optional: false
+  - name: fromFormat
+    type: int
+    description: The record format it was rewritten from (2 or 3 for a wairon 6 record)
+    optional: false
+  - name: compared
+    type: list<string>
+    description: >-
+      What the upgrade compared: `specs` (every own spec's design digest) and the parts it matched
+      (design, rules, composition, network); for a record not carried, what could not be compared or
+      did not match
+    optional: false
+  - name: carried
+    type: bool
+    description: >-
+      Whether the approval was carried: true writes the current identity and its parts; false keeps
+      the old identity (which never equals a v7 one) and empty parts, so the record reads stale and
+      names the own specs that moved
+    optional: false
+methods: []
+sourcePath: src/core/lockfile.ts
+createdAt: '2026-11-19T20:29:28.810Z'
+updatedAt: '2026-11-20T01:24:21.944Z'

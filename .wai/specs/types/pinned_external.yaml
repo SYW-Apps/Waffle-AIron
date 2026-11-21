@@ -2,10 +2,11 @@ kind: value-object
 id: pinned_external
 name: PinnedExternal
 description: >-
-  One declared external as the owner's gate judges against it: its lock entry and the snapshot that
-  entry names, read from the bound project's own .wai/externals.lock.yaml and .wai/externals/ and
-  nothing else. The producer is never read: this is what the project pinned, not what the producer
-  holds now (that comparison is the family run's composition).
+  One declared hosted or git external as the owner's gate judges against it: its lock entry and the
+  snapshot that entry names, read from the bound project's own .wai/inputs.lock.yaml and
+  .wai/externals/ and nothing else. The producer is never read: this is what the project pinned, not
+  what the producer holds now (that comparison is the family run's composition). A path external is
+  read live and has no entry.
 subsystem: sdd_surfaces
 fields:
   - name: alias
@@ -38,4 +39,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-28T06:01:54.841Z'
-updatedAt: '2026-09-28T17:16:24.975Z'
+updatedAt: '2026-11-20T01:30:43.401Z'

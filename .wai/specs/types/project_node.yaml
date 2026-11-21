@@ -106,7 +106,14 @@ fields:
       What a consumer in another project judges a call into its native (no abi) InProcess library
       against (LANGUAGE_BRIDGE_MISSING).
     optional: true
+  - name: pathExternal
+    type: bool
+    description: >-
+      True when the node was reached as a path external (`../x` under externals), not as a member:
+      it is read live and judged for validity only, never answered as a member approval, a member
+      debt or a member revision.
+    optional: true
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:52.264Z'
-updatedAt: '2026-10-09T01:02:45.848Z'
+updatedAt: '2026-11-20T20:50:08.612Z'

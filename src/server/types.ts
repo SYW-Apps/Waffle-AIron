@@ -1,4 +1,5 @@
 import type { LockRecord } from '../core/lockfile.js';
+import type { ApproverIdentity } from '../models/lock.js';
 import type { FindingsState } from '../core/canvas.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
 import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
@@ -385,6 +386,19 @@ export interface PrincipalSubject {
   email?: string;
 }
 
+/**
+ * principal_subject.approver — the approver identity a hosted lock records for this subject: its user
+ * id and display name, source hosted. A credential that resolved no subject (the bootstrap master
+ * credential) has none: its caller records the instance master credential instead. Pure.
+ */
+export function approver(subject: PrincipalSubject): ApproverIdentity {
+  return {
+    id: subject.userId,
+    ...(subject.displayName ? { name: subject.displayName } : {}),
+    source: 'hosted',
+  };
+}
+
 /** The authenticated caller identity and authorized scope. Transient (never
  *  persisted). Its subject, projects narrowing, and permissionSubject are
  *  server-side bindings derived from the token or bootstrap credential, never
@@ -660,13 +674,13 @@ export interface ApprovalRequest {
    *  GovernedProjectCreation). The full impacts are in the project.init.policy
    *  audit event. Absent for every other kind and before execution. */
   executionSummary?: string;
-  /** A project:lock request only: the gate identity of the tree the request was
-   *  made about, captured when it was created, `<algorithm>:<digest>`. The
-   *  approved execution refuses when the tree's identity no longer matches it —
-   *  an approval never certifies a design nobody asked to have approved.
-   *  Absent on a request created before stage 5, which executes against the
-   *  tree as it then stands. */
-  gateStateId?: string;
+  /** A project:lock request only: the approval identity (own design plus own
+   *  policy) of the tree the request was made about, captured when it was
+   *  created, `<algorithm>:<digest>`. The approved execution refuses when the
+   *  tree's identity no longer matches it — an approval never certifies a
+   *  design nobody asked to have approved. Absent on a request created before
+   *  it was recorded, which executes against the tree as it then stands. */
+  approvalId?: string;
 }
 
 /** A decision supplied by an authorized user/admin for a pending approval request. */

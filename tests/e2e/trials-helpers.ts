@@ -153,3 +153,46 @@ export function gitInit(dir: string): void {
 export function countCode(text: string, code: string): number {
   return text.split(`[${code}]`).length - 1;
 }
+
+/** A producer served over git: the `file://` source to declare, and a way to release a new state of it. */
+export interface GitProducer {
+  /** The git source (no commit named: the consumer pins the producer's approved head). */
+  source: string;
+  /** The commit the producer was first served at. */
+  commit: string;
+  /** Approve the producer's tree as it now stands, commit it and push it, so a live read of the remote sees it. */
+  publish: () => Promise<void>;
+}
+
+/**
+ * Serve the project in `dir` as a git producer (wairon 7 pins only hosted and
+ * git sources; a `../` sibling is read live and never pinned). A git producer
+ * is read at its APPROVED state, so it is locked first; `publish()` locks and
+ * pushes a later release.
+ */
+export async function serveGitProducer(run: TrialSandbox['run'], folder: string, dir: string): Promise<GitProducer> {
+  const lock = await run(['lock', '--yes'], dir);
+  if (lock.code !== 0) throw new Error(`the producer could not be approved: ${transcript(lock)}`);
+  gitInit(dir);
+  const bare = path.join(folder, `${path.basename(dir)}-remote.git`);
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'trial', GIT_AUTHOR_EMAIL: 'trial@example.invalid',
+    GIT_COMMITTER_NAME: 'trial', GIT_COMMITTER_EMAIL: 'trial@example.invalid',
+  };
+  const git = (cwd: string, ...args: string[]): string => execFileSync('git', args, { cwd, env, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  git(dir, 'clone', '-q', '--bare', dir, bare);
+  git(dir, 'remote', 'add', 'origin', bare);
+  const branch = git(dir, 'branch', '--show-current');
+  return {
+    source: `file:///${bare.split(path.sep).join('/')}`,
+    commit: git(dir, 'rev-parse', 'HEAD'),
+    publish: async () => {
+      const again = await run(['lock', '--yes'], dir);
+      if (again.code !== 0) throw new Error(`the release could not be approved: ${transcript(again)}`);
+      git(dir, 'add', '-A');
+      git(dir, '-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'release', '--allow-empty');
+      git(dir, 'push', '-q', 'origin', `HEAD:${branch}`);
+    },
+  };
+}

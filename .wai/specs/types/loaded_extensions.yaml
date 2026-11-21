@@ -80,7 +80,13 @@ fields:
       Every practice the loaded packs declare, each tagged with its pack, in pack load order. A
       practice id declared again by a later pack is left out and reported among the load errors.
     optional: false
+  - name: contributions
+    type: map<string, PackContribution>
+    description: >-
+      Each loaded pack's own contribution, keyed by pack name, kept beside the merged lists so a
+      pack's content can be digested on its own.
+    optional: false
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:57:07.906Z'
-updatedAt: '2026-11-06T21:43:49.206Z'
+updatedAt: '2026-11-20T19:49:20.968Z'

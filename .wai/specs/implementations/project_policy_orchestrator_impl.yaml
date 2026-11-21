@@ -558,47 +558,36 @@ methods:
         type: local
       - stepNumber: 9
         description: >-
-          Compute the gate identity as it stands now through the validator adapter: spec content,
-          governing doctrine and consumed contract inputs
+          Compute the approval identity as it stands now through the validator adapter: the own
+          design and the own policy
         type: call
         targetComponent: host_validator_adapter
-        targetMethod: computeGateStateId
+        targetMethod: computeApprovalId
       - stepNumber: 10
         description: >-
-          Resolve the lock VERDICT through the shared authority, passing the gate identity just
+          Resolve the lock VERDICT through the shared authority, passing the approval identity just
           computed, rather than testing whether a record merely exists: a stale record freezes
           nothing, so reporting it as locked claimed a freeze that did not hold. Reported as locked
-          plus a distinct stale flag, so a UI can prompt for the re-lock.
+          plus a distinct stale flag, so a UI can prompt for the re-lock. A release change never
+          makes it stale: the release is not part of the approval
         type: call
         targetComponent: host_core_adapter
         targetMethod: readLockState
       - stepNumber: 11
-        description: >-
-          When the verdict is stale, read the project's own approval entry (familyApprovals at depth
-          0, the entry keyed ''): its release verdict is the shared one
-          (family_validator.releaseVerdict). When only the wairon release moved and the approved
-          design re-validates clean at the --ci standard, the verdict is carried and the approval is
-          in force, so the view reports locked, not stale, exactly as lock-check and status do
-          locally.
-        type: call
-        targetComponent: host_validator_adapter
-        targetMethod: familyApprovals
-      - stepNumber: 12
         description: >-
           Read the project's L1 subsystem specs to collect the subsystems declaring their own
           profile, which the project-level profile does not govern.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 13
+      - stepNumber: 12
         description: >-
           Assemble the ProjectConfigView from the resolved projectType, the locked flag (true when
-          the verdict is locked or a stale verdict's release verdict carried the approval, with a
-          stale flag otherwise when it is stale), the classified profileSource and
-          profileResolvable, the recorded selection ids that are not the governing one
+          the verdict is locked, with a stale flag when it is stale), the classified profileSource
+          and profileResolvable, the recorded selection ids that are not the governing one
           (unappliedProfileIds), and the overriding subsystem ids.
         type: local
-      - stepNumber: 14
+      - stepNumber: 13
         description: Return the project configuration view
         type: return
         outcome: the project configuration view
@@ -705,45 +694,35 @@ methods:
         targetMethod: recordProfileSelection
       - stepNumber: 14
         description: >-
-          Compute the gate identity as it stands now through the validator adapter: spec content,
-          governing doctrine and consumed contract inputs
+          Compute the approval identity as it stands now through the validator adapter: the own
+          design and the own policy
         type: call
         targetComponent: host_validator_adapter
-        targetMethod: computeGateStateId
+        targetMethod: computeApprovalId
       - stepNumber: 15
         description: >-
-          Resolve the lock VERDICT through the shared authority, passing the gate identity just
-          computed (locked only when a record exists AND its gate identity equals that one).
+          Resolve the lock VERDICT through the shared authority, passing the approval identity just
+          computed (locked only when a record exists AND its identity equals that one).
         type: call
         targetComponent: host_core_adapter
         targetMethod: readLockState
       - stepNumber: 16
-        description: >-
-          When the verdict is stale, read the project's own approval entry (familyApprovals at depth
-          0, the entry keyed ''): a carried release verdict (only the wairon release moved, and the
-          approved design re-validates clean at the --ci standard) keeps the approval in force, the
-          same verdict the local lock-check gives.
-        type: call
-        targetComponent: host_validator_adapter
-        targetMethod: familyApprovals
-      - stepNumber: 17
         description: >-
           Read the project's L1 subsystem specs to collect the subsystems declaring a profile of
           their own, which takes precedence over the project-level profile for their components.
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadSubsystemSpecs
-      - stepNumber: 18
+      - stepNumber: 17
         description: >-
           Assemble the updated ProjectConfigView: the applied projectType, the locked flag (true
-          when the verdict is locked or a stale verdict's release verdict carried the approval, with
-          a stale flag otherwise when it is stale), profileSource from the ensure result,
-          profileResolvable true (the write path guarantees resolvability), adoptedPackName when a
-          pack had to be vendored, the unapplied recorded-selection remainder, the ids of the
-          subsystems that override the project-level profile, and the impact measured before the
-          write.
+          when the verdict is locked, with a stale flag when it is stale), profileSource from the
+          ensure result, profileResolvable true (the write path guarantees resolvability),
+          adoptedPackName when a pack had to be vendored, the unapplied recorded-selection
+          remainder, the ids of the subsystems that override the project-level profile, and the
+          impact measured before the write.
         type: local
-      - stepNumber: 19
+      - stepNumber: 18
         description: Return the updated project configuration view
         type: return
         outcome: the updated project configuration view
@@ -1036,4 +1015,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-09T20:50:11.443Z'
-updatedAt: '2026-10-08T12:15:51.352Z'
+updatedAt: '2026-11-20T00:31:14.726Z'

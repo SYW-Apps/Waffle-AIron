@@ -34,25 +34,23 @@ methods:
   - name: compose
     description: >-
       With one project's root bound: compare each of its externals — and each of its referenced
-      project members (a `../`, git or hosted source; stage 8) — as its lock records it with the
-      producer's live export table (decision 19, signature-level superset, canonical digests). The
-      uses compared are every public name the project's references land on or spell — `alias::name`
-      references and bare names bound through its `use` imports alike, each method of an implemented
-      extension point too, for family and outside producers alike since stage 8 — so a type used
-      only bare is covered, and a producer outside the family that breaks a used method is
-      EXTERNAL_INCOMPATIBLE, not only drifted. A used method or type that changed, was renamed (the
-      producer's rename trace names the new name, and the message names it) or vanished is
-      EXTERNAL_INCOMPATIBLE (error) — pinned or not, a public name gone from the live table
-      included: a use the lock does not hold is still compared with the live producer the run can
-      read. An external with uses that was never pinned at all is EXTERNAL_UNPINNED (error): nothing
-      records what the design is judged against, so a producer change cannot be told — never a pass,
-      and `wairon lock` refuses until it is pinned. A producer whose canonical contract changed
-      while nothing used changed, or whose pinned snapshot no longer carries what the producer says
-      (a stale abi, transport or role), is EXTERNAL_DRIFTED (notice; prose never drifts); a use that
-      cannot be compared — used but not in the lock, an unreachable, unfetchable or unreadable
-      producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the family run's
-      gate over producers inside its reach (one checkout, so live is reproducible there); everything
-      else is advise's to report.
+      project members (a `../`, git or hosted source) — with the producer's live export table
+      (signature-level superset, canonical digests). The uses compared are every public name the
+      project's references land on or spell — `alias::name` references and bare names bound through
+      its `use` imports alike, each method of an implemented extension point too — so a type used
+      only bare is covered. A PATH external (`../x`) carries no pin: it is a sibling checkout read
+      live, like a workspace path dependency, so every run compares its uses with the live producer,
+      and a used method or type that changed, was renamed (the producer's rename trace names the new
+      name, and the message names it) or vanished is EXTERNAL_INCOMPATIBLE (error); it is never
+      drifted or unpinned. A HOSTED or GIT producer is compared as its inputs-lock pin records it: a
+      used member changed, renamed or gone is EXTERNAL_INCOMPATIBLE (error) — pinned or not, a use
+      the pin does not hold included; one with uses never pinned at all is EXTERNAL_UNPINNED
+      (error), and the build owes a pin (inputs); a producer whose canonical contract changed while
+      nothing used changed, or whose pinned snapshot no longer carries what the producer says (a
+      stale abi, transport or role), is EXTERNAL_DRIFTED (notice; prose never drifts); a use that
+      cannot be compared — an unreachable, unfetchable or unreadable producer — is
+      EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the family run's gate over
+      producers inside its reach; everything else is advise's to report.
     signature: 'compose(project: string): ExternalComposition'
     returns: ExternalComposition
     params:
@@ -87,26 +85,20 @@ methods:
       references into it as unavailable). Two members resolving to one project id are
       PROJECT_ID_COLLISION (error, pointing at consumption: one member, several consumers). A member
       that declares no id is PROJECT_ID_DEFAULTED (notice), naming its alias as the id to declare; a
-      member with no usable id is PROJECT_ID_AMBIGUOUS (warning) — the family half of project
-      identity, moved here from the project-identity rule, which judges only the bound project's own
-      id. Projects of the selection that depend on each other in a loop are PROJECT_DEPENDENCY_CYCLE
-      (warning), reported once per loop on each project in it with the references that close each
-      edge. A family-only (audience project) L0 re-export of another family project's name that no
-      project of the family reaches through the re-exporting project is EXPORT_UNREACHED (notice): a
-      dead re-export, its consumer moved to the source or left. A present member whose approval
+      member with no usable id is PROJECT_ID_AMBIGUOUS (warning). Projects of the selection that
+      depend on each other in a loop are PROJECT_DEPENDENCY_CYCLE (warning), reported once per loop
+      on each project in it with the references that close each edge. A family-only (audience
+      project) L0 re-export of another family project's name that no project of the family reaches
+      through the re-exporting project is EXPORT_UNREACHED (notice). A present member whose approval
       state (approvals) is never is MEMBER_UNAPPROVED, and one that is drifted is MEMBER_DRIFTED —
-      warnings, and they stay warnings in stage 5 (decision #11): `--ci` at the parent fails until
-      the member is locked or its severity is lowered, and a parent that wants its own lock to
-      refuse sets composition.requireApprovedMembers. A member drifted only by the stage-5 identity
-      upgrade says so in the message. A never-approved member whose own tree holds nothing below its
-      L0 (ProjectApproval.approvable is false: no subsystem, no type, no L0 export entry, no member
-      project) is MEMBER_NOTHING_APPROVABLE (notice) instead of MEMBER_UNAPPROVED: the lock
-      MEMBER_UNAPPROVED prescribes refuses for such a member, so the parent says there is nothing to
-      approve there yet. A notice rather than a suppression keeps the empty member visible in the
-      family run; it never fails `--ci`, and once the member holds a type, an export entry or a
-      subsystem, MEMBER_UNAPPROVED applies as before. A types-only member is approvable, so its
-      MEMBER_UNAPPROVED is honest. Each finding's severity is the root's rules.sddRuleSeverity
-      override, else the default.
+      its own lock no longer matches its own design and policy — both warnings: `--ci` at the parent
+      fails until the member is locked at its own root or its severity is lowered; the parent's own
+      approval never moves with them, and a parent that wants its build to refuse sets
+      composition.requireApprovedMembers (a member input debt). A never-approved member whose own
+      tree holds nothing below its L0 (ProjectApproval.approvable is false) is
+      MEMBER_NOTHING_APPROVABLE (notice) instead of MEMBER_UNAPPROVED: the lock MEMBER_UNAPPROVED
+      prescribes refuses for such a member. Each finding's severity is the root's
+      rules.sddRuleSeverity override, else the default.
     signature: 'checkMembers(family: ProjectFamily): list<ValidationIssue>'
     returns: list<ValidationIssue>
     params:
@@ -241,20 +233,21 @@ methods:
           configuration or specs
   - name: approvals
     description: >-
-      The bound project's pin tree: the approval state of the bound root and of each PROJECT member
-      within `depth` levels of its project graph (all levels when omitted) — contained ones and,
-      since stage 8, referenced ones (a `../`, git or hosted source), opened at their sibling
-      checkout or the fetch cache at the pinned commit — each computed at that project's OWN root —
-      its lock record against its own gate identity recomputed there — so the answer about a project
-      is the same whichever root asked (status-agrees). Per member also: its composition subject
-      (its record's stateId), whether its staleness is only the stage-5 identity upgrade, and how
-      its parent's lock pinned it (matches | moved | unpinned, read from the parent's record
-      `members`, or its legacy `children` in the v5 reading `wairon upgrade` binds). Each PART of a
-      selected project is answered too (stage 8), as a part: approved exactly when its declaring
-      project is (its approval is that project's), with its content digest and the commit it was
-      read at — what a lock records as the part's MemberPin. A declared member with no project on
-      disk is `never`. Reads each project's own tree once and writes nothing; the caller must gate
-      on reach itself before it asks about a family.
+      The bound project's approvals: the approval and inputs state of the bound root and of each
+      PROJECT member within `depth` levels of its project graph (all levels when omitted) —
+      contained ones and referenced ones (a `../`, git or hosted source), opened at their sibling
+      checkout or the fetch cache at the pinned commit — each computed at that project's OWN root:
+      its lock record against its own approval identity recomputed there, and its inputs against its
+      own inputs lock (inputs), so the answer about a project is the same whichever root asked
+      (status-agrees). A parent records nothing about its members and reads nothing of theirs but
+      their own records: a member re-locking never moves its parent. A path external (`../x`
+      declared under `externals`) is not a member: it is read live as a node of the scan and the
+      owner's gate judges it for validity only, so it is never answered here as a member approval
+      and never a member debt. Below a selected project that sets composition.requireApprovedMembers
+      the selection reaches one level further, so its member debts are judged from real entries.
+      Each PART of a selected project is answered too, as a part: its state is its declaring
+      project's. A declared member with no project on disk is `never`. Reads each project's own tree
+      once and writes nothing; the caller must gate on reach itself before it asks about a family.
     signature: 'approvals(depth?: int): list<ProjectApproval>'
     returns: list<ProjectApproval>
     params:
@@ -381,9 +374,10 @@ methods:
     effect: read
   - name: unpinned
     description: >-
-      The bound project's declared externals (and referenced project members) never pinned: no entry
-      in its externals lock, so nothing records what its design is judged against. A part is no
-      producer and is left out. Read from the bound root's own pins
+      The bound project's declared externals and referenced project members with a hosted or git
+      source that the inputs lock holds no entry for: nothing records what its design is judged
+      against. A path external (`../x`) is read live and never pinned, and a part is no producer:
+      both are left out. Read from the bound root's own pins
       (validator_surfaces_adapter.listPinnedExternals); writes nothing.
     signature: 'unpinned(): list<string>'
     returns: list<string>
@@ -393,9 +387,9 @@ methods:
     description: >-
       The uses of each pinned external (and referenced project member) of the bound project that its
       pin does not record, keyed by alias, each `<name>` or `<name>.<method>` — read offline from
-      the bound root's own pins and references (validator_surfaces_adapter.unrecordedUses). With
-      unpinned, what a project's approval owes: `wairon lock` refuses until a re-pin records them.
-      Writes nothing.
+      the bound root's own pins and references (validator_surfaces_adapter.unrecordedUses). What the
+      build inputs owe (inputs, InputDebtKind unrecorded) until a re-pin records them. Writes
+      nothing.
     signature: 'unrecorded(): map<string, list<string>>'
     returns: map<string, list<string>>
     params: []
@@ -416,35 +410,6 @@ methods:
         type: string
         description: The `alias::name` the contract would implement
     effect: read
-  - name: releaseVerdict
-    description: >-
-      THE verdict on an approval whose gate identity no longer matches because the wairon release
-      changed — one function every surface reads through the project's approval entry (lock-check,
-      status, sdd_get_status, validate, the family view). Only a record that PROVES the project's
-      own inputs unchanged is re-validated: its gateParts break down its stateId
-      (lock_record.partsProblem is none), every part but `release` equals the identity's current
-      one, and its release stamp is older than or the same as the running release
-      (lock_record.releaseStampAgainst). Such an approval is re-validated under the current rules,
-      in the same command: clean at the `--ci` standard (no error, no warning but the draft-related
-      ones --ci waives; notices never count) it CARRIES OVER — approved, nothing written; otherwise
-      it is stale for exactly the findings the new release reports. A record that cannot prove it,
-      over a design whose own spec files and direct members' approvals did not move, is stale with
-      one sentence (ReleaseVerdict.reason) and never re-validated: taken before gate parts
-      ("approved under <old> before wairon recorded its inputs separately — re-lock once to record
-      them; later upgrades then carry over"), stamped by a release that records gate parts although
-      it carries none (its stamp was edited: an earlier wairon wrote it), carrying parts that do not
-      break down its identity, or stamped by a newer wairon or by no valid version. Undefined when
-      what moved is not the release: the caller judges it as before. Writes nothing; a verdict is
-      decided once per record and identity in a process.
-    signature: 'releaseVerdict(record: LockRecord, current: StateId): ReleaseVerdict?'
-    returns: ReleaseVerdict?
-    params:
-      - name: record
-        type: LockRecord
-        description: The project's own lock record
-      - name: current
-        type: StateId
-        description: Its gate identity as computed now, with its parts
   - name: adviseNetwork
     description: >-
       THE MEMBER'S VERDICT IS THE SAME WITH OR WITHOUT ITS FAMILY ON DISK; ITS FAMILY'S WORD IS
@@ -477,6 +442,28 @@ methods:
           repeated
         optional: true
     effect: read
+  - name: inputs
+    description: >-
+      With one project's root bound: what its build inputs owe beside its approval
+      (ProjectApproval.inputs), from its own committed files, so the answer is location-independent.
+      An external or referenced project member with a hosted or git source that the inputs lock
+      holds no entry for is `unpinned`; a use of a pinned one its pin does not record is
+      `unrecorded`, naming each use; a selected pack that cannot load, has no entry in the inputs
+      lock, or whose doctrine digest (approval_identity.packContents) differs from the one recorded
+      is `pack`; and, when the project sets composition.requireApprovedMembers, each direct member
+      project in `members` whose state is not approved is `member`. A path external (`../x`) is read
+      live and never owes a pin. Each debt carries the one sentence a verdict quotes, with the
+      command that clears it (`wairon externals pin <alias>`, `wairon pack sync`, the member's own
+      `wairon lock`). Empty when the inputs hold. Writes nothing.
+    signature: 'inputs(members: list<ProjectApproval>): list<InputDebt>'
+    returns: list<InputDebt>
+    params:
+      - name: members
+        type: list<ProjectApproval>
+        description: >-
+          The bound project's direct members' entries, judged at their own roots; read only under
+          composition.requireApprovedMembers
+    effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-30T12:03:38.529Z'
+updatedAt: '2026-11-20T19:41:11.460Z'

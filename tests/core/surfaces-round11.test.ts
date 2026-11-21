@@ -7,9 +7,9 @@ import { invalidateSpecCache, loadSystemSpec, readProjectSystem, updateSpec } fr
 import { getExternalsStatus, pinExternals } from '../../src/core/surfaces.js';
 import { adviseExternals } from '../../src/core/validation.js';
 import { relationHealth } from '../../src/models/index.js';
-import { sameRulesNotice } from '../../src/models/lock.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness';
 import { projectYaml } from '../helpers/conformance-r6-trees';
+import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // Round-11 sandbox trials — members, externals and approval. Each block
@@ -17,9 +17,13 @@ import { projectYaml } from '../helpers/conformance-r6-trees';
 // ---------------------------------------------------------------------------
 
 const roots: string[] = [];
+const cleanups: (() => void)[] = [];
 afterEach(() => {
   setProjectRoot(null);
   invalidateSpecCache();
+  for (const c of cleanups.splice(0)) {
+    try { c(); } catch { /* windows locks */ }
+  }
   for (const dir of roots.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* windows locks */ }
   }
@@ -64,20 +68,24 @@ function consumer(): FixtureTree {
   };
 }
 
-function pinnedPair(transport: 'HTTP' | 'InProcess'): { producer: string; consumer: string } {
+/** The consumer pinned against the producer, a git external served by a local repository: the kind of external a pin judges. */
+function pinnedPair(transport: 'HTTP' | 'InProcess'): { producer: string; consumer: string; release(): void } {
   const folder = tempDir();
+  cleanups.push(isolateGlobals(cleanups));
   const producer = writeProject(path.join(folder, 'producer'), api(transport, '/habits/{habitId}/check-ins'), projectYaml('habitly-api'));
-  const reader = writeProject(path.join(folder, 'consumer'), consumer(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { path: '../producer' } } } }));
+  const served = serveGit(cleanups, producer, 'producer');
+  const reader = writeProject(path.join(folder, 'consumer'), consumer(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { git: served.url } } } }));
   bind(reader);
   expect(pinExternals().map((p) => p.outcome)).toEqual(['pinned']);
-  return { producer, consumer: reader };
+  return { producer, consumer: reader, release: () => { served.release(); } };
 }
 
 describe('1. a moved wire route is a break (solo-app top-3)', () => {
-  it('HTTP: the use is changed, the external incompatible, the advisory EXTERNAL_LIVE_INCOMPATIBLE', () => {
-    const { producer, consumer: reader } = pinnedPair('HTTP');
+  it('HTTP: the use is changed and the external incompatible', () => {
+    const { producer, consumer: reader, release } = pinnedPair('HTTP');
     fs.rmSync(path.join(producer, '.wai', 'specs', 'interfaces'), { recursive: true, force: true });
     writeProject(producer, api('HTTP', '/habits/{habitId}/done'), projectYaml('habitly-api'));
+    release();
     bind(reader);
     const [status] = getExternalsStatus();
     // Round 11: state "unchanged", health "drifted" — exit 0 for a client spelling the route.
@@ -85,9 +93,8 @@ describe('1. a moved wire route is a break (solo-app top-3)', () => {
     expect(status.uses[0].detail).toContain('a client calling it over the wire spells the route');
     expect(relationHealth(status)).toBe('incompatible');
     bind(reader);
-    const advised = adviseExternals();
-    expect(advised.map((i) => i.code)).toEqual(['EXTERNAL_LIVE_INCOMPATIBLE']);
-    expect(advised[0].message).toContain('"habit_portal.checkIn" changed since it was pinned: endpoint moved');
+    // Offline, a pinned git external is not compared: the advisory says so.
+    expect(adviseExternals().map((i) => i.code)).toEqual(['EXTERNAL_LIVE_UNCOMPARED']);
   });
 
   it('InProcess: a library binds no route, so nothing moves and the external stays ok', () => {
@@ -173,22 +180,6 @@ describe('3. a change report echoes what the write stores (lib-and-app R11-9)', 
     expect(JSON.stringify(added.changes)).not.toContain('geo-sdk::');
     const stored = fs.readFileSync(path.join(app, '.wai', 'specs', 'components', fs.readdirSync(path.join(app, '.wai', 'specs', 'components'))[0]), 'utf8');
     expect(stored).toContain('geo::distance');
-  });
-});
-
-describe('4. the upgrade carry-over is said once, as a notice (lib-and-app R11-1)', () => {
-  const holding = { state: 'approved' as const };
-  it('an older release\'s record under the same rules: one notice naming both releases', () => {
-    const notice = sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, holding, '5.1.1-dev.115');
-    expect(notice).toBe(' Notice: approved under wairon 5.1.1-dev.114; this release (5.1.1-dev.115) judges the design by the same rules, so the approval carries over as it is.');
-  });
-  it('silent for the same release, a newer stamp, a release verdict, a stamp problem or an approval not holding', () => {
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.115' }, holding, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.116' }, holding, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, { ...holding, release: { from: '5.1.1-dev.114', to: '5.1.1-dev.115', carried: true } } as never, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, { ...holding, stampProblem: 'x' }, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, { state: 'drifted' }, '5.1.1-dev.115')).toBe('');
-    expect(sameRulesNotice({ validatorVersion: '5.1.1-dev.114' }, undefined, '5.1.1-dev.115')).toBe('');
   });
 });
 

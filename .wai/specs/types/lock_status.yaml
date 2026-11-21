@@ -4,15 +4,12 @@ name: LockStatus
 description: >-
   The resolved verdict on a project's lock, plus the evidence it was decided from. Exists so every
   surface answers "is this locked?" identically: the hosted project config view, `wairon status`,
-  and `wairon doctor`. Before it, the gated re-check compared state identities while the config view
-  answered from record existence alone — so a stale lock reported as locked, claiming a freeze that
-  no longer held.
+  and `wairon doctor`. Only a format-4 record reaches it: lock_store refuses an earlier one, naming
+  `wairon upgrade`, so no identity of another algorithm is ever compared here.
 fields:
   - name: state
     type: LockState
-    description: >-
-      Whether the lock record still covers the design (see upgraded() for a record taken under an
-      earlier gate identity algorithm).
+    description: Whether the lock record still covers the own design and policy.
     optional: false
   - name: record
     type: LockRecord?
@@ -24,21 +21,10 @@ fields:
   - name: current
     type: StateId
     description: >-
-      The gate identity as it stands now — what the verdict was decided against, and what a re-lock
-      would record.
+      The approval identity as it stands now — what the verdict was decided against, and what a
+      re-lock would record.
     optional: false
-methods:
-  - name: upgraded
-    signature: 'upgraded(): boolean'
-    returns: bool
-    description: >-
-      Whether a stale verdict comes from the identity itself changing shape rather than from
-      anything it covers: true when the state is stale and the record's stateId.algorithm differs
-      from current.algorithm. A lock taken before stage 5 (algorithm sha256+content+doctrine+inputs)
-      against the stage-5 identity (sha256+content+doctrine+inputs+members) answers true — every
-      lock reads stale once, and a surface that says so can tell the human that nothing in the
-      design is known to have moved. Pure over the status's own fields.
-    symbol: lockUpgraded
+methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-07-30T15:58:52.007Z'
-updatedAt: '2026-10-04T23:39:51.728Z'
+updatedAt: '2026-11-19T20:30:18.932Z'

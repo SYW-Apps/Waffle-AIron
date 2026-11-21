@@ -15,6 +15,7 @@ import { followProducerRenames } from '../../src/core/exports.js';
 import { relationHealth, carriedFactChanges, type ResolvedExportTable } from '../../src/models/index.js';
 import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 import { buildContractFamily } from '../helpers/reference-family.js';
+import { bareFrom, isolateGlobals, pushChange, approveAt } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // Round-2 trial fixes in the externals / surfaces area, against real projects
@@ -107,6 +108,8 @@ interface StudioOptions {
   signatureFrom?: boolean;
   /** The external declaration (default: geo at ../geo). */
   externals?: Record<string, unknown>;
+  /** GeoKit is served by a local git repository (approved, each rewrite released): the kind of external a pin judges. */
+  served?: boolean;
   /** What the renderer depends on (default geo::tile-library). */
   rendererTarget?: string;
 }
@@ -145,6 +148,7 @@ function tileStudio(o: StudioOptions = {}): FixtureTree {
 function pair(geo: GeoOptions = {}, studio: StudioOptions = {}): { root: string; geo: string; studio: string; rewriteGeo(o: GeoOptions): void } {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-r2ext-')));
   roots.push(root);
+  if (studio.served) cleanups.push(isolateGlobals(cleanups));
   const geoDir = path.join(root, 'geo');
   const studioDir = path.join(root, 'studio');
   const writeGeo = (o: GeoOptions): void => {
@@ -154,11 +158,25 @@ function pair(geo: GeoOptions = {}, studio: StudioOptions = {}): { root: string;
     fs.writeFileSync(path.join(geoDir, '.wai', 'project.yaml'), configYaml('geo'));
   };
   writeGeo(geo);
+  let bare = '';
+  let served = studio.externals;
+  if (studio.served) {
+    const repo = bareFrom(cleanups, geoDir, 'geo', { approved: true });
+    bare = repo.bare;
+    served = { geo: { source: { git: repo.url } } };
+  }
   fs.mkdirSync(studioDir, { recursive: true });
   materializeFixtureProject(studioDir, tileStudio(studio));
-  fs.writeFileSync(path.join(studioDir, '.wai', 'project.yaml'), configYaml('studio', { externals: studio.externals ?? { geo: { source: { path: '../geo' } } } }));
+  fs.writeFileSync(path.join(studioDir, '.wai', 'project.yaml'), configYaml('studio', { externals: served ?? { geo: { source: { path: '../geo' } } } }));
   invalidateSpecCache();
-  return { root, geo: geoDir, studio: studioDir, rewriteGeo: (o) => { writeGeo(o); invalidateSpecCache(); } };
+  return { root, geo: geoDir, studio: studioDir, rewriteGeo: (o) => {
+      writeGeo(o);
+      if (studio.served) {
+        approveAt(geoDir);
+        pushChange(geoDir, bare, 'geo changes');
+      }
+      invalidateSpecCache();
+    } };
 }
 
 const codes = (issues: ValidationIssue[], code: string): ValidationIssue[] => issues.filter((i) => i.code === code);
@@ -169,7 +187,7 @@ function studioConfig(dir: string): Record<string, any> {
 
 describe('R2-30 — a re-pin refreshes every carried fact, and a stale snapshot is never ok', () => {
   it('the producer adds `abi: c`: status says drifted (stale abi), the re-pin rewrites the snapshot, the bridge error clears', () => {
-    const p = pair();
+    const p = pair({}, { served: true });
     bind(p.studio);
     expect(pinExternals()[0].outcome).toBe('pinned');
     expect(codes(validateProject({}).issues, 'LANGUAGE_BRIDGE_MISSING')).toHaveLength(1);
@@ -288,7 +306,7 @@ describe('implementing an exported trait (R2-22, R2-23, R2-53)', () => {
 
 describe('`externals remove`, malformed sources and the dry run (R2-29, platform)', () => {
   it('removes the declaration and its pin together, and an orphaned pin alone', () => {
-    const p = pair();
+    const p = pair({}, { served: true });
     bind(p.studio);
     pinExternals();
     // A dry run answers what the real run then does — said as a dry run (platform R4/R5).
@@ -301,7 +319,7 @@ describe('`externals remove`, malformed sources and the dry run (R2-29, platform
   });
 
   it('lists an orphaned pin, and removes it', () => {
-    const p = pair();
+    const p = pair({}, { served: true });
     bind(p.studio);
     pinExternals();
     // The declaration deleted by hand: the pin stays behind.
@@ -377,14 +395,14 @@ describe('an unpinned family use the live producer broke (platform)', () => {
     expect(composed.map((i) => [i.code, i.severity])).toContainEqual(['EXTERNAL_INCOMPATIBLE', 'error']);
   });
 
-  it('an unpinned use still present live fails the composed gate as EXTERNAL_UNPINNED (never a pass, never a false break)', () => {
+  it('a use still present in a producer read live (a sibling found by its id) is as it is: no pin is owed, so the composed gate has nothing to fail', () => {
     const f = buildContractFamily();
     cleanups.push(() => f.cleanup());
     bind(f.billing);
     const [status] = getExternalsStatus();
-    expect(status.uses).toEqual([expect.objectContaining({ publicName: 'ledger-portal', state: 'unlocked' })]);
-    // Round 3: a never-pinned use is no warning — the composed gate cannot tell what it was judged against.
-    expect(compose('billing').findings.map((i) => i.code)).toEqual(['EXTERNAL_UNPINNED']);
+    expect(status.uses).toEqual([expect.objectContaining({ publicName: 'ledger-portal', state: 'unchanged' })]);
+    expect(relationHealth(status)).toBe('ok');
+    expect(compose('billing').findings).toEqual([]);
   });
 });
 

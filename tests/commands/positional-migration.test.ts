@@ -123,12 +123,12 @@ describe('stage 4 — the positional migration', () => {
       'app|shared|waffler-error|declared-producer|export:false|external:false|app::screen-state type WafflerError',
       'app|ui|banner-style|only-match|export:true|external:true|app::screen-state type BannerStyle',
     ]);
-    // ui gains the export the import names; app declares ui and pins both its externals — shared never was.
+    // ui gains the export the import names; app declares ui with its source path. Neither external is pinned: a sibling project in a folder is read live.
     const ui = planned.projects.find((p) => p.project === 'ui')!;
     expect(ui.exports.map((e) => `${e.typeDef}|${e.publicName}|${e.reason}|${e.consumers.join(',')}`)).toEqual(['banner-style|banner-style|positional|app']);
     const app = planned.projects.find((p) => p.project === 'app')!;
     expect(app.externals.map((e) => `${e.alias}|${e.reason}`)).toEqual(['ui|positional']);
-    expect(app.pins).toEqual(['shared', 'ui']);
+    expect(app.pins).toEqual([]);
     // The top's own id used as a prefix is rewritten to the bare local id.
     expect(planned.rewrites.map((r) => [r.project, r.specId, r.form, r.from, r.to])).toEqual([['', 'ledger-line', 'self-prefix', 'vocab.report', 'report']]);
     // What no rule decides is reported, never guessed.
@@ -218,23 +218,21 @@ describe('stage 4 — the positional migration', () => {
     expect(planned.projects.flatMap((p) => p.imports).some((i) => i.name === 'index-value' && i.consumer === 'app')).toBe(false);
   });
 
-  it('after apply: the imports, exports and externals written, pins last, and the family run clean apart from what a person must decide', () => {
+  it('after apply: the imports, exports and externals written, nothing pinned, and the family run clean apart from what a person must decide', () => {
     const f = fresh();
     const before = at(f.top, () => validateFamily({}));
     expect(errorsOf(before).filter((e) => e.includes('UNDEFINED_TYPE_REFERENCE')).length).toBeGreaterThan(2);
     const report = at(f.top, () => apply(plan()));
     const rel = report.written.map((w) => path.relative(f.top, w).split(path.sep).join('/'));
-    // Pins are the LAST writes.
-    const firstPin = rel.findIndex((w) => /externals(\/|\.lock)/.test(w));
-    expect(firstPin).toBeGreaterThan(0);
-    expect(rel.slice(firstPin).every((w) => /externals(\/|\.lock)/.test(w))).toBe(true);
+    // A family external is read live where its producer is stored: no pin is written.
+    expect(rel.filter((w) => /externals(\/|\.lock)/.test(w))).toEqual([]);
     // The named imports, where each consumer declares its producer.
     expect(configOf(f.top).members).toMatchObject({ shared: { source: 'shared', use: ['index-value'] } });
-    expect(configOf(f.app).externals).toEqual({ shared: { use: ['waffler-error'] }, ui: { use: ['banner-style'] } });
-    // ui exports what app imports; app's pin of ui carries it.
+    expect(configOf(f.app).externals).toEqual({ shared: { use: ['waffler-error'] }, ui: { source: { path: '../ui' }, use: ['banner-style'] } });
+    // ui exports what app imports; app reads it live.
     const uiL0 = yaml.load(fs.readFileSync(path.join(f.ui, '.wai', 'specs', '.index.yaml'), 'utf8')) as { publicInterfaces: { typeDef?: string }[] };
     expect(uiL0.publicInterfaces.map((e) => e.typeDef)).toContain('banner-style');
-    expect(fs.readFileSync(path.join(f.app, '.wai', 'externals', 'ui.yaml'), 'utf8')).toContain('banner-style');
+    expect(fs.existsSync(path.join(f.app, '.wai', 'externals', 'ui.yaml'))).toBe(false);
     // The self-prefix, bare on disk.
     expect(fs.readFileSync(path.join(f.top, '.wai', 'specs', 'types', 'ledger-line.yaml'), 'utf8')).not.toContain('vocab.report');
     // No positional error is left but the two a person decides.
@@ -242,7 +240,9 @@ describe('stage 4 — the positional migration', () => {
     expect(errorsOf(after)).toEqual(['app|UNDEFINED_TYPE_REFERENCE|screen-state', '|UNDEFINED_TYPE_REFERENCE|report']);
     // Each owner's gate agrees from its own root.
     expect(errorsOf(at(f.app, () => validateProject()))).toEqual(['|UNDEFINED_TYPE_REFERENCE|screen-state']);
-    expect(at(f.app, () => validateProject()).issues.filter((i) => i.code.startsWith('EXTERNAL_'))).toEqual([]);
+    // Its declared externals carry no `source`: nothing above its root is read and nothing is pinned, so its own gate
+    // can only say that it cannot resolve them (never a pass) — every reference itself is declared and exported.
+    expect(at(f.app, () => validateProject()).issues.filter((i) => ['EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED'].includes(i.code))).toEqual([]);
   });
 
   it('property: idempotence — the second plan is empty and a second apply writes nothing', () => {

@@ -1,0 +1,23 @@
+kind: value-object
+id: producer_pin
+name: ProducerPin
+description: >-
+  What pinning one hosted or git producer from its approved state did: the outcome reported for the
+  alias and, when it pinned, the lock entry that replaces the previous one. No entry means the
+  previous pin stays.
+subsystem: sdd_surfaces
+fields:
+  - name: pin
+    type: ExternalPin
+    description: The outcome for the alias, as pinExternals reports it.
+    optional: false
+  - name: entry
+    type: ExternalLockEntry
+    description: >-
+      The new lock entry; absent when the pin was refused or the producer was unreachable, so the
+      previous pin stays.
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-11-20T00:09:48.070Z'
+updatedAt: '2026-11-20T00:09:48.499Z'

@@ -82,34 +82,32 @@ Windows would otherwise report every spec as drifted on a Linux CI runner. The
 defect was unreachable while the record was machine-local — sharing it is what
 made it live.
 
-### It is per project root, and members are pinned by their subjects
+### It is per project root, and a record names no member
 
 Every `.wai` owns its own lock record, including each member project. A
 parent's approval never freezes a member's in-flight work, a member cloned on
 its own carries its approval with it, and a parent lock writes nothing below
 itself.
 
-What crosses between them is a **composition subject**: the `stateId` in the
-member's own lock record, read and never recomputed. Each direct member's
-subject is an input of the parent's gate identity, and the parent's record
-(format 2) lists it under `members` with the member's state as the parent saw
-it — `approved` (its lock matches its tree), `drifted` (it has a lock, its tree
-changed) or `never` (no lock). Approval is transitive by hashing: a member's
-subject already includes its own members' subjects, so nothing recurses into a
-member's files. A member editing its own specs does not appear in the parent's
-diff or move the parent's identity — the decisions are separate — until the
-member re-locks; then its subject moves and the parent's approval reads stale.
-`wairon status` prints the pin tree (each member's state from its own root,
-and whether the parent's pin `matches`, has `moved`, or is `unpinned`).
+The approval covers the project's own design and its own policy only (its
+design, rules, composition, network and selections): a parent's record (format
+4) holds no `members` entry, and a member re-locking never moves its parent.
+The member's state is read where it lives — its own last committed lock —
+and reported as `approved` (its lock matches its tree), `drifted` (it has a
+lock, its tree changed) or `never` (no lock). `lock-check` passes when the
+record is approved, no build input is owed and every member's own approval
+holds. A path external (`../x` under `externals`) is not a member: it is read
+live and judged for validity only.
 
 A parent may require its members' approvals with
-`composition.requireApprovedMembers: true`: its lock then refuses while a
-direct member is drifted or never approved, naming each. By default it proceeds
-and records their states.
+`composition.requireApprovedMembers: true`: a member that is drifted or never
+approved is then a debt the parent reports beside its approval, naming each.
+By default nothing is owed.
 
-This replaced a stage-1 `children` map that copied each child's `StateId` into
-the parent's record without ever re-verifying it; `children` is still read for
-one release and never written.
+What the build consumes is recorded apart from the approval, in
+`.wai/inputs.lock.yaml`: the pins of git and hosted externals, a part's parent
+and the packs as they resolve. `wairon lock` refreshes only what is owed, then
+approves. A release never moves an approval.
 
 ### Settledness is derived, not stored
 

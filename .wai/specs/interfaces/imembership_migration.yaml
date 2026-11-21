@@ -45,26 +45,27 @@ methods:
       not an empty directory (relocation-target-exists; an empty one, left by a cut-short cleanup,
       is free); without request.widen, a family project (the bound one included) using a public name
       the member exports only to the family (audience project or department) — once the member is
-      outside the family, a pin taken by path or hosted id sees its instance audience and above, so
-      that use would stop resolving (audience-too-narrow, one refusal per export naming every
-      project that uses it: widening is a design decision, never a move's silent side effect).
+      outside the family, an external read by path or hosted id sees its instance audience and
+      above, so that use would stop resolving (audience-too-narrow, one refusal per export naming
+      every project that uses it: widening is a design decision, never a move's silent side effect).
       Edits: with request.widen, first, in the member, exactly those used exports' L0 entries
       widened to the instance audience through the gated authoring seam, each shown as `widen <name>
       <audience>→instance (used by …)` and confirmed with the rest — an export no family project
       uses is never widened; an export no L0 entry of the member names directly cannot be widened
       and stays audience-too-narrow. Then, in the bound project, the member removed and an external
       declared under the SAME alias — `project` its id when that differs from the alias, its source,
-      its `use` and description carried — and pinned; in every other family project whose external
-      finds the member through the family, a source to it; in the member, a source on each of its
-      externals that found a family project through the family, since it leaves the family. The
-      source is `source.path` (relative to the declaring project) locally, and `source.hosted` (the
-      producer's record id) when the request carries a relocation — a path cannot cross the hosted
-      server's isolated roots. With request.relocation the member is also MOVED: every file under
-      its directory is written under relocation.to in the rehearsal and removed from its old place
-      (the scope names both whole), so the move is part of the plan's file changes — creates at the
-      new root, deletes at the old — and commits with everything else, all or nothing. No reference
-      text changes. Notes: consumers outside the family are not affected (they already name it by
-      path, by hosted id, or not at all).
+      its `use` and description carried; a path external is read live and never pinned, a hosted one
+      is pinned when owed; in every other family project whose external finds the member through the
+      family, a source to it; in the member, a source on each of its externals that found a family
+      project through the family, since it leaves the family. The source is `source.path` (relative
+      to the declaring project) locally, and `source.hosted` (the producer's record id) when the
+      request carries a relocation — a path cannot cross the hosted server's isolated roots. With
+      request.relocation the member is also MOVED: every file under its directory is written under
+      relocation.to in the rehearsal and removed from its old place (the scope names both whole), so
+      the move is part of the plan's file changes — creates at the new root, deletes at the old —
+      and commits with everything else, all or nothing. No reference text changes. Notes: consumers
+      outside the family are not affected (they already name it by path, by hosted id, or not at
+      all).
     signature: 'planDetach(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -125,8 +126,9 @@ methods:
     description: >-
       Write a confirmed attach, detach or adopt plan into the roots the rehearsal maps, owner by
       owner under that owner's binding, restoring the caller's binding on every path: configuration
-      edits first, pins last (a pin reads the producer's final state). Every write is idempotent, so
-      a re-run writes nothing.
+      edits first, then the pin of a hosted or git external where one is owed (a pin reads the
+      producer's final state; a path external is read live and never pinned, and a member is never
+      pinned). Every write is idempotent, so a re-run writes nothing.
     signature: 'write(plan: MigrationPlan, rehearsal: Rehearsal): void'
     returns: void
     params:
@@ -140,4 +142,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:33:39.248Z'
-updatedAt: '2026-10-08T18:55:01.950Z'
+updatedAt: '2026-11-20T19:39:26.270Z'

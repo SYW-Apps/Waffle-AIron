@@ -186,13 +186,14 @@ methods:
           beside the family under their common ancestor, so a promote, demote, internalize or move
           writes them all-or-nothing; each repository still gets its own commit afterwards), the
           project the verb brings in (attach, adopt), and every project a family project names as an
-          external by a path inside the family root, into a private rehearsal — so a pin taken on
-          the copy reads the same producer the live pin would. A request carrying a relocation
-          (hosted detach and adopt) is rehearsed with the relocation's coordinator (the host data
-          directory) as the coordinator and an owner contributing its store files as areas, and with
-          the project's old directory and its new root named whole (a family project inside them is
-          copied once, by them); its writers run with the hosted record lookup answering the
-          relocated project at its new place in the copy
+          external by a path inside the family root, into a private rehearsal — so the rehearsal's
+          scan reads the same path producers the live one would (a path external is read live as a
+          node of the scan, never pinned). A request carrying a relocation (hosted detach and adopt)
+          is rehearsed with the relocation's coordinator (the host data directory) as the
+          coordinator and an owner contributing its store files as areas, and with the project's old
+          directory and its new root named whole (a family project inside them is copied once, by
+          them); its writers run with the hosted record lookup answering the relocated project at
+          its new place in the copy
         type: call
         targetComponent: family_transaction
         targetMethod: rehearse
@@ -258,8 +259,8 @@ methods:
         label: chaining
         description: >-
           Write the chaining migration into the rehearsal roots: ids, exports, externals, the
-          position migration's imports, moves, rewrites and pin deletions, and pins LAST — its order
-          unchanged
+          position migration's imports, moves, rewrites and pin deletions, and last the pins a git
+          or hosted external is owed — its order unchanged
         type: call
         targetComponent: chaining_migration_orchestrator
         targetMethod: write
@@ -448,4 +449,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-10-09T01:00:52.928Z'
+updatedAt: '2026-11-20T19:40:54.337Z'

@@ -1,0 +1,23 @@
+kind: value-object
+id: inputs_refresh
+name: InputsRefresh
+description: >-
+  What `wairon lock` refreshed in the inputs lock before it approved: the owed externals it pinned
+  (each outcome, a refused one included) and whether the recorded packs moved. Inputs never block
+  the approval; what stays owed is reported, and lock-check refuses it.
+subsystem: sdd_cli
+fields:
+  - name: pins
+    type: list<ExternalPin>
+    description: >-
+      One outcome per owed external the lock tried to pin (never pinned, or used beyond its pin);
+      empty when none was owed.
+    optional: false
+  - name: packsRecorded
+    type: bool
+    description: Whether the inputs lock's packs section changed.
+    optional: false
+methods: []
+sourcePath: src/commands/lock.ts
+createdAt: '2026-11-20T00:18:51.931Z'
+updatedAt: '2026-11-20T00:18:52.362Z'

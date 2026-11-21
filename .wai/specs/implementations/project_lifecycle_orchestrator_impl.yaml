@@ -141,14 +141,17 @@ methods:
         onFalseStep: 7
       - stepNumber: 4
         description: >-
-          Authorized: lock directly via the admin plane's pre-authorized entry with the caller as
-          the approver, forwarding the project id — a member's own record id when a member is
-          locked; no qualifier exists any more
+          Authorized: lock directly via the pre-authorized lock entry, forwarding the project id — a
+          member's own record id when a member is locked; no qualifier exists any more — with the
+          approver the record names: the caller's subject's approver(), or the instance master
+          credential when the credential resolved no subject
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedLock
+        targetComponent: hosted_lock
+        targetMethod: execute
       - stepNumber: 5
-        description: Build a completed ProjectActionOutcome (action project:lock) carrying the lock record
+        description: >-
+          Build a completed ProjectActionOutcome (action project:lock) carrying the lock record of
+          the HostedLockOutcome the lock answered
         type: local
       - stepNumber: 6
         description: Executed — continue to auditing
@@ -208,16 +211,16 @@ methods:
           error's code, and no request is created. Warnings do not block, as at the local `wairon
           lock`
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: checkLockable
+        targetComponent: hosted_lock
+        targetMethod: assertApprovable
       - stepNumber: 14
         description: >-
-          Approval required: capture the gate identity of the project's tree (a member's own tree
-          when the project is a member) through the admin plane, so the approved execution can
+          Approval required: capture the approval identity of the project's tree (a member's own
+          tree when the project is a member) through the admin plane, so the approved execution can
           refuse a tree that moved after the request
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: gateIdentity
+        targetComponent: hosted_lock
+        targetMethod: identity
       - stepNumber: 15
         description: >-
           List the caller's pending project:lock requests over this project's record (the same
@@ -229,10 +232,10 @@ methods:
       - stepNumber: 16
         description: >-
           Does the caller already hold a pending lock request for this same design? One of them
-          records a gateStateId equal to the identity just captured
+          records an approvalId equal to the identity just captured
         type: branch
         condition: >-
-          a listed pending project:lock request records a gateStateId equal to the gate identity
+          a listed pending project:lock request records an approvalId equal to the approval identity
           captured in the previous step
         onTrueStep: 17
         onFalseStep: 18
@@ -246,8 +249,8 @@ methods:
         description: >-
           Build the pending project:lock ApprovalRequest: kind, the project's own record id (a
           member's when a member is locked), the requester's subject and token id, expiry, a
-          redacted human summary naming the project, and gateStateId = the identity just captured.
-          No qualifier is recorded: the record id alone confines the approved action
+          redacted human summary naming the project, and approvalId = the identity just captured. No
+          qualifier is recorded: the record id alone confines the approved action
         type: local
       - stepNumber: 19
         description: Create the pending approval request
@@ -309,22 +312,22 @@ methods:
         error: not found
       - stepNumber: 6
         description: >-
-          Is it a pending project:lock request carrying a gateStateId? Only such a request can be
+          Is it a pending project:lock request carrying an approvalId? Only such a request can be
           overtaken by a moved design
         type: branch
-        condition: the request is pending, of kind project:lock, and records a gateStateId
+        condition: the request is pending, of kind project:lock, and records an approvalId
         onFalseStep: 10
       - stepNumber: 7
         description: >-
-          Capture the gate identity of the request's project tree as it stands now, through the
+          Capture the approval identity of the request's project tree as it stands now, through the
           admin plane (a member's own tree when the request is about a member)
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: gateIdentity
+        targetComponent: hosted_lock
+        targetMethod: identity
       - stepNumber: 8
         description: Did the design move since the request was made?
         type: branch
-        condition: the identity captured now differs from the request's gateStateId
+        condition: the identity captured now differs from the request's approvalId
         onFalseStep: 10
       - stepNumber: 9
         description: >-
@@ -398,16 +401,16 @@ methods:
         targetMethod: list
       - stepNumber: 7
         description: >-
-          For each listed pending project:lock request carrying a gateStateId, capture the gate
+          For each listed pending project:lock request carrying an approvalId, capture the approval
           identity of its project's tree as it stands now through the admin plane
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: gateIdentity
+        targetComponent: hosted_lock
+        targetMethod: identity
       - stepNumber: 8
         description: Did any of those requests' design move since it was requested?
         type: branch
         condition: >-
-          a listed project:lock request's gateStateId differs from the identity captured now for its
+          a listed project:lock request's approvalId differs from the identity captured now for its
           project
         onFalseStep: 10
       - stepNumber: 9
@@ -510,15 +513,16 @@ methods:
             step: 16
       - stepNumber: 14
         description: >-
-          project:lock - execute through the admin plane's pre-authorized lock entry on the
-          request's record id (a member's own record for a member lock) with the request's
-          gateStateId as the expected identity (so an approval never certifies a design other than
-          the one requested; a request without one executes against the tree as it stands). A lock
-          request carrying a payload (the member-qualifier scope an older major recorded, which the
-          instance upgrade closes) is refused, never executed on the record it names.
+          project:lock - execute through the pre-authorized lock entry on the request's record id (a
+          member's own record for a member lock) with the request's approvalId as the expected
+          identity (so an approval never certifies a design other than the one requested; a request
+          without one executes against the tree as it stands), and as approver the deciding caller's
+          subject's approver() (the instance master credential when no subject). A lock request
+          carrying a payload (the member-qualifier scope an older major recorded, which the instance
+          upgrade closes) is refused, never executed on the record it names.
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedLock
+        targetComponent: hosted_lock
+        targetMethod: execute
       - stepNumber: 15
         label: lockDone
         description: Continue to mark the approval completed
@@ -669,13 +673,14 @@ methods:
             step: 17
       - stepNumber: 15
         description: >-
-          project:lock - execute through the admin plane's pre-authorized lock entry on the
-          request's record id with the request's gateStateId as the expected identity (the retry
-          path must confine and pin exactly as the auto-execute path does). A lock request carrying
-          a payload is refused, as on the auto-execute path.
+          project:lock - execute through the pre-authorized lock entry on the request's record id
+          with the request's approvalId as the expected identity (the retry path must confine and
+          pin exactly as the auto-execute path does), and as approver the approving subject's
+          approver() (the instance master credential when no subject). A lock request carrying a
+          payload is refused, as on the auto-execute path.
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedLock
+        targetComponent: hosted_lock
+        targetMethod: execute
       - stepNumber: 16
         label: lockDone
         description: Continue to mark the approval completed
@@ -868,6 +873,8 @@ methods:
         outcome: the withdrawn approval request
     detail: full
     symbol: withdrawRequest
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-30T19:38:21.293Z'
+updatedAt: '2026-11-20T19:47:56.756Z'

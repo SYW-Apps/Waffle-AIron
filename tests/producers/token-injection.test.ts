@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { setSecret } from '../../src/utils/secrets.js';
-import * as admin from '../../src/server/admin.js';
+import * as hostedProducers from '../../src/server/hosted-producers.js';
 import { createPlacedProject } from '../server/helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
 
@@ -89,7 +89,7 @@ describe('the hosted admin plane resolves the token and hands it in', () => {
     const cfg = hosted();
     setSecret('notion-token', 'host_stored_token');
 
-    await admin.produceProducer(cfg, MASTER, 'demo', 'notion');
+    await hostedProducers.produce(cfg, MASTER, 'demo', 'notion');
 
     expect(producerCalls).toHaveLength(1);
     expect(producerCalls[0].target).toBe('notion');
@@ -99,7 +99,7 @@ describe('the hosted admin plane resolves the token and hands it in', () => {
   it('refuses a configured target with no stored token before the producer runs', async () => {
     const cfg = hosted();
 
-    await expect(admin.produceProducer(cfg, MASTER, 'demo', 'notion')).rejects.toThrow(/^No Notion token/);
+    await expect(hostedProducers.produce(cfg, MASTER, 'demo', 'notion')).rejects.toThrow(/^No Notion token/);
     expect(producerCalls).toHaveLength(0);
   });
 });

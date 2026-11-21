@@ -1,14 +1,14 @@
-import * as crypto from 'crypto';
+
 import { files } from '../io/index.js';
+import { WAIRON_VERSION } from '../config/defaults.js';
 import * as path from 'path';
-import { getHostedLookup, getProjectRoot, userCacheDir, getRequestParentReach, readsV5Forms, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
 // spec_validator: the owner's gate every selected project runs, and the gate
 // identity a member's lock is compared with.
 import {
   validateProject,
-  validateDesign,
   ownReachModel,
-  computeGateStateId,
+  computeApprovalId,
   type ProjectVerdict,
   type ValidationIssue,
   type ValidationOptions,
@@ -20,8 +20,6 @@ import {
   projectFamily,
   loadProjectConfig,
   readLockRecord,
-  approvalRecord,
-  diffAgainstApproval,
   loadProjectExtensions,
   packManifest,
   loadSubsystemSpecs,
@@ -33,28 +31,24 @@ import {
   resolveChainingParent,
   resolveProjectExports,
 } from './adapters/validator-core.js';
-import { getExternalsStatus, listPinnedExternals, memberStatuses, unrecordedUses } from './adapters/validator-surfaces.js';
+import { getExternalsStatus, listPinnedExternals, lockedPacks, memberStatuses, unrecordedUses } from './adapters/validator-surfaces.js';
+import { packContents } from './rules/approval-identity.js';
 import { dependencyCycles, declaredExternals, declaredMembers, familyNode, keyIn, relationHealth, type AuthoredReference, type ExternalStatus, type ProjectFamily, type ProjectNode, type ProjectRelations } from '../models/index.js';
 import { admits, projectIdentity, rangeProblem, requiredPolicies, type PackRequirement, type PackSelection, type ProjectConfig } from '../models/project.js';
 import { packSettings, type PackSettings } from '../models/pack-impact.js';
 import type { LoadedExtensions } from './extensions.js';
 import type { IssueSeverity } from './rules/types.js';
-import type { StateId } from './statehash.js';
-import {
-  approvalSubject, ciBlockingIssues, describeGateParts, designOnly, gatePartsProblem, movedGateParts, releaseStampAgainst, releaseStampProblem, stampRecordsGateParts,
-  usableGateParts, GATE_PARTS_SINCE, type PinState, type ProjectApproval, type ReleaseVerdict,
-} from '../models/lock.js';
-import { WAIRON_VERSION } from '../config/defaults.js';
+import { describeApprovalParts, gatePartsProblem, movedParts, type InputDebt, type ProjectApproval } from '../models/lock.js';
 import type { NetworkDeclaration } from '../models/project.js';
 import type { ReachFinding, ReachModel } from '../models/reach.js';
 // reach_model_projector and network_arbiter: the family's reach model and its
 // network verdicts — pure, over the models each project's own gate projected.
 import { compose as composeReach } from './rules/reach-model-projector.js';
 import { judge as judgeNetwork, familyCodes } from './rules/network-arbiter.js';
-import { ownGet, ownHas } from '../utils/own.js';
+import { ownGet } from '../utils/own.js';
 
 /** A project's lock record, as the core adapter reads one. */
-type LockRecord = NonNullable<ReturnType<typeof approvalRecord>>;
+type LockRecord = NonNullable<ReturnType<typeof readLockRecord>>;
 
 // ---------------------------------------------------------------------------
 // family_validator — the family run (stage 4).
@@ -196,6 +190,14 @@ function depthOf(family: ProjectFamily, node: ProjectNode): number {
   return depth;
 }
 
+/** Whether the node is a path external, or was read below one: a live node of the scan, never a member. */
+function underPathExternal(family: ProjectFamily, node: ProjectNode): boolean {
+  for (let at: ProjectNode | null = node; at; at = at.parent === undefined ? null : familyNode(family, at.parent)) {
+    if (at.pathExternal !== undefined) return true;
+  }
+  return false;
+}
+
 /** One selected project, and the subsystem scope its own gate runs with. */
 interface Selected {
   node: ProjectNode;
@@ -210,7 +212,9 @@ interface Selected {
  */
 function selectProjects(family: ProjectFamily, options: ValidationOptions): Selected[] {
   const limit = options.memberDepth ?? Infinity;
-  const nodes = family.nodes.filter((n) => depthOf(family, n) <= limit);
+  // A path external, and anything read below one, is no member: the owner's own gate judges its
+  // uses of it, and its own findings are its own gate's — never a selection entry here.
+  const nodes = family.nodes.filter((n) => depthOf(family, n) <= limit && !underPathExternal(family, n));
   const scope = options.scopeSubsystem;
   if (!scope) return nodes.map((node) => ({ node }));
   const member = nodes.find((n) => n.namespace !== '' && (scope === n.namespace || scope.startsWith(`${n.namespace}::`)));
@@ -485,7 +489,7 @@ function judgeExternal(status: ExternalStatus, project: string, config: ProjectC
   const neverPinned = status.pinnedDigest === undefined ? status.uses.filter((u) => u.state === 'unlocked') : [];
   if (neverPinned.length > 0) {
     out.push(finding(config, 'EXTERNAL_UNPINNED',
-      `${named(project)} uses ${neverPinned.map(useName).join(', ')} of ${who}, which was never pinned: nothing records what its design is judged against, so a producer change that breaks it cannot be told. Pin it (\`wairon externals pin ${status.alias}\`) — and \`wairon lock\` refuses until it is.`,
+      `${named(project)} uses ${neverPinned.map(useName).join(', ')} of ${who}, which was never pinned: nothing records what its design is judged against, so a producer change that breaks it cannot be told. Pin it (\`wairon externals pin ${status.alias}\`, or the next \`wairon lock\`, which pins what the build owes).`,
       project));
   }
   for (const use of status.uses.filter((u) => u.state === 'unavailable' || (u.state === 'unlocked' && !neverPinned.includes(u)))) {
@@ -528,16 +532,24 @@ export function compose(project: string): ExternalComposition {
 }
 
 /**
- * ifamily_validator.unpinned — the bound project's declared externals (and
- * referenced project members) never pinned: no entry in its externals lock,
- * so nothing records what its design is judged against. A part is no
- * producer and is left out. Reads the bound root's own files; writes nothing.
+ * ifamily_validator.unpinned — the bound project's declared externals and
+ * referenced project members with a hosted or git source that the inputs lock
+ * holds no entry for: nothing records what its design is judged against. A
+ * path external (`../x`) is read live and never pinned, and a part is no
+ * producer: both are left out. Reads the bound root's own files; writes nothing.
  */
 export function unpinned(): string[] {
   // Step 1: the parts — no producer, nothing to pin.
   const parts = new Set(projectFamily().nodes.find((n) => n.namespace === '')?.parts.map((p) => p.alias) ?? []);
-  // Steps 2-3: every declared alias without a lock entry.
-  return listPinnedExternals().filter((p) => !parts.has(p.alias) && p.entry === undefined).map((p) => p.alias);
+  // The producers that are pinned at all: a hosted or git source, an external or a referenced member.
+  const config = configOrNull();
+  const pinnable = new Set<string>();
+  if (config) {
+    for (const e of declaredExternals(config)) if (e.sourceHosted !== undefined || e.sourceGit !== undefined) pinnable.add(e.alias);
+    for (const m of declaredMembers(config)) if (m.storage === 'hosted' || m.storage === 'git') pinnable.add(m.alias);
+  }
+  // Steps 2-3: every pinnable alias without a lock entry.
+  return listPinnedExternals().filter((p) => !parts.has(p.alias) && pinnable.has(p.alias) && p.entry === undefined).map((p) => p.alias);
 }
 
 /**
@@ -665,6 +677,14 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
       const users = [...new Set(broken.flatMap((u) => specsUsing(family, status.alias, u.publicName)))].sort();
       const renamed = broken.some((u) => u.state === 'renamed' || u.detail?.includes('follow the rename'));
       const bindings = bindingModulesOf(users);
+      // A path external is read live and never pinned: there is no pin to refresh, only the uses to adapt.
+      if (!status.pinned && (status.sourceKind === 'family' || status.sourceKind === 'path')) {
+        return advisory(config, 'EXTERNAL_LIVE_INCOMPATIBLE',
+          `${who} is read live, and its producer no longer fits this project's uses: ${broken.map(movedUse).join('; ')}. `
+          + `Used by ${users.length ? users.map((s) => `"${s}"`).join(', ') : 'this project\'s references'}. `
+          + (bindings.length ? `Binding module(s) declared there: ${bindings.map((b) => `"${b}"`).join(', ')} — follow the move there too. ` : '')
+          + `Adapt the uses${renamed ? ' (follow the rename: edit them to the new name)' : ''}; it is never pinned, so there is nothing to re-pin.`);
+      }
       return advisory(config, 'EXTERNAL_LIVE_INCOMPATIBLE',
         `${who} moved in its live producer since it was pinned: ${broken.map(movedUse).join('; ')}. `
         + `Used by ${users.length ? users.map((s) => `"${s}"`).join(', ') : 'this project\'s references'}. `
@@ -827,34 +847,19 @@ function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): 
       `The member ${named(entry.key)} has never been locked: nobody has approved its design. Lock it at its own root (\`wairon lock\`).`,
       entry.key);
   }
-  if (entry.state === 'drifted' && entry.release && !entry.release.carried) {
-    if (entry.release.reason) {
-      return finding(config, 'MEMBER_DRIFTED',
-        `The member ${named(entry.key)} is not covered by its approval under this release: ${entry.release.reason} (At its own root: \`wairon lock\` there.)`,
-        entry.key);
-    }
+  if (entry.state === 'drifted' && entry.partsMoved && entry.partsMoved.length > 0 && entry.owed === undefined) {
     return finding(config, 'MEMBER_DRIFTED',
-      `The member ${named(entry.key)} was approved under wairon ${entry.release.from}, and this release (${entry.release.to}) finds ${entry.release.count ?? 0} issue(s) in its approved design: ${(entry.release.findings ?? []).join('; ')}. Fix them at its own root, then \`wairon lock\` there.`,
-      entry.key);
-  }
-  if (entry.state === 'drifted' && entry.inputsMoved && entry.inputsMoved.length > 0 && entry.owed === undefined) {
-    return finding(config, 'MEMBER_DRIFTED',
-      `The member ${named(entry.key)} changed since it was approved: ${describeGateParts(entry.inputsMoved)} moved. Re-lock it at its own root (\`wairon lock\`).`,
-      entry.key);
-  }
-  if (entry.state === 'drifted' && entry.upgraded) {
-    return finding(config, 'MEMBER_DRIFTED',
-      `The member ${named(entry.key)} was approved under an earlier gate identity — the gate identity gained inputs in this release (members' composition subjects, \`composition\`; code conformance moved beside the claim), which says nothing about its design. Re-lock it once at its own root (\`wairon lock\`).`,
+      `The member ${named(entry.key)} changed since it was approved: ${describeApprovalParts(entry.partsMoved)} moved. Re-lock it at its own root (\`wairon lock\`).`,
       entry.key);
   }
   if (entry.state === 'drifted' && entry.owed !== undefined) {
     return finding(config, 'MEMBER_DRIFTED',
-      `The member ${named(entry.key)} is not covered by its approval: ${entry.owed}. Its own \`wairon lock-check\` fails until it is cleared at its own root (\`wairon lock\` there${/never pinned|beyond its pin/.test(entry.owed) ? ', after `wairon externals pin`' : ''}).`,
+      `The member ${named(entry.key)} is not covered by its approval: ${entry.owed}. Its own \`wairon lock-check\` fails until it is cleared at its own root (\`wairon lock\` there).`,
       entry.key);
   }
   if (entry.state === 'drifted') {
     return finding(config, 'MEMBER_DRIFTED',
-      `The member ${named(entry.key)} changed since it was approved: its lock no longer matches its own gate identity. Re-lock it at its own root (\`wairon lock\`).`,
+      `The member ${named(entry.key)} changed since it was approved: its lock no longer matches its own design and policy. Re-lock it at its own root (\`wairon lock\`).`,
       entry.key);
   }
   return null;
@@ -945,30 +950,28 @@ function unreachedReexports(family: ProjectFamily, config: ProjectConfig | null)
   return out;
 }
 
-// ---- the pin tree ----------------------------------------------------------
+// ---- the approvals ---------------------------------------------------------
 //
-// Each project's approval state, computed at that project's OWN root — its
-// lock record against its own gate identity recomputed there — so the answer
-// about a project is the same whichever root asked (status-agrees). Reads each
-// project's own tree once and writes nothing.
+// Each project's approval and input debts, computed at that project's OWN root
+// — its lock record against its own approval identity recomputed there, and
+// its inputs against its own inputs lock — so the answer about a project is
+// the same whichever root asked (status-agrees). A parent records nothing
+// about its members, and reads nothing of theirs but their own records. Reads
+// each project's own tree once and writes nothing.
 
-/** A record's composition subject: what its APPROVAL stands for (lock_record.approvalSubject) — a restamp keeps the approval's. */
-function subjectOf(record: LockRecord): string {
-  return approvalSubject(record);
-}
-
-/** Steps 4-7: one loaded project's own state, bound to its own root. */
-function ownApproval(node: ProjectNode, root: string): ProjectApproval {
-  return approvalAt(node, { topRoot: root, narrowed: true });
-}
-
-/** Steps 4-7 at one project root, bound within a ceiling. */
-function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent' | 'id' | 'directory'>, ceiling: Ceiling): ProjectApproval {
+/** Steps 4-9 at one project root, bound within a ceiling; `members` are its direct members' entries, already answered. */
+function approvalAt(
+  node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent' | 'id' | 'directory'>,
+  ceiling: Ceiling,
+  members: ProjectApproval[],
+): ProjectApproval {
   return within(node.directory, ceiling, () => {
-    // Step 5: its own gate identity — its tree, its members' recorded subjects.
-    const current = computeGateStateId();
+    // Step 5: its own approval identity — its design and policy, nothing it consumes.
+    const current = computeApprovalId();
     // Step 6: its own lock record.
     const record = readLockRecord();
+    // Step 9: what its build inputs owe — never part of the state.
+    const inputs = projectInputs(members);
     const base: ProjectApproval = {
       key: node.namespace,
       ...(node.mountAlias !== undefined ? { alias: node.mountAlias } : {}),
@@ -977,345 +980,191 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
       state: 'never',
       // Judged at its own root by the shared predicate: false only for an L0 with nothing below it.
       approvable: holdsDesign(),
+      inputs,
     };
-    // Step 7: none is never; a matching identity is approved — for a format-2
-    // record, matching the identity recomputed under its own algorithm
-    // (asRecorded) — else drifted, upgraded when only the algorithm marker moved.
+    // Step 7: none is never; a matching identity is approved; otherwise drifted.
     if (!record) return base;
-    const same = (id: StateId | undefined): boolean => !!id && record.stateId.algorithm === id.algorithm && record.stateId.digest === id.digest;
-    const matches = same(current) || same(current.asRecorded);
-    // Step 7: the inputs that moved, named, when the record carries gate parts
-    // that break down its identity; parts that do not are ignored, said once.
-    // A record whose identity still matches but that carries no parts at all
-    // is said too: every record from GATE_PARTS_SINCE on carries them.
-    const partsIgnored = gatePartsProblem(record, current)
-      ?? (matches && record.gateParts === undefined && current.parts
-        ? `the record carries none, though every record wairon ${GATE_PARTS_SINCE} and later writes carries them`
-        : undefined);
-    const parts = usableGateParts(record, current);
-    const moved = matches || !parts ? null : movedGateParts({ gateParts: parts }, current.parts);
-    // Step 8: a change of the release alone is judged by re-validation.
-    const release = matches ? undefined : releaseVerdict(record, current);
-    // Step 7: a stamp this wairon cannot stand behind is named whatever the
-    // identity decided — unless the release verdict already names it.
-    const stampClause = releaseStampProblem(record, WAIRON_VERSION);
-    const stampNamed = release?.reason !== undefined && release.reason.includes(String(record.validatorVersion ?? 'no release stamp'));
-    const stampProblem = stampClause !== null && !stampNamed ? stampClause : undefined;
-    // Steps 9-12: what the approval still owes although its identity may
-    // match — a moved id, an external never pinned or used beyond its pin.
+    const matches = record.stateId.algorithm === current.algorithm && record.stateId.digest === current.digest;
+    // The parts that moved, named, when the record's parts break down its
+    // identity; parts that do not are ignored, said once. A record that holds
+    // none (an upgrade that could not carry it) names no part.
+    const partsProblem = gatePartsProblem(record, current);
+    const usable = partsProblem === null && Object.keys(record.parts).length > 0;
+    const moved = matches || !usable ? [] : movedParts(record, current.parts ?? {});
+    // Step 8: what the approval still owes although its identity may match: a moved id.
     const owed = owedBy(record);
-    const covered = (matches || release?.carried === true) && owed === undefined;
     return {
       ...base,
-      state: covered ? 'approved' : 'drifted',
-      subject: subjectOf(record),
-      ...(!matches && !release && record.stateId.algorithm !== current.algorithm ? { upgraded: true } : {}),
-      ...(release ? { release } : {}),
-      ...(moved && moved.length > 0 && !release ? { inputsMoved: moved } : {}),
+      state: matches && owed === undefined ? 'approved' : 'drifted',
+      ...(moved.length > 0 ? { partsMoved: moved } : {}),
       ...(owed !== undefined ? { owed } : {}),
-      ...(partsIgnored !== undefined ? { partsIgnored } : {}),
-      ...(stampProblem !== undefined ? { stampProblem } : {}),
+      ...(partsProblem !== null ? { partsIgnored: partsProblem } : {}),
     };
   });
 }
 
-/** Release verdicts already decided in this process, by root, record identity and current identity. */
-const releaseVerdicts = new Map<string, ReleaseVerdict | null>();
-
-/** Roots whose re-validation is running: a rule asking for the entry again never starts another. */
-const revalidating = new Set<string>();
-
 /**
- * ifamily_validator.releaseVerdict — THE verdict on an approval whose gate
- * identity no longer matches because the wairon release changed. Only a
- * record that PROVES the project's own inputs unchanged — gate parts that
- * break down its identity, every part but `release` as it stands, an older or
- * the same valid stamp — is re-validated under the current rules, in the same
- * command: clean at the --ci standard it carries over (approved, nothing
- * written); otherwise it is stale for exactly the findings the new release
- * reports. A record that cannot prove it (no parts, ignored parts, a newer or
- * invalid stamp) over an unmoved design is stale with one sentence
- * (`reason`). Undefined when what moved is not the release. Bound to the
- * project's own root by the caller.
- */
-export function releaseVerdict(record: LockRecord, current: StateId): ReleaseVerdict | undefined {
-  const root = path.resolve(getProjectRoot());
-  // Step 1: what the record can prove — parts that break down its identity, and its stamp.
-  const problem = gatePartsProblem(record, current);
-  const parts = usableGateParts(record, current);
-  const stamp = releaseStampAgainst(record, WAIRON_VERSION);
-  const from = typeof record.validatorVersion === 'string' && record.validatorVersion !== '' ? record.validatorVersion : 'an unrecorded release';
-  if (parts) {
-    // Steps 2-3: a record with gate parts — only the release's part moved.
-    const moved = movedGateParts({ gateParts: parts }, current.parts) ?? [];
-    if (moved.length !== 1 || moved[0] !== 'release') return undefined;
-    // Steps 4-5: only an older (or the same) valid stamp is a change of the release this one may judge.
-    if (stamp === 'newer' || stamp === 'invalid') return { from, to: WAIRON_VERSION, carried: false, reason: stampReason(record, stamp) };
-  } else {
-    // Steps 6-8: a record that cannot prove its own inputs unchanged — over a
-    // design no own spec file and no member approval of which moved (else the
-    // caller names what did).
-    const diff = diffAgainstApproval();
-    if (!diff || diff.added.length + diff.changed.length + diff.removed.length > 0) return undefined;
-    if (!membersAsPinned(record)) return undefined;
-    // Steps 9-10: stale with the one sentence, never re-validated.
-    return { from, to: WAIRON_VERSION, carried: false, reason: unprovenReason(record, stamp, problem) };
-  }
-  // Steps 11-12: decided once per record and identity — in this process, or
-  // by an earlier command, whose verdict the user cache keeps.
-  const key = `${root}|${record.stateId.digest}|${current.digest}`;
-  if (releaseVerdicts.has(key)) return releaseVerdicts.get(key) ?? undefined;
-  const diskKey = verdictCacheKey(root, record, current);
-  const remembered = readCachedVerdict(root, diskKey);
-  if (remembered !== null) {
-    releaseVerdicts.set(key, remembered);
-    return remembered;
-  }
-  if (revalidating.has(root)) return undefined;
-  revalidating.add(root);
-  try {
-    // Steps 13-14: the approved design re-validated under the current rules.
-    const config = configOrNull();
-    const result = designOnly(validateDesign({ rules: config?.rules, projectType: config?.projectType, memberDepth: 0 }));
-    // Step 15: what would fail `validate --ci`.
-    const blocking = ciBlockingIssues(result);
-    // Steps 16-18.
-    const verdict: ReleaseVerdict = blocking.length === 0
-      ? { from, to: WAIRON_VERSION, carried: true }
-      : {
-        from, to: WAIRON_VERSION, carried: false, count: blocking.length,
-        findings: blocking.slice(0, 5).map((i) => `${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.replace(/\.\s*$/, '')}`),
-      };
-    releaseVerdicts.set(key, verdict);
-    writeCachedVerdict(root, diskKey, verdict);
-    return verdict;
-  } finally {
-    revalidating.delete(root);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// The release verdict kept across commands. Re-validation is a whole owner's
-// gate run (a second code-model build included), and every status, validate
-// and lock-check of an upgraded project asked for it again for as long as the
-// approval carried the older stamp. One small file per project root in
-// wairon's user cache (WAIRON_CACHE_DIR, else the OS user cache) — never in
-// the tree, so nothing to ignore or commit — holds the last verdict with the
-// key it answers: the root, the record's identity, stamp and gate parts, the
-// running release and build, and the current gate identity, which covers the
-// design and every input the verdict reads. Any of them moving misses.
-// ---------------------------------------------------------------------------
-
-/** This build's own stamp — the entry script this process runs, which a rebuild writes anew — so a rebuilt wairon of one version never reads an older build's verdict. */
-const BUILD_STAMP: string = (() => {
-  try {
-    return String(files.stat(process.argv[1] ?? '').mtimeMs);
-  } catch {
-    return 'unknown';
-  }
-})();
-
-/** The key a cached verdict answers. */
-function verdictCacheKey(root: string, record: LockRecord, current: StateId): string {
-  return crypto.createHash('sha256').update(JSON.stringify([
-    root, record.stateId.algorithm, record.stateId.digest, record.validatorVersion ?? null, record.gateParts ?? null,
-    WAIRON_VERSION, BUILD_STAMP, current.algorithm, current.digest,
-  ])).digest('hex');
-}
-
-/** The cache file of one project root. */
-function verdictCacheFile(root: string): string {
-  const base = userCacheDir();
-  const name = crypto.createHash('sha256').update(root.toLowerCase()).digest('hex').slice(0, 32);
-  return path.join(base, 'release-verdicts', `${name}.json`);
-}
-
-/** The verdict an earlier command recorded under exactly this key, or null. Never fails: a missing or unreadable cache is a miss. */
-function readCachedVerdict(root: string, key: string): ReleaseVerdict | null {
-  try {
-    const held = JSON.parse(files.readText(verdictCacheFile(root))) as { key?: unknown; verdict?: ReleaseVerdict };
-    return held.key === key && held.verdict && typeof held.verdict.carried === 'boolean' ? held.verdict : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Record the verdict for the next command. Never fails: a cache that cannot be written only costs a re-validation. */
-function writeCachedVerdict(root: string, key: string, verdict: ReleaseVerdict): void {
-  try {
-    const file = verdictCacheFile(root);
-    files.ensureDir(path.dirname(file));
-    files.writeText(file, JSON.stringify({ key, verdict }));
-  } catch { /* the next command re-validates */ }
-}
-
-/** Step 5: why a newer or invalid release stamp is no change of the release this wairon may judge. */
-function stampReason(record: LockRecord, stamp: 'newer' | 'invalid'): string {
-  if (stamp === 'newer') {
-    return `It was written by a newer wairon (${record.validatorVersion}) than this one (${WAIRON_VERSION}): this release cannot re-judge an approval a newer one took. Run that wairon (or a newer one), or re-lock to approve the design under this one.`;
-  }
-  return typeof record.validatorVersion === 'string' && record.validatorVersion !== ''
-    ? `Its release stamp "${record.validatorVersion}" is no wairon version, so a change of the release cannot be told apart from an edited record — re-lock once to approve the design under this release.`
-    : 'It carries no release stamp, so a change of the release cannot be told apart from an edited record — re-lock once to approve the design under this release.';
-}
-
-/** Step 9: the one sentence for a record that cannot prove the project's own inputs unchanged. */
-function unprovenReason(record: LockRecord, stamp: ReturnType<typeof releaseStampAgainst>, problem: string | null): string {
-  if (problem !== null) {
-    return `Its gate parts do not break down its identity (${problem}), so they are ignored, and whether only the release moved cannot be told — re-lock once to record them; later upgrades then carry over.`;
-  }
-  if (stamp === 'newer' || stamp === 'invalid') return stampReason(record, stamp);
-  const old = record.validatorVersion as string;
-  if (stampRecordsGateParts(old)) {
-    return `Its stamp says wairon ${old} took it, but it carries no gate parts, which every record from wairon ${GATE_PARTS_SINCE} on carries: an earlier wairon took it (the stamp was edited), so the release moved since, and whether the project's own inputs moved too cannot be told — re-lock once to record them; later upgrades then carry over.`;
-  }
-  return `Approved under wairon ${old} before wairon recorded its inputs separately — re-lock once to record them; later upgrades then carry over.`;
-}
-
-/** Whether every direct member's recorded subject is the one the identity reads now (a record from before gate parts). */
-function membersAsPinned(record: LockRecord): boolean {
-  const family = projectFamily();
-  const now = new Map<string, string>();
-  for (const node of family.nodes) {
-    if (node.parent !== '' || node.mountAlias === undefined) continue;
-    const r = approvalRecord(node.directory);
-    now.set(node.mountAlias, r ? subjectOf(r) : 'never');
-  }
-  const recorded = record.members ?? {};
-  const aliases = new Set([...now.keys(), ...Object.keys(recorded)]);
-  for (const alias of aliases) {
-    const pin = ownGet(recorded, alias);
-    if (pin?.as === 'part') continue;
-    if ((pin?.subject ?? 'never') !== (now.get(alias) ?? 'never')) return false;
-  }
-  return true;
-}
-
-/**
- * Steps 8-11 of approvals at the bound root: what the approval on record owes
- * that its gate identity does not cover — the project id moved since it
+ * Step 8 of approvals at the bound root: what the approval on record owes
+ * that its identity does not cover — the project id moved since it
  * (project_config.identity, the resolution the project-identity rule and
- * `lock-check` judge by), a declared external never pinned, or a use its pin
- * does not record — as one sentence; undefined when nothing is owed.
+ * `lock-check` judge by) — as one sentence; undefined when nothing is owed.
  */
 function owedBy(record: LockRecord): string | undefined {
-  const reasons: string[] = [];
   const config = configOrNull();
-  if (config && record.projectId !== undefined) {
-    const identity = projectIdentity(config, record.projectId);
-    const now = identity.id === undefined ? 'no id at all' : identity.id;
-    if (identity.problems.some((p) => p.kind === 'renamed')) reasons.push(`the project was renamed since the approval (${record.projectId} → ${now}), and the approval still names the former id`);
-    else if (identity.problems.some((p) => p.kind === 'changed')) reasons.push(`the project id changed since the approval (${record.projectId} → ${now})`);
-  }
-  const never = unpinned();
-  if (never.length > 0) reasons.push(`declared external(s) never pinned — ${never.map((a) => `"${a}"`).join(', ')}`);
-  for (const [alias, uses] of Object.entries(unrecorded())) {
-    reasons.push(`external "${alias}" is used beyond its pin: ${uses.join(', ')} (used now, but not in the lock)`);
-  }
-  // Step 12: a selected pack that cannot load leaves the doctrine the approval
-  // was judged under unreadable, and the identity digests only what loaded.
-  const unloadable = unloadablePacks();
-  if (unloadable.length > 0) reasons.push(`extension pack(s) selected in .wai/project.yaml cannot load — ${unloadable.join('; ')}`);
-  return reasons.length > 0 ? reasons.join('; ') : undefined;
+  if (!config || record.projectId === undefined) return undefined;
+  const identity = projectIdentity(config, record.projectId);
+  const now = identity.id === undefined ? 'no id at all' : identity.id;
+  if (identity.problems.some((p) => p.kind === 'renamed')) return `the project was renamed since the approval (${record.projectId} → ${now}), and the approval still names the former id`;
+  if (identity.problems.some((p) => p.kind === 'changed')) return `the project id changed since the approval (${record.projectId} → ${now})`;
+  return undefined;
 }
 
-/** Each selected extension pack that cannot load, as the loader says why: a load error or a selection that does not resolve (an error, not a warning). */
-function unloadablePacks(): string[] {
-  let loaded: LoadedExtensions;
-  try {
-    loaded = loadProjectExtensions();
-  } catch {
-    return [];
-  }
-  return [
-    ...loaded.errors,
-    // A selection that resolved with a warning (unpinned, unfetchable origin) still loaded.
-    ...(loaded.selectionFailures ?? []).filter((f) => f.severity === 'error').map((f) => f.message),
-  ];
+/** The names of the packs a configuration selects: each `extensions.packs` entry's name, or a path reference's file stem. */
+function selectedPackNames(config: ProjectConfig | null): string[] {
+  return [...new Set((config?.extensions?.packs ?? []).map((entry) =>
+    (typeof entry === 'string' ? entry.split(/[\\/]/).pop()!.replace(/\.(ya?ml|cjs|js)$/i, '') : entry.name)))];
 }
 
 /**
- * Steps 8-9: how the parent's lock pinned a member — its `members` entry, else
- * (format 1, in the v5 reading only) its `children` entry.
+ * ifamily_validator.inputs — with one project's root bound: what its build
+ * inputs owe beside its approval, from its own committed files, so the answer
+ * is location-independent. A hosted or git external (or referenced member) the
+ * inputs lock holds no entry for is `unpinned`; a use of a pinned one its pin
+ * does not record is `unrecorded`; a selected pack that cannot load, has no
+ * entry in the inputs lock, or whose doctrine digest differs from the recorded
+ * one is `pack`; and, under composition.requireApprovedMembers, each direct
+ * member project whose state is not approved is `member`. A path external is
+ * read live and never owes a pin. Writes nothing.
  */
-function pinOf(parent: LockRecord | null, alias: string, subject: string | undefined): PinState {
-  if (!parent) return 'unpinned';
-  const recorded = parent.members
-    ? (ownHas(parent.members, alias) ? ownGet(parent.members, alias)!.subject ?? 'never' : undefined)
-    : (readsV5Forms() ? ownGet(parent.children, alias) : undefined);
-  if (recorded === undefined) return 'unpinned';
-  return recorded === (subject ?? 'never') ? 'matches' : 'moved';
+export function projectInputs(members: ProjectApproval[]): InputDebt[] {
+  const debts: InputDebt[] = [];
+  // Step 1: the declared hosted and git producers the inputs lock holds no entry for.
+  for (const alias of unpinned()) {
+    debts.push({ kind: 'unpinned', subject: alias, sentence: `external "${alias}" is not pinned — run \`wairon externals pin ${alias}\`` });
+  }
+  // Step 2: the uses of the pinned producers their pins do not record.
+  for (const [alias, uses] of Object.entries(unrecorded())) {
+    debts.push({
+      kind: 'unrecorded', subject: alias, detail: uses,
+      sentence: `external "${alias}" is used beyond its pin: ${uses.join(', ')} — re-pin it with \`wairon externals pin ${alias}\``,
+    });
+  }
+  // Steps 3-6: the project's configuration, and the packs its selections name as loaded.
+  const config = configOrNull();
+  const selected = selectedPackNames(config);
+  if (selected.length > 0) {
+    let loaded: LoadedExtensions | null = null;
+    try {
+      loaded = loadProjectExtensions();
+    } catch { /* every selection then reads as one that cannot load */ }
+    const digests = loaded ? packContents(loaded) : {};
+    const recorded = lockedPacks();
+    for (const name of selected) {
+      const digest = ownGet(digests, name);
+      if (digest === undefined) {
+        const why = loaded
+          ? [...(loaded.selectionFailures ?? []).filter((f) => f.name === name && f.severity === 'error').map((f) => f.message), ...loaded.errors.filter((e) => e.includes(name))]
+          : [];
+        debts.push({ kind: 'pack', subject: name, sentence: `pack "${name}" cannot load: ${why.length > 0 ? why.join('; ') : 'it did not resolve'}` });
+        continue;
+      }
+      const entry = ownGet(recorded, name);
+      if (entry === undefined) {
+        debts.push({ kind: 'pack', subject: name, sentence: `pack "${name}" is not recorded in the inputs lock — run \`wairon pack sync\`` });
+      } else if (entry.digest !== digest) {
+        debts.push({ kind: 'pack', subject: name, sentence: `pack "${name}" changed since it was recorded — run \`wairon pack sync\`` });
+      }
+    }
+  }
+  // Step 7: under requireApprovedMembers, each direct member whose own lock does not hold.
+  if (config?.composition?.requireApprovedMembers) {
+    for (const member of members) {
+      if (member.as === 'part' || member.state === 'approved') continue;
+      const who = member.alias ?? member.key;
+      debts.push({
+        kind: 'member', subject: who,
+        sentence: `member "${who}" is ${member.state === 'never' ? 'never approved' : 'drifted'} — lock it at its own root`,
+      });
+    }
+  }
+  // Step 8.
+  return debts;
 }
 
 /**
- * ifamily_validator.approvals — the bound project's pin tree: the root's own
+ * ifamily_validator.approvals — the bound project's approvals: the root's own
  * entry first, then each member within `depth` levels (all when omitted), in
- * walk order. A declared member with no project on disk is `never`, with no
- * subject, and nothing is bound for it. The caller must gate on reach itself
- * before it asks about a family.
+ * walk order. A project that sets composition.requireApprovedMembers is judged
+ * from its members' real entries, so the selection reaches one level further
+ * below it than `depth` allows (those entries are not answered). A declared
+ * member with no project on disk is `never`, and nothing is bound for it. The
+ * caller must gate on reach itself before it asks about a family.
  */
 export function projectApprovals(depth?: number): ProjectApproval[] {
   // Step 1: the bound root's project graph.
   const family = projectFamily();
   const root = path.resolve(getProjectRoot());
-  // Step 2: the projects to answer for.
+  const ceiling: Ceiling = { topRoot: root, narrowed: true };
+  // Step 2: the projects to answer for, and the ones judged only for a requiring project's debts.
   const limit = depth ?? Infinity;
-  const selected = family.nodes.filter((n) => depthOf(family, n) <= limit);
-  const directoryOf = new Map(family.nodes.map((n) => [n.namespace, n.directory]));
-  const parentRecord = (key: string): LockRecord | null => {
-    const dir = directoryOf.get(key);
-    return dir === undefined ? null : approvalRecord(dir);
-  };
-  // Steps 3-9: each loaded project at its own root, and its parent's pin.
-  const entries: ProjectApproval[] = selected.map((node) => {
-    const own = ownApproval(node, root);
-    if (node.parent === undefined || node.mountAlias === undefined) return own;
-    return { ...own, pinned: pinOf(parentRecord(node.parent), node.mountAlias, own.subject) };
-  });
-  // A declared member with no project on disk: never, bound to nothing.
+  // A path external (and anything read below it) is a live node judged for validity only: never a member, never answered here.
+  const members = family.nodes.filter((n) => !underPathExternal(family, n));
+  const selected = members.filter((n) => depthOf(family, n) <= limit);
+  const requiring = selected.filter((n) => within(n.directory, ceiling, () => configOrNull()?.composition?.requireApprovedMembers === true));
+  const extra = members.filter((n) => !selected.includes(n) && requiring.some((r) => n.parent === r.namespace));
+  const walk = [...selected, ...extra];
+  // A declared member with no project on disk: never, bound to nothing. Answered for
+  // any project in the walk (a requiring parent counts it a debt), reported within `depth`.
+  const answered: Array<{ entry: ProjectApproval; reported: boolean }> = [];
   for (const problem of family.problems) {
     if (problem.kind !== 'member-absent' || !problem.id) continue;
     const parentKey = problem.projects[0] ?? '';
     const parentNode = family.nodes.find((n) => n.namespace === parentKey);
-    if (!parentNode || depthOf(family, parentNode) + 1 > limit) continue;
-    entries.push({
-      key: parentKey === '' ? problem.id : `${parentKey}::${problem.id}`,
-      alias: problem.id,
-      parent: parentKey,
-      state: 'never',
-      pinned: pinOf(parentRecord(parentKey), problem.id, undefined),
+    if (!parentNode || !walk.includes(parentNode)) continue;
+    answered.push({
+      entry: { key: parentKey === '' ? problem.id : `${parentKey}::${problem.id}`, alias: problem.id, parent: parentKey, state: 'never', inputs: [] },
+      reported: selected.includes(parentNode) && depthOf(family, parentNode) + 1 <= limit,
     });
   }
-  // Stage 8: each referenced project member of a selected project, at the root
-  // it is opened at (its sibling checkout, or the fetch cache at its pinned
-  // commit), and how its declaring project's lock pinned it.
-  for (const ref of referencedOf(selected)) {
+  // Each referenced project member of a selected project, at the root it is
+  // opened at (its sibling checkout, or the fetch cache at its pinned commit).
+  for (const ref of referencedOf(walk)) {
+    const reported = selected.some((n) => n.namespace === ref.parent);
     if (ref.directory === undefined) {
-      entries.push({ key: ref.key, alias: ref.alias, parent: ref.parent, as: 'project', state: 'never', pinned: pinOf(parentRecord(ref.parent), ref.alias, undefined) });
+      answered.push({ entry: { key: ref.key, alias: ref.alias, parent: ref.parent, as: 'project', state: 'never', inputs: [] }, reported });
       continue;
     }
-    const own = approvalAt({ namespace: ref.key, mountAlias: ref.alias, parent: ref.parent, directory: ref.directory }, { topRoot: ref.directory, narrowed: true });
-    entries.push({ ...own, as: 'project', ...(ref.commit !== undefined ? { commit: ref.commit } : {}), pinned: pinOf(parentRecord(ref.parent), ref.alias, own.subject) });
+    const own = approvalAt({ namespace: ref.key, mountAlias: ref.alias, parent: ref.parent, directory: ref.directory }, { topRoot: ref.directory, narrowed: true }, []);
+    answered.push({ entry: { ...own, as: 'project' }, reported });
   }
-  // Stage 8: each part of a selected project, answered as a part — approved
-  // exactly when its declaring project is (its approval is that project's),
-  // with its content digest and the commit it was read at.
+  // Steps 3-9: each loaded project at its own root, deepest first, so every
+  // project's direct members are answered before it.
+  const byKey = new Map<string, ProjectApproval>();
+  for (const node of [...walk].sort((a, b) => depthOf(family, b) - depthOf(family, a))) {
+    const direct = [...byKey.values(), ...answered.map((a) => a.entry)].filter((e) => e.parent === node.namespace && e.as !== 'part');
+    byKey.set(node.namespace, approvalAt(node, ceiling, direct));
+  }
+  // Each part of a selected project, answered as a part: its state is its declaring project's.
+  const parts: ProjectApproval[] = [];
   for (const node of selected) {
-    const declaring = entries.find((e) => e.key === node.namespace);
+    const declaring = byKey.get(node.namespace);
     for (const part of node.parts) {
-      entries.push({
+      parts.push({
         key: node.namespace === '' ? part.alias : `${node.namespace}::${part.alias}`,
         alias: part.alias,
         parent: node.namespace,
         as: 'part',
         state: declaring?.state ?? 'never',
-        ...(part.contentDigest !== undefined ? { contentDigest: part.contentDigest } : {}),
-        ...(part.commit !== undefined ? { commit: part.commit } : {}),
+        inputs: [],
       });
     }
   }
-  // Step 10: root first.
-  return entries;
+  // Steps 10-13: walk order, root first; the projects judged only for a requiring project's debts are left out.
+  return [
+    ...selected.map((n) => byKey.get(n.namespace)!),
+    ...answered.filter((a) => a.reported).map((a) => a.entry),
+    ...parts,
+  ];
 }
 
 // ---- relation health -------------------------------------------------------
@@ -1408,7 +1257,7 @@ function containedRelations(answered: ExternalStatus[]): ExternalStatus[] {
   // Step 8: its own graph — the references it writes into its own members.
   const own = projectFamily();
   const consumed = own.nodes
-    .filter((n) => n.parent === '' && n.mountAlias !== undefined && !answered.some((s) => s.alias === n.mountAlias))
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined && n.pathExternal === undefined && !answered.some((s) => s.alias === n.mountAlias))
     .map((child) => ({
       child,
       refs: own.authoredReferences.filter((r) => (own.owners.get(r.specId) ?? '') === '' && r.producer === child.namespace && r.binding !== 'local'),

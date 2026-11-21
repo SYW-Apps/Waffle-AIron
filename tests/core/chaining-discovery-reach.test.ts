@@ -76,8 +76,8 @@ function family(): { root: string; kidDir: string } {
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
   kid.save('subsystem', subsystem('k-core', { parentSystem: 'kid-system' }));
-  // The child reaches its parent the way wairon 6 spells it: an external it declares, never `super::`.
-  projectConfigRepositoryAt(kidDir).declareExternal('parent', { project: 'parent' });
+  // The child reaches its parent the way wairon 6 spells it: an external it declares (here a git one, the kind a pin judges), never `super::`.
+  projectConfigRepositoryAt(kidDir).declareExternal('parent', { project: 'parent', source: { git: 'https://example.invalid/parent.git' } });
   kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['parent::parent-orch'] }));
   invalidateSpecCache();
   return { root, kidDir };

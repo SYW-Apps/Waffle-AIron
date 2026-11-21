@@ -414,7 +414,11 @@ function searchedConsumers(bound: string, search: string[], seen: ReadonlySet<st
         || (e.sourceGit !== undefined && producerId !== null && e.project === producerId)));
       if (!declared) return null;
       const node = consumerNode(graph(), root);
-      const usage = node ? pinnedUsage(node.namespace, declared.alias) : null;
+      // A path producer is a node of that root's scan, read live: its usage is counted against its live table.
+      const producerBinding = node?.externals.find((e) => e.alias === declared.alias);
+      const usage = !node ? null
+        : producerBinding?.sourceKind === 'family' && producerBinding.producer !== undefined ? exportUsage(node.namespace, producerBinding.producer)
+          : pinnedUsage(node.namespace, declared.alias);
       return {
         project: effectiveProjectId(config) ?? path.basename(root),
         key: node?.namespace ?? '',
@@ -443,28 +447,17 @@ export interface MemberRevision {
   revision?: ApprovedRevision;
 }
 
-/** The composition subjects the bound project's lock records for its members, by alias (`<algorithm>:<digest>`). */
-function recordedMemberSubjects(root: string): Map<string, string> {
-  try {
-    const record = JSON.parse(files.readText(path.join(root, '.wai', 'lock.json'))) as { members?: Record<string, { subject?: unknown }> };
-    return new Map(Object.entries(record.members ?? {}).filter(([, m]) => typeof m?.subject === 'string').map(([alias, m]) => [alias, m.subject as string]));
-  } catch {
-    return new Map();
-  }
-}
-
 /**
  * iexternal_producers.memberRevisions — each live member of the bound project
  * (a contained member or a `../` sibling, read where it is stored and never
- * pinned) with its root, the bound project's usage of it, and its tree at the
- * approval it is judged against: the commit that introduced the member
- * approval the bound project's lock records for it, else the member's own last
- * committed approval. `recordedIn` names another tree of the bound project
- * whose lock is read for those records instead — its tree at an earlier
- * revision (`surface diff`'s baseline), so a member is read as THAT approval
- * recorded it. Never on a hosted request. No network.
+ * pinned) with its root, the bound project's usage of it, and its tree at its
+ * own last committed approval. The bound project's lock records no member, so
+ * the member's own `.wai/lock.json` history is the only source. With `asOf`,
+ * the member's last approval committed at or before that moment (`surface
+ * diff` passes its baseline's commit time). Never on a hosted request. No
+ * network.
  */
-export function memberRevisions(recordedIn?: string): MemberRevision[] {
+export function memberRevisions(asOf?: Date): MemberRevision[] {
   // Steps 1-2: a hosted request reads no folder outside its own records.
   if (getHostedLookup() !== null) return [];
   const bound = path.resolve(getProjectRoot());
@@ -472,27 +465,24 @@ export function memberRevisions(recordedIn?: string): MemberRevision[] {
   const family = graph();
   const own = consumerNode(family, bound);
   if (!own) return [];
-  // Step 4: the subjects its lock records — or the lock of the tree named.
-  const subjects = recordedMemberSubjects(recordedIn ?? bound);
   const out: MemberRevision[] = [];
-  // Steps 5-10: each live member.
+  // Steps 4-9: each live member.
   for (const node of family.nodes) {
-    if (node.parent !== own.namespace || node === own || node.mountAlias === undefined) continue;
+    if (node.parent !== own.namespace || node === own || node.mountAlias === undefined || node.pathExternal !== undefined) continue;
     const alias = node.mountAlias;
     const usage = exportUsage(own.namespace, node.namespace);
     const entry: MemberRevision = { alias, project: node.id ?? node.namespace, root: node.directory, usage };
     const repo = gitSource.repositoryRoot(node.directory);
     if (repo) {
-      const lockPath = path.join('.wai', 'lock.json');
-      const subject = subjects.get(alias);
-      const digest = subject?.slice(subject.lastIndexOf(':') + 1);
-      const recorded = digest ? gitSource.commitIntroducing(node.directory, lockPath, digest) : null;
-      const commit = recorded ?? gitSource.lastCommitOf(node.directory, lockPath);
+      // Step 7: the member's own last committed approval, as of then when asked.
+      const commit = gitSource.lastCommitOf(node.directory, path.join('.wai', 'lock.json'), asOf);
       if (commit) {
         try {
+          // Step 8: its tree at that commit, read-only.
           const relative = path.relative(repo, node.directory);
           const directory = gitSource.fetch(repo, commit, relative === '' ? undefined : relative);
-          entry.revision = { directory, commit, label: recorded ? `the approval this project's lock records for it (${commit.slice(0, 12)})` : `its own last committed approval (${commit.slice(0, 12)})` };
+          // Step 9.
+          entry.revision = { directory, commit, committedAt: gitSource.commitTime(repo, commit) ?? new Date(0), label: `its own last committed approval (${commit.slice(0, 12)})` };
         } catch {
           // A tree that cannot be materialized leaves the revision out, never fails the read.
         }
@@ -509,6 +499,8 @@ export interface ApprovedRevision {
   directory: string;
   commit: string;
   label: string;
+  /** The commit's committer time: the moment a sibling member's approval is read as of when this revision is a comparison's baseline. */
+  committedAt: Date;
 }
 
 /**
@@ -531,9 +523,11 @@ export function approvedRevision(against?: string): ApprovedRevision {
       ? `"${against}" names no commit of the repository at ${repo}`
       : 'no approval of this project was ever committed (.wai/lock.json is in no commit) — lock and commit first, or name a revision (`--against <ref>`)');
   }
-  // Step 3: that commit's tree of the project, from the fetch cache.
+  // Step 3: the commit's committer time, which a sibling member's approval is read as of.
+  const committedAt = gitSource.commitTime(repo, commit) ?? new Date(0);
+  // Step 4: that commit's tree of the project, from the fetch cache.
   const relative = path.relative(repo, bound);
   const directory = gitSource.fetch(repo, commit, relative === '' ? undefined : relative);
-  // Step 4.
-  return { directory, commit, label: against !== undefined ? `${against} (${commit.slice(0, 12)})` : `the last approval, committed at ${commit.slice(0, 12)}` };
+  // Step 5.
+  return { directory, commit, committedAt, label: against !== undefined ? `${against} (${commit.slice(0, 12)})` : `the last approval, committed at ${commit.slice(0, 12)}` };
 }

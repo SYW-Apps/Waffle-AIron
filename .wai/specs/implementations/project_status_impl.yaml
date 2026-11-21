@@ -120,27 +120,24 @@ methods:
         type: local
       - stepNumber: 15
         description: >-
-          When the options carry the pin tree (options.approvals, computed by the validator at each
-          project's own root and handed in — this component cannot compute a gate identity), mark
-          each `[Project]` line with that member's approval state in words (approved | drifted |
-          never approved, `re-lock once` for an upgrade-only drift, `re-validated under <release>`
-          for an approval a release change carried, `the new release finds N issue(s)` for one it
-          did not) and how its parent's lock pinned it (pinned | pin moved | not pinned; a member
-          whose entry is state never and whose pin matches — the parent recorded it unapproved —
-          reads `recorded unapproved`, so `[never approved · recorded unapproved]`, never `·
-          pinned`, which claimed an approval the parent never copied), and close the report with the
-          root's own state as a sentence (`Approval: this project is approved | drifted since its
-          approval | never approved`, with the release line when its entry carries one, and a notice
-          for gate parts that are ignored or a release stamp this wairon cannot stand behind) — a
-          lone project never approved says so too, so the report never leaves the question open. A
-          never-approved tree for which the shared predicate spec_loader.holdsDesign answers false
-          (an L0 with no subsystem, type, export entry or member project) says instead `Approval:
-          nothing approvable yet` — never a prescription to add a subsystem, as `wairon lock` and
+          When the options carry the approvals (options.approvals, computed by the validator at each
+          project's own root and handed in: this component cannot compute an approval identity),
+          mark each `[Project]` line with that member's own approval state in words (approved |
+          drifted | never approved, and the parts that moved for a drifted one). A parent never pins
+          a member, so no pin state is shown: a member's re-lock never moves its parent. Close the
+          report with the root's own state as a sentence (`Approval: this project is approved |
+          drifted since its approval | never approved`) and, when its build owes inputs, one line
+          per debt (an external to pin, a pack to sync, a member to lock under
+          requireApprovedMembers), plus a notice for parts that are ignored; a lone project never
+          approved says so too, so the report never leaves the question open. A never-approved tree
+          for which the shared predicate spec_loader.holdsDesign answers false (an L0 with no
+          subsystem, type, export entry or member project) says instead `Approval: nothing
+          approvable yet`, never a prescription to add a subsystem, as `wairon lock` and
           `lock-check` word it; a types-only tree is approvable and reads `never approved`. States
           are read, never recomputed here, so the report from a parent and from the member agree by
           construction (status-agrees). Without approvals the report shows no states. Before that
-          sentence, one line names each implementation whose conformance dial is off — on the
-          implementation, or on the methods it lists — as realization not checked: the dial is code
+          sentence, one line names each implementation whose conformance dial is off (on the
+          implementation, or on the methods it lists) as realization not checked: the dial is code
           linkage outside the approval, and the dashboard is where a reader looks for what the gate
           does not judge
         type: local
@@ -156,4 +153,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-10-23T22:23:11.455Z'
+updatedAt: '2026-11-20T00:22:55.710Z'

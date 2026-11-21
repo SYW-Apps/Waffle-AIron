@@ -92,7 +92,7 @@ function rehearseChanges(f: Family): { rehearsal: Rehearsal; changes: FileChange
   put(at(f.root, '.wai', 'specs', 'new', 'deep', 'c.yaml'), 'id: c\n');
   fs.writeFileSync(at(f.m1, '.wai', 'specs', 'x.yaml'), 'id: x\nrenamed: true\n');
   fs.rmSync(at(f.m1, '.wai', 'specs', 'only', 'y.yaml'));
-  put(at(f.m2, '.wai', 'externals.lock.yaml'), 'externals: {}\n');
+  put(at(f.m2, '.wai', 'inputs.lock.yaml'), 'externals: {}\n');
   put(at(f.m2, '.wai', 'externals', 'p.yaml'), 'alias: p\n');
   return { rehearsal, changes: transaction.diff(rehearsal) };
 }
@@ -157,8 +157,8 @@ describe('stage 6 — the family transaction', () => {
       '.|create|.wai/specs/new/deep/c.yaml',
       `${path.join('packages', 'm1')}|delete|.wai/specs/only/y.yaml`,
       `${path.join('packages', 'm1')}|write|.wai/specs/x.yaml`,
-      `${path.join('packages', 'm2')}|create|.wai/externals.lock.yaml`,
       `${path.join('packages', 'm2')}|create|.wai/externals/p.yaml`,
+      `${path.join('packages', 'm2')}|create|.wai/inputs.lock.yaml`,
     ]);
     // A plan writes nothing into the family.
     expect(transactionDirsLeft(f)).toEqual([]);

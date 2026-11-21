@@ -106,13 +106,6 @@ methods:
         description: The project whose own spec tree declares the mounts
     guarantees:
       - idempotent
-  - name: consumedContractInputs
-    description: >-
-      Forward to core_orchestrator.consumedContractInputs: the consumed contract inputs a verdict at
-      the bound project can consult — its own root's, never a member's
-    signature: 'consumedContractInputs(): list<string>'
-    returns: list<string>
-    params: []
   - name: loadTypeSpec
     description: Read one type specification by id.
     signature: 'loadTypeSpec(id: string): TypeSpec?'
@@ -474,18 +467,19 @@ methods:
   - name: memberRevisions
     description: >-
       Each live member of the bound project with its root, the bound project's usage of it and its
-      tree at the approval it is judged against (the one the bound project's lock records, else the
-      member's own last), materialized read-only. Dispatched to the external-producers workflow.
-    signature: 'memberRevisions(recordedIn?: string): list<member_revision>'
+      tree at its own last committed approval (as of a moment, when given), materialized read-only.
+      Dispatched to the external-producers workflow.
+    signature: 'memberRevisions(asOf?: datetime): list<member_revision>'
     returns: list<member_revision>
     params:
-      - name: recordedIn
-        type: string
+      - name: asOf
+        type: datetime
         description: >-
-          Another tree of the bound project (its tree at an earlier revision, in the fetch cache)
-          whose lock records the member approvals to read instead of the bound root's — surface
-          diff's baseline reads each member as THAT approval recorded it
+          Read each member's approval as it stood at this moment; its latest committed approval when
+          omitted
         optional: true
+        previousNames:
+          - recordedIn
     effect: io
   - name: inspectLock
     description: >-
@@ -596,4 +590,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-12T21:49:55.619Z'
+updatedAt: '2026-11-20T01:30:12.282Z'

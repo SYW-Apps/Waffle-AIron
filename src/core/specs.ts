@@ -248,6 +248,8 @@ export interface ScannedProjectRoot {
   mountAlias?: string;
   /** How the parent declares it; absent for the bound root. */
   mountForm?: MountForm;
+  /** True when the parent declares it under `externals` with a path source: a live scan node judged for validity, never a member. */
+  pathExternal?: true;
   /** The legacy L1 mount subsystem as the parent wrote it; null for a members-declared root and the bound root. */
   legacyMount: SubsystemSpec | null;
   /** What its parent's declaration says the member is (the `members` description, or a legacy mount's). */
@@ -652,6 +654,8 @@ interface MemberDeclarationRead {
   legacyFile?: string;
   /** Why the declaration is not followed. */
   problem?: string;
+  /** True for a path external read live as a scan node: judged for validity, never a member. */
+  pathExternal?: boolean;
 }
 
 /** A project's configuration read through that root's binding; null when it has none or it fails its schema. */
@@ -691,7 +695,7 @@ function projectContentAt(dir: string): boolean {
  */
 function pinnedAsMember(dir: string, alias: string): boolean {
   try {
-    const lock = readYamlFile(path.join(aiPathsAt(dir).root(), 'externals.lock.yaml')) as { externals?: Record<string, { role?: string }> } | null;
+    const lock = readYamlFile(path.join(aiPathsAt(dir).root(), 'inputs.lock.yaml')) as { externals?: Record<string, { role?: string }> } | null;
     return ownGet(lock?.externals, alias)?.role === 'member';
   } catch {
     return false;
@@ -3351,6 +3355,15 @@ export class SpecWorkspace {
   private scanVisitedSpecDirs: string[] = [];
   private scanVisitedConfigFiles: string[] = [];
   private cachedConfigFiles: string[] = [];
+  /**
+   * The build-input files the scan read: each root's inputs lock and its pinned
+   * snapshots. A pin is written in-process by the same caller that reads the
+   * tree next (`wairon lock` pins what it owes, then captures the identity),
+   * so these few files are re-checked on every cache hit, not once per TTL.
+   */
+  private scanVisitedInputFiles: string[] = [];
+  private cachedInputFiles: string[] = [];
+  private cachedInputSignature: string | null = null;
   private cachedRoots: ScannedProjectRoot[] = [];
   private cachedRawRoots: RawRoot[] = [];
   private cachedReadables: ReadableProject[] = [];
@@ -3380,6 +3393,8 @@ export class SpecWorkspace {
     this.cachedDepth = null;
     this.cachedSpecDirs = [];
     this.cachedConfigFiles = [];
+    this.cachedInputFiles = [];
+    this.cachedInputSignature = null;
     this.cachedRoots = [];
     this.cachedRawRoots = [];
     this.cachedReadables = [];
@@ -3401,10 +3416,11 @@ export class SpecWorkspace {
       // Cache hit — but the files may have been edited externally (hand edits,
       // another process) since we scanned. Re-verify via mtime signature at
       // most once per TTL.
+      const inputsMoved = computeSpecTreeSignature([], this.cachedInputFiles) !== this.cachedInputSignature;
       const now = Date.now();
-      if (now - this.lastSignatureCheckMs <= SIGNATURE_TTL_MS) return this.cachedIndex;
+      if (!inputsMoved && now - this.lastSignatureCheckMs <= SIGNATURE_TTL_MS) return this.cachedIndex;
       this.lastSignatureCheckMs = now;
-      if (computeSpecTreeSignature(this.cachedSpecDirs, this.cachedConfigFiles) === this.cachedSignature) return this.cachedIndex;
+      if (!inputsMoved && computeSpecTreeSignature(this.cachedSpecDirs, this.cachedConfigFiles) === this.cachedSignature) return this.cachedIndex;
       this.invalidate();
     }
 
@@ -3413,6 +3429,7 @@ export class SpecWorkspace {
     this.cachedV5 = readsV5Forms();
     this.scanVisitedSpecDirs = [];
     this.scanVisitedConfigFiles = [];
+    this.scanVisitedInputFiles = [];
 
     const scan = this.scanFamily(maxDepth);
     this.cachedIndex = scan.index;
@@ -3424,6 +3441,8 @@ export class SpecWorkspace {
     this.cachedSpecDirs = this.scanVisitedSpecDirs;
     this.cachedConfigFiles = this.scanVisitedConfigFiles;
     this.cachedSignature = computeSpecTreeSignature(this.cachedSpecDirs, this.cachedConfigFiles);
+    this.cachedInputFiles = this.scanVisitedInputFiles;
+    this.cachedInputSignature = computeSpecTreeSignature([], this.cachedInputFiles);
     this.lastSignatureCheckMs = Date.now();
     return this.cachedIndex;
   }
@@ -3452,7 +3471,9 @@ export class SpecWorkspace {
   private scanFamily(maxDepth: number): { index: SpecIndex; raws: RawRoot[]; readables: ReadableProject[] } {
     // Steps 1-8: phase one, every root read and keyed, members followed.
     const raws: RawRoot[] = [];
-    this.readRoot(this.rootDir, null, undefined, new Set([chainDirKey(this.rootDir)]), maxDepth, 0, raws, new Set());
+    const taken = new Set<string>();
+    this.readRoot(this.rootDir, null, undefined, new Set([chainDirKey(this.rootDir)]), maxDepth, 0, raws, taken);
+    this.followPathExternals(raws, taken, maxDepth);
     raws.forEach((raw) => this.keyRoot(raw));
     raws.forEach((raw) => this.bindAliases(raw, raws));
     const readables = raws.map((raw) => readableOf(raw));
@@ -3521,6 +3542,13 @@ export class SpecWorkspace {
     // Step 2: the root's configuration, through its own binding.
     const config = configAt(dir);
     this.scanVisitedConfigFiles.push(aiPathsAt(dir).projectConfig());
+    // The root's build inputs the scan reads: its inputs lock and each declared external's pinned snapshot.
+    this.scanVisitedInputFiles.push(path.join(aiPathsAt(dir).root(), 'inputs.lock.yaml'));
+    if (config) {
+      for (const declared of declaredExternals(config)) {
+        if (!declared.problem) this.scanVisitedInputFiles.push(path.join(aiPathsAt(dir).root(), 'externals', `${declared.alias}.yaml`));
+      }
+    }
     // The bound root's configuration keys its schema does not know: the parse
     // drops them, so a misspelt setting (`requireCod`) would silently do nothing.
     if (!parent && config) this.reportUnknownConfigKeys(aiPathsAt(dir).projectConfig(), rawConfigAt(dir), config);
@@ -3535,6 +3563,7 @@ export class SpecWorkspace {
       namespace: key,
       ...(parent ? { parent: parent.record.namespace } : {}),
       ...(member ? { mountAlias: member.alias, mountForm: member.form } : {}),
+      ...(member?.pathExternal ? { pathExternal: true as const } : {}),
       legacyMount: member?.legacyMount ?? null,
       ...(member?.description !== undefined ? { memberDescription: member.description } : {}),
       directory: path.resolve(dir),
@@ -3577,6 +3606,70 @@ export class SpecWorkspace {
       this.readRoot(childDir, raw, decl, new Set([...ancestors, chainDirKey(childDir)]), maxDepth, depth + 1, raws, taken);
       raw.memberKeys.set(decl.alias, raws[before].record.namespace);
     }
+  }
+
+  /**
+   * Step 6 (round 9): the path EXTERNALS (`../x`) of every root read so far,
+   * followed exactly like a `../` sibling project member — a node of the scan
+   * read live from its own root, composed live and never through a pin. A git
+   * or hosted external is not read. It runs after every member is followed, so
+   * a folder some root declares as a member is one node, not two; a path
+   * producer's own members and externals are followed in turn.
+   */
+  private followPathExternals(raws: RawRoot[], taken: Set<string>, maxDepth: number): void {
+    // `raws` grows as producers are read: each is visited in its turn.
+    for (let i = 0; i < raws.length; i++) {
+      const raw = raws[i];
+      const depth = this.depthOf(raw, raws);
+      if (depth >= maxDepth) continue;
+      for (const decl of this.pathExternalsOf(raw, raws)) {
+        const childDir = path.resolve(raw.dir, decl.path);
+        const before = raws.length;
+        this.readRoot(childDir, raw, decl, this.ancestorKeysOf(raw, raws, childDir), maxDepth, depth + 1, raws, taken);
+        raw.memberKeys.set(decl.alias, raws[before].record.namespace);
+      }
+    }
+  }
+
+  /** How many roots lie between this one and the bound root. */
+  private depthOf(raw: RawRoot, raws: readonly RawRoot[]): number {
+    let depth = 0;
+    for (let at: RawRoot | undefined = raw; at && at.record.parent !== undefined; depth++) {
+      const parent: string | undefined = at.record.parent;
+      at = raws.find((r) => r.record.namespace === parent);
+    }
+    return depth;
+  }
+
+  /** The directories on the walk from the bound root to this root, and a directory about to be read below it. */
+  private ancestorKeysOf(raw: RawRoot, raws: readonly RawRoot[], below: string): Set<string> {
+    const keys = new Set([chainDirKey(below)]);
+    for (let at: RawRoot | undefined = raw; at; ) {
+      keys.add(chainDirKey(at.dir));
+      const parent: string | undefined = at.record.parent;
+      at = parent === undefined ? undefined : raws.find((r) => r.record.namespace === parent);
+    }
+    return keys;
+  }
+
+  /**
+   * The path externals of a root the scan follows, each as the member
+   * declaration it reads as: usable declarations whose folder exists and is not
+   * already read by this scan. A missing folder is left unread — its
+   * references are judged unavailable (EXTERNAL_CHECK_UNAVAILABLE).
+   */
+  private pathExternalsOf(raw: RawRoot, raws: readonly RawRoot[]): MemberDeclarationRead[] {
+    const config = raw.record.config;
+    if (!config || getHostedLookup() !== null) return [];
+    const out: MemberDeclarationRead[] = [];
+    for (const decl of declaredExternals(config)) {
+      if (decl.problem || decl.sourcePath === undefined || raw.memberKeys.has(decl.alias)) continue;
+      const dir = path.resolve(raw.dir, decl.sourcePath);
+      const key = chainDirKey(dir);
+      if (raws.some((r) => chainDirKey(r.dir) === key) || !ioFiles.exists(dir)) continue;
+      out.push({ alias: decl.alias, path: decl.sourcePath, form: 'members', storage: 'path', source: { path: decl.sourcePath }, use: decl.use, kind: 'project', pathExternal: true });
+    }
+    return out;
   }
 
   /**
@@ -4142,7 +4235,8 @@ export class SpecWorkspace {
     for (const [alias, memberKey] of raw.memberKeys) raw.record.aliases.set(alias, memberKey);
     if (!raw.record.config) return;
     for (const decl of declaredExternals(raw.record.config)) {
-      if (decl.problem || raw.record.aliases.has(decl.alias)) continue;
+      // A git or hosted external is never read by the scan: it is judged through its pin, whatever else answers to its id.
+      if (decl.problem || raw.record.aliases.has(decl.alias) || decl.sourceGit !== undefined || decl.sourceHosted !== undefined) continue;
       const others = raws.filter((r) => r !== raw);
       let producer: RawRoot | undefined;
       if (decl.sourcePath !== undefined) {
@@ -9050,100 +9144,29 @@ export function resolveChainingParent(): ChainingParentRef | null {
   return findChainingParent(getProjectRoot(), reach?.topRoot);
 }
 
-/**
- * Reduce a stored surface snapshot to its content key: provenance (stateId,
- * generatedAt, origin) stripped, then canonicalized so YAML key order never
- * moves the identity. Mirrors `surfaceContentKey` in src/core/surfaces.ts, but
- * lives here rather than being imported from it — sdd_core must not depend on
- * sdd_surfaces, and importing that module would cycle straight back through
- * this one.
- */
-function snapshotInputKey(snapshot: SurfaceSnapshot): string {
-  const { stateId, generatedAt, origin, ...content } = snapshot;
-  return canonicalize(content);
-}
-
-/**
- * The snapshots stored in one directory, reduced to content keys that name
- * their kind. A malformed file is skipped exactly as the surface repository's
- * own listSnapshots skips one — a corrupt pin never blocks (or silently
- * varies) the gate identity.
- */
-function snapshotInputsIn(dir: string, kind: 'surface' | 'external'): string[] {
-  if (!pathExists(dir)) return [];
-  const keys: string[] = [];
-  for (const file of ioFiles.list(dir).sort()) {
-    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
-    try {
-      keys.push(`${kind}:${snapshotInputKey(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file))))}`);
-    } catch {
-      // A malformed snapshot never aborts the read — it simply is not a consumed input.
-    }
-  }
-  return keys;
-}
-
-/**
- * Every consumed contract input a project root holds: its stored surface
- * snapshots under .wai/surfaces, its pinned external snapshots under
- * .wai/externals, and its .wai/externals.lock.yaml canonicalized whole — its
- * digests and `used` map are what a verdict consults. Each key names its kind,
- * so equal content in two kinds never collides. Read locally: the snapshot and
- * lock files are modelled in sdd_surfaces, which sdd_core must not depend on.
- */
-function consumedSurfaceInputsAt(rootDir: string): string[] {
-  const keys = [
-    ...snapshotInputsIn(path.join(rootDir, '.wai', 'surfaces'), 'surface'),
-    ...snapshotInputsIn(path.join(rootDir, '.wai', 'externals'), 'external'),
-  ];
-  const lock = path.join(rootDir, '.wai', 'externals.lock.yaml');
-  if (pathExists(lock)) {
-    try {
-      keys.push(`lock:${canonicalize(readYamlFile(lock))}`);
-    } catch {
-      // A malformed lock never aborts the read — it simply is not a consumed input.
-    }
-  }
-  return keys;
-}
-
-/**
- * The consumed contract inputs a verdict at the bound project can consult
- * (icore_orchestrator/icore_portal.consumedContractInputs): THIS root's stored
- * surface snapshots, pinned external snapshots and externals lock, as
- * canonical content keys. A member's inputs are left out since stage 5: they
- * are that member's own gate's, and reach this project's gate identity through
- * the member's composition subject. The gate identity covers them, so swapping
- * a pinned contract invalidates a lock.
- */
-export function consumedContractInputs(): string[] {
-  return consumedSurfaceInputsAt(getProjectRoot());
-}
-
 /** Whether a lock is in force, void, or absent. */
 export type LockState = 'unlocked' | 'locked' | 'stale';
 
 /**
  * The resolved verdict on a project's lock, plus the evidence it was decided
- * from. `stale` covers a record the design or anything it was approved under
- * moved past — and a record taken under an earlier gate identity algorithm
- * (lockUpgraded).
+ * from. `stale` covers a record the own design or policy it was approved
+ * under moved past.
  */
 export interface LockStatus {
   state: LockState;
   /** The persisted record, or null when the project was never locked. */
   record: LockRecord | null;
-  /** The gate identity the caller computed now — what `state` was decided against. */
+  /** The approval identity the caller computed now — what `state` was decided against. */
   current: StateId;
 }
 
 /**
  * Resolve the project's lock into one of three honest states, comparing the
- * recorded gate identity against the one the caller computed now
- * (validator_portal.computeGateStateId) — or, for a format-2 record, against
- * its asRecorded reading. Nothing is hashed here: the gate
- * identity is the validator's, because the doctrine it covers is the
- * validator's rule set.
+ * recorded approval identity against the one the caller computed now
+ * (validator_portal.computeApprovalId). Nothing is hashed here: the approval
+ * identity is the validator's, because the policy it covers is the
+ * validator's to project. Only a format-4 record reaches the comparison: the
+ * lock store refuses an earlier one, naming `wairon upgrade`.
  *
  * The ONE authority for the question "is this project locked?". Before this, the
  * promote gate compared StateIds while the project config view answered from the mere
@@ -9155,12 +9178,7 @@ export interface LockStatus {
 export function readLockState(current: StateId): LockStatus {
   const record = readLockRecord();
   if (!record) return { state: 'unlocked', record: null, current };
-  // A format-2 record is judged under its own algorithm: current.asRecorded
-  // is the same gate identity recomputed the way that record was taken, so a
-  // lock taken before code linkage left the approval stays valid as long as
-  // nothing it covered moved.
-  const holds = stateIdEquals(record.stateId, current) || stateIdEquals(record.stateId, current.asRecorded);
-  return { state: holds ? 'locked' : 'stale', record, current };
+  return { state: stateIdEquals(record.stateId, current) ? 'locked' : 'stale', record, current };
 }
 
 /**
@@ -9196,18 +9214,6 @@ export function renderTypeDiagrams(): TypeDiagram[] {
  */
 export function familyMembers(): FamilyMember[] {
   return architectureFamilyMembers();
-}
-
-/**
- * lock_status.upgraded — whether a stale verdict comes from the identity itself
- * changing shape rather than from anything it covers: the state is stale and
- * the record's algorithm differs from the current one. A lock taken before
- * stage 5 answers true — every lock reads stale once, and a surface that says
- * so can tell the human that nothing in the design is KNOWN to have moved.
- * Pure over the status's own fields.
- */
-export function lockUpgraded(status: LockStatus): boolean {
-  return status.state === 'stale' && !!status.record && status.record.stateId.algorithm !== status.current.algorithm;
 }
 
 // ---------------------------------------------------------------------------

@@ -6,11 +6,11 @@ import * as path from 'node:path';
 import { writeSpecFile } from '../../src/core/spec-files.js';
 import { ComponentSpecSchema, ImplementationSpecSchema, InterfaceSpecSchema } from '../../src/models/index.js';
 import * as admin from '../../src/server/admin.js';
-import { executeApprovedLock, gateIdentity } from '../../src/server/admin.js';
+import * as hostedLock from '../../src/server/hosted-lock.js';
 import { LockValidationError } from '../../src/server/errors.js';
 import { lockProject, decideRequest, executeApprovedRequest, getApprovalStatus, listPendingRequests, withdrawRequest } from '../../src/server/projectlifecycle.js';
 import * as hostCore from '../../src/server/adapters/core.js';
-import { computeGateStateId, validateAsComplete } from '../../src/server/adapters/validator.js';
+import { computeApprovalId, validateAsComplete } from '../../src/server/adapters/validator.js';
 import { registerProjectRecord } from '../../src/server/projects.js';
 import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
@@ -24,14 +24,13 @@ import type { ApproverIdentity } from '../../src/models/lock.js';
 import type { ApiKeyRecord, Capability, HostConfig, PermissionValue, PrincipalSubject } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
-// Stage 5 — approval across a family (wave B: hosted).
-//
-// The hosted lock (admin_orchestrator.executeApprovedLock, which lockProject
-// and the approval workflow both reach) runs the same flow as `wairon lock`:
-// capture the gate identity, validate as complete, gate on the design half,
-// honour composition.requireApprovedMembers, re-confirm the identity, write a
-// format-2 record. A lock request pins the identity it was made about, and the
-// approved execution refuses a tree that moved since.
+// The hosted lock (hosted_lock.execute, which lockProject and the approval
+// workflow both reach) runs the same flow as `wairon lock`: refresh the owed
+// build inputs, capture the approval identity, validate as complete, gate on
+// the design half, honour composition.requireApprovedMembers, re-confirm the
+// identity, write a format-4 record (the project's own approval; no members).
+// A lock request pins the identity it was made about, and the approved
+// execution refuses a tree that moved since.
 //
 // Real temp directories throughout: a real instance data dir, the approval
 // family registered as a hosted project, and every machine-global location
@@ -78,6 +77,10 @@ afterEach(() => {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* windows file locks */ }
   }
 });
+
+/** The hosted lock of a project's own record, and the identity a lock of it would certify now. */
+const executeApprovedLock = (c: HostConfig, id: string, approver: ApproverIdentity, expected?: string): LockRecord => hostedLock.execute(c, id, approver, expected).record;
+const gateIdentity = (c: HostConfig, id: string): string => hostedLock.identity(c, id);
 
 const lockFile = (dir: string): string => path.join(dir, '.wai', 'lock.json');
 const pin = (record: LockRecord): string => `${record.stateId.algorithm}:${record.stateId.digest}`;
@@ -138,39 +141,49 @@ function addUnimplementedComponent(broken = false): void {
   invalidateSpecCache();
 }
 
-describe('hosted lock — format 2', () => {
-  it('records format 2: members (subject + state), code beside the claim, the design half, the approver, never children', () => {
+describe('hosted lock — format 4', () => {
+  it('records format 4: the four parts, code beside the claim, the design half, the approver, no members', () => {
     executeApprovedLock(cfg, 'leaf', APPROVER);
-    const mid = executeApprovedLock(cfg, 'mid', APPROVER);
+    executeApprovedLock(cfg, 'mid', APPROVER);
     invalidateSpecCache();
 
     const record = executeApprovedLock(cfg, 'top', APPROVER);
 
-    expect(record.format).toBe(3);
+    expect(record.format).toBe(4);
     expect(record.children).toBeUndefined();
+    // The parent never records a member: each member's own lock is its approval.
+    expect((record as unknown as { members?: unknown }).members).toBeUndefined();
     expect(record.lockedBy).toEqual(APPROVER);
-    expect(record.members).toEqual({
-      mid: { as: 'project', project: 'mid', subject: pin(mid), state: 'approved' },
-      sib: { as: 'project', project: 'sib', state: 'never' },
-    });
+    expect(Object.keys(record.parts ?? {}).sort()).toEqual(['composition', 'design', 'rules', 'selections']);
     expect(record.code).toBeDefined();
     expect(record.code!.analyzer.doctrineDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(record.code!.codes).toBeUndefined();
     expect(record.validationResult).toMatchObject({ valid: true, errors: 0 });
-    expect(record.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
+    expect(record.stateId.algorithm).toBe('sha256+design+policy');
     // What was written is what was returned, and it carries no `children`.
-    expect(readLockRecordAt(fam.top)).toMatchObject({ format: 3, stateId: record.stateId });
+    expect(readLockRecordAt(fam.top)).toMatchObject({ format: 4, parts: record.parts, stateId: record.stateId });
     expect(fs.readFileSync(lockFile(fam.top), 'utf8')).not.toContain('"children"');
     // The record certifies the tree as it stands: the hosted lock state reads locked.
-    expect(runWithProjectRoot(fam.top, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
+    expect(runWithProjectRoot(fam.top, () => hostCore.readLockState(computeApprovalId())).state).toBe('locked');
   });
 
   it('a member-scoped lock records the member at its own root and writes nothing at the parent', () => {
     const leaf = executeApprovedLock(cfg, 'leaf', APPROVER);
-    expect(leaf.format).toBe(3);
+    expect(leaf.format).toBe(4);
     expect(readLockRecordAt(fam.leaf)).toMatchObject({ stateId: leaf.stateId });
     expect(fs.existsSync(lockFile(fam.mid))).toBe(false);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
+  });
+});
+
+describe('hosted lock — what it answers', () => {
+  it('answers the persisted record, the pin outcomes of the refresh and the input debts that remain', () => {
+    const outcome = hostedLock.execute(cfg, 'leaf', APPROVER);
+    expect(outcome.record.format).toBe(4);
+    expect(outcome.record.lockedBy).toEqual(APPROVER);
+    // Nothing was owed: no pin was taken, and nothing remains owed.
+    expect(outcome.pins).toEqual([]);
+    expect(outcome.debts).toEqual([]);
   });
 });
 
@@ -230,12 +243,13 @@ describe('hosted lock — composition.requireApprovedMembers', () => {
     executeApprovedLock(cfg, 'sib', APPROVER);
     invalidateSpecCache();
     const record = executeApprovedLock(cfg, 'top', APPROVER);
-    expect(record.members).toMatchObject({ mid: { state: 'approved' }, sib: { state: 'approved' } });
+    expect(record.format).toBe(4);
   });
 
-  it('without the flag the hosted lock proceeds and records each member\'s state', () => {
+  it('without the flag the hosted lock proceeds over members never approved, recording none of them', () => {
     const record = executeApprovedLock(cfg, 'top', APPROVER);
-    expect(record.members).toEqual({ mid: { as: 'project', project: 'mid', state: 'never' }, sib: { as: 'project', project: 'sib', state: 'never' } });
+    expect(record.format).toBe(4);
+    expect((record as unknown as { members?: unknown }).members).toBeUndefined();
   });
 });
 
@@ -249,11 +263,11 @@ describe('hosted lock — inputs captured before validation, confirmed before wr
       return original(...args);
     });
 
-    expect(() => executeApprovedLock(cfg, 'top', APPROVER)).toThrow(/inputs changed while it ran/);
+    expect(() => executeApprovedLock(cfg, 'top', APPROVER)).toThrow(/design changed while the lock ran/);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
   });
 
-  it('a member re-approving between the capture and the write refuses too', () => {
+  it('a member re-approving between the capture and the write does not move the parent approval', () => {
     const original = hostCore.captureApprovedSpecs;
     let once = false;
     vi.spyOn(hostCore, 'captureApprovedSpecs').mockImplementation((...args: Parameters<typeof original>) => {
@@ -268,8 +282,10 @@ describe('hosted lock — inputs captured before validation, confirmed before wr
       return original(...args);
     });
 
-    expect(() => executeApprovedLock(cfg, 'top', APPROVER)).toThrow(/inputs changed while it ran/);
-    expect(fs.existsSync(lockFile(fam.top))).toBe(false);
+    // A member's own lock is outside the parent's identity: the parent's lock is written.
+    const record = executeApprovedLock(cfg, 'top', APPROVER);
+    expect(fs.existsSync(lockFile(fam.top))).toBe(true);
+    expect(readLockRecordAt(fam.top)).toMatchObject({ stateId: record.stateId });
     expect(fs.existsSync(lockFile(fam.sib))).toBe(true);
   });
 });
@@ -281,31 +297,29 @@ describe('hosted property: parent-lock-writes-nothing-below', () => {
 
     const record = executeApprovedLock(cfg, 'top', APPROVER);
 
-    expect(record.members).toMatchObject({ mid: { state: 'approved' }, sib: { state: 'approved' } });
+    expect(record.format).toBe(4);
     expect(fs.existsSync(lockFile(fam.top))).toBe(true);
     expect({ mid: dirHash(fam.mid), sib: dirHash(fam.sib) }).toEqual(before);
   });
 });
 
-describe('lockProject routes through executeApprovedLock', () => {
-  it('the admin plane\'s lockProject writes the same format-2 record, with the authenticated approver', () => {
+describe('lockProject routes through the hosted lock', () => {
+  it('the admin plane@@s lockProject writes the same format-4 record, with the authenticated approver', () => {
     const record = admin.lockProject(cfg, MASTER, 'top');
-    expect(record.format).toBe(3);
-    expect(record.members).toBeDefined();
+    expect(record.format).toBe(4);
     expect(record.lockedBy).toMatchObject({ source: 'hosted' });
     expect(readLockRecordAt(fam.top)).toMatchObject({ stateId: record.stateId });
   });
 
-  it('the lifecycle lockProject (yes) completes with a format-2 record and states the code line', () => {
+  it('the lifecycle lockProject (yes) completes with a format-4 record and states the code line', () => {
     const outcome = lockProject(cfg, MASTER, 'top');
     expect(outcome.status).toBe('completed');
-    expect(outcome.lock!.format).toBe(3);
-    expect(outcome.lock!.members).toBeDefined();
+    expect(outcome.lock!.format).toBe(4);
     expect(outcome.summary).toMatch(/Locked project "top" \(status: ready\)\. code: \d+ errors recorded beside the claim/);
   });
 });
 
-describe('hosted approval requests pin the gate identity at request time', () => {
+describe('hosted approval requests pin the approval identity at request time', () => {
   function subject(userId: string): PrincipalSubject {
     return { userId, kind: 'human', issuer: 'local' };
   }
@@ -326,14 +340,14 @@ describe('hosted approval requests pin the gate identity at request time', () =>
   }
 
   /** A pending project:lock request from a requester who needs approval, and a decider who may decide. */
-  function requestLock(project = 'top'): { id: string; gateStateId?: string; requester: string; decider: string } {
+  function requestLock(project = 'top'): { id: string; approvalId?: string; requester: string; decider: string } {
     const requester = mintToken('rq', 'u-requester');
     allow('u-requester', 'project:write', 'approval');
     const outcome = lockProject(cfg, requester, project);
     expect(outcome.status).toBe('pending-approval');
     const decider = mintToken('dc', 'u-decider');
     allow('u-decider', 'approval:decide', 'yes');
-    return { id: outcome.approval!.id, gateStateId: outcome.approval!.gateStateId, requester, decider };
+    return { id: outcome.approval!.id, approvalId: outcome.approval!.approvalId, requester, decider };
   }
 
   const approve = (decider: string, requestId: string) => decideRequest(cfg, decider, {
@@ -341,20 +355,20 @@ describe('hosted approval requests pin the gate identity at request time', () =>
   });
 
   it('the request records the identity of the tree it was made about', () => {
-    const { id, gateStateId } = requestLock();
-    expect(gateStateId).toBe(gateIdentity(cfg, 'top'));
-    expect(getApprovalRequestById(dataDir, id)!.gateStateId).toBe(gateStateId);
+    const { id, approvalId } = requestLock();
+    expect(approvalId).toBe(gateIdentity(cfg, 'top'));
+    expect(getApprovalRequestById(dataDir, id)!.approvalId).toBe(approvalId);
     // A member-scoped request pins the member's identity, not the project's.
     const member = requestLock('sib');
-    expect(member.gateStateId).toBe(gateIdentity(cfg, 'sib'));
-    expect(member.gateStateId).not.toBe(gateStateId);
+    expect(member.approvalId).toBe(gateIdentity(cfg, 'sib'));
+    expect(member.approvalId).not.toBe(approvalId);
   });
 
   it('unchanged: approving executes the lock, and the record certifies exactly the requested identity', () => {
-    const { id, gateStateId, decider } = requestLock();
+    const { id, approvalId, decider } = requestLock();
     const decided = approve(decider, id);
     expect(decided.status).toBe('completed');
-    expect(pin(readLockRecordAt(fam.top)!)).toBe(gateStateId);
+    expect(pin(readLockRecordAt(fam.top)!)).toBe(approvalId);
   });
 
   const MOVED_REASON =
@@ -371,7 +385,7 @@ describe('hosted approval requests pin the gate identity at request time', () =>
   function expectFreshRequestSucceeds(): void {
     const fresh = requestLock();
     expect(approve(fresh.decider, fresh.id).status).toBe('completed');
-    expect(pin(readLockRecordAt(fam.top)!)).toBe(fresh.gateStateId);
+    expect(pin(readLockRecordAt(fam.top)!)).toBe(fresh.approvalId);
   }
 
   it("moved (auto-execute): the decision's execution refuses, the request ends cancelled with the reason, nothing is written", () => {
@@ -401,13 +415,12 @@ describe('hosted approval requests pin the gate identity at request time', () =>
     expectFreshRequestSucceeds();
   });
 
-  it('a member moving after the request moves the parent\'s identity too, and refuses', () => {
-    const { id, decider } = requestLock();
+  it('a member locking after the request leaves the parent identity as it was, and the approval executes', () => {
+    const { id, approvalId, decider } = requestLock();
     executeApprovedLock(cfg, 'sib', APPROVER);
     invalidateSpecCache();
-    expect(() => approve(decider, id)).toThrow(MOVED_REASON);
-    expect(fs.existsSync(lockFile(fam.top))).toBe(false);
-    expectCancelled(id);
+    expect(approve(decider, id).status).toBe('completed');
+    expect(pin(readLockRecordAt(fam.top)!)).toBe(approvalId);
   });
 
   it('a second lock request for the same design returns the pending one: same id, no second record', () => {

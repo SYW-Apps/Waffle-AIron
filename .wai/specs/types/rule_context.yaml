@@ -173,10 +173,11 @@ fields:
   - name: pinnedExternals
     type: list<PinnedExternal>
     description: >-
-      The bound project's declared externals with their lock entries and pinned snapshots, read by
-      the validator from the project's own .wai/externals files: what a reference into a project
-      outside the scan is judged against. Never the live producer, never anything above the bound
-      root. Empty on a candidate run.
+      The bound project's declared hosted and git externals (and referenced git or hosted members)
+      with their lock entries and pinned snapshots, read by the validator from the project's own
+      .wai/inputs.lock.yaml and .wai/externals files: what a reference into a project outside the
+      scan is judged against. Never the live producer of a hosted or git source. A path producer is
+      never here: it is a node of the scan, read live. Empty on a candidate run.
     optional: false
   - name: declaredMembers
     type: list<DeclaredMember>
@@ -458,20 +459,21 @@ methods:
     description: >-
       The owner's resolution of one reference the scan recorded (the project graph's authored
       references), before any severity: null for a reference that stays inside the bound project. A
-      reference bound to a contained member is resolved against that member's live L0 export table
-      (exported: resolved; unexported: missing). A reference bound outside the scan — an alias of a
-      declared external — is resolved against pinnedExternals only: no pin is unavailable, a public
-      name or member the pinned snapshot does not carry is missing, one it carries is resolved. A
-      bare name of form import is resolved by the scan's import binding, completed here for
-      externals outside the scan: the names each such external's `use` supplies are read from its
-      pin (every exported name, closure-only types excluded, for `*`), compared by nameKey, with the
-      same precedence — an explicit name beats a `*`, one supplier resolves, two are ambiguous
-      (IMPORT_AMBIGUOUS), none leaves the name unresolved with a hint. A reference that reaches a
-      project the bound project does not declare, or names a first segment that is neither one of
-      its subsystems, a declared alias nor the provider of a foreign snapshot, is forbidden. A
-      deprecated form that names no alias is unavailable. The result carries the owner, the call
-      site, the canonical target, the import it came through and the digest of the input it was
-      judged against, so every rule that reads it agrees and only project-boundaries reports a
+      reference bound to a contained member or a path producer (a node of the scan, read live) is
+      resolved against that project's live L0 export table (exported: resolved; unexported:
+      missing). A reference bound outside the scan — an alias of a declared hosted or git external,
+      or a path producer whose folder is missing — is resolved against pinnedExternals only: no pin
+      is unavailable, a public name or member the pinned snapshot does not carry is missing, one it
+      carries is resolved. A bare name of form import is resolved by the scan's import binding,
+      completed here for externals outside the scan: the names each such external's `use` supplies
+      are read from its pin (every exported name, closure-only types excluded, for `*`), compared by
+      nameKey, with the same precedence — an explicit name beats a `*`, one supplier resolves, two
+      are ambiguous (IMPORT_AMBIGUOUS), none leaves the name unresolved with a hint. A reference
+      that reaches a project the bound project does not declare, or names a first segment that is
+      neither one of its subsystems, a declared alias nor the provider of a foreign snapshot, is
+      forbidden. A deprecated form that names no alias is unavailable. The result carries the owner,
+      the call site, the canonical target, the import it came through and the digest of the input it
+      was judged against, so every rule that reads it agrees and only project-boundaries reports a
       non-resolved outcome.
   - name: importHint
     signature: 'importHint(name: string): string | null'
@@ -526,4 +528,4 @@ methods:
       which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-11-14T19:07:10.075Z'
+updatedAt: '2026-11-20T14:17:20.962Z'

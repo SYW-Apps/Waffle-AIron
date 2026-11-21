@@ -558,22 +558,24 @@ methods:
     returns: async void
   - name: runExternals
     description: >-
-      `wairon externals <action> [alias…]`: add (`externals add <alias> [<source>]` — declare one
+      `wairon externals <action> [alias…]`: add (`externals add <alias> [<source>]`: declare one
       external in .wai/project.yaml from the one location grammar members use, `../sibling` |
       `hosted:<id>` | `<git url>[#<commit>]`, with --project, --ref, --dir, --use, --description,
       --no-pin and --dry-run; refused in one sentence naming the accepted form, checked against the
-      producer it reaches, pinned by default; exit 1 on a refusal), pin (pin the named declared
-      externals, else all, into .wai/externals/ and .wai/externals.lock.yaml, printing each alias's
-      outcome and its unexported references; exit 1 when an alias could not be pinned — unresolved,
-      unreachable, or refused over a used member the producer renamed or removed — because its
+      producer it reaches, pinned by default when the producer is hosted or git; exit 1 on a
+      refusal), pin (pin the named declared hosted and git externals, else all, each from its
+      producer's approved state, into .wai/externals/ and .wai/inputs.lock.yaml, printing each
+      alias's outcome and its unexported references; a path external is reported as read live, never
+      pinned; exit 1 when an alias could not be pinned: unresolved, unreachable, a producer with no
+      approved design, or refused over a used member the producer renamed or removed, because its
       previous pin stays and nothing new was recorded), status (each external's pin compared with
-      its live producer at signature level — unchanged, changed, renamed, removed, unlocked, or
-      unavailable with EXTERNAL_CHECK_UNAVAILABLE — a CI gate on the LIVE producer for teams that
+      its live producer at signature level: unchanged, changed, renamed, removed, unlocked, or
+      unavailable with EXTERNAL_CHECK_UNAVAILABLE; a CI gate on the LIVE producer for teams that
       want one: exit 1 when any external is incompatible, 2 when nothing is incompatible but
       something could not be compared (never a pass), 0 otherwise, from external_status.health), and
-      list (the declared externals, how each resolves, and what is pinned — a malformed declaration
+      list (the declared externals, how each resolves, and what is pinned; a malformed declaration
       listed with its problem, never hidden). `--json` prints the structured answer instead of the
-      table, with the same exit code.
+      table, with the same exit code. A pin refreshes a build input and never moves the approval.
     signature: 'runExternals(action: string, aliases: list<string>, options?: ExternalsOptions): async void'
     returns: async void
     params:
@@ -1004,4 +1006,4 @@ methods:
     returns: async void
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-15T02:14:42.190Z'
+updatedAt: '2026-11-20T00:22:47.571Z'

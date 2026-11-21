@@ -255,16 +255,16 @@ methods:
         type: string
   - name: readLockState
     description: >-
-      Resolve the project's lock against the gate identity the caller computed now
-      (validator_portal.computeGateStateId): unlocked when no record exists, locked when the
-      record's gate identity equals it — or, for a format-2 record, equals its asRecorded reading
-      (the identity recomputed under the algorithm that record was taken with) — stale otherwise.
+      Resolve the project's lock against the approval identity the caller computed now
+      (validator_portal.computeApprovalId): unlocked when no record exists, locked when the record's
+      identity equals it, stale otherwise. A record written before format 4 never reaches the
+      comparison: the lock store refuses it, naming `wairon upgrade`.
     signature: 'readLockState(current: StateId): LockStatus'
     returns: LockStatus
     params:
       - name: current
         type: StateId
-        description: The gate identity as it stands now
+        description: The approval identity as it stands now
   - name: resolveSubprojectForNamespace
     description: >-
       Resolve a chained mount's qualified namespace to its project root (containment-checked against
@@ -407,17 +407,6 @@ methods:
         description: The project whose own spec tree declares the mounts
     guarantees:
       - idempotent
-  - name: consumedContractInputs
-    description: >-
-      The consumed contract inputs a verdict at the bound project can consult, as canonical content
-      keys: THIS root's stored surface snapshots (.wai/surfaces), pinned external snapshots
-      (.wai/externals) and externals lock (.wai/externals.lock.yaml). A member's inputs are left out
-      since stage 5: they are that member's own gate's, and reach this project's gate identity
-      through the member's composition subject. The gate identity covers them, so swapping a pinned
-      contract or re-pinning a changed `used` map invalidates a lock.
-    signature: 'consumedContractInputs(): list<string>'
-    returns: list<string>
-    params: []
   - name: renameComponent
     description: >-
       Rename a component and every reference to it. The component, and each interface and
@@ -463,20 +452,6 @@ methods:
           Answer what the rename would move, rewrite, keep and rekey — refusing exactly as the real
           rename would — and write nothing
         optional: true
-  - name: retireSpecialists
-    description: >-
-      Plan, and with apply write, the migration off the retired Specialist stereotype. Every
-      Specialist becomes an Orchestrator whose dependencyClass follows from its dependencies: pure
-      when it depends only on pure logic, read when it also depends on Repositories, Indexes,
-      Adapters or read logic, unset when a dependency fits neither. Classes are decided over the
-      whole graph, so a Specialist is classified after those it depends on. Every project variant
-      based on Specialist is rebased onto Orchestrator. Without apply nothing is written.
-    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
-    returns: SpecialistRetirement
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
   - name: renameMethod
     description: >-
       Rename a contract method and every reference to it. The method moves on every interface of the
@@ -815,26 +790,6 @@ methods:
     signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
     returns: list<LegacySpecFile>
     params: []
-  - name: findChainingSubprojectsMissingConfig
-    description: >-
-      The member directories, found recursively from a root through each project's members (either
-      declaration form), that hold a spec tree but no project configuration — the state that leaves
-      one unrunnable standalone. Pure read.
-    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
-    returns: list<string>
-    params:
-      - name: projectRoot
-        type: string
-  - name: backfillChainedSubprojectConfigs
-    description: >-
-      Write a project configuration for every member found recursively from a root (either
-      declaration form) that has a spec tree but none, declaring its alias as its project id;
-      existing specs are never touched. Returns the directories repaired.
-    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
-    returns: list<string>
-    params:
-      - name: projectRoot
-        type: string
   - name: assertContainedProjectPath
     description: >-
       Resolve a subsystem's projectPath within a project root, refusing an absolute, parent-escaping
@@ -1589,22 +1544,6 @@ methods:
         type: string
         description: The copy's root, as rehearsalCopy answered it
     effect: write
-  - name: retireGateways
-    description: >-
-      Plan, and with apply write, the migration off the retired Gateway stereotype (a v5 form, read
-      only in the v5 reading `wairon upgrade` binds). A Gateway that owns exactly one Portal, and
-      whose own methods no narrative of another spec calls, is merged into that Portal: the Portal
-      takes the gateway variant; the Gateway's other owned members become the Portal's dependencies;
-      every component that depended on the Gateway depends on the Portal; every L1 or L0 export
-      naming the Gateway names the Portal; and the Gateway's spec, contract and implementation are
-      deleted. Any other Gateway is refused, naming why and the hand steps. Without apply nothing is
-      written.
-    signature: 'retireGateways(apply: bool): GatewayRetirement'
-    returns: GatewayRetirement
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
   - name: renameGroup
     description: >-
       The group half of renameSpecId: rename a type group on its own — its folder, its types'
@@ -1757,4 +1696,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-14T16:10:01.490Z'
+updatedAt: '2026-11-20T01:30:15.446Z'

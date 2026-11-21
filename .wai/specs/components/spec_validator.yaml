@@ -23,7 +23,7 @@ dependsOn:
   - source_analysis_adapter
   - binding_module_adapter
   - rule_repository
-  - gate_identity
+  - approval_identity
   - reach_model_projector
   - doctrine_rules
   - code_model_loader

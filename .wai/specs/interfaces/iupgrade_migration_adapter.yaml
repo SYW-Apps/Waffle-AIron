@@ -17,12 +17,6 @@ methods:
   - name: drop
     description: Discard a rehearsal that will not be committed.
     signatureFrom: migration_portal.drop
-  - name: plan
-    description: Plan the chaining migration (verb chaining) of the bound root.
-    signatureFrom: migration_portal.plan
-  - name: apply
-    description: Apply a planned chaining migration to the bound root.
-    signatureFrom: migration_portal.apply
 status: draft
 createdAt: '2026-10-18T13:06:21.470Z'
-updatedAt: '2026-10-18T13:06:23.909Z'
+updatedAt: '2026-11-20T01:26:41.538Z'

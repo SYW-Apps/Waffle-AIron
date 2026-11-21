@@ -150,18 +150,19 @@ methods:
         description: >-
           Plan from each match. import: an import of the public name on the consumer's alias for the
           producer (its existing external or member alias, else the producer's id, marked
-          declaresExternal), one entry per (consumer, alias, name) listing every reference it
-          resolves and the reason the producer was chosen, marked exportPlanned when the producer
-          exports the target under no public name (its default public name is then the one
-          imported). The migration never writes a named import a local spec of the consumer would
-          shadow (the same nameKey): that name is an import-shadowed finding naming the local spec,
-          and its references are left as they are. self-prefix: a rewrite to the bare local id (form
-          self-prefix). ambiguous: one positional-ambiguous finding per (consumer, name) listing
-          every candidate, every spec writing it and what each tie-break rule left, the references
-          left as they are — a person picks. Imports that would supply one bare name to one consumer
-          twice — two planned, or a planned one beside a named `use` of another alias the consumer
-          already holds — are dropped for that name and reported (import-collision). none: nothing —
-          a genuine dangling reference, which the gate reports
+          declaresExternal — an external the chaining migration declares with the producer's source
+          path), one entry per (consumer, alias, name) listing every reference it resolves and the
+          reason the producer was chosen, marked exportPlanned when the producer exports the target
+          under no public name (its default public name is then the one imported). The migration
+          never writes a named import a local spec of the consumer would shadow (the same nameKey):
+          that name is an import-shadowed finding naming the local spec, and its references are left
+          as they are. self-prefix: a rewrite to the bare local id (form self-prefix). ambiguous:
+          one positional-ambiguous finding per (consumer, name) listing every candidate, every spec
+          writing it and what each tie-break rule left, the references left as they are — a person
+          picks. Imports that would supply one bare name to one consumer twice — two planned, or a
+          planned one beside a named `use` of another alias the consumer already holds — are dropped
+          for that name and reported (import-collision). none: nothing — a genuine dangling
+          reference, which the gate reports
         type: local
       - stepNumber: 18
         label: held-back
@@ -254,8 +255,9 @@ methods:
         label: pins
         description: >-
           Delete the superseded stage-1 family pins last in this migration, once the externals that
-          replace them are declared — nothing reads them since stage 3; the chaining migration pins
-          the externals after this, from the final spelling
+          replace them are declared: they are dropped because the producers are path producers, read
+          live, and nothing has read the pins since stage 3; the chaining migration pins only a git
+          or hosted external owed one, after this, from the final spelling
         type: loop
         loopKind: forEach
         over: each project's superseded pins
@@ -281,4 +283,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-09-27T10:45:51.006Z'
-updatedAt: '2026-10-02T20:45:34.609Z'
+updatedAt: '2026-11-20T19:40:18.287Z'

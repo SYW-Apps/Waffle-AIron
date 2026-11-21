@@ -196,7 +196,7 @@ describe('journey: member rename-alias on a trait implementer (lib-and-app-r9 R9
   }, 180_000);
 });
 
-describe('journey: sdd_get_spec reads alias::name, an external from its pin (solo-app-r9 MAJOR 3)', () => {
+describe('journey: sdd_get_spec reads alias::name, an external read live from its producer (solo-app-r9 MAJOR 3)', () => {
   it('an external\'s type reads from the pinned snapshot, marked read-only', async () => {
     project('fam9-ext', {
       system: { name: 'fam9-ext', vision: 'A producer.', publicInterfaces: [{ from: 'cal', typeDef: 'cadence', audience: 'external' }] },
@@ -204,13 +204,11 @@ describe('journey: sdd_get_spec reads alias::name, an external from its pin (sol
       types: [{ id: 'cadence', kind: 'value-object', subsystem: 'cal', fields: [{ name: 'every', type: 'int' }] }],
     }, 'fam9-ext');
     const app = project('fam9', { system: { name: 'fam9', vision: 'A consumer.' }, subsystems: [{ id: 'habit', status: 'complete' }] }, 'fam9', { externals: { ext: { project: 'fam9-ext', source: { path: '../fam9-ext' } } } });
-    const pin = await sb.run(['externals', 'pin', 'ext'], app);
-    expect(pin.code, transcript(pin)).toBe(0);
     const client = await serve({ dir: app });
     const r = await callTool(client, 'sdd_get_spec', { kind: 'type', id: 'ext::cadence' });
     expect(r.ok, r.text).toBe(true);
-    expect(r.text).toMatch(/"pinnedSnapshot"/);
-    expect(r.text).toMatch(/"readOnly": true/);
+    expect(r.text).toMatch(/fam9-ext::cadence/);
+    expect(r.text).not.toMatch(/"pinnedSnapshot"/);
     expect(r.text).toMatch(/every/);
   }, 180_000);
 });

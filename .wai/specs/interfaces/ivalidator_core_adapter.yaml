@@ -53,13 +53,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: consumedContractInputs
-    description: >-
-      Forward to core_portal.consumedContractInputs: the consumed contract inputs of the bound root
-      alone (never a member's)
-    signature: 'consumedContractInputs(): list<string>'
-    returns: list<string>
-    params: []
   - name: settledSpecPaths
     description: >-
       Forward to approval_portal.settledSpecPaths: the spec files unchanged since the approval, or
@@ -178,31 +171,6 @@ methods:
       - name: entry
         type: PackSelection | PackPath
         description: A by-name selection or a legacy path reference
-  - name: computeOwnStateId
-    description: >-
-      Forward to approval_portal.computeOwnStateId: the full-content identity of the bound project's
-      own specs (code linkage included), never a member's — recomputed only to judge a format-2 lock
-      under its own algorithm.
-    signature: 'computeOwnStateId(): StateId'
-    returns: StateId
-    params: []
-    guarantees:
-      - idempotent
-  - name: approvalRecord
-    description: >-
-      Forward to approval_portal.approvalRecord: the lock record another project root carries (a
-      direct member's, for its composition subject; a member's parent's, for its pin), or null when
-      it has none. Read from that root alone — no scan, no validation — which is what keeps a
-      parent's gate identity proportional to its own tree plus one small file per direct member.
-    signature: 'approvalRecord(root?: string): LockRecord?'
-    returns: LockRecord?
-    params:
-      - name: root
-        type: string
-        description: The project root whose record to read; the bound root when omitted
-        optional: true
-    guarantees:
-      - idempotent
   - name: signatureFacts
     description: >-
       Forward to the core portal: what the current scan's signature resolution recorded, the sources
@@ -256,28 +224,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: computeOwnDesignIdAsRecorded
-    description: >-
-      Forward to approval_portal.computeOwnDesignIdAsRecorded: the own design identity in the
-      earlier design reading, status put back as approved.
-    signature: 'computeOwnDesignIdAsRecorded(approvedStatus: map<string, SpecStatus>): StateId'
-    returns: StateId
-    params:
-      - name: approvedStatus
-        type: map<string, SpecStatus>
-        description: Each spec's approved status, keyed `<kind>:<id>`
-    guarantees:
-      - idempotent
-  - name: approvedStatuses
-    description: 'Forward to approval_portal.approvedStatuses: each own spec''s status as the record approved it.'
-    signature: 'approvedStatuses(record: LockRecord): map<string, SpecStatus>'
-    returns: map<string, SpecStatus>
-    params:
-      - name: record
-        type: LockRecord
-        description: The approval record
-    guarantees:
-      - idempotent
   - name: resolveChainingParent
     description: >-
       Forward to the core portal: the bound root's chaining parent (the parent root that declares it
@@ -316,4 +262,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-30T18:16:08.586Z'
+updatedAt: '2026-11-19T21:56:29.180Z'

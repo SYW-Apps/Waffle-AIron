@@ -189,7 +189,7 @@ function outsideConsumers(family: ProjectFamily, target: ProjectNode, newId: str
     .map((c) => {
       const where = path.relative(target.directory, c.directory) || '.';
       return c.section === 'members'
-        ? `Outside this family: ${c.project} (${where}) declares this project as its member "${c.alias}" — nothing there is written. Once this project is re-locked as "${newId}", run \`wairon lock\` in ${where} to pin its new approval.`
+        ? `Outside this family: ${c.project} (${where}) declares this project as its member "${c.alias}" — nothing there is written, and it records nothing about this project: it reads this project's own committed lock, so re-lock this project as "${newId}" at its own root.`
         : `Outside this family: ${c.project} (${where}) declares this project as its external "${c.alias}" — nothing there is written. It must rewrite that external's project to "${newId}" and re-pin it (\`wairon externals pin ${c.alias}\` there; its next gate reports the id change).`;
     });
 }
@@ -241,7 +241,7 @@ function planHolder(plan: MigrationPlan, family: ProjectFamily, h: Holder, oldId
   edit(plan, h.node.namespace, 'external', `externals: ${after} names ${newId}`, { root: h.node.directory, call: 'repointExternal', args: [after, wanted, declared?.source ?? null] });
 }
 
-/** Last: a holder's pin under the alias, carried to its new key and producer id, digest unchanged. */
+/** Last: a holder's pin under the alias, carried to its new key and producer id, digest unchanged. A path external has none: it is read live. */
 function planPin(plan: MigrationPlan, h: Holder, oldId: string, newId: string): void {
   const pinned = runWithProjectRoot(h.node.directory, () => surfaces.listExternals()).find((l) => l.alias === h.alias)?.lock;
   if (!pinned) return;
@@ -288,11 +288,12 @@ export function planAliasRename(family: ProjectFamily, bound: string, request: M
 }
 
 /**
- * Each OTHER family project that pins the bound project: an alias rename
- * changes only how the bound project spells its own re-exports, never a name a
- * consumer uses, so a pin whose every use is unchanged now is taken again after
- * it; one already broken is left as it is, with a note — a migration never
- * launders a real incompatibility.
+ * Each OTHER family project that holds a git or hosted pin of the bound
+ * project: an alias rename changes only how the bound project spells its own
+ * re-exports, never a name a consumer uses, so a pin whose every use is
+ * unchanged now is taken again after it; one already broken is left as it is,
+ * with a note — a migration never launders a real incompatibility. A path
+ * external is read live and never pinned, so it needs nothing.
  */
 function repinIntactConsumers(plan: MigrationPlan, family: ProjectFamily, bound: string): void {
   const boundNode = familyNode(family, bound)!;
@@ -307,7 +308,7 @@ function repinIntactConsumers(plan: MigrationPlan, family: ProjectFamily, bound:
     for (const status of statuses) {
       const producer = node.aliases.get(status.alias);
       const pinsBound = producer !== undefined ? producer === bound : boundNode.id !== undefined && status.project === boundNode.id;
-      if (!status.pinned || status.outOfReach || !pinsBound) continue;
+      if (!status.pinned || status.outOfReach || !pinsBound || (status.sourceKind !== 'git' && status.sourceKind !== 'hosted')) continue;
       const broken = status.uses.filter((u) => u.state === 'changed' || u.state === 'removed');
       if (broken.length > 0) {
         plan.notes.push(`${label(node.namespace)}'s pin of "${status.alias}" is already incompatible (${broken.map((u) => u.publicName ?? u.member ?? '?').join(', ')}): not re-pinned — adapt its uses, then run \`wairon externals pin ${status.alias}\` there.`);

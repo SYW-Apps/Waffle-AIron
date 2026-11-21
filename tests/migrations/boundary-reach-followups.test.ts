@@ -60,7 +60,7 @@ describe('promote: the entries and topics a new boundary makes', () => {
     expect(stored.methods[0].invokedBy!.caller).toMatch(/checkin-client of clinic/);
   });
 
-  it('names the topics now crossing the boundary, and the family run pairs them while the member alone reports them', () => {
+  it('names the topics now crossing the boundary, and the family run pairs them, and the member alone pairs them through its path external for the parent', () => {
     const { root, part } = clinic();
     const planned = plan(root, { verb: 'promote', alias: 'scheduling' });
     expect(planned.notes.join('\n')).toMatch(/booking\.made: emitted by booking-publisher \(the new project\), consumed in clinic by booking-observer/);
@@ -68,7 +68,11 @@ describe('promote: the entries and topics a new boundary makes', () => {
     const family = at(root, () => validateFamily({ family: true }));
     expect(family.issues.filter((i) => i.code === 'UNCONSUMED_TOPIC')).toEqual([]);
     const alone = at(part, () => validateProject());
-    expect(alone.issues.filter((i) => i.code === 'UNCONSUMED_TOPIC').map((i) => i.specId)).toEqual(['booking-publisher']);
+    // The new project declares its parent as a path external (written with its source path, read live, never pinned): its own gate sees the consumer too.
+    const declared = (yaml.load(fs.readFileSync(path.join(part, '.wai', 'project.yaml'), 'utf-8')) as { externals?: Record<string, { source?: { path?: string } }> }).externals ?? {};
+    expect(Object.values(declared).map((e) => e.source?.path)).toEqual([path.relative(part, root).split(path.sep).join('/')]);
+    expect(fs.existsSync(path.join(part, '.wai', 'inputs.lock.yaml'))).toBe(false);
+    expect(alone.issues.filter((i) => i.code === 'UNCONSUMED_TOPIC').map((i) => i.specId)).toEqual([]);
   });
 
   it('refuses sdd_update_spec on a member project\'s spec from the root, naming the member folder, writing nothing', () => {

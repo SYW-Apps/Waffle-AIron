@@ -5,7 +5,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { captureApprovedSpecs } from '../../src/core/approval.js';
 import { writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 const now = '2026-10-25T10:00:00.000Z';
@@ -90,9 +90,9 @@ export function lookupProject(): {
       setProjectRoot(root);
       invalidateSpecCache();
       const record: LockRecord = {
-        stateId: computeGateStateId(), lockedAt: now, lockedBy: { id: 'tester <t@example.com>', source: 'git' },
+        stateId: computeApprovalId(), lockedAt: now, lockedBy: { id: 'tester <t@example.com>', source: 'git' },
         validatorVersion: 'test', validationResult: { valid: true, errors: 0, warnings: 0 }, status: 'ready',
-        specs: captureApprovedSpecs(), specsReading: 'design', format: 3,
+        specs: captureApprovedSpecs(), specsReading: 'design', format: 4, parts: {},
       };
       writeLockRecord(record);
     },

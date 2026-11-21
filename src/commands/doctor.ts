@@ -47,7 +47,7 @@ import { reportPluginSkills } from './skills.js';
 import { activeTargetTypes, pluginTargetTypes, isPart } from '../models/project.js';
 import { detectPlugin } from './agent-plugins.js';
 import { isNewerVersion } from '../utils/version.js';
-import { computeGateStateId, validateFamily } from './validate.js';
+import { computeApprovalId, validateFamily } from './validate.js';
 // The approver's own projection, taken from the models rather than from
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
@@ -492,15 +492,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // action, which fails closed but tells you late. Silent for a project that was never locked.
   if (projectConfigExists()) {
     try {
-      const lock = readLockState(computeGateStateId());
+      const lock = readLockState(computeApprovalId());
       if (lock.state === 'locked') {
         console.log(chalk.bold('Lock'));
         line(tally, 'ok', `approved at ${approvalStamp(lock.record!)}`);
-        if (!lock.record!.specs) {
-          line(tally, 'warn', 'this lock predates per-spec approval — re-lock so `wairon status` can name what drifts');
-        } else if (lock.record!.specsReading !== 'design') {
-          line(tally, 'warn', 'this lock predates lock format 3 and still holds — `wairon upgrade` re-expresses it in the design reading without a review, after which adding or moving a sourcePath never drifts it');
-        }
         logger.blank();
       } else if (lock.state === 'stale') {
         // lock-check's own verdict, word for word: an approval a change of the

@@ -1,14 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSpec, invalidateSpecCache, readLockState } from '../../src/core/specs.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { writeMemberProject } from '../helpers/legacy-mount.js';
 import { stateIdEquals } from '../../src/core/statehash.js';
-import { writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -18,7 +16,7 @@ import type { SubsystemSpec } from '../../src/models/index.js';
 // a pinned contract can flip a verdict without moving the spec-tree digest, so
 // without this coverage a lock keeps reading fresh under a changed contract.
 //
-// Item 6 of stage 1 (chained-subsystem correctness): computeGateStateId reads
+// Item 6 of stage 1 (chained-subsystem correctness): computeApprovalId reads
 // those stored snapshots (this root's own, plus every chained root's) through
 // core's consumedContractInputs, which reduces each to a provenance-free
 // content key, and hands them to the gate identity as `inputs`.
@@ -27,7 +25,7 @@ import type { SubsystemSpec } from '../../src/models/index.js';
 const now = '2026-09-12T10:00:00Z';
 
 /** Minimal loadable tree: an L0 system and one subsystem — enough for
- *  computeGateStateId, which only needs a loadable tree, not a validated one. */
+ *  computeApprovalId, which only needs a loadable tree, not a validated one. */
 function buildRoot(rootDir: string, systemName = 'gate-inputs-sys'): void {
   fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
   fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
@@ -103,7 +101,7 @@ interfaces:
 projectName: ${opts.projectName}
 `;
 
-describe('the gate identity digests consumed surface snapshots', () => {
+describe('the approval identity digests nothing the project consumes', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -111,21 +109,24 @@ describe('the gate identity digests consumed surface snapshots', () => {
     if (rootDir) { try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ } }
   });
 
-  it('swapping the BOUND ROOT\'s own stored snapshot changes computeGateStateId', () => {
+  it('swapping the bound root own stored snapshot leaves computeApprovalId alone', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
     writeRawSnapshot(rootDir, 'peer-a.yaml', snapshotYaml({ projectName: 'peer-a', detail: 'v1' }));
-
-    const before = computeGateStateId();
+    const before = computeApprovalId();
     writeRawSnapshot(rootDir, 'peer-a.yaml', snapshotYaml({ projectName: 'peer-a', detail: 'v2' }));
-    const after = computeGateStateId();
-
-    expect(stateIdEquals(before, after)).toBe(false);
+    expect(stateIdEquals(before, computeApprovalId())).toBe(true);
   });
 
-  // Stage 5: a member's inputs are its own gate's. They reach the parent only
-  // through the member's composition subject, which moves when the member re-locks.
-  it('swapping a MEMBER\'s stored snapshot leaves the parent\'s computeGateStateId alone', () => {
+  it('a pin recorded in the externals lock or the inputs lock never moves it', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
+    buildRoot(rootDir);
+    const before = computeApprovalId();
+    fs.writeFileSync(path.join(rootDir, '.wai', 'inputs.lock.yaml'), ['externals: {}', 'packs: {}', ''].join('\n'));
+    expect(stateIdEquals(before, computeApprovalId())).toBe(true);
+  });
+
+  it('swapping a member stored snapshot leaves the parent computeApprovalId alone', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
     writeMemberProject(
@@ -138,73 +139,31 @@ describe('the gate identity digests consumed surface snapshots', () => {
     setProjectRoot(rootDir);
     const kidRoot = path.join(rootDir, 'packages', 'kid');
     writeRawSnapshot(kidRoot, 'peer-b.yaml', snapshotYaml({ projectName: 'peer-b', detail: 'v1' }));
-
-    const before = computeGateStateId();
+    const before = computeApprovalId();
     writeRawSnapshot(kidRoot, 'peer-b.yaml', snapshotYaml({ projectName: 'peer-b', detail: 'v2' }));
-    const after = computeGateStateId();
-
-    expect(stateIdEquals(before, after)).toBe(true);
+    expect(stateIdEquals(before, computeApprovalId())).toBe(true);
   });
 
-  it('re-saving the same content under a new generatedAt/stateId/origin does not change it', () => {
+  it('a member re-locking never moves the parent identity', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
-    writeRawSnapshot(rootDir, 'peer-a.yaml', snapshotYaml({
-      projectName: 'peer-a', detail: 'stable', generatedAt: '2026-09-01T00:00:00Z',
-      stateId: 'sha256:aaaa', origin: 'authored',
-    }));
-    const before = computeGateStateId();
-
-    // Same interfaces/types content; only the provenance fields moved — as a
-    // re-pin of an UNCHANGED contract does.
-    writeRawSnapshot(rootDir, 'peer-a.yaml', snapshotYaml({
-      projectName: 'peer-a', detail: 'stable', generatedAt: '2026-09-11T23:00:00Z',
-      stateId: 'sha256:bbbb', origin: 'generated',
-    }));
-    const after = computeGateStateId();
-
-    expect(stateIdEquals(before, after)).toBe(true);
+    writeMemberProject(
+      { id: 'kid', name: 'kid', description: 'chained kid', parentSystem: 'gate-inputs-sys',
+        publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now,
+        projectPath: 'packages/kid' } as SubsystemSpec,
+      'kid',
+    );
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    const before = computeApprovalId();
+    const kidRoot = path.join(rootDir, 'packages', 'kid');
+    fs.writeFileSync(path.join(kidRoot, '.wai', 'lock.json'), JSON.stringify({ format: 4, parts: {}, specs: {}, stateId: { algorithm: 'sha256+design+policy', digest: 'e'.repeat(64) } }));
+    expect(stateIdEquals(before, computeApprovalId())).toBe(true);
   });
 
-  it('YAML key order (top-level and nested) does not change it', () => {
+  it('the algorithm is sha256+design+policy', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
     buildRoot(rootDir);
-    writeRawSnapshot(rootDir, 'peer-a.yaml', snapshotYaml({ projectName: 'peer-a', detail: 'stable' }));
-    const before = computeGateStateId();
-
-    writeRawSnapshot(rootDir, 'peer-a.yaml', snapshotYamlReorderedKeys({ projectName: 'peer-a', detail: 'stable' }));
-    const after = computeGateStateId();
-
-    expect(stateIdEquals(before, after)).toBe(true);
-  });
-
-  it('the algorithm is sha256+design-2+doctrine+inputs+members', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
-    buildRoot(rootDir);
-    expect(computeGateStateId().algorithm).toBe('sha256+design-2+doctrine+inputs+members');
-  });
-
-  v5it('a lock record carrying the retired sha256+doctrine+inputs identity reads STALE, never locked', () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-gateinputs-'));
-    buildRoot(rootDir);
-
-    // Exactly what a pre-upgrade lock record carries: same digest wairon would
-    // compute now, but under the retired algorithm marker.
-    const current = computeGateStateId();
-    const legacyRecord: LockRecord = {
-      stateId: { algorithm: 'sha256+doctrine+inputs', digest: current.digest },
-      lockedAt: now,
-      lockedBy: { id: 'tester <t@example.com>', source: 'git' },
-      validatorVersion: 'test',
-      validationResult: { valid: true, errors: 0, warnings: 0 },
-      status: 'ready',
-      specs: {},
-      children: {},
-    };
-    writeLockRecord(legacyRecord);
-
-    const { state, record } = readLockState(computeGateStateId());
-    expect(state).toBe('stale');
-    expect(record!.stateId.algorithm).toBe('sha256+doctrine+inputs');
+    expect(computeApprovalId().algorithm).toBe('sha256+design+policy');
   });
 });

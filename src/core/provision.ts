@@ -287,31 +287,6 @@ function memberDeclarationsAt(dir: string): MemberAt[] {
 }
 
 /**
- * Walk a project and every member it declares (recursively, either form),
- * invoking `onMember` for each member directory with its alias. Shared scan
- * behind the detection + backfill helpers below.
- */
-function walkMembers(projectRoot: string, onMember: (memberDir: string, alias: string) => void): void {
-  const visited = new Set<string>();
-  const walk = (dir: string): void => {
-    const resolved = path.resolve(dir);
-    if (visited.has(resolved)) return;
-    visited.add(resolved);
-    for (const member of memberDeclarationsAt(dir)) {
-      let memberDir: string;
-      try {
-        memberDir = assertContainedProjectPath(dir, member.path);
-      } catch {
-        continue; // absolute / escaping path — never touch it
-      }
-      onMember(memberDir, member.alias);
-      walk(memberDir); // recurse into the member's own members
-    }
-  };
-  walk(projectRoot);
-}
-
-/**
  * core_orchestrator.listDirectChainedSubprojects — the DIRECT members of a
  * project, one level deep: its `members` entries and, in the v5 reading only, its
  * legacy L1 mounts, each resolved inside the project root as the member's
@@ -334,44 +309,6 @@ export function listDirectChainedSubprojects(projectRoot: string): { dir: string
   }
   // Step 5.
   return out;
-}
-
-/** True when a member dir has a spec tree but no project.yaml (un-runnable standalone). */
-function childHasSpecsButNoConfig(childDir: string): boolean {
-  return ioFiles.exists(aiPathsAt(childDir).specsDir()) && !projectConfigRepositoryAt(childDir).exists();
-}
-
-/**
- * Detect members (recursively, either declaration form) that have specs but
- * no project.yaml — the state that makes a member un-runnable standalone
- * (`wairon` reports "No wairon project found"). Pure read; returns the member
- * dirs. Used by the doctor report to point the user at `--fix`.
- */
-export function findChainingSubprojectsMissingConfig(projectRoot: string): string[] {
-  const missing: string[] = [];
-  walkMembers(projectRoot, (memberDir) => {
-    if (childHasSpecsButNoConfig(memberDir)) missing.push(memberDir);
-  });
-  return missing;
-}
-
-/**
- * Backfill a missing project.yaml on any member that has a spec tree but no
- * project config, declaring its alias as its project id. Existing specs are
- * never touched. Returns the member dirs repaired. Used by `wairon doctor --fix`.
- */
-export function backfillChainedSubprojectConfigs(projectRoot: string): string[] {
-  const backfilled: string[] = [];
-  walkMembers(projectRoot, (memberDir, alias) => {
-    if (childHasSpecsButNoConfig(memberDir)) {
-      runWithProjectRoot(memberDir, () => {
-        // A member is identified by the alias its parent declares it under.
-        ensureProjectInitialized(alias, alias);
-      });
-      backfilled.push(memberDir);
-    }
-  });
-  return backfilled;
 }
 
 /**
@@ -1344,7 +1281,11 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   declareCrossingEntries(inside, outside, parentId || parentName, result);
   recordCrossingTopics(inside, outside, parentId || parentName, result);
   // Step 10 (declare): the new project declares the parent as its external when it references it.
-  if (crossing.out.length > 0 || qualified.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, {}));
+  // It is a path external, written with its source path: read live from the parent's folder, never pinned.
+  const parentRoot = getProjectRoot();
+  if (crossing.out.length > 0 || qualified.out.length > 0 || [...climbs.values()].some((t) => t.startsWith(`${parentId}::`))) {
+    runWithProjectRoot(dir, () => projectConfigRepository.declareExternal(parentId, { source: { path: toPosixPath(path.relative(dir, parentRoot)) || '.' } }));
+  }
   // Step 10 (siblings): each other project the moved specs name through the parent's members or externals, declared too.
   declareSiblings(family, inside, dir, alias, result);
   // Step 11: the parent's re-exports of the part's subsystems re-export the member.
@@ -2122,7 +2063,7 @@ export interface InternalizeResult {
 const MEMBER_WAI_GROUPS: ReadonlyMap<string, string> = new Map([
   ['project.yaml', 'project.yaml'],
   ['lock.json', 'lock'],
-  ['externals.lock.yaml', 'pins and snapshots'],
+  ['inputs.lock.yaml', 'pins and snapshots'],
   ['externals', 'pins and snapshots'],
   ['surfaces', 'legacy surfaces'],
   ['agents', 'derived outputs'],

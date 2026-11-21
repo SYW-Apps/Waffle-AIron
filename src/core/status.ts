@@ -36,7 +36,7 @@ import {
 import { implementationSourceFiles, statesCalls, type SubsystemSpec } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
-import { describeGateParts, type ProjectApproval } from '../models/lock.js';
+import { describeApprovalParts, type ProjectApproval } from '../models/lock.js';
 
 /**
  * The completeness report, and whether it could be produced at all. Two parts
@@ -80,34 +80,25 @@ export interface StatusOptions {
   /** How many member levels to follow: absent, all the way down; 0, the bound project alone; n, that many levels. */
   memberDepth?: number;
   /**
-   * The pin tree to print, computed by the validator at each project's own
+   * The approvals to print, computed by the validator at each project's own
    * root (validator_portal.familyApprovals) and handed in — core cannot compute
-   * a gate identity itself. When given, each [Project] line carries its
-   * member's approval state and how its parent pinned it, and the report ends
-   * with the root's own state. Absent: no approval states.
+   * an approval identity itself. When given, each [Project] line carries its
+   * member's own approval state, and the report ends with the root's own state
+   * and what its build inputs owe. Absent: no approval states.
    */
   approvals?: ProjectApproval[];
 }
 
-/** One approval as a status tag: its state, an upgrade note, and its pin. */
+/** One approval as a status tag: its state, and for a drifted one the parts that moved. */
 function approvalTag(entry: ProjectApproval | undefined): string {
   if (!entry) return '';
   const words = APPROVAL_WORDS[entry.state];
-  const state = entry.release
-    ? (entry.release.carried
-      ? `${words}, re-validated under ${entry.release.to}`
-      : entry.release.reason ? `${words}: re-lock once at its own root` : `${words}: the new release finds ${entry.release.count ?? 0} issue(s)`)
-    : entry.upgraded ? `${words}, re-lock once` : words;
-  // A member the parent recorded unapproved reads as that, never as `pinned`, which claimed an approval the parent never copied.
-  if (entry.pinned === 'matches' && entry.state === 'never') return ` [${state} · recorded unapproved]`;
-  return entry.pinned ? ` [${state} · ${PIN_WORDS[entry.pinned]}]` : ` [${state}]`;
+  const moved = entry.state === 'drifted' && entry.partsMoved && entry.partsMoved.length > 0 ? `: ${describeApprovalParts(entry.partsMoved)} moved` : '';
+  return ` [${words}${moved}]`;
 }
 
 /** An approval state in words: `never` alone read like a template with a word missing. */
 const APPROVAL_WORDS: Record<ProjectApproval['state'], string> = { approved: 'approved', drifted: 'drifted', never: 'never approved' };
-
-/** How a parent's lock pinned a member, in words. */
-const PIN_WORDS: Record<NonNullable<ProjectApproval['pinned']>, string> = { matches: 'pinned', moved: 'pin moved', unpinned: 'not pinned' };
 
 /** The root's own state as the report's closing sentence. */
 const OWN_APPROVAL_WORDS: Record<ProjectApproval['state'], string> = {
@@ -115,25 +106,6 @@ const OWN_APPROVAL_WORDS: Record<ProjectApproval['state'], string> = {
   drifted: 'drifted — its approval no longer covers this tree (`wairon lock` re-approves)',
   never: 'never approved (`wairon lock` approves the design)',
 };
-
-/**
- * The root's own state when what moved is a direct member's pin and not its own
- * design: "drifted" alone read as if this project's design changed, beside a
- * verdict that says no own spec did. Names the member(s) and the fix; null
- * when the own design (or nothing named) moved, so the plain words stand.
- */
-function pinMovedWords(own: ProjectApproval, approvals: ProjectApproval[]): string | null {
-  if (own.state !== 'drifted' || own.upgraded || own.owed !== undefined) return null;
-  const inputs = own.inputsMoved;
-  if (!inputs || !inputs.includes('members') || inputs.includes('design')) return null;
-  const moved = approvals.filter((a) => a.parent === '' && a.as !== 'part' && a.pinned === 'moved').map((a) => a.alias ?? a.key);
-  if (moved.length === 0) return null;
-  const others = inputs.filter((p) => p !== 'members');
-  const also = others.length > 0 ? `; ${describeGateParts(others)} moved too` : '';
-  return moved.length === 1
-    ? `not covered by its approval: none of its own specs changed, but member ${moved[0]} was re-approved at its own root since, and this approval still pins its earlier approval${also} (\`wairon lock\` here pins the new one)`
-    : `not covered by its approval: none of its own specs changed, but members ${moved.join(', ')} were re-approved at their own roots since, and this approval still pins their earlier approvals${also} (\`wairon lock\` here pins the new ones)`;
-}
 
 /**
  * How a caller wants the report marked up, named by what each part MEANS
@@ -213,7 +185,7 @@ function storageOf(storage: string, directory: string | undefined, commit: strin
 /** A part's pin of its parent, as its own lock records it: the excerpt's short digest, or never pinned. */
 function parentPinState(parent: string): string {
   try {
-    const lock = readYamlFile(fromProjectRoot('.wai', 'externals.lock.yaml')) as { parent?: { project?: string; digest?: string } } | null;
+    const lock = readYamlFile(fromProjectRoot('.wai', 'inputs.lock.yaml')) as { parent?: { project?: string; digest?: string } } | null;
     const entry = lock?.parent;
     if (entry?.project === parent && entry.digest) return `(pinned ${entry.digest.replace(/^sha256:/, '').slice(0, 12)}; \`wairon validate\` here judges this part against the pin)`;
   } catch { /* an unreadable lock reads as never pinned */ }
@@ -588,16 +560,11 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
   if (own && nothingDesigned) {
     output += `${mark.layer('system', 'Approval:')} nothing approvable yet — the tree holds the L0 and nothing below it\n`;
   } else if (own) {
-    const release = own.release
-      ? (own.release.carried
-        ? ` (approved under wairon ${own.release.from}, re-validated under ${own.release.to}: still approved)`
-        : own.release.reason
-          ? ` (${own.release.reason})`
-          : ` (approved under wairon ${own.release.from}; the new release finds ${own.release.count ?? 0} issue(s) in the approved design)`)
-      : '';
-    const ignored = own.partsIgnored !== undefined ? ` (notice: the record's gate parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them)` : '';
-    const stamp = own.stampProblem !== undefined ? ` (notice: ${own.stampProblem}; \`wairon lock\` replaces the stamp)` : '';
-    output += `${mark.layer('system', 'Approval:')} this project is ${pinMovedWords(own, options.approvals ?? []) ?? OWN_APPROVAL_WORDS[own.state]}${release}${own.upgraded ? ' (locked under an earlier gate identity — re-lock once)' : ''}${ignored}${stamp}\n`;
+    const moved = own.state === 'drifted' && own.partsMoved && own.partsMoved.length > 0 ? ` (${describeApprovalParts(own.partsMoved)} moved)` : '';
+    const ignored = own.partsIgnored !== undefined ? ` (notice: the record's parts are ignored — ${own.partsIgnored}; \`wairon lock\` rewrites them)` : '';
+    output += `${mark.layer('system', 'Approval:')} this project is ${OWN_APPROVAL_WORDS[own.state]}${moved}${ignored}\n`;
+    // What the build inputs owe beside the approval: one line per debt, never a change of the approval.
+    for (const debt of own.inputs) output += `${mark.layer('system', 'Inputs:')} ${debt.sentence}\n`;
   }
 
   // Step 10: answer the report as text, not failed, so a terminal, an MCP

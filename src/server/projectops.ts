@@ -1,6 +1,7 @@
 import * as packs from './packs.js';
 import * as projectPolicy from './policy.js';
 import * as admin from './admin.js';
+import * as hostedProducers from './hosted-producers.js';
 import * as identity from './identity.js';
 import * as operations from './operations.js';
 import * as gitbacking from './gitbacking.js';
@@ -157,19 +158,19 @@ export function listProjectProfiles(cfg: HostConfig, credential: string | null, 
 // ── producers ─────────────────────────────────────────────────────────────────
 
 export function listProducers(cfg: HostConfig, credential: string | null, project: string): ProducerConfig[] {
-  return admin.listProducers(cfg, credential, project);
+  return hostedProducers.list(cfg, credential, project);
 }
 
 export function configureProducer(cfg: HostConfig, credential: string | null, project: string, target: string, parentPageId: string): void {
-  admin.configureProducer(cfg, credential, project, target, parentPageId);
+  hostedProducers.configure(cfg, credential, project, target, parentPageId);
 }
 
 export function removeProducer(cfg: HostConfig, credential: string | null, project: string, target: string): void {
-  admin.removeProducer(cfg, credential, project, target);
+  hostedProducers.remove(cfg, credential, project, target);
 }
 
 export async function produceProducer(cfg: HostConfig, credential: string | null, project: string, target: string): Promise<void> {
-  await admin.produceProducer(cfg, credential, project, target);
+  await hostedProducers.produce(cfg, credential, project, target);
 }
 
 // ── per-project git backing ───────────────────────────────────────────────────

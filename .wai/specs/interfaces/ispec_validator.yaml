@@ -119,21 +119,17 @@ methods:
         type: CandidateOptions
         description: Rules config, project type and loaded packs
         optional: true
-  - name: computeGateStateId
+  - name: computeApprovalId
     description: >-
-      Gather the project's OWN design identity (code linkage and timestamps left out), the governing
-      extensions, the project's gate config (type, rule tuning, composition), its own consumed
-      contract inputs, the built-in rule sequence, and each direct member's composition subject —
-      read from the member's own lock record, never recomputed and never its specs — and compute the
-      gate identity from them. Every input is the bound project's own or a direct member's recorded
-      decision, never an ancestor's state and never a member's tree. When the bound project's own
-      lock record was taken under the previous, full-content gate algorithm (format 2), the answer
-      also carries that record's identity recomputed under its own algorithm (StateId.asRecorded),
-      so a lock taken before code linkage left the approval stays valid as long as nothing it
-      covered moved — no forced re-lock.
-    signature: 'computeGateStateId(): StateId'
+      Gather the project's OWN design identity (code linkage, readiness and timestamps left out) and
+      its policy (project type, rule tuning, composition, network, pack selections), and compute the
+      approval identity from them, with its parts. Every input is the bound project's own: never an
+      ancestor's state, never a member's, never anything it consumes.
+    signature: 'computeApprovalId(): StateId'
     returns: StateId
     params: []
+    previousNames:
+      - ispec_validator.computeGateStateId
   - name: findTestsReferencing
     description: >-
       Find the tests that encode a given set of methods, resolving the project's declared test roots
@@ -183,20 +179,6 @@ methods:
         description: The run's scope, exactly as validateProject takes it
         optional: true
     effect: read
-  - name: validateDesign
-    description: >-
-      The owner's gate at each spec's AUTHORED status (never as-complete), its result carrying
-      `analysis` — the code half summarised with the analyzer that took it, as validateAsComplete's
-      does — so validation_result.designOnly keeps the design half. What a change of the wairon
-      release is judged by: the approved design re-validated under the current rules at the `--ci`
-      standard (family_validator.releaseVerdict).
-    signature: 'validateDesign(options?: ValidationOptions): ValidationResult'
-    returns: ValidationResult
-    params:
-      - name: options
-        type: ValidationOptions
-        description: The project's own rules and projectType
-        optional: true
   - name: introducedFindings
     description: >-
       Judge one spec about to be written IN its tree (a component or a contract; any other kind
@@ -240,6 +222,19 @@ methods:
         type: list<ComponentSpec>
         description: The other components the same write changes, each in place of the stored one of its id
         optional: true
+  - name: resolvedPacks
+    description: >-
+      The bound project's selected extension packs as they resolve now, keyed by pack name: each
+      selection's declared version, the version its manifest resolved to, where it resolved from,
+      and its doctrine digest (approval_identity.packContents). What `wairon lock` and `wairon pack
+      sync` record in the inputs lock; a selection that does not load is left out (it is an input
+      debt, never a recorded pack). Writes nothing.
+    signature: 'resolvedPacks(): map<string, LockedPack>'
+    returns: map<string, LockedPack>
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-31T21:51:59.877Z'
+updatedAt: '2026-11-20T00:18:19.820Z'

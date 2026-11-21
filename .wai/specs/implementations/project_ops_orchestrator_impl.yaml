@@ -84,29 +84,29 @@ methods:
       - stepNumber: 1
         description: Forward to the admin orchestrator with the caller's credential
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: listProducers
+        targetComponent: hosted_producers
+        targetMethod: list
   - name: configureProducer
     narrative:
       - stepNumber: 1
         description: Forward to the admin orchestrator with the caller's credential
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: configureProducer
+        targetComponent: hosted_producers
+        targetMethod: configure
   - name: removeProducer
     narrative:
       - stepNumber: 1
         description: Forward to the admin orchestrator with the caller's credential
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: removeProducer
+        targetComponent: hosted_producers
+        targetMethod: remove
   - name: produceProducer
     narrative:
       - stepNumber: 1
         description: Forward to the admin orchestrator with the caller's credential
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: produceProducer
+        targetComponent: hosted_producers
+        targetMethod: produce
   - name: getGitBinding
     narrative:
       - stepNumber: 1
@@ -300,4 +300,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-09-29T16:16:48.520Z'
+updatedAt: '2026-11-20T01:02:28.372Z'

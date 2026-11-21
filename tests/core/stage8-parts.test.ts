@@ -9,8 +9,8 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { writeSpecFile } from '../../src/core/spec-files.js';
 import { invalidateSpecCache, listProjectRoots, saveComponentSpec, loadComponentSpec, PartReadOnly } from '../../src/core/specs.js';
 import { projectFamilyGraph } from '../../src/core/project-family.js';
-import { validateProject, validateAsComplete, validateFamily, computeGateStateId, type ValidationIssue, type ValidationResult } from '../../src/core/validation.js';
-import { computeOwnStateId } from '../../src/core/statehash.js';
+import { validateProject, validateAsComplete, validateFamily, computeApprovalId, type ValidationIssue, type ValidationResult } from '../../src/core/validation.js';
+import { computeOwnDesignStateId as computeOwnStateId } from '../../src/core/statehash.js';
 import { captureApprovedSpecs } from '../../src/core/approval.js';
 import { readLockRecord } from '../../src/core/lockfile.js';
 import { pinExternals } from '../../src/core/surfaces.js';
@@ -232,10 +232,10 @@ describe('property: part-is-the-parents-subsystem', () => {
     const contained = clinic('contained');
     const a = gateAt(inline);
     const aOwn = computeOwnStateId();
-    const aGate = computeGateStateId();
+    const aGate = computeApprovalId();
     const b = gateAt(contained);
     const bOwn = computeOwnStateId();
-    const bGate = computeGateStateId();
+    const bGate = computeApprovalId();
     expect(verdictOf(b)).toEqual(verdictOf(a));
     // The ordinary subsystem rules judged the dependency across the part's folder.
     expect(a.issues.some((i) => i.specId === 'appointment-planner')).toBe(true);
@@ -249,11 +249,11 @@ describe('property: part-is-the-parents-subsystem', () => {
     for (const storage of ['inline', 'contained'] as const) {
       const root = clinic(storage);
       bind(root);
-      const captured = computeGateStateId();
+      const captured = computeApprovalId();
       const record = await runLock({ yes: true }, validateAsComplete({}), captured);
       states.push(`${record!.stateId.algorithm}:${record!.stateId.digest}`);
       if (storage === 'contained') {
-        expect(record!.members).toEqual({ scheduling: { as: 'part', contentDigest: expect.stringMatching(/^sha256:/), state: 'approved' } });
+        expect((record as unknown as { members?: unknown }).members).toBeUndefined();
         expect(Object.keys(record!.specs!).filter((k) => k.startsWith('members/')).sort()).toEqual([
           'members/scheduling/.wai/specs/scheduling/.index.yaml',
           'members/scheduling/.wai/specs/scheduling/appointment-planner/.index.yaml',
@@ -277,7 +277,7 @@ describe('property: storage-is-orthogonal', () => {
         verdict: verdictOf(result),
         keys: Object.keys(captureApprovedSpecs(root)).sort(),
         own: computeOwnStateId(),
-        gate: computeGateStateId(),
+        gate: computeApprovalId(),
         digest: listProjectRoots()[0].parts[0].contentDigest,
       };
     });
@@ -300,8 +300,9 @@ describe('property: storage-is-orthogonal', () => {
     const config = projectConfigRepositoryAt(root).load()!;
     const commit = String(config.members!.scheduling).split('#')[1];
     expect(part.commit).toBe(commit);
-    const record = await runLock({ yes: true }, validateAsComplete({}), computeGateStateId());
-    expect(record!.members!.scheduling).toEqual({ as: 'part', contentDigest: part.contentDigest, commit, state: 'approved' });
+    const record = await runLock({ yes: true }, validateAsComplete({}), computeApprovalId());
+    expect((record as unknown as { members?: unknown }).members).toBeUndefined();
+    expect(Object.keys(record!.specs).some((k) => k.startsWith('members/scheduling/'))).toBe(true);
   });
 });
 

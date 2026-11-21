@@ -30,7 +30,16 @@ fields:
     type: string
     description: Verified email address when available.
     optional: true
-methods: []
+methods:
+  - name: approver
+    signature: 'approver(): ApproverIdentity'
+    params: []
+    returns: ApproverIdentity
+    description: >-
+      The approver identity a hosted lock records for this subject: its user id and display name,
+      source hosted. A credential that resolved no subject (the bootstrap master credential) has no
+      PrincipalSubject; its caller records the instance master credential instead. The hosted
+      counterpart of the approval portal's localApprover. Pure.
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:22.659Z'
-updatedAt: '2026-09-19T11:07:13.601Z'
+updatedAt: '2026-11-20T19:47:52.734Z'

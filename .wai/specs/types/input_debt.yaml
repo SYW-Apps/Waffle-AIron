@@ -1,0 +1,29 @@
+kind: value-object
+id: input_debt
+name: InputDebt
+description: >-
+  One thing a project's build inputs owe beside its approval (ProjectApproval.inputs): what, about
+  which producer, pack or member, and the sentence every surface quotes. An approval with debts
+  still holds — the approved design and policy did not move — but `wairon lock-check` refuses until
+  each debt is cleared, by the command its sentence names.
+fields:
+  - name: kind
+    type: InputDebtKind
+    description: What is owed
+    optional: false
+  - name: subject
+    type: string
+    description: The alias of the external or referenced member, the pack name, or the member key it concerns
+    optional: false
+  - name: detail
+    type: list<string>
+    description: 'For unrecorded: each use the pin does not hold, `<name>` or `<name>.<method>`. Empty otherwise'
+    optional: true
+  - name: sentence
+    type: string
+    description: 'One sentence a verdict quotes: the cause and the command that clears it'
+    optional: false
+methods: []
+sourcePath: src/models/lock.ts
+createdAt: '2026-11-19T20:29:34.261Z'
+updatedAt: '2026-11-19T20:29:34.698Z'

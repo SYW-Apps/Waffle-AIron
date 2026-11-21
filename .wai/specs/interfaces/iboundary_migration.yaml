@@ -25,10 +25,10 @@ methods:
       name of the member another family project uses, so each consumer keeps resolving; for every
       other family project consuming the member: when it already declares an alias for the bound
       project, each `member::name` reference respelled to that alias at its position, the member
-      alias's `use` merged into it, the member external and its pin removed; otherwise its external
-      repointed at the bound project's id (source path re-expressed when it had one) and re-pinned
-      (the plan notes the pin will read drifted); the member's externals the bound project now
-      declares, pinned in the bound project. A sibling checkout joins the same transaction: files
+      alias's `use` merged into it, the member external removed; otherwise its external repointed at
+      the bound project's id (source path re-expressed when it had one; a path external is read live
+      and never pinned); the member's externals the bound project now declares, pinned in the bound
+      project only when git or hosted and owed. A sibling checkout joins the same transaction: files
       all-or-nothing, commits one per repository. Re-lock: the bound project and every consumer
       written; a project member's lock ends with it (listed as deleted).
     signature: >-
@@ -86,12 +86,14 @@ methods:
       rehearsal maps, restoring the caller's binding on every path. Internalize of a project:
       consumers' reference edits first from the rehearsal's top root (while the member's keys
       exist), then the core's internalize under the bound project's binding, then the consumers'
-      alias tables, then the pins; of a part, the core's internalize alone. Externalize: the core's
+      alias tables, then the pins that are owed (a git or hosted external only; a path external is
+      read live and never pinned); of a part, the core's internalize alone. Externalize: the core's
       externalize under the bound project's binding (as part or as project), then — for a project —
-      the new member's pin under its binding and the bound project's pin of it. Promote: the core's
-      promote under the bound project's binding, then the pins on both sides. Demote: the core's
-      demote under the bound project's binding, then the bound project's pin of the member removed.
-      A core refusal propagates to the caller, which reports it as the plan's refusal.
+      the pins owed by a git or hosted external it declares; the new member's external for the bound
+      project is a path external, never pinned. Promote: the core's promote under the bound
+      project's binding, then the pins owed by git or hosted externals only. Demote: the core's
+      demote under the bound project's binding. A member is never pinned. A core refusal propagates
+      to the caller, which reports it as the plan's refusal.
     signature: 'write(plan: MigrationPlan, rehearsal: Rehearsal): void'
     returns: void
     params:
@@ -123,13 +125,12 @@ methods:
       L0 exporting exactly what the rest of the bound project uses of it), references across the new
       boundary re-saved (`alias::name` one way, `<parent id>::name` the other, bare type names
       imported by `use`), the bound project exporting what the new project uses of it and declared
-      as the new project's external, the bound project's L0 re-exports re-pointed at the member, an
-      asserted `as: part` dropped; then the new project's external for the bound project pinned in
-      it, and — when it is not contained — the bound project's pin of the new member taken. A part
-      in a sibling checkout joins the same all-or-nothing transaction, and the plan says so: files
-      all-or-nothing, commits one per repository. Re-lock: the bound project; the new project has no
-      lock and is listed as "to lock". promote-then-demote-is-identity: demoting the result plans
-      the exact inverse.
+      as the new project's external, written with its source path (a path external, read live, never
+      pinned), the bound project's L0 re-exports re-pointed at the member, an asserted `as: part`
+      dropped; the bound project takes no pin of the new member. A part in a sibling checkout joins
+      the same all-or-nothing transaction, and the plan says so: files all-or-nothing, commits one
+      per repository. Re-lock: the bound project; the new project has no lock and is listed as "to
+      lock". promote-then-demote-is-identity: demoting the result plans the exact inverse.
     signature: 'planPromote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -164,10 +165,10 @@ methods:
       external for the parent dropped, an asserted `as: project` and any `use` dropped from the
       declaration — and EVERY L0 export entry of the bound project the demote removes (an entry at
       audience project naming a target only the member used, hand-written or made by a promote),
-      each named as an edit for confirmation; the bound project's pin of the member removed. A
-      member in a sibling checkout joins the same transaction: files all-or-nothing, commits one per
-      repository. Re-lock: the bound project; the member's own lock ends with it (listed as
-      deleted).
+      each named as an edit for confirmation; a leftover pin of the member an earlier release took
+      of a sibling is dropped (members are not pinned). A member in a sibling checkout joins the
+      same transaction: files all-or-nothing, commits one per repository. Re-lock: the bound
+      project; the member's own lock ends with it (listed as deleted).
     signature: 'planDemote(family: ProjectFamily, bound: string, request: MigrationRequest): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -203,4 +204,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:03.086Z'
-updatedAt: '2026-10-02T23:59:36.046Z'
+updatedAt: '2026-11-20T19:38:23.300Z'

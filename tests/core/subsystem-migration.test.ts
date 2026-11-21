@@ -401,10 +401,10 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
       .toEqual(['top::shared_portal', 'ledger::ledger_portal']);
     expect(callTargets(stored(fam.childDir, 'billing/billing_adapter/.implementation.yaml')))
       .toEqual(['top::shared_portal', 'ledger::ledger_portal']);
-    // …the parent is declared as the member's external, importing by name the
-    // bare type it now owns (stage 4: a bare name resolves locally, then through
+    // …the parent is declared as the member's external, written with its source path (a path
+    // external, read live), importing by name the bare type it now owns (stage 4: a bare name resolves locally, then through
     // a `use` import — never by a family-wide suffix match)…
-    expect(projectConfigRepositoryAt(fam.childDir).load()?.externals).toEqual({ top: { use: ['money'] } });
+    expect(projectConfigRepositoryAt(fam.childDir).load()?.externals).toEqual({ top: { source: { path: '../..' }, use: ['money'] } });
     // …and the parent exports what the member reaches across the new boundary:
     // the portal its subsystem already published, and the imported type.
     expect(stored(fam.root, '.index.yaml').publicInterfaces).toEqual([
@@ -422,17 +422,16 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     expect(stored(fam.childDir, 'billing/types/invoice.yaml').fields.map((f: any) => f.type)).toEqual(['money']);
   });
 
-  it('from the child root the references into the parent are judged against its pins alone — unpinned, unavailable', () => {
+  it('from the child root the references into the parent are judged against the parent, read live through its source path', () => {
     const fam = family();
     root = fam.root;
     externalizeSubsystem('billing', 'packages/billing', 'project');
 
     const fromChild = verdict(fam.childDir);
 
-    // Stage 4: nothing is resolved through the parent. The member declares the
-    // parent as an external; until it is pinned, its references into it have
-    // nothing to be judged against — never a pass, never a typo-grade error.
-    expect(fromChild.issues.some((i) => i.code === 'EXTERNAL_CHECK_UNAVAILABLE')).toBe(true);
+    // The member declares the parent as a path external: it is read live from its
+    // folder, never pinned, so the references into it are judged, not unavailable.
+    expect(fromChild.issues.some((i) => i.code === 'EXTERNAL_CHECK_UNAVAILABLE')).toBe(false);
     // The one exception is the deprecated root-anchored `::shared_portal`: a
     // leading `::` reads from whichever root loads it, so from the member's own
     // root it names the member's own (absent) spec — the reason it is

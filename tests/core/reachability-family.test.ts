@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import * as yaml from 'js-yaml';
 import { compose, project } from '../../src/core/rules/reach-model-projector.js';
 import { judge } from '../../src/core/rules/network-arbiter.js';
-import { computeGateIdentity } from '../../src/core/rules/gate-identity.js';
+import { computeApprovalIdentity } from '../../src/core/rules/approval-identity.js';
 import { emptyExtensions } from '../../src/core/extensions.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
@@ -253,23 +253,20 @@ describe('family_validator.checkReach (the family run)', () => {
 // The gate identity: `network` only when declared
 // ---------------------------------------------------------------------------
 
-describe('gate_identity.compute and the network declaration', () => {
-  const content: StateId = { algorithm: 'sha256-design', digest: 'abc123' } as StateId;
+describe('approval_identity.compute and the network declaration', () => {
+  const design: StateId = { algorithm: 'sha256-design-2', digest: 'abc123' } as StateId;
   const gate = { projectType: 'backend', rules: { designDepth: 'narratives' } as never, composition: null };
-  const members = { billing: 'sha256+design+doctrine+inputs+members:ffff' };
 
-  it('digests a project that declares no network exactly as before networks existed, so no existing lock stales', () => {
-    // Pinned from the gate identity at 0f4a1050, before the network key existed.
-    const before = 'a3021dc8657886a206a3995f54084f741160c616f4e020a0265eae277bf21752';
-    expect(computeGateIdentity(content, emptyExtensions(), [], ['in-a'], gate, members).digest).toBe(before);
-    expect(computeGateIdentity(content, emptyExtensions(), [], ['in-a'], { ...gate, network: undefined }, members).digest).toBe(before);
-    expect(computeGateIdentity(content, emptyExtensions(), [], ['in-a'], { ...gate, network: null }, members).digest).toBe(before);
+  it('digests a project that declares no network the same whether the key is absent, undefined or null', () => {
+    const before = computeApprovalIdentity(design, [], gate).digest;
+    expect(computeApprovalIdentity(design, [], { ...gate, network: undefined }).digest).toBe(before);
+    expect(computeApprovalIdentity(design, [], { ...gate, network: null }).digest).toBe(before);
   });
 
   it('moves the identity when a project declares, or redescribes, a network', () => {
-    const none = computeGateIdentity(content, emptyExtensions(), [], ['in-a'], gate, members).digest;
-    const declared = computeGateIdentity(content, emptyExtensions(), [], ['in-a'], { ...gate, network: {} }, members).digest;
-    const described = computeGateIdentity(content, emptyExtensions(), [], ['in-a'], { ...gate, network: { description: 'Order services' } }, members).digest;
+    const none = computeApprovalIdentity(design, [], gate).digest;
+    const declared = computeApprovalIdentity(design, [], { ...gate, network: {} }).digest;
+    const described = computeApprovalIdentity(design, [], { ...gate, network: { description: 'Order services' } }).digest;
     expect(new Set([none, declared, described]).size).toBe(3);
   });
 });

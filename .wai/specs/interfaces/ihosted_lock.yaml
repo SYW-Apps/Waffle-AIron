@@ -1,0 +1,103 @@
+id: ihosted_lock
+name: Hosted Lock Interface
+description: >-
+  Contract of the hosted lock workflow: the lock itself, the build inputs it refreshes first, and
+  the read-only checks a lock request is made with. Every method is pre-authorized: its callers
+  (admin_orchestrator.lockProject for a direct lock, project_lifecycle_orchestrator for a request
+  and its approved execution) authenticate and authorize first, and nothing here does. Never exposed
+  on any portal.
+component: hosted_lock
+methods:
+  - name: execute
+    description: >-
+      Lock the project's OWN record: a member is a record since stage 7, so its own tree is bound
+      (derived from its parent's root and memberPath) and no qualifier exists. Git goes through the
+      project's family repository: sync at the family root's repository root, and publish ONLY the
+      project's own .wai/ pathspec there, so a member's lock reaches the remote without sweeping its
+      parent's or siblings' trees. The owed build inputs are refreshed first (refreshInputs),
+      exactly as the local lock does, and never block the approval. The approval identity is
+      CAPTURED before validation and confirmed unchanged before the record is written (refused
+      otherwise, no record written); when `expected` is given (an approval request's recorded
+      approvalId) the captured identity must equal it, so an approval never certifies a design other
+      than the one requested; the lock gates on the design half of the as-complete run only; the
+      record is format 4 (the identity, its five parts, the per-spec design digests and the code
+      results beside the claim, no members); and with composition.requireApprovedMembers it refuses
+      while a direct member is drifted or never approved, naming each. It answers a
+      HostedLockOutcome: the persisted record, the pin outcomes of the refresh (a refused one
+      included) and the input debts that remain. Nothing is ever written below the bound project.
+    signature: 'execute(projectId: string, approver: ApproverIdentity, expected?: string): HostedLockOutcome'
+    returns: HostedLockOutcome
+    params:
+      - name: projectId
+        type: string
+      - name: approver
+        type: ApproverIdentity
+        description: >-
+          Who approves, as the caller AUTHENTICATED it: the approving subject's approver() (the
+          credential's subject on a direct lock, the decider on an approved request), or the
+          instance master credential when the credential resolved no subject. Recorded as the
+          record's lockedBy. Pre-authorized callers resolve it; nothing here re-authenticates.
+      - name: expected
+        type: string
+        description: >-
+          The approval identity (`<algorithm>:<digest>`) an approval request recorded when it was
+          made; absent for a direct lock.
+        optional: true
+    previousNames:
+      - iadmin_orchestrator.executeApprovedLock
+      - ihosted_lock.executeApprovedLock
+  - name: identity
+    description: >-
+      The approval identity (own design plus own policy) a lock of this project's own record would
+      certify NOW, rendered `<algorithm>:<digest>`. Read-only: no sync, no validation, no write.
+      project_lifecycle_orchestrator records it on a project:lock request when it is created, so the
+      approved execution can refuse a tree that moved after the request.
+    signature: 'identity(projectId: string): string'
+    returns: string
+    params:
+      - name: projectId
+        type: string
+    guarantees:
+      - idempotent
+    previousNames:
+      - iadmin_orchestrator.gateIdentity
+      - ihosted_lock.gateIdentity
+  - name: assertApprovable
+    description: >-
+      Validate the tree of this project's own record the way an approved lock would (as-complete,
+      the design half), and refuse with a LockValidationError naming the error count and each
+      error's code when it has errors. Warnings and notices never refuse, matching the local `wairon
+      lock`. Read-only: no sync, no lock record, no write. project_lifecycle_orchestrator calls it
+      before it creates a pending project:lock request, so a request is never made about a tree the
+      approved lock would refuse.
+    signature: 'assertApprovable(projectId: string): void'
+    returns: void
+    params:
+      - name: projectId
+        type: string
+    guarantees:
+      - idempotent
+    previousNames:
+      - iadmin_orchestrator.checkLockable
+      - ihosted_lock.checkLockable
+  - name: refreshInputs
+    description: >-
+      Refresh the bound project's owed build inputs before a hosted lock judges it, exactly as the
+      local lock does: pin the owed aliases from their hosted or git producers' approved states
+      (every other pin stays as it is) and record the selected packs as they resolve. A refused pin
+      keeps its previous pin and comes back as an outcome to report: inputs never block the
+      approval. Writes the bound project's .wai/inputs.lock.yaml and its snapshots only.
+    signature: 'refreshInputs(owed: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
+    params:
+      - name: owed
+        type: list<string>
+        description: >-
+          The aliases the own approval entry owes (input debts of kind unpinned or unrecorded);
+          empty pins nothing and still records the packs
+    effect: write
+    previousNames:
+      - iadmin_orchestrator.refreshInputs
+status: complete
+createdAt: '2026-11-20T00:38:27.764Z'
+updatedAt: '2026-11-20T19:48:16.919Z'

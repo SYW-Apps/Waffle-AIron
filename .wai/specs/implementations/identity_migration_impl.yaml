@@ -46,8 +46,9 @@ methods:
           each authored reference that went through it (the graph's authoredReferences with that
           referrer and alias, at their positions, L0 `from` entries included) is respelled with the
           new first segment; an alias that differs is kept, and an external's `project` is repointed
-          to the new id; a pin under the alias is carried to its new key and producer id. A
-          reference at a position the writer does not parse is reference-unwritable
+          to the new id; the pin of a git or hosted external under the alias is carried to its new
+          key and producer id (a path external has no pin: it is read live). A reference at a
+          position the writer does not parse is reference-unwritable
         type: local
       - stepNumber: 7
         description: >-
@@ -74,9 +75,9 @@ methods:
         description: >-
           Name each consumer outside the projects the plan writes in a note: its project, its
           folder, and the alias and section it declares the target under; nothing in it is written.
-          A parent declaring it as a member is to re-lock there once the target is re-locked, to pin
-          its new approval; a project declaring it as an external is to rewrite its own external
-          (its next gate reports the id change)
+          A parent declaring it as a member records nothing about it: it reads the target's own
+          committed lock, so the target is re-locked at its own root; a project declaring it as an
+          external is to rewrite its own external (its next gate reports the id change)
         type: local
       - stepNumber: 10
         description: Answer the plan, every written project to re-lock, the target first
@@ -104,8 +105,9 @@ methods:
         description: >-
           Plan the bound project's edits only: the alias rekeyed; every authored reference of the
           bound project that went through the alias respelled with the new first segment at its
-          position, L0 `from` entries included; an external's pin carried to the new alias with the
-          same producer; a local spec id equal to the new alias is a note
+          position, L0 `from` entries included; the pin of a git or hosted external carried to the
+          new alias with the same producer (a path external has none); a local spec id equal to the
+          new alias is a note
         type: local
       - stepNumber: 5
         description: Read the bound project's pinned externals, to find the lock the renamed alias carries
@@ -114,8 +116,8 @@ methods:
         targetMethod: listExternals
       - stepNumber: 6
         description: >-
-          Under each other family project that pins the bound project, read its externals' status:
-          the alias is the bound project's own, so a pin whose every use is unchanged is taken again
+          Under each other family project that consumes the bound project, read its externals'
+          status: the alias is the bound project's own, so a use that stays valid needs nothing
           after the rename (the names it uses are the same; only how the bound project re-exports
           them is spelled) — one already broken is left with a note, never laundered
         type: call
@@ -160,13 +162,15 @@ methods:
       - stepNumber: 7
         label: pins
         description: >-
-          Last, for each holder with a pin under a planned alias, bind its rehearsal root and carry
-          the pin to its new key and producer id, digest unchanged
+          Last, for each holder with a git or hosted pin under a planned alias, bind its rehearsal
+          root and carry the pin to its new key and producer id, digest unchanged
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: renamePin
       - stepNumber: 8
-        description: Then re-take each family consumer's pin the plan read intact, under its own rehearsal root
+        description: >-
+          Then re-take only a git or hosted pin the plan read intact that is owed one, under its
+          consumer's rehearsal root; a path external is read live and never pinned
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: pinExternals
@@ -175,4 +179,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:43.534Z'
-updatedAt: '2026-10-20T09:25:57.987Z'
+updatedAt: '2026-11-20T19:38:46.372Z'

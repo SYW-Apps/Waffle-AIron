@@ -7,7 +7,7 @@ import { setProjectRoot, runWithProjectBinding } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import {
   validateProject, validateFamily, validateAsComplete, type ValidationIssue, type ValidationResult,
-  computeGateStateId,
+  computeApprovalId, unpinnedExternals,
 } from '../../src/core/validation.js';
 import { pinExternals } from '../../src/core/surfaces.js';
 import { readLockRecord } from '../../src/core/lockfile.js';
@@ -50,8 +50,9 @@ function referenceFamily(): ReferenceFamily {
   return f;
 }
 
-function contractFamily(): ContractFamily {
-  const f = buildContractFamily();
+/** The contract family; with `git`, billing's external for ledger is a git one (ledger released through a local repository), the kind a pin judges. */
+function contractFamily(git = false): ContractFamily {
+  const f = buildContractFamily({ git });
   cleanups.push(() => f.cleanup());
   return f;
 }
@@ -100,7 +101,7 @@ async function lock(dir: string): Promise<void> {
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
   const config = projectConfigRepositoryAt(dir).load();
   const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
-  await runLock({ yes: true }, gate, computeGateStateId());
+  await runLock({ yes: true }, gate, computeApprovalId());
 }
 
 describe('the family run — what it carries', () => {
@@ -206,7 +207,7 @@ describe('family codes — fire and control', () => {
   });
 
   it('EXTERNAL_DRIFTED fires when only an unused member changed; quiet when nothing changed', () => {
-    const f = contractFamily();
+    const f = contractFamily(true);
     pin(f.billing);
     expect(family(familyAt(f.top), 'EXTERNAL_DRIFTED')).toEqual([]);
     f.setLedgerContract('post', 'string');
@@ -215,12 +216,23 @@ describe('family codes — fire and control', () => {
     expect(family(run, 'EXTERNAL_INCOMPATIBLE')).toEqual([]);
   });
 
-  it('EXTERNAL_UNPINNED fires on a use of an external never pinned (an error: never a pass); quiet once pinned', () => {
-    const f = contractFamily();
-    expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED').map((i) => [i.project, i.severity])).toEqual([['billing', 'error']]);
-    expect(family(familyAt(f.top), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
+  it('a git external never pinned is never a pass: its references are unavailable, `unpinned` names it, and both clear once pinned', () => {
+    const f = contractFamily(true);
+    const unavailable = (run: ValidationResult): string[] =>
+      run.issues.filter((i) => i.code === 'EXTERNAL_CHECK_UNAVAILABLE' && i.project === 'billing').map((i) => i.severity);
+    expect(unavailable(familyAt(f.top))).toEqual(['warning', 'warning']);
+    bind(f.billing);
+    expect(unpinnedExternals()).toEqual(['ledger']);
     pin(f.billing);
-    expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED')).toEqual([]);
+    expect(unavailable(familyAt(f.top))).toEqual([]);
+    bind(f.billing);
+    expect(unpinnedExternals()).toEqual([]);
+  });
+
+  it('a sibling found by its id is read live: it owes no pin, so nothing is unpinned', () => {
+    const f = contractFamily();
+    bind(f.billing);
+    expect(unpinnedExternals()).toEqual([]);
   });
 
   it('MEMBER_NOT_FOUND fires on a declared member with no project on disk; quiet when it is there', () => {
@@ -282,16 +294,17 @@ describe('family codes — fire and control', () => {
   });
 
   it('a family code is tuned by the owning project\'s sddRuleSeverity', () => {
-    const f = contractFamily();
+    const f = contractFamily(true);
     // The root owns the member checks.
     f.setConfig(f.top, ['id: house', 'name: House', 'members:', '  ledger: ledger', '  billing: billing',
       'rules:', '  sddRuleSeverity:', '    MEMBER_UNAPPROVED: error', '    PROJECT_DEPENDENCY_CYCLE: "off"']);
-    expect(family(familyAt(f.top), 'MEMBER_UNAPPROVED').map((i) => i.severity)).toEqual(['error', 'error']);
+    // Ledger is released through its repository, so it is approved: only billing is not.
+    expect(family(familyAt(f.top), 'MEMBER_UNAPPROVED').map((i) => i.severity)).toEqual(['error']);
     // The consumer owns the composition of its externals; the root's word does not reach it.
     f.setConfig(f.top, ['id: house', 'name: House', 'members:', '  ledger: ledger', '  billing: billing',
       'rules:', '  sddRuleSeverity:', '    EXTERNAL_UNPINNED: "off"']);
     expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED')).toHaveLength(1);
-    f.setConfig(f.billing, ['id: billing', 'name: Billing', 'externals:', '  ledger: {}',
+    f.setConfig(f.billing, ['id: billing', 'name: Billing', ...f.externalLines,
       'rules:', '  sddRuleSeverity:', '    EXTERNAL_UNPINNED: "off"']);
     expect(family(familyAt(f.top), 'EXTERNAL_UNPINNED')).toEqual([]);
   });
@@ -313,7 +326,7 @@ describe('approval context', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     await runWithProjectBinding(f.ledger, { topRoot: f.top, parentReach: true }, async () => {
       const config = projectConfigRepositoryAt(f.ledger).load();
-      await runLock({ yes: true }, validateAsComplete({ rules: config?.rules, projectType: config?.projectType }), computeGateStateId());
+      await runLock({ yes: true }, validateAsComplete({ rules: config?.rules, projectType: config?.projectType }), computeApprovalId());
     });
     bind(f.ledger);
     expect(fields()).toEqual(atOwnRoot);

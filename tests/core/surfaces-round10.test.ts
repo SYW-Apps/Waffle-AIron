@@ -11,6 +11,7 @@ import { readYamlFile } from '../../src/utils/yaml.js';
 import { fieldChangesSince, memberDigest, relationHealth, SurfaceSnapshotSchema, type SurfaceSnapshot } from '../../src/models/index.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness';
 import { projectYaml } from '../helpers/conformance-r6-trees';
+import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // Round-10 sandbox trials — surfaces and externals. Each block replays one
@@ -18,9 +19,16 @@ import { projectYaml } from '../helpers/conformance-r6-trees';
 // ---------------------------------------------------------------------------
 
 const roots: string[] = [];
+const cleanups: (() => void)[] = [];
+/** The producers served by a local git repository, by their folder: what releases a change to one. */
+const released = new Map<string, () => string>();
 afterEach(() => {
   setProjectRoot(null);
   invalidateSpecCache();
+  released.clear();
+  for (const c of cleanups.splice(0)) {
+    try { c(); } catch { /* windows locks */ }
+  }
   for (const dir of roots.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* windows locks */ }
   }
@@ -74,12 +82,15 @@ function wholeContractConsumer(): FixtureTree {
 describe('1. a contract used as a whole: every method it holds is compared live (solo-app top-1)', () => {
   function pinnedPair(): { producer: string; consumer: string } {
     const folder = tempDir();
+    cleanups.push(isolateGlobals(cleanups));
     const producer = writeProject(path.join(folder, 'producer'), habitApi(), projectYaml('habitly-api'));
-    const consumer = writeProject(path.join(folder, 'consumer'), wholeContractConsumer(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { path: '../producer' } } } }));
+    const served = serveGit(cleanups, producer, 'producer');
+    released.set(producer, served.release);
+    const consumer = writeProject(path.join(folder, 'consumer'), wholeContractConsumer(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { git: served.url } } } }));
     bind(consumer);
     expect(pinExternals().map((p) => p.outcome)).toEqual(['pinned']);
     // The lock records the contract as a whole: no member named.
-    expect(readYamlFile<{ externals: Record<string, { used: Record<string, Record<string, string>> }> }>(path.join(consumer, '.wai', 'externals.lock.yaml')).externals.legacy.used).toEqual({ habit_portal: {} });
+    expect(readYamlFile<{ externals: Record<string, { used: Record<string, Record<string, string>> }> }>(path.join(consumer, '.wai', 'inputs.lock.yaml')).externals.legacy.used).toEqual({ habit_portal: {} });
     return { producer, consumer };
   }
 
@@ -87,6 +98,7 @@ describe('1. a contract used as a whole: every method it holds is compared live 
   function republish(producer: string, verbs: Verb[]): void {
     for (const dir of ['interfaces', 'implementations']) fs.rmSync(path.join(producer, '.wai', 'specs', dir), { recursive: true, force: true });
     writeProject(producer, habitApi(verbs), projectYaml('habitly-api'));
+    released.get(producer)!();
     invalidateSpecCache();
   }
 
@@ -106,9 +118,9 @@ describe('1. a contract used as a whole: every method it holds is compared live 
     expect(status.uses).toEqual([{ publicName: 'habit_portal', member: 'checkIn', state: 'removed' }]);
     expect(relationHealth(status)).toBe('incompatible');
     bind(consumer);
+    // Offline, a pinned git external is not compared: the advisory says so and names the command that compares it.
     const advised = adviseExternals();
-    expect(advised.map((i) => i.code)).toEqual(['EXTERNAL_LIVE_INCOMPATIBLE']);
-    expect(advised[0].message).toContain('"habit_portal.checkIn" gone from the producer\'s live export table');
+    expect(advised.map((i) => i.code)).toEqual(['EXTERNAL_LIVE_UNCOMPARED']);
   });
 
   it('a verb RENAMED is renamed to its new name', () => {
@@ -144,7 +156,7 @@ function git(dir: string, ...args: string[]): string {
 /** An approval record committed with the tree as it stands; `members` is what the record says of each member. */
 function approve(dir: string, digest: string, members?: Record<string, string>): void {
   const record = {
-    format: 3, stateId: { algorithm: 'sha256+design-2', digest }, specs: {},
+    format: 4, parts: {}, stateId: { algorithm: 'sha256+design-2', digest }, specs: {},
     ...(members ? { members: Object.fromEntries(Object.entries(members).map(([alias, d]) => [alias, { as: 'project', project: 'geo-sdk', subject: `sha256+design-2:${d}`, state: 'approved' }])) } : {}),
   };
   fs.writeFileSync(path.join(dir, '.wai', 'lock.json'), JSON.stringify(record, null, 2));
@@ -243,6 +255,7 @@ describe('3a. the live comparison names a field added to (or removed from) a use
 
   it('the consumer\'s status names the added field — never only "its shape changed beyond that"', () => {
     const folder = tempDir();
+    cleanups.push(isolateGlobals(cleanups));
     const withRecord = (fields: { name: string; type: string; previousNames?: string[] }[]): FixtureTree => {
       const tree = habitApi();
       const contract = tree.interfaces![0] as { methods: { name: string }[] };
@@ -253,10 +266,12 @@ describe('3a. the live comparison names a field added to (or removed from) a use
       };
     };
     const producer = writeProject(path.join(folder, 'producer'), withRecord([{ name: 'name', type: 'string' }]), projectYaml('habitly-api'));
-    const consumer = writeProject(path.join(folder, 'consumer'), wholeContractConsumer(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { path: '../producer' } } } }));
+    const served = serveGit(cleanups, producer, 'producer');
+    const consumer = writeProject(path.join(folder, 'consumer'), wholeContractConsumer(), projectYaml('reminders', { externals: { legacy: { project: 'habitly-api', source: { git: served.url } } } }));
     bind(consumer);
     expect(pinExternals().map((p) => p.outcome)).toEqual(['pinned']);
     writeProject(producer, withRecord([{ name: 'title', type: 'string', previousNames: ['name'] }, { name: 'cadence', type: 'string' }]), projectYaml('habitly-api'));
+    served.release();
     bind(consumer);
     const [status] = getExternalsStatus();
     // Round 10: 'field "habit.name" renamed to "title" (and its shape changed beyond that)'.

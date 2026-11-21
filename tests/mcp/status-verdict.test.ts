@@ -10,7 +10,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { getStatusReport } from '../../src/core/status.js';
 import { captureApprovedSpecs } from '../../src/core/approval.js';
 import { writeLockRecord } from '../../src/core/lockfile.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import * as yaml from 'js-yaml';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
@@ -73,7 +73,7 @@ function createTempProject() {
 /** Write the lock record a `wairon lock --yes` would leave behind. */
 function approve(): void {
   writeLockRecord({
-    stateId: computeGateStateId(),
+    stateId: computeApprovalId(),
     lockedAt: '2026-09-20T11:00:00Z',
     lockedBy: { id: 'tester <t@example.com>', source: 'git' },
     validatorVersion: 'test',
@@ -81,8 +81,7 @@ function approve(): void {
     status: 'ready',
     specs: captureApprovedSpecs(),
     // captureApprovedSpecs answers the design reading (lock format 3).
-    specsReading: 'design',
-    format: 3,
+    format: 4, parts: {},
     children: {},
   });
 }

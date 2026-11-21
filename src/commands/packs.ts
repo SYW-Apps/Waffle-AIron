@@ -6,7 +6,7 @@ import inquirer from 'inquirer';
 import { scaffoldPack, buildPack as sdkBuildPack, extractPack, inspectArchive, packContentDigest } from '@wairon/sdk';
 import type { PackScaffoldRequest, PackBuildResult, PackExtractionResult } from '@wairon/sdk';
 import { logger } from '../utils/logger.js';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, readFileOrNull } from '../utils/fs.js';
 import { downloadFile } from '../utils/download.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 import type { PackSelection } from '../models/project.js';
@@ -16,7 +16,9 @@ import { WAIRON_VERSION } from '../config/defaults.js';
 import * as registry from './registry.js';
 import type { RegistryResolution } from './registry.js';
 // validator_portal: the pack impact every pack-selecting command shows before it writes.
-import { measurePackImpact } from '../core/validation.js';
+import { measurePackImpact, resolvedPacks } from '../core/validation.js';
+// surface_portal: the inputs lock's packs section, which a sync records.
+import { recordPacks } from '../core/surface-portal.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import {
   discoverPacks,
@@ -951,10 +953,12 @@ export async function syncPacks(allowUnverifiedCode?: boolean): Promise<void> {
   const missing = selections.filter((s) => packEntryRef(s, root) === null);
   if (selections.length === 0) {
     logger.info('This project selects no packs — nothing to sync.');
+    recordSyncedPacks();
     return;
   }
   if (missing.length === 0) {
     logger.success(`All ${selections.length} selected pack(s) are already available.`);
+    recordSyncedPacks();
     return;
   }
 
@@ -1003,6 +1007,19 @@ export async function syncPacks(allowUnverifiedCode?: boolean): Promise<void> {
   }
 
   if (installed > 0) logger.success(`Synced ${installed} pack(s) into the pack store.`);
+  recordSyncedPacks();
+}
+
+/**
+ * syncPacks steps 18-20: record the selected packs as they load now in the
+ * inputs lock's packs section (a no-op when it already says exactly this) and
+ * say whether it moved. A sync refreshes a build input; it never moves the approval.
+ */
+function recordSyncedPacks(): void {
+  const file = path.join(getProjectRoot(), '.wai', 'inputs.lock.yaml');
+  const before = readFileOrNull(file);
+  recordPacks(resolvedPacks());
+  if (readFileOrNull(file) !== before) logger.info('Recorded the selected packs in .wai/inputs.lock.yaml — commit it.');
 }
 
 /**

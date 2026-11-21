@@ -1,0 +1,36 @@
+kind: value-object
+id: locked_pack
+name: LockedPack
+description: >-
+  One selected pack as the inputs lock records it (InputsLock.packs, keyed by pack name): what the
+  selection resolved to when `wairon pack sync` or `wairon lock` last recorded it. A build input,
+  never part of the approval: when the pack loaded now digests differently, the build owes a sync
+  (InputDebtKind pack), and the approval holds.
+subsystem: sdd_surfaces
+fields:
+  - name: declared
+    type: string
+    description: >-
+      The version the selection declares in .wai/project.yaml, as written (absent when it declares
+      none)
+    optional: true
+  - name: resolved
+    type: string
+    description: >-
+      The version the selection resolved to, from the pack's manifest (absent when the manifest
+      declares none)
+    optional: true
+  - name: source
+    type: string
+    description: >-
+      Where it was resolved from: the bundled path, the source URL, or the install location's kind
+      (`installed`)
+    optional: true
+  - name: digest
+    type: string
+    description: The pack's doctrine digest (approval_identity.packContents) when recorded
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-11-19T21:54:22.613Z'
+updatedAt: '2026-11-20T14:17:54.012Z'

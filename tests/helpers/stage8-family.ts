@@ -13,6 +13,11 @@ import {
   TypeSpecSchema,
 } from '../../src/models/index.js';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
+import { invalidateSpecCache } from '../../src/core/specs.js';
+import { captureApprovedSpecs } from '../../src/core/approval.js';
+import { writeLockRecord } from '../../src/core/lockfile.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 
 // ---------------------------------------------------------------------------
 // Stage 8, wave B fixtures: a producer project (ledger) and a consumer (shop)
@@ -55,8 +60,27 @@ export function git(cwd: string, ...args: string[]): string {
   }).trim();
 }
 
+/**
+ * Approve a project as it stands: write its lock record at its own root, as a
+ * producer that ran `wairon lock` would hold. A pin is taken from approved
+ * state only, so a producer a test pins from is approved first.
+ */
+export function approveAt(dir: string): void {
+  runWithProjectRoot(dir, () => {
+    invalidateSpecCache();
+    writeLockRecord({
+      stateId: computeApprovalId(), lockedAt: STAMP, lockedBy: { id: 'tester <t@example.com>', source: 'git' },
+      validatorVersion: 'test', validationResult: { valid: true, errors: 0, warnings: 0 }, status: 'ready',
+      specs: captureApprovedSpecs(), specsReading: 'design', format: 4, parts: {},
+    });
+  });
+  invalidateSpecCache();
+}
+
 /** A local bare repository cloned from a work tree; answers its file URL and the work tree's head. */
-export function bareFrom(cleanups: (() => void)[], work: string, name: string): { url: string; bare: string; commit: string } {
+export function bareFrom(cleanups: (() => void)[], work: string, name: string, options: { approved?: boolean } = {}): { url: string; bare: string; commit: string } {
+  // With `approved`, the producer is approved as it stands: a pin is taken from approved state only.
+  if (options.approved) approveAt(work);
   git(work, 'init', '-q');
   git(work, 'add', '-A');
   git(work, 'commit', '-q', '-m', `the ${name}`);
@@ -65,8 +89,16 @@ export function bareFrom(cleanups: (() => void)[], work: string, name: string): 
   return { url: `file:///${bare.replace(/\\/g, '/').replace(/^\//, '')}`, bare, commit: git(work, 'rev-parse', 'HEAD') };
 }
 
+/** A project served by a local git repository: approved as it stands. `release` approves, commits and pushes each later change. */
+export function serveGit(cleanups: (() => void)[], dir: string, name: string): { url: string; bare: string; commit: string; release(message?: string): string } {
+  const repo = bareFrom(cleanups, dir, name, { approved: true });
+  return { ...repo, release: (message = `the ${name} changes`) => { approveAt(dir); return pushChange(dir, repo.bare, message); } };
+}
+
 /** Commit the work tree's changes and push them to its bare repository; answers the new commit. */
 export function pushChange(work: string, bare: string, message: string): string {
+  // Each release of the producer is approved as it stands.
+  if (fs.existsSync(path.join(work, '.wai', 'lock.json'))) approveAt(work);
   git(work, 'add', '-A');
   git(work, 'commit', '-q', '-m', message);
   const branch = git(work, 'rev-parse', '--abbrev-ref', 'HEAD');

@@ -1,0 +1,282 @@
+id: hosted_lock_impl
+name: Hosted Lock Implementation
+description: >-
+  The hosted lock workflow in a module of its own, src/server/hosted-lock.ts (moved out of the admin
+  orchestrator's module): the lock, the input refresh it takes first, and the read-only request
+  checks. Pre-authorized throughout.
+contract: ihosted_lock
+sourcePath: src/server/hosted-lock.ts
+injectedParams:
+  - cfg
+methods:
+  - name: execute
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the project's repository scope (its family root's isolated root, the family's one
+          git binding, and its own .wai/ pathspec) and bind the project's own root (a member
+          record's derived from its parent's root and memberPath; no qualifier exists any more).
+          Every step below validates and writes the bound tree only; nothing below it is ever
+          written
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
+      - stepNumber: 2
+        description: >-
+          Sync the default branch into the working branch at the family repository root so the lock
+          is based on the latest (a no-op for a native family).
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: sync
+      - stepNumber: 3
+        description: >-
+          Read the project's own approval entry and its direct members' own approval states (depth
+          1), each project member computed at its own root, and each part with its content digest
+          and commit: the own entry's input debts name the externals the build owes, and the members
+          serve requireApprovedMembers below
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 4
+        description: >-
+          Refresh the owed build inputs BEFORE anything is judged, exactly as the local lock does:
+          the aliases the own entry owes (input debts of kind unpinned or unrecorded), and the packs
+          as they resolve. A refused pin is kept as an outcome to report: inputs never block the
+          approval. The pin outcomes are kept for the answer
+        type: call
+        targetComponent: hosted_lock
+        targetMethod: refreshInputs
+      - stepNumber: 5
+        label: capture
+        description: >-
+          CAPTURE the approval identity (own design and own policy) before anything is judged: the
+          identity the record will certify (inputs-captured-before-validation)
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeApprovalId
+      - stepNumber: 6
+        description: Was this lock requested about a particular design?
+        type: branch
+        condition: >-
+          an expected identity was passed (the request's approvalId) and the captured identity
+          differs from it
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Refuse, writing nothing to .wai/lock.json: the design changed after the lock was
+          requested, so approving now would certify a design nobody asked to have approved. The
+          requester asks again.
+        type: throw
+        error: the design changed since the lock was requested
+      - stepNumber: 8
+        label: validate
+        description: >-
+          Validate the tree as-complete; the result carries the code half summarized with its
+          analyzer
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 9
+        description: >-
+          Take the design half of the result (ValidationResult.designOnly): what the approval
+          certifies and the only findings that may refuse it. Code-conformance findings are recorded
+          beside the claim (`code`, reported in the outcome as "code: N errors recorded beside the
+          claim") and never refuse the lock: CI enforces code conformance, not the lock. Does the
+          design half report errors?
+        type: branch
+        condition: the design half reports errors
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Return cannot-lock with the design errors, having written no lock record
+        type: return
+        outcome: cannot lock — validation failed
+      - stepNumber: 11
+        label: config
+        description: >-
+          Read the bound tree's project configuration: its composition block
+          (requireApprovedMembers) and its effective id (project_config.effectiveId(), a defaulted
+          one included), recorded as projectId so validate can later report PROJECT_ID_CHANGED
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 12
+        description: >-
+          Does the project require approved members, and is a PROJECT member not approved? (A part's
+          approval is this lock)
+        type: branch
+        condition: >-
+          composition.requireApprovedMembers is true and a direct member is drifted or never
+          approved
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Refuse, writing no lock record, naming each drifted or never-approved direct member with
+          its state: each member locks at its own root first; a parent never approves below itself
+          (require-refuses)
+        type: throw
+        error: 'composition.requireApprovedMembers: direct members not approved'
+      - stepNumber: 14
+        label: capture-specs
+        description: >-
+          Capture the approved tree as one DESIGN digest per OWN spec file (its design view in
+          canonical form, code linkage and timestamps out), its parts' included (stage 8), keyed
+          `members/<alias>/<path inside the part>`; a project member's files are its own lock's.
+          Nothing is written into the spec files
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 15
+        label: confirm
+        description: Recompute the approval identity immediately before writing
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeApprovalId
+      - stepNumber: 16
+        description: Did the design or its policy move while the lock ran?
+        type: branch
+        condition: the recomputed identity differs from the captured one
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Refuse, writing no lock record: a spec or the policy changed while this lock ran, so the
+          validation just performed does not describe what would be recorded. Run the lock again
+        type: throw
+        error: the design changed while the lock ran
+      - stepNumber: 18
+        label: assemble
+        description: >-
+          Assemble a format-4 LockRecord exactly as the local lock does: stateId = the captured
+          identity (sha256+design+policy), parts = its five parts, lockedAt, the AUTHENTICATED
+          approver the caller resolved from the credential, validatorVersion (provenance only),
+          validationResult = the design half's counts, status ready, the effective id as projectId,
+          specs = the captured per-spec design digests, and `code` = the result's analysis without
+          its codes list. No members: each member's own lock is its approval
+        type: local
+      - stepNumber: 19
+        description: >-
+          Persist the record BEFORE publishing, so the commit that ships the specs also contains the
+          approval that certifies them
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 20
+        description: >-
+          Commit ONLY the project's own .wai/ pathspec (the lock record and the inputs lock with its
+          snapshots among it) at the family repository root and push, returning the commit and
+          compare URL a human opens the PR from. A no-op for a native family
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 21
+        description: Only a real publish has a commit to record.
+        type: branch
+        condition: nothing was published (native family, or a clean pathspec)
+        onFalseStep: 23
+      - stepNumber: 22
+        description: >-
+          Answer a HostedLockOutcome: the persisted record unchanged, the pin outcomes of the
+          refresh and the input debts of the own entry that remain after it ("approved; the build
+          owes: <debts>")
+        type: return
+        outcome: HostedLockOutcome
+      - stepNumber: 23
+        label: published
+        description: >-
+          Extend the record with commitSha and compareUrl, known only AFTER the commit, so these two
+          fields are re-written into a record the commit already carries.
+        type: local
+      - stepNumber: 24
+        description: Persist the two published fields.
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 25
+        description: >-
+          Answer a HostedLockOutcome: the published record (with the compare URL to open the PR),
+          the pin outcomes of the refresh and the input debts that remain
+        type: return
+        outcome: HostedLockOutcome
+  - name: identity
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the root exactly as execute does: the project's own root, a member record's derived
+          from its parent's root and memberPath
+        type: local
+      - stepNumber: 2
+        description: Compute the bound tree's approval identity
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeApprovalId
+      - stepNumber: 3
+        description: Return it rendered `<algorithm>:<digest>`
+        type: return
+        outcome: approval identity
+  - name: assertApprovable
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the root exactly as execute does: the project's own root, a member record's derived
+          from its parent's root and memberPath
+        type: local
+      - stepNumber: 2
+        description: Validate the bound tree as-complete
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 3
+        description: >-
+          Take the design half of the result (ValidationResult.designOnly), the half that may refuse
+          a lock: code-conformance findings never refuse
+        type: local
+      - stepNumber: 4
+        description: Does the design half report errors?
+        type: branch
+        condition: the design half reports errors
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Refuse, naming the error count and each error's code with its message and spec; warnings
+          do not refuse
+        type: throw
+        error: 'Cannot lock: the spec tree does not validate as-complete (<N> error(s): <codes>)'
+      - stepNumber: 6
+        description: The tree would lock; return without writing
+        type: return
+        outcome: nothing
+  - name: refreshInputs
+    narrative:
+      - stepNumber: 1
+        description: Is any alias owed?
+        type: branch
+        condition: owed is not empty
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Pin exactly the owed aliases, each from its hosted or git producer's approved state; every
+          other pin stays as it is
+        type: call
+        targetComponent: host_surfaces_adapter
+        targetMethod: pinExternals
+      - stepNumber: 3
+        label: packs
+        description: >-
+          Resolve the selected packs as they load now: declared and resolved versions, source and
+          doctrine digest
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: resolvedPacks
+      - stepNumber: 4
+        description: Record them in the inputs lock's packs section (a no-op when it already says exactly this)
+        type: call
+        targetComponent: host_surfaces_adapter
+        targetMethod: recordPacks
+      - stepNumber: 5
+        description: Answer the pin outcomes, empty when nothing was owed
+        type: return
+        outcome: list<ExternalPin>
+    detail: full
+status: complete
+createdAt: '2026-11-20T00:38:27.765Z'
+updatedAt: '2026-11-20T19:43:26.813Z'

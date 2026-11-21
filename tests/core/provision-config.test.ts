@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot, runWithProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSpec, loadSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
-import { provisionProject, ensureProjectInitialized, backfillChainedSubprojectConfigs, externalizeSubsystem, createMember } from '../../src/core/provision.js';
+import { provisionProject, ensureProjectInitialized, externalizeSubsystem, createMember } from '../../src/core/provision.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { isProjectInitialized, aiPathsAt } from '../../src/config/paths.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
@@ -123,25 +123,6 @@ describe('provisioning through the project config Repository', () => {
 
     expect(ensureProjectInitialized('fallback')).toEqual({ wroteConfig: true, wroteSystem: false });
     expect(projectConfigRepositoryAt(root).load()?.name).toBe('tree-name');
-  });
-
-  v5it('backfill creates a missing child configuration and leaves an existing one alone', () => {
-    const root = tempRoot();
-    setProjectRoot(root);
-    saveL0('root-system');
-    saveSpec('subsystem', subsystem('alpha', 'alpha', 'packages/alpha'));
-    saveSpec('subsystem', subsystem('beta', 'beta', 'packages/beta'));
-    const alpha = path.join(root, 'packages', 'alpha');
-    const beta = path.join(root, 'packages', 'beta');
-    fs.mkdirSync(path.join(alpha, '.wai', 'specs'), { recursive: true });
-    fs.mkdirSync(path.join(beta, '.wai', 'specs'), { recursive: true });
-    writeConfig(beta, 'beta-own');
-
-    const backfilled = backfillChainedSubprojectConfigs(root);
-
-    expect(backfilled.map((dir) => path.basename(dir))).toEqual(['alpha']);
-    expect(projectConfigRepositoryAt(alpha).load()?.name).toBe('alpha');
-    expect(untouched(beta)).toBe(true);
   });
 
   it('createMember keeps an existing member configuration', () => {
@@ -266,16 +247,4 @@ describe('provisioning writes the project id', () => {
     expect(projectConfigRepositoryAt(path.join(root, 'packages', 'core')).load()?.id).toBe('core');
   });
 
-  v5it("backfill identifies a member by its alias (here a legacy mount's subsystem id)", () => {
-    const root = tempRoot();
-    setProjectRoot(root);
-    saveL0('root-system');
-    saveSpec('subsystem', subsystem('ledger', 'Ledger', 'packages/general-ledger'));
-    const child = path.join(root, 'packages', 'general-ledger');
-    fs.mkdirSync(path.join(child, '.wai', 'specs'), { recursive: true });
-
-    backfillChainedSubprojectConfigs(root);
-
-    expect(projectConfigRepositoryAt(child).load()?.id).toBe('ledger');
-  });
 });

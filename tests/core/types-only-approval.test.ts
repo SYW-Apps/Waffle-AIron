@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, holdsDesign } from '../../src/core/specs.js';
-import { computeGateStateId, validateAsComplete, validateFamily, validateProject, familyApprovals } from '../../src/core/validation.js';
+import { computeApprovalId, validateAsComplete, validateFamily, validateProject, familyApprovals } from '../../src/core/validation.js';
 import { getStatusReport } from '../../src/core/status.js';
 import { writeSpecFile } from '../../src/core/spec-files.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
@@ -71,7 +71,7 @@ function bind(dir: string): void {
 function lockAt(dir: string) {
   bind(dir);
   vi.spyOn(console, 'log').mockImplementation(() => undefined);
-  const captured = computeGateStateId();
+  const captured = computeApprovalId();
   const config = projectConfigRepositoryAt(dir).load();
   const gate = validateAsComplete({ rules: config?.rules, projectType: config?.projectType });
   expect(designOnly(gate).issues.filter((i) => i.severity === 'error')).toEqual([]);

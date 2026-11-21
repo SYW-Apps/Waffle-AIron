@@ -87,13 +87,6 @@ function downgradeToFormat2(dir: string): void {
   writeFile(dir, '.wai/lock.json', JSON.stringify(record, null, 2));
 }
 
-/** A dev.102 project is a major-5 project: it carries no stamp (`wairon upgrade` is what re-expresses its lock). */
-function unstamp(dir: string): void {
-  const config = yaml.load(readFile(dir, '.wai/project.yaml')) as Record<string, unknown>;
-  delete config.waironMajor;
-  writeFile(dir, '.wai/project.yaml', yaml.dump(config, { noRefs: true, lineWidth: 200 }));
-}
-
 let sb: TrialSandbox;
 
 beforeAll(() => { sb = createTrialSandbox('tinkerer'); });
@@ -118,63 +111,37 @@ describe('tinkerer: upgrading a lock taken by an older wairon (format 2)', () =>
   });
 
   it('lock-check and lock-check --strict agree: a format-2 record is a wairon 5 record, refused by name with the way forward', async () => {
-    // wairon 6 reads no earlier lock format outside the upgrade: the record is not judged, and the
+    // wairon 7 reads no earlier lock format outside the upgrade: the record is not judged, and the
     // refusal names its format, who wrote it and the command that carries it over.
     for (const args of [['lock-check'], ['lock-check', '--strict']]) {
       const r = await sb.run(args, dir);
       expectExit(r, 1);
-      expect(r.all).toContain('it is lock record format 2, written by wairon 5 (wairon 6 reads format 3)');
+      expect(r.all).toContain('it is lock record format 2, written by an earlier wairon major (this release reads format 4)');
       expect(r.all).toContain('Run `wairon upgrade`');
       expect(r.all).not.toContain('delete it and run');
     }
   });
 
-  it("upgrade re-expresses it as format 3, keeping the approval the approver's", async () => {
-    // The project is a major-5 project: the guard refuses commands, doctor names the major
-    // and the upgrade, and the read-only plan names the re-expression and writes nothing.
-    unstamp(dir);
+  it('a wairon 5 tree (format-2 lock, major 5) is refused by upgrade, by name, with the way forward; nothing is written', async () => {
+    // wairon 5 forms are retired: wairon 7 neither reads nor carries them. The way forward is wairon 6's upgrade first.
+    const config = yaml.load(readFile(dir, '.wai/project.yaml')) as Record<string, unknown>;
+    config.waironMajor = 5;
+    writeFile(dir, '.wai/project.yaml', yaml.dump(config, { noRefs: true, lineWidth: 200 }));
+    const before = readFile(dir, '.wai/lock.json');
     const refused = await sb.run(['lock-check'], dir);
     expectExit(refused, 1);
-    expect(refused.all).toContain('run `wairon upgrade`');
-    const report = await sb.run(['doctor'], dir);
-    expect(report.all).toContain('written by wairon 5 (unstamped)');
-    expect(report.all).toContain('wairon upgrade');
+    expect(refused.all).toContain('wairon upgrade');
     const plan = await sb.run(['upgrade', '--report'], dir);
-    expectExit(plan, 0);
-    expect(plan.all).toContain('lock.json: re-express the approval in the current reading (who approved it, and when, are kept)');
-    expect(plan.all).toContain('Nothing was written.');
-    expect(lockRecord(dir).format).toBe(2); // the plan writes nothing
-
+    expect(plan.all).toContain('npx wairon@6 upgrade');
     const fix = await sb.run(['upgrade', '--yes'], dir);
-    expectExit(fix, 0);
-    expect(fix.all).toContain('is now on major 6');
-
-    const record = lockRecord(dir);
-    expect(record.format).toBe(3);
-    expect(record.specsReading).toBe('design');
-    expect(record.lockedAt).toBe(lockedAt);
-    expect(record.reexpressed).toMatchObject({ fromAlgorithm: 'sha256+content+doctrine+inputs+members', fromReading: 'content', by: 'wairon upgrade' });
-    expect(readFile(dir, '.wai/project.yaml')).toMatch(/^waironMajor: 6$/m);
+    expect(fix.code, transcript(fix)).not.toBe(0);
+    expect(fix.all).toContain('npx wairon@6 upgrade');
+    expect(readFile(dir, '.wai/lock.json')).toBe(before); // nothing was carried or rewritten
+    expect(lockRecord(dir).format).toBe(2);
+    expect(lockRecord(dir).lockedAt).toBe(lockedAt);
   });
 
-  it('after the carry: still stale (the gate moved), and one lock names that cause and clears it for both checks', async () => {
-    const stale = await sb.run(['lock-check'], dir);
-    expectExit(stale, 1);
-    expect(stale.all).toContain('what moved is the gate it was judged under');
-
-    const lock = await sb.run(['lock', '--yes'], dir);
-    expectExit(lock, 0);
-    expect(lock.all).toContain('No spec changed since the last approval, but what the design is approved under did: the gate identity this wairon release computes (approved by wairon 5.1.1-dev.102)');
-    expect(lock.all).not.toContain('Nothing has changed since the last approval');
-
-    for (const args of [['lock-check'], ['lock-check', '--strict']]) {
-      const r = await sb.run(args, dir);
-      expectExit(r, 0);
-      expect(r.all).toContain('The design in this tree is the approved design');
-    }
-  });
-
-  it('negative control: a format-2 lock over an edited spec is NOT carried — it says something it covered moved', async () => {
+  it('negative control: a format-2 lock over an edited spec is refused the same way — never judged, never carried', async () => {
     const edited = sb.materialize('upgrade-format2-edited', linkshort());
     declareId(edited, 'linkshort');
     expectExit(await sb.run(['lock', '--yes'], edited), 0);
@@ -184,25 +151,16 @@ describe('tinkerer: upgrading a lock taken by an older wairon (format 2)', () =>
 
     const r = await sb.run(['lock-check'], edited);
     expectExit(r, 1);
-    expect(r.all).toContain('it is lock record format 2, written by wairon 5');
+    expect(r.all).toContain('it is lock record format 2, written by an earlier wairon major');
 
-    // Even the upgrade does not carry the approval over an edited spec: it would approve what the approver never saw.
-    // The record is kept on record in the current format, certifying the identity it always certified — so it
-    // reads stale — and one `wairon lock` approves the edited design again.
-    unstamp(edited);
+    // The upgrade of a wairon 5 tree is refused too: the record stays as the approver left it.
+    const config = yaml.load(readFile(edited, '.wai/project.yaml')) as Record<string, unknown>;
+    config.waironMajor = 5;
+    writeFile(edited, '.wai/project.yaml', yaml.dump(config, { noRefs: true, lineWidth: 200 }));
     const fix = await sb.run(['upgrade', '--yes'], edited);
-    expectExit(fix, 0);
-    expect(fix.all).not.toContain('re-express the approval');
-    const kept = lockRecord(edited);
-    expect(kept.format).toBe(3);
-    expect(kept.specs).toBeUndefined();
-    expect(kept.reexpressed).toMatchObject({ fromReading: 'content', by: 'wairon upgrade' });
-    expect(kept.stateId).toEqual({ algorithm: 'sha256+content+doctrine+inputs+members', digest: 'b959e8c1e21a0425c548748f5c25bbe0b0eea2dd8ec19b222bbf514f97fe6c29' });
-    const stale = await sb.run(['lock-check'], edited);
-    expectExit(stale, 1);
-    expect(stale.all).not.toContain('The design in this tree is the approved design');
-    expectExit(await sb.run(['lock', '--yes'], edited), 0);
-    expectExit(await sb.run(['lock-check'], edited), 0);
+    expect(fix.code, transcript(fix)).not.toBe(0);
+    expect(fix.all).toContain('npx wairon@6 upgrade');
+    expect(lockRecord(edited).format).toBe(2);
   });
 });
 
@@ -310,7 +268,7 @@ describe('tinkerer: lock messages say what they approve', () => {
     // where lock named the network declaration: both now print the one sentence.
     const check = await sb.run(['lock-check'], dir);
     expectExit(check, 1);
-    expect(check.all).toContain('No own spec file and no direct member\'s approval moved, so what changed is the network declaration');
+    expect(check.all).toContain('No own spec file moved, so what changed is the network declaration');
     expect(check.all).toContain('the network declaration');
     expect(check.all).not.toContain('a declared input or `composition`.');
 

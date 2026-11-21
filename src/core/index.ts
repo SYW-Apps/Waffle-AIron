@@ -90,7 +90,6 @@ export {
   moveMethods,
   dryRunSerializeSpecs,
   specPathsInScope,
-  consumedContractInputs,
   buildProjectGraph,
   resolveChainingParent,
   resolveSubprojectForNamespace,
@@ -192,10 +191,6 @@ export {
   moveMember,
   externalizeSubsystem,
   internalizeMember,
-  // spec_maintenance_portal findChainingSubprojectsMissingConfig /
-  // backfillChainedSubprojectConfigs: what `wairon doctor` reports and repairs.
-  findChainingSubprojectsMissingConfig,
-  backfillChainedSubprojectConfigs,
   // spec_maintenance_portal moveMountToMembers / normalizeReferences: the
   // chaining migration's member move and reference normalization.
   moveMountToMembers,
@@ -220,19 +215,12 @@ export type { InternalizeResult, PromoteResult } from './provision.js';
 export type { MemberCreation, MemberAdvance } from './provision.js';
 
 // The tree's content identity (approval_portal computeStateId — the snapshot
-// and archive stamps) and the bound project's OWN content identity
-// (approval_portal computeOwnStateId — the content half of the gate identity a
-// lock records; a member's specs are never part of it).
-export { computeStateId, computeOwnStateId } from './statehash.js';
+// and archive stamps).
+export { computeStateId } from './statehash.js';
 // approval_portal computeOwnDesignId — the bound project's OWN design identity
-// (code linkage and timestamps out): the content half of the gate identity
-// from lock format 3 on. computeOwnStateId above stays as the content reading
-// a format-2 lock was taken in.
+// (code linkage, readiness and timestamps out): the design half of the
+// approval identity.
 export { computeOwnDesignStateId as computeOwnDesignId } from './statehash.js';
-// approval_portal computeOwnDesignIdAsRecorded — the own design identity in the
-// earlier design reading (status still in the view), statuses put back as
-// approved: how a lock taken in that reading is judged as it was taken.
-export { computeOwnDesignStateIdAsRecorded as computeOwnDesignIdAsRecorded } from './statehash.js';
 export type { StateId } from './statehash.js';
 
 // The lock record itself (approval_portal readLockRecord / writeLockRecord).
@@ -242,7 +230,7 @@ export type { StateId } from './statehash.js';
 // itself); the read is the store's own function, which the orchestrator binds
 // and hands through.
 export { readLockRecord, writeLockRecord } from './specs.js';
-export type { LockRecord, MemberPin } from './lockfile.js';
+export type { LockRecord, LockUpgrade } from './lockfile.js';
 
 // The rendered architecture diagram (spec_tree_portal renderDiagram) — one string
 // for `wairon diagram`, which is the only thing that command needs from the
@@ -428,8 +416,6 @@ export type { SpecIdRename, SpecMove } from './provision.js';
 // spec_tree_portal crossProjectWriteRefusal: the project boundary every
 // authored write asks before it writes — a 1:1 forward to the core orchestrator.
 export { crossProjectWriteRefusal } from './specs.js';
-export { retireSpecialists, retireGateways } from './stereotype-migration.js';
-export type { SpecialistRetirement, SpecialistRetype, GatewayRetirement, GatewayMerge } from './stereotype-migration.js';
 export { repairForeignStepFields } from './narrative-repair.js';
 export type { ForeignFieldRepair } from './narrative-repair.js';
 // spec_maintenance_portal repairSignatures: the doctor's one-time regeneration
@@ -442,12 +428,6 @@ export type { SignatureTextRepair } from './signature-repair.js';
 // the number positions whose name says so and the positions only an author can
 // settle listed — a 1:1 forward to the core orchestrator.
 export { repairTypeSpellings } from './type-spelling-repair.js';
-// spec_maintenance_portal migrateReachability: the doctor's migration onto the
-// reachability model (transports, listener mounts into entries and routers,
-// retired invokedBy kinds, authored export types, retired allows) — a 1:1
-// forward to reachability_migration.migrate.
-export { migrate as migrateReachability } from './reachability-migration.js';
-export type { ReachabilityMigrationPlan, ReachRewrite } from './reachability-migration.js';
 
 // The approval (approval_portal captureApprovedSpecs … approvalVerdict) — the
 // per-spec digests a lock RECORDS instead of writing statuses into the tree.
@@ -478,13 +458,6 @@ export {
   // private copy of it, which is how sdd_get_status came to say nothing at all
   // about a tree that had drifted from its approval.
   approvalVerdict,
-  // approval_portal reexpress — a format-2 record carried into the design
-  // reading when its own identity, recomputed, proves the design unchanged; a
-  // read, the caller writes the answer through writeLockRecord.
-  reexpress,
-  // approval_portal approvedStatuses — each own spec's status as a
-  // design-reading record approved it, for recomputing an earlier-reading lock.
-  approvedStatuses,
 } from './approval.js';
 export type { ApprovalDiff, ApprovalVerdict } from './approval.js';
 // Who to record as the approver on a machine with no wairon account — resolved

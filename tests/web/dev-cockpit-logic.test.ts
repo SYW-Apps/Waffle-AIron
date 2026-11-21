@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  bannerState, barState, branchChipText, changeCount, changeMarks, groupMoved, inPlaceScope, lockBody, memberName, memberOfScope, membersToLock, movedKind, movedScope,
+  bannerState, barState, branchChipText, lockScopeOptions, memberReason, changeCount, changeMarks, groupMoved, inPlaceScope, lockBody, memberName, memberOfScope, membersToLock, movedKind, movedScope,
   offersLockInPlace, parseMoved, pendingReviews, specRoute, subsystemOfRoute, subsystemOfSpec,
   type DevApprovalData, type ScopeNode,
 } from '../../web/src/views/devCockpitLogic.js';
@@ -16,6 +16,21 @@ const drifted = (moved: string[]): DevApprovalData => ({
   approved: true, approvedBy: 'Robbe', approvedAt: '2026-11-01T10:00:00Z', verdict: { text: 'x', drifted: true, moved },
 });
 const clean: DevApprovalData = { approved: true, verdict: { text: '', drifted: false } };
+
+describe('dev cockpit member projects and lock scopes', () => {
+  it('names why a member project is owed its own approval, in its own terms', () => {
+    expect(memberReason({ key: 'm', state: 'never' })).toBe('never locked');
+    expect(memberReason({ key: 'm', state: 'drifted', partsMoved: ['design', 'rules'] })).toBe('design, rules changed');
+    expect(memberReason({ key: 'm', state: 'drifted', owed: 'its project id moved' })).toBe('its project id moved');
+    expect(memberReason({ key: 'm', state: 'drifted', partsMoved: ['design'], inputs: [{ kind: 'unpinned', subject: 'x', sentence: 'external x is not pinned' }] }))
+      .toBe('design changed; external x is not pinned');
+  });
+  it('offers the served project own subsystems and never a member project one', () => {
+    expect(lockScopeOptions({ lockScopes: ['b', 'a'] }, nodes)).toEqual(['a', 'b']);
+    expect(lockScopeOptions(undefined, [...nodes, { id: 'billing::ledger', kind: 'subsystem' }])).toEqual(['a', 'b']);
+    expect(lockScopeOptions({ lockScopes: ['a', 'billing::ledger'] }, nodes)).toEqual(['a']);
+  });
+});
 
 describe('dev cockpit action bar', () => {
   it('shows nothing for a locked, unmoved design', () => {

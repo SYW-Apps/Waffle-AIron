@@ -117,6 +117,8 @@ export interface PlannedExternal {
   project: string;
   /** The producer's namespace in the family graph. */
   producer: string;
+  /** The producer's folder relative to the consumer's: the declaration's `source.path`, so the external is read live and never pinned. */
+  sourcePath: string;
   reason: PlannedExternalReason;
 }
 
@@ -389,8 +391,13 @@ function planPair(ctx: Planning, consumer: string, producer: string): void {
   const alias = declares(ctx.family, consumer, producer)
     ? declaredAlias(consumerNode, producer)
     : planExternal(ctx, consumerNode, producer, 'reference');
-  // Step 17.
-  if (alias !== undefined && (entries || alias.planned)) addPin(ctx, consumerNode, alias.alias);
+  // Step 17: a path external (a sibling project in a folder) is read live and never pinned; only a git or hosted external already declared is, when an entry was planned beyond its pin.
+  if (alias !== undefined && entries && heldAsPinnable(consumerNode, alias.alias)) addPin(ctx, consumerNode, alias.alias);
+}
+
+/** Whether the consumer declares the alias from a git or hosted source: the only kind that holds a pin. */
+function heldAsPinnable(consumer: ProjectNode, alias: string): boolean {
+  return consumer.externals.some((e) => e.alias === alias && (e.sourceKind === 'git' || e.sourceKind === 'hosted'));
 }
 
 /** The alias an existing declaration reaches the producer under; none for a member, whose mount is its alias. */
@@ -552,7 +559,9 @@ function planExternal(ctx: Planning, consumer: ProjectNode, producer: string, re
   if (existing || mounted || (planned && planned.producer !== producer)) {
     return refuse('alias-taken', `${label(consumer.namespace)} already uses the alias "${alias}" for something else — declare ${label(producer)} under another`);
   }
-  if (!planned) entry.externals.push({ alias, project: alias, producer, reason });
+  const producerNode = familyNode(ctx.family, producer);
+  const sourcePath = producerNode ? path.relative(consumer.directory, producerNode.directory).split(path.sep).join('/') || '.' : '.';
+  if (!planned) entry.externals.push({ alias, project: alias, producer, sourcePath, reason });
   return { alias, planned: true };
 }
 
@@ -575,26 +584,27 @@ function convertLegacyPins(ctx: Planning): void {
   }
 }
 
-/** Step 20: the family pin becomes an external for the parent, unless the member declares it already. */
+/** Step 20: the family pin becomes a path external for the parent (with its source path, never pinned), unless the member declares it already. */
 function convertParentPin(ctx: Planning, member: ProjectNode, parent: string): void {
   if (declares(ctx.family, member.namespace, parent)) return;
   if (entryOf(ctx, member).externals.some((e) => e.producer === parent)) return;
-  const alias = planExternal(ctx, member, parent, 'legacy-pin');
-  if (alias !== undefined) addPin(ctx, member, alias.alias);
+  planExternal(ctx, member, parent, 'legacy-pin');
 }
 
 /**
- * Step 21: a family external a project declared before the migration ran and
- * never pinned is pinned with the rest — its gate has nothing to judge the
- * references against until it is. A pinned one is left alone: re-pinning a
- * changed producer would hide the change the family run reports.
+ * Step 21: an external a project declared before the migration ran and never
+ * pinned is pinned with the rest — its gate has nothing to judge the
+ * references against until it is. A family external is read live, where its
+ * producer is stored, and is never pinned: it is left out, or every plan would
+ * find it again. A pinned one is left alone: re-pinning a changed producer
+ * would hide the change the family run reports.
  */
 function pinNeverPinned(ctx: Planning, node: ProjectNode): void {
-  if (node.externals.every((e) => e.sourceKind !== 'family')) return;
+  if (node.externals.every((e) => e.sourceKind !== 'git' && e.sourceKind !== 'hosted')) return;
   // Its declared externals and their lock entries, under its binding.
   const listed = runWithProjectRoot(node.directory, () => surfaces.listExternals());
   for (const external of listed) {
-    if (external.sourceKind === 'family' && external.lock === undefined) addPin(ctx, node, external.alias);
+    if ((external.sourceKind === 'git' || external.sourceKind === 'hosted') && external.lock === undefined) addPin(ctx, node, external.alias);
   }
 }
 
@@ -657,7 +667,7 @@ function mergeImport(ctx: Planning, planned: PlannedImport): void {
     if (declared === undefined) return;
     alias = declared.alias;
   }
-  if (planned.declaresExternal || consumer.externals.some((e) => e.alias === alias)) addPin(ctx, consumer, alias);
+  if (heldAsPinnable(consumer, alias)) addPin(ctx, consumer, alias);
   entryOf(ctx, consumer).imports.push({ ...planned, alias });
 }
 
@@ -878,7 +888,7 @@ function createMinimalSystem(p: ProjectMigration, description: string | undefine
 /** Step 19. */
 function declareExternals(p: ProjectMigration, log: WriteLog): void {
   for (const external of p.externals) {
-    if (!core.declareExternal(external.alias, {})) continue;
+    if (!core.declareExternal(external.alias, { source: { path: external.sourcePath } })) continue;
     log.file(AI_PATHS.projectConfig());
     log.stale(p.directory);
   }
@@ -889,7 +899,7 @@ function pin(p: ProjectMigration, log: WriteLog): void {
   for (const pinned of surfaces.pinExternals(p.pins)) {
     if (pinned.outcome !== 'pinned') continue;
     if (pinned.snapshot) log.file(path.resolve(p.directory, pinned.snapshot));
-    log.file(path.join(p.directory, '.wai', 'externals.lock.yaml'));
+    log.file(path.join(p.directory, '.wai', 'inputs.lock.yaml'));
     log.stale(p.directory);
   }
 }

@@ -56,7 +56,7 @@ function readRequests(dataDir: string): ApprovalRequest[] {
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) throw new Error('expected a JSON array of approval requests');
-    return parsed as ApprovalRequest[];
+    return parsed.map(withApprovalId);
   } catch (e) {
     throw new Error(`Approval store at ${p} contains malformed JSON: ${(e as Error).message}`);
   }
@@ -68,7 +68,18 @@ function readCurrent(p: string): ApprovalRequest[] {
   if (!Array.isArray(parsed)) {
     throw new Error(`Approval store at ${p} contains malformed JSON: expected a JSON array of approval requests`);
   }
-  return parsed as ApprovalRequest[];
+  return parsed.map(withApprovalId);
+}
+
+/**
+ * A request recorded before the field was renamed carries its identity as
+ * `gateStateId`: read it as the `approvalId` it became, so the approved
+ * execution still judges it (an identity under the older algorithm never
+ * matches, and the request is cancelled as a design that changed).
+ */
+function withApprovalId(raw: unknown): ApprovalRequest {
+  const { gateStateId, ...rest } = raw as ApprovalRequest & { gateStateId?: string };
+  return gateStateId !== undefined && rest.approvalId === undefined ? { ...rest, approvalId: gateStateId } : rest;
 }
 
 // ── redaction predicate ─────────────────────────────────────────────────────

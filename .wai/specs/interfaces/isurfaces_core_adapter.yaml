@@ -199,18 +199,19 @@ methods:
   - name: memberRevisions
     description: >-
       Forward to the core portal: each live member of the bound project with its usage and its tree
-      at the approval it is judged against — what a member consumer's relation and binding are
-      compared with.
-    signature: 'memberRevisions(recordedIn?: string): list<member_revision>'
+      at its own last committed approval (as of a moment, when given). What a member consumer's
+      relation and binding are compared with.
+    signature: 'memberRevisions(asOf?: datetime): list<member_revision>'
     returns: list<member_revision>
     params:
-      - name: recordedIn
-        type: string
+      - name: asOf
+        type: datetime
         description: >-
-          Another tree of the bound project (its tree at an earlier revision, in the fetch cache)
-          whose lock records the member approvals to read instead of the bound root's — surface
-          diff's baseline reads each member as THAT approval recorded it
+          Read each member's approval as it stood at this moment (surface diff's baseline passes its
+          revision's commit time); its latest committed approval when omitted
         optional: true
+        previousNames:
+          - recordedIn
     effect: io
   - name: loadGroupSpecs
     description: Loads the type groups (the layout tree the design export carries as typeGroups).
@@ -218,6 +219,19 @@ methods:
     returns: list<group_spec>
     params: []
     effect: read
+  - name: diffAgainstApproval
+    description: >-
+      Forward to approval_portal.diffAgainstApproval: what differs between a project's tree and its
+      own approval on record; null when it was never approved. Read with a producer's root bound, it
+      tells whether the producer's design is approved as it stands, which a pin requires.
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
+    returns: ApprovalDiff?
+    params:
+      - name: root
+        type: string
+        description: The producer's root; the bound project when omitted
+        optional: true
+    effect: read
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-23T22:22:53.079Z'
+updatedAt: '2026-11-20T00:07:51.061Z'

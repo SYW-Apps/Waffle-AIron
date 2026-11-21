@@ -11,14 +11,14 @@ import {
 } from './approvals.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock, gateIdentity, checkLockable, hostedApprover } from './admin.js';
+import * as hostedLock from './hosted-lock.js';
 import type { ApproverIdentity } from '../models/lock.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { impactHeadline } from '../models/pack-impact.js';
 import { isValidProjectId, invalidProjectIdProblem, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds, resolveFamilyReach } from './authorization.js';
-import { describeDecision } from './types.js';
+import { describeDecision, approver } from './types.js';
 import type {
   ApprovalRequest,
   ApprovalDecision,
@@ -43,8 +43,8 @@ import type {
 // resolved value:
 //   yes      → execute directly through the pre-authorized entry points
 //              (project:init through the policy orchestrator's
-//              executeApprovedInit; project:lock through the admin plane's
-//              executeApprovedLock) and
+//              executeApprovedInit; project:lock through the hosted lock's
+//              execute) and
 //              return a completed ProjectActionOutcome.
 //   approval → create a pending ApprovalRequest and return a pending-approval
 //              outcome; deciding it AUTO-EXECUTES the action.
@@ -315,10 +315,15 @@ export function initializeProject(
   }
 }
 
+/** The identity a lock records: the subject's own approver, or the instance master credential when the credential resolved no subject. */
+function approverOf(subject?: PrincipalSubject): ApproverIdentity {
+  return subject ? approver(subject) : { id: 'master', name: 'instance master credential', source: 'hosted' as const };
+}
+
 /**
  * Project lock — the project's approval. A caller whose approval:decide over
  * the project's OWN record is yes locks directly via the admin plane's
- * pre-authorized executeApprovedLock (completed outcome carrying the lock
+ * pre-authorized hostedLock.execute (completed outcome carrying the lock
  * record); a caller who may write the project (or holds approval:decide as
  * approval) creates a pending project:lock request someone else decides;
  * anyone else is forbidden. Since
@@ -334,8 +339,8 @@ export function lockProject(
     action: 'project:lock',
     verb: 'Lock',
     noun: 'lock',
-    execute: (approver) => {
-      const lock = executeApprovedLock(cfg, projectId, approver);
+    execute: (who) => {
+      const lock = hostedLock.execute(cfg, projectId, who).record;
       return {
         status: 'completed',
         action: 'project:lock',
@@ -366,8 +371,8 @@ function codeBesideClaim(lock: LockRecord): string {
  *      approval at the project rung) or whose approval:decide resolves to
  *      approval → create the pending request someone else decides;
  *    anyone else → Forbidden.
- *  The REQUEST path pins the gate identity of the project's tree
- *  (gateStateId), so the approved execution refuses a tree that moved since;
+ *  The REQUEST path pins the approval identity of the project's tree
+ *  (approvalId), so the approved execution refuses a tree that moved since;
  *  the record id alone confines it. */
 function lifecycleAction(
   cfg: HostConfig,
@@ -377,7 +382,7 @@ function lifecycleAction(
     action: 'project:lock';
     verb: string;
     noun: string;
-    execute: (approver: ApproverIdentity) => ProjectActionOutcome;
+    execute: (who: ApproverIdentity) => ProjectActionOutcome;
   },
 ): ProjectActionOutcome {
   const principal = requirePrincipal(cfg, credential);
@@ -388,7 +393,7 @@ function lifecycleAction(
   const decide = authorize(cfg.dataDir, principal, APPROVAL_DECIDE_CAPABILITY, 'project', projectId);
   if (decide.value === 'yes') {
     // Steps 4-6: the pre-authorized entries validate existence themselves (Unknown project).
-    const outcome = opts.execute(hostedApprover(principal.subject));
+    const outcome = opts.execute(approverOf(principal.subject));
     tryAppendAudit(
       cfg,
       buildAuditEvent(principal, 'lifecycle.completed', 'security', {
@@ -419,16 +424,16 @@ function lifecycleAction(
   }
   // Step 13: a tree with validation errors is refused here, before any request
   // exists: the approved lock would refuse it, so nobody is asked to approve it.
-  checkLockable(cfg, projectId);
+  hostedLock.assertApprovable(cfg, projectId);
   // Steps 14-17: pin the design the request is about: the approved execution
-  // refuses a tree whose gate identity moved after this moment. No qualifier is
+  // refuses a tree whose approval identity moved after this moment. No qualifier is
   // recorded — the record id (a member's own) confines the request.
-  const gateStateId = gateIdentity(cfg, projectId);
+  const approvalId = hostedLock.identity(cfg, projectId);
   // Steps 15-17: a caller who already holds a pending lock request for this very
   // design is handed that request back, not a second one; nothing new happened,
   // so nothing is audited.
   const existing = listApprovalRequests(cfg.dataDir, 'pending', projectId, principalSubject(principal).userId, opts.action)
-    .find((r) => r.gateStateId === gateStateId);
+    .find((r) => r.approvalId === approvalId);
   if (existing) {
     return {
       status: 'pending-approval',
@@ -442,28 +447,28 @@ function lifecycleAction(
     opts.action,
     `${opts.verb} project ${projectId}`,
     projectId,
-    { gateStateId },
+    { approvalId },
   );
   return createPendingOutcome(cfg, principal, pending, opts.action);
 }
 
 /**
- * A pending project:lock request recording a gateStateId that differs from its
- * project's gate identity now can never be approved: cancel it through the
+ * A pending project:lock request recording an approvalId that differs from its
+ * project's approval identity now can never be approved: cancel it through the
  * repository's atomic withdraw, recording why, and return it as it now stands.
  * A request found no longer pending at that moment is simply read again. Null
  * when the request is not such a request or its design has not moved.
  */
 function cancelIfDesignMoved(cfg: HostConfig, req: ApprovalRequest): ApprovalRequest | null {
-  if (req.status !== 'pending' || req.kind !== 'project:lock' || !req.gateStateId || !req.projectId) return null;
+  if (req.status !== 'pending' || req.kind !== 'project:lock' || !req.approvalId || !req.projectId) return null;
   let now: string;
   try {
-    now = gateIdentity(cfg, req.projectId);
+    now = hostedLock.identity(cfg, req.projectId);
   } catch {
     return null; // a tree that cannot be read now is not proof the design moved
   }
-  if (now === req.gateStateId) return null;
-  const reason = `the design changed since it was requested (requested ${req.gateStateId}, now ${now}); `
+  if (now === req.approvalId) return null;
+  const reason = `the design changed since it was requested (requested ${req.approvalId}, now ${now}); `
     + 'request the lock again';
   try {
     return withdrawApprovalRequest(cfg.dataDir, req.id, reason);
@@ -708,7 +713,7 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecuti
       }
       // The request's record id: a member's own record for a member lock.
       const target = req.projectId ?? '';
-      // The request's gateStateId is the expected identity: an approval never
+      // The request's approvalId is the expected identity: an approval never
       // certifies a design other than the one requested (a request without one,
       // created before stage 5, executes against the tree as it stands).
       const lock = lockAsRequested(cfg, req, target);
@@ -723,7 +728,7 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecuti
 
 /**
  * Execute an approved project:lock through the admin plane on the request's
- * record, with the request's gateStateId as the expected identity.
+ * record, with the request's approvalId as the expected identity.
  * When the design moved after the request, the request is CANCELLED with the
  * reason recorded on it (never left approved and un-executable until it
  * expires), and the refusal says the same; the requester asks again.
@@ -733,7 +738,7 @@ function lockAsRequested(cfg: HostConfig, req: ApprovalRequest, target: string):
     // The DECIDER is the approver: in the approval path the requester did not
     // have the authority, and the decision is what conferred it. The requester
     // is not lost — the ApprovalRequest and the audit event both carry them.
-    return executeApprovedLock(cfg, target, hostedApprover(req.decidedBy), req.gateStateId);
+    return hostedLock.execute(cfg, target, approverOf(req.decidedBy), req.approvalId).record;
   } catch (err) {
     const moved = designMovedSince(err);
     if (!moved) throw err;

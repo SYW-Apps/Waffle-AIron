@@ -334,9 +334,13 @@ methods:
           member is referenced: recorded with the root it was located at and its commit
           (ScannedProjectRoot.referenced) and nothing of it is read into this root. A `../` sibling
           PROJECT member is followed below like a contained one (round 8: a folder of the same
-          family on disk, composed live, never through a pin). On a hosted instance (a request bound
-          with a hosted record lookup) a `../` or git source is never read: it is unavailable, since
-          a hosted project reaches another root only by a `hosted:` source — a project there is
+          family on disk, composed live, never through a pin). A path EXTERNAL (`../x`) is followed
+          exactly like a `../` sibling project member: a node of the scan read live from its own
+          root, composed live and never through a pin — whether a sibling is declared as a member or
+          as an external makes no difference to the tree. A git or hosted external is never read by
+          the scan: it is judged through its pin. On a hosted instance (a request bound with a
+          hosted record lookup) a `../` or git source is never read: it is unavailable, since a
+          hosted project reaches another root only by a `hosted:` source — a project there is
           recorded referenced and unavailable
         type: local
       - stepNumber: 7
@@ -748,4 +752,4 @@ methods:
     symbol: loadGroupSpecs
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-23T22:19:10.438Z'
+updatedAt: '2026-11-20T14:17:00.541Z'

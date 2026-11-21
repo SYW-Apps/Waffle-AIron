@@ -283,7 +283,7 @@ const WRITE_TOOL_PREFIXES = [
   'sdd_internalize_',
   'sdd_move_',
   'sdd_rename_',
-  // sdd_pin_externals writes the externals lock and snapshots of the bound tree.
+  // sdd_pin_externals writes the inputs lock and snapshots of the bound tree.
   'sdd_pin_',
   // sdd_remove_external takes an external's declaration and its pin out.
   'sdd_remove_',

@@ -646,10 +646,12 @@ function isAtOrBelow(outer: string, inner: string): boolean {
 }
 
 /**
- * The member folders a project declares in its `.wai/project.yaml`, resolved
- * against its root: path sources only (a git or hosted member lives nowhere
- * under the declaring folder). Read leniently — an unreadable configuration
- * declares nothing — because binding must never fail on someone else's file.
+ * The folders a project reads live beside its own, resolved against its root:
+ * the path sources of its `members` and of its `externals` (a `../` path
+ * external is read live like a sibling member, never through a pin). A git or
+ * hosted source lives nowhere under the declaring folder. Read leniently — an
+ * unreadable configuration declares nothing — because binding must never fail
+ * on someone else's file.
  */
 export function declaredMemberDirs(projectRoot: string): string[] {
   let parsed: unknown;
@@ -659,21 +661,32 @@ export function declaredMemberDirs(projectRoot: string): string[] {
   } catch {
     return [];
   }
-  const members = (parsed as { members?: unknown } | null)?.members;
-  if (!members || typeof members !== 'object') return [];
   const dirs: string[] = [];
-  for (const value of Object.values(members as Record<string, unknown>)) {
-    const declaration = value as { source?: unknown; path?: unknown } | string | null;
-    const source = typeof declaration === 'string'
-      ? declaration
-      : typeof declaration?.source === 'string' ? declaration.source : typeof declaration?.path === 'string' ? declaration.path : undefined;
-    if (!source) continue;
-    const text = source.trim();
-    // A git URL (scheme or scp form) or a hosted record has no folder here.
-    if (text.startsWith('hosted:') || /^[a-z][a-z0-9+.-]*:\/\//i.test(text) || /^[\w.-]+@[\w.-]+:/.test(text) || path.isAbsolute(text)) continue;
-    dirs.push(path.resolve(projectRoot, text));
+  for (const section of ['members', 'externals'] as const) {
+    const declarations = (parsed as Record<string, unknown> | null)?.[section];
+    if (!declarations || typeof declarations !== 'object') continue;
+    for (const value of Object.values(declarations as Record<string, unknown>)) {
+      const dir = pathSourceOf(projectRoot, value);
+      if (dir) dirs.push(dir);
+    }
   }
   return dirs;
+}
+
+/** The folder a member or external declaration's source names, or null for a git or hosted source or none. */
+function pathSourceOf(projectRoot: string, declaration: unknown): string | null {
+  const written = declaration as { source?: unknown; path?: unknown } | string | null;
+  const nested = typeof written === 'object' && written !== null && typeof written.source === 'object' && written.source !== null
+    ? (written.source as { path?: unknown }).path
+    : undefined;
+  const source = typeof written === 'string'
+    ? written
+    : typeof written?.source === 'string' ? written.source : typeof nested === 'string' ? nested : typeof written?.path === 'string' ? written.path : undefined;
+  if (!source) return null;
+  const text = source.trim();
+  // A git URL (scheme or scp form) or a hosted record has no folder here.
+  if (text.startsWith('hosted:') || /^[a-z][a-z0-9+.-]*:\/\//i.test(text) || /^[\w.-]+@[\w.-]+:/.test(text) || path.isAbsolute(text)) return null;
+  return path.resolve(projectRoot, text);
 }
 
 /**

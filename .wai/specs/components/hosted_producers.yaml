@@ -1,0 +1,22 @@
+id: hosted_producers
+name: Hosted Producers
+description: >-
+  The control-plane workflows over a hosted project's producer targets: the destinations its design
+  is published to (a target and the page it is placed under). Each workflow authenticates the
+  caller, requires project:admin over the project, then configures, lists, removes or produces one
+  target through the producer adapter; a target's token is resolved from the secret repository by
+  reference, never passed inline. How each kind of target is written is the producer subsystem's,
+  behind the adapter: this component only manages which targets a project has and when one is
+  produced.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - authentication
+  - authorization
+  - host_producer_adapter
+  - secret_repository
+  - project_repository
+status: complete
+createdAt: '2026-11-20T01:02:18.609Z'
+updatedAt: '2026-11-20T19:41:51.892Z'

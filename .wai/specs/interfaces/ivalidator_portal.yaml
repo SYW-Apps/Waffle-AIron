@@ -78,17 +78,17 @@ methods:
         type: CandidateOptions
         description: Rules config, project type and loaded packs
         optional: true
-  - name: computeGateStateId
+  - name: computeApprovalId
     description: >-
-      Forward to spec_validator.computeGateStateId: the gate identity a lock records and every
-      staleness check compares — the project's own DESIGN identity (code linkage out), the design
-      doctrine, its own consumed contract inputs, its `composition`, and each direct member's
-      composition subject (read from the member's own lock record). Rules that judge code are not
-      part of it. Carries asRecorded when the lock on disk is a format-2 one, which
-      core_orchestrator.readLockState also accepts.
-    signature: 'computeGateStateId(): StateId'
+      Forward to spec_validator.computeApprovalId: the approval identity a lock records and every
+      staleness check compares — the project's own DESIGN identity (code linkage and readiness out)
+      together with its policy (type, design rule tuning, composition, network, pack selections),
+      with its parts. Nothing the project consumes is in it.
+    signature: 'computeApprovalId(): StateId'
     returns: StateId
     params: []
+    previousNames:
+      - ivalidator_portal.computeGateStateId
   - name: findTestsReferencing
     description: >-
       Published: the tests that encode a given set of methods, so a write that changes or deletes
@@ -167,12 +167,11 @@ methods:
       - idempotent
   - name: familyApprovals
     description: >-
-      Forward to family_validator.approvals: the bound project's pin tree — its own approval state
-      and each member's within `depth` levels, each computed at the member's own root, with each
-      member's subject and how its parent pinned it. The one source the lock workflow (depth 1:
-      record `members`, enforce requireApprovedMembers), `wairon status` and sdd_get_status read, so
-      they cannot disagree. Writes nothing. Hosted callers must gate on reach themselves before
-      asking about a family.
+      Forward to family_validator.approvals: the bound project's approvals — its own approval state
+      and inputs, and each member's within `depth` levels, each computed at that member's own root.
+      The one source the lock workflow (depth 1: enforce requireApprovedMembers through the inputs),
+      `wairon status`, `wairon lock-check` and sdd_get_status read, so they cannot disagree. Writes
+      nothing. Hosted callers must gate on reach themselves before asking about a family.
     signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
     returns: list<ProjectApproval>
     params:
@@ -219,11 +218,10 @@ methods:
     effect: read
   - name: unpinnedExternals
     description: >-
-      The bound project's declared externals (and referenced project members) that were never pinned
-      — no entry in its externals lock, so nothing records what its design is judged against; a part
-      is no producer and is left out. What `wairon lock` refuses to approve over: an unpinned
-      external is never a pass, so never an approval either. Reads the bound root's own files;
-      writes nothing.
+      The bound project's declared hosted and git externals (and referenced git or hosted project
+      members) with no entry in its inputs lock; a path producer is read live and never listed. An
+      input debt, never an approval refusal: `wairon lock` pins these before it approves. Reads the
+      bound root's own files; writes nothing.
     signature: 'unpinnedExternals(): list<string>'
     returns: list<string>
     params: []
@@ -231,10 +229,9 @@ methods:
   - name: unrecordedExternalUses
     description: >-
       The uses of each pinned external of the bound project that its pin does not record ("used now,
-      but not in the lock"), keyed by alias, each `<name>` or `<name>.<method>` — counted offline
-      from its own pins and references. What `wairon lock` refuses to approve over exactly as it
-      refuses a never-pinned external: the pin records none of these uses, so a producer that broke
-      one could not be told. Writes nothing.
+      but not in the lock"), keyed by alias, each `<name>` or `<name>.<method>`, counted offline
+      from its own pins and references. An input debt: `wairon lock` re-pins these aliases before it
+      approves. Writes nothing.
     signature: 'unrecordedExternalUses(): map<string, list<string>>'
     returns: map<string, list<string>>
     params: []
@@ -352,6 +349,12 @@ methods:
     signature: 'stopBackground(): async void'
     returns: async void
     params: []
+  - name: resolvedPacks
+    description: >-
+      Forward to spec_validator.resolvedPacks: the bound project's selected packs as they resolve
+      now, what `wairon lock` and `wairon pack sync` record in the inputs lock. Pure 1:1 forward.
+    signatureFrom: spec_validator.resolvedPacks
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-12T00:39:35.099Z'
+updatedAt: '2026-11-20T00:18:26.742Z'

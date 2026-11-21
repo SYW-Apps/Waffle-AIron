@@ -385,7 +385,7 @@ methods:
         description: Without a repository there is no earlier revision to compare with
         type: branch
         condition: the bound root is in a git work tree
-        onFalseStep: 12
+        onFalseStep: 13
       - stepNumber: 4
         description: The revision asked for, else the last approval committed
         type: branch
@@ -411,24 +411,33 @@ methods:
         description: A ref naming nothing, or no approval ever committed, is refused
         type: branch
         condition: a commit was found
-        onFalseStep: 11
+        onFalseStep: 12
       - stepNumber: 9
+        description: >-
+          The commit's committer time, which a sibling member's approval is read as of when this
+          revision is a comparison's baseline
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: commitTime
+      - stepNumber: 10
         description: >-
           Materialize the project's folder of that commit read-only in the fetch cache (the local
           repository is the source)
         type: call
         targetComponent: git_source_adapter
         targetMethod: fetch
-      - stepNumber: 10
-        description: Answer the directory, the commit, and the label a changelog names the baseline by
+      - stepNumber: 11
+        description: >-
+          Answer the directory, the commit, its committer time, and the label a changelog names the
+          baseline by
         type: return
         outcome: approved_revision
-      - stepNumber: 11
+      - stepNumber: 12
         label: no-commit
         description: Refuse naming the ref, or that no approval of this project was ever committed
         type: throw
         error: no such commit, or no approval committed
-      - stepNumber: 12
+      - stepNumber: 13
         label: no-repository
         description: 'Refuse: pass a saved surface snapshot instead'
         type: throw
@@ -448,68 +457,66 @@ methods:
       - stepNumber: 3
         description: >-
           Read the bound project's graph: its direct live members, each with its alias and root, and
-          its own namespace
+          its own namespace. A path external (`../x` under `externals`) is not a member: it is a
+          live node of the scan judged for validity only, so it is never listed here
         type: call
         targetComponent: spec_loader
         targetMethod: graph
       - stepNumber: 4
-        description: >-
-          Read the bound project's lock record, if any — or, when recordedIn names another tree of
-          the bound project (its tree at an earlier revision), that tree's: the composition subject
-          it records for each member (`members.<alias>.subject`, `<algorithm>:<digest>`)
-        type: local
-      - stepNumber: 5
         label: member
         description: For each live member
         type: loop
         loopKind: forEach
         over: >-
-          the graph's direct project members that are contained or `../` siblings (never a part, a
-          git or a hosted one)
-        endStep: 11
-      - stepNumber: 6
+          the graph's direct project members that are contained or `../` siblings declared under
+          `members` (never a part, a git or a hosted one, and never a path external)
+        endStep: 10
+      - stepNumber: 5
         description: Map the bound project's references into it onto its public names
         type: call
         targetComponent: spec_loader
         targetMethod: exportUsage
-      - stepNumber: 7
+      - stepNumber: 6
         description: >-
           Find the git work tree the member's folder lies in; a member in no work tree has no
-          revision, so the three steps below are skipped for it
+          revision, so the two steps below are skipped for it
         type: call
         targetComponent: git_source_adapter
         targetMethod: repositoryRoot
-      - stepNumber: 8
+      - stepNumber: 7
         description: >-
-          The commit of the member's own `.wai/lock.json` that introduced the digest the lock
-          records for it, when it records one
-        type: call
-        targetComponent: git_source_adapter
-        targetMethod: commitIntroducing
-      - stepNumber: 9
-        description: Else (no record, or no commit holds it) the member's own last committed approval
+          The last commit of the member's own `.wai/lock.json`, committed at or before asOf when
+          given: the member's own last committed approval as of then. The bound project's lock
+          records no member, so nothing else names one
         type: call
         targetComponent: git_source_adapter
         targetMethod: lastCommitOf
-      - stepNumber: 10
+      - stepNumber: 8
         description: >-
-          Materialize the member's tree at that commit, read-only, in the fetch cache — skipped when
+          Materialize the member's tree at that commit, read-only, in the fetch cache; skipped when
           no commit was found or the member is in no work tree (then it has no revision)
         type: call
         targetComponent: git_source_adapter
         targetMethod: fetch
-      - stepNumber: 11
+      - stepNumber: 9
+        description: >-
+          The commit's committer time, the revision's committedAt; skipped when no commit was found
+          or the member is in no work tree
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: commitTime
+      - stepNumber: 10
         label: recorded
         description: >-
-          Record the member: alias, project id, root, usage and the revision (its directory, commit
-          and label — the approval this project's lock records, or the member's own last approval);
-          a git failure leaves the revision out, never fails the read
+          Record the member: alias, project id, root, usage and the revision (its directory, commit,
+          committer time and label: the member's own last approval); a git failure leaves the
+          revision out, never fails the read
         type: local
-      - stepNumber: 12
+      - stepNumber: 11
         description: Answer one entry per live member, in declaration order
         type: return
         outcome: list<member_revision>
     detail: full
 status: complete
 createdAt: '2026-09-26T17:44:00.485Z'
-updatedAt: '2026-10-17T16:24:36.408Z'
+updatedAt: '2026-11-20T19:41:08.510Z'

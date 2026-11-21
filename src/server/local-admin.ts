@@ -21,10 +21,6 @@ export {
   mintKey,
   revokeKey,
   listKeys,
-  configureProducer,
-  produceProducer,
-  removeProducer,
-  listProducers,
   setSecret,
   listSecrets,
   enableGit,
@@ -35,6 +31,14 @@ export {
   configureGitSync,
   registerLocalDevProject,
 } from './admin.js';
+
+// Producer targets (hosted_producers), republished under this portal's contract names.
+export {
+  configure as configureProducer,
+  produce as produceProducer,
+  remove as removeProducer,
+  list as listProducers,
+} from './hosted-producers.js';
 
 // Instance-wide and project extension packs (pack_orchestrator).
 export {

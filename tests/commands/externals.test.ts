@@ -11,13 +11,16 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { runExternals, UnknownExternalsActionError } from '../../src/commands/externals.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+import { bareFrom, isolateGlobals } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // `wairon externals` and the sdd_pin_externals / sdd_get_externals_status
 // tools, over a small real family: a root that mounts a billing member and
 // declares it, under a second alias, as an external it re-exports nothing
 // from. (Stage 3: the member's own alias is the member; an external under that
-// same alias would be an alias conflict, and neither would be followed.)
+// same alias would be an alias conflict, and neither would be followed.) The
+// external is a GIT one — served by a local repository of the billing project,
+// approved — the kind of external a pin judges; a path external is read live.
 // ---------------------------------------------------------------------------
 
 const TS = '2026-01-01T00:00:00.000Z';
@@ -30,19 +33,23 @@ function write(root: string, rel: string, text: string): void {
   fs.writeFileSync(file, text);
 }
 
+const cleanups: (() => void)[] = [];
+
 function family(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-cli-'));
+  cleanups.push(isolateGlobals(cleanups));
   const project = (id: string, name: string, externals?: Record<string, unknown>): string => dump({
     waironMajor: WAIRON_MAJOR, id, name, targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
     extensions: { packs: [], useGlobalPacks: false }, ...(externals ? { externals } : {}),
   });
-  write(root, '.wai/project.yaml', project('fleetworks', 'FleetWorks', { bill: { project: 'billing' }, ledger: {} }));
   write(root, '.wai/specs/.index.yaml', dump({ name: 'FleetWorks', vision: 'v' }));
   write(root, '.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'FleetWorks', projectPath: 'packages/billing' }));
   write(root, 'packages/billing/.wai/project.yaml', project('billing', 'Billing Service'));
-  write(root, 'packages/billing/.wai/specs/.index.yaml', dump({ name: 'BillingService', vision: 'v', publicInterfaces: [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project' }] }));
+  write(root, 'packages/billing/.wai/specs/.index.yaml', dump({ name: 'BillingService', vision: 'v', publicInterfaces: [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'instance' }] }));
   write(root, 'packages/billing/.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'BillingService', publicInterfaces: [{ component: 'invoice-portal', details: 'd' }] }));
   write(root, 'packages/billing/.wai/specs/components/invoice-portal.yaml', dump({ id: 'invoice-portal', name: 'Invoice Portal', description: 'd', subsystem: 'billing', componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [] }));
+  const served = bareFrom(cleanups, path.join(root, 'packages', 'billing'), 'billing', { approved: true });
+  write(root, '.wai/project.yaml', project('fleetworks', 'FleetWorks', { bill: { project: 'billing', source: { git: served.url } }, ledger: {} }));
   invalidateSpecCache();
   setProjectRoot(root);
   return root;
@@ -58,6 +65,9 @@ describe('wairon externals and the externals MCP tools', () => {
     invalidateSpecCache();
     try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
     root = undefined;
+    for (const c of cleanups.splice(0)) {
+      try { c(); } catch { /* win locks */ }
+    }
   });
 
   v5it('pin, list and status answer as JSON; an unknown action is refused', async () => {
@@ -72,7 +82,7 @@ describe('wairon externals and the externals MCP tools', () => {
 
     await runExternals('list', [], { json: true });
     const rows = JSON.parse(out.pop()!);
-    expect(rows[0]).toMatchObject({ alias: 'bill', sourceKind: 'family', relation: 'member', audience: 'project' });
+    expect(rows[0]).toMatchObject({ alias: 'bill', sourceKind: 'git', audience: 'instance' });
 
     await runExternals('status', [], { json: true });
     const statuses = JSON.parse(out.pop()!);

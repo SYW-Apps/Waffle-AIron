@@ -11,9 +11,10 @@ import { execFileSync } from 'child_process';
 import { adviseExternals, validateProject, type ValidationIssue } from '../../src/core/validation.js';
 import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 import { buildContractFamily } from '../helpers/reference-family.js';
+import { approveAt, bareFrom, isolateGlobals, pushChange } from '../helpers/stage8-family.js';
 import { compose } from '../../src/core/family-validation.js';
-import { computeGateStateId, validateFamily } from '../../src/core/validation.js';
-import { runLock } from '../../src/commands/lock.js';
+import { computeApprovalId, unpinnedExternals, validateFamily } from '../../src/core/validation.js';
+import { refreshInputs } from '../../src/commands/lock.js';
 import { remove } from '../../src/core/external-declarations.js';
 
 // ---------------------------------------------------------------------------
@@ -28,10 +29,14 @@ import { remove } from '../../src/core/external-declarations.js';
 
 const TS = '2026-01-01T00:00:00.000Z';
 const roots: string[] = [];
+const cleanups: (() => void)[] = [];
 
 afterEach(() => {
   setProjectRoot(null);
   invalidateSpecCache();
+  for (const c of cleanups.splice(0)) {
+    try { c(); } catch { /* windows locks */ }
+  }
   for (const dir of roots.splice(0)) {
     try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* windows locks */ }
   }
@@ -128,10 +133,15 @@ function tileStudio(): FixtureTree {
   };
 }
 
-/** GeoKit at <root>/geo and TileStudio at <root>/studio, the studio declaring `geo` at ../geo (unpinned). */
-function pair(geo: GeoOptions = {}): { root: string; geo: string; studio: string; rewriteGeo(o: GeoOptions): void } {
+/**
+ * GeoKit at <root>/geo and TileStudio at <root>/studio, the studio declaring `geo` at ../geo — read live,
+ * never pinned. With `served`, GeoKit is a git external served by a local repository (approved, each
+ * rewrite released): the kind of external a pin judges.
+ */
+function pair(geo: GeoOptions = {}, served = false): { root: string; geo: string; studio: string; rewriteGeo(o: GeoOptions): void } {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-r3ext-')));
   roots.push(root);
+  if (served) cleanups.push(isolateGlobals(cleanups));
   const geoDir = path.join(root, 'geo');
   const studioDir = path.join(root, 'studio');
   const writeGeo = (o: GeoOptions): void => {
@@ -141,18 +151,35 @@ function pair(geo: GeoOptions = {}): { root: string; geo: string; studio: string
     fs.writeFileSync(path.join(geoDir, '.wai', 'project.yaml'), configYaml('geo'));
   };
   writeGeo(geo);
+  let bare = '';
+  let source: Record<string, unknown> = { path: '../geo' };
+  if (served) {
+    const repo = bareFrom(cleanups, geoDir, 'geo', { approved: true });
+    bare = repo.bare;
+    source = { git: repo.url };
+  }
   fs.mkdirSync(studioDir, { recursive: true });
   materializeFixtureProject(studioDir, tileStudio());
-  fs.writeFileSync(path.join(studioDir, '.wai', 'project.yaml'), configYaml('studio', { externals: { geo: { source: { path: '../geo' } } } }));
+  fs.writeFileSync(path.join(studioDir, '.wai', 'project.yaml'), configYaml('studio', { externals: { geo: { source } } }));
   invalidateSpecCache();
-  return { root, geo: geoDir, studio: studioDir, rewriteGeo: (o) => { writeGeo(o); invalidateSpecCache(); } };
+  return {
+    root, geo: geoDir, studio: studioDir,
+    rewriteGeo: (o) => {
+      writeGeo(o);
+      if (served) {
+        approveAt(geoDir);
+        pushChange(geoDir, bare, 'geo changes');
+      }
+      invalidateSpecCache();
+    },
+  };
 }
 
 const codes = (issues: ValidationIssue[], code: string): ValidationIssue[] => issues.filter((i) => i.code === code);
 
 describe('R3-35/37 — an implemented contract is pinned and compared method by method', () => {
   it('the pin records a digest for each implemented method (not `tile-source: {}`)', () => {
-    const p = pair();
+    const p = pair({}, true);
     bind(p.studio);
     pinExternals();
     const used = externalsRepository.readLock()!.externals.geo.used;
@@ -175,7 +202,7 @@ describe('R3-35/37 — an implemented contract is pinned and compared method by 
   });
 
   it('a producer changing an implemented method\'s signature reads changed', () => {
-    const p = pair();
+    const p = pair({}, true);
     bind(p.studio);
     pinExternals();
     p.rewriteGeo({ sourceReturns: 'string' });
@@ -184,8 +211,8 @@ describe('R3-35/37 — an implemented contract is pinned and compared method by 
     expect(status.uses).toContainEqual(expect.objectContaining({ publicName: 'tile-source', member: 'load_tile', state: 'changed' }));
   });
 
-  it('a re-pin over the rename is refused naming the new name and what it cannot carry; the live advisory names the rename too', () => {
-    const p = pair();
+  it('a re-pin over the rename is refused naming the new name and what it cannot carry; the live status names the rename too', () => {
+    const p = pair({}, true);
     bind(p.studio);
     pinExternals();
     const before = externalsRepository.readLock();
@@ -199,9 +226,8 @@ describe('R3-35/37 — an implemented contract is pinned and compared method by 
     // The previous pin stays.
     bind(p.studio);
     expect(externalsRepository.readLock()).toEqual(before);
-    const advised = codes(adviseExternals(), 'EXTERNAL_LIVE_INCOMPATIBLE');
-    expect(advised.length).toBeGreaterThan(0);
-    expect(advised.map((i) => i.message).join('\n')).toMatch(/fetch_tile/);
+    const [status] = getExternalsStatus();
+    expect(status.uses).toContainEqual(expect.objectContaining({ member: 'load_tile', state: 'renamed', renamedTo: 'tile-source.fetch_tile' }));
   });
 });
 
@@ -213,7 +239,7 @@ describe('R3-14 / R3-32 — the snapshot types an implement-role entry by its ki
   });
 
   it('an exported type travels with its methods (the checked constructor)', () => {
-    const p = pair();
+    const p = pair({}, true);
     bind(p.studio);
     pinExternals();
     const def = externalsRepository.readSnapshot('geo')!.types.find((t) => t.id === 'tile-key')!;
@@ -254,9 +280,9 @@ describe('platform — the design export lists every name a member is referenced
 describe('platform — an unpinned consumer of a producer that broke a used name', () => {
   const ledgerL0 = (dir: string): string => path.join(dir, '.wai', 'specs', '.index.yaml');
 
-  it('the composed gate fails: EXTERNAL_UNPINNED for a never-pinned use, at the family root too', () => {
-    const f = buildContractFamily();
-    roots.push(f.top);
+  it('the composed gate fails: EXTERNAL_UNPINNED for a never-pinned use of a git external, at the family root too', () => {
+    const f = buildContractFamily({ git: true });
+    cleanups.push(() => f.cleanup());
     bind(f.billing);
     expect(compose('billing').findings.map((i) => [i.code, i.severity])).toEqual([['EXTERNAL_UNPINNED', 'error']]);
     bind(f.top);
@@ -278,13 +304,16 @@ describe('platform — an unpinned consumer of a producer that broke a used name
     expect(compose('billing').findings.map((i) => [i.code, i.severity])).toContainEqual(['EXTERNAL_INCOMPATIBLE', 'error']);
   });
 
-  it('`wairon lock` in the unpinned consumer refuses, and locks once it is pinned', async () => {
+  it('`wairon lock` in a consumer of a never-pinned git external pins it first; a sibling declared by id is read live and owes no pin', () => {
+    const served = pair({}, true);
+    bind(served.studio);
+    expect(unpinnedExternals()).toEqual(['geo']);
+    expect(refreshInputs().pins).toEqual([expect.objectContaining({ alias: 'geo' })]);
+    // The same use of a sibling family project (an external found by its id) is read live: nothing to pin.
     const f = buildContractFamily();
     roots.push(f.top);
     bind(f.billing);
-    const gate = { valid: true, issues: [] } as never;
-    await expect(runLock({ yes: true }, gate, computeGateStateId())).rejects.toThrow(/never pinned — "ledger"/);
-    expect(fs.existsSync(path.join(f.billing, '.wai', 'lock.json'))).toBe(false);
+    expect(unpinnedExternals()).toEqual([]);
   });
 });
 
@@ -315,11 +344,11 @@ describe('platform — a dead re-export is flagged at the producer', () => {
 });
 
 describe('solo — removing the last external leaves no empty lock behind', () => {
-  it('`externals remove` of the only external deletes .wai/externals.lock.yaml', () => {
-    const p = pair();
+  it('`externals remove` of the only external deletes .wai/inputs.lock.yaml', () => {
+    const p = pair({}, true);
     bind(p.studio);
     pinExternals();
-    const lockFile = path.join(p.studio, '.wai', 'externals.lock.yaml');
+    const lockFile = path.join(p.studio, '.wai', 'inputs.lock.yaml');
     expect(fs.existsSync(lockFile)).toBe(true);
     expect(remove('geo')).toMatchObject({ removed: true, unpinned: true });
     expect(fs.existsSync(lockFile)).toBe(false);

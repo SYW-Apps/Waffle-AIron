@@ -25,6 +25,8 @@ export interface DevApprovalData {
   projectName?: string;
   /** Direct member projects and their own approval state (absent without members). */
   members?: MemberApproval[];
+  /** The subsystems a lock may be narrowed to: the served project's own, never a member project's. */
+  lockScopes?: string[];
 }
 
 /** The part of a graph node this logic reads. */
@@ -204,6 +206,23 @@ export function memberName(m: Pick<MemberApproval, 'alias' | 'key'>): string {
 /** The direct members whose own approval is owed and that hold something to approve. */
 export function membersToLock(approval: Pick<DevApprovalData, 'members'> | undefined): MemberApproval[] {
   return (approval?.members ?? []).filter((m) => m.state !== 'approved' && m.approvable !== false);
+}
+
+/** Why a member project's own approval is owed, in its own terms: a never-locked one says so; a drifted one names what moved. */
+export function memberReason(m: MemberApproval): string {
+  if (m.state === 'never') return 'never locked';
+  const why: string[] = [];
+  if (m.owed) why.push(m.owed);
+  else if (m.partsMoved && m.partsMoved.length > 0) why.push(`${m.partsMoved.join(', ')} changed`);
+  else why.push('changed');
+  for (const d of m.inputs ?? []) why.push(d.sentence);
+  return why.join('; ');
+}
+
+/** The subsystems the lock dialog offers: the server's lock scopes, else the tree's own subsystems (an id qualified `alias::name` belongs to a member project and is never offered). */
+export function lockScopeOptions(approval: Pick<DevApprovalData, 'lockScopes'> | undefined, nodes: ScopeNode[]): string[] {
+  const ids = approval?.lockScopes ?? nodes.filter((n) => n.kind === 'subsystem').map((n) => n.id);
+  return ids.filter((id) => !id.includes('::')).sort();
 }
 
 function memberChangedText(members: MemberApproval[]): string {

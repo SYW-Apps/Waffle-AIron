@@ -8,7 +8,7 @@ import {
 } from '../../src/core/specs.js';
 import { diffAgainstApproval, diffSize } from '../../src/core/approval.js';
 import { runLock } from '../../src/commands/lock.js';
-import { computeGateStateId } from '../../src/core/validation.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import { logger } from '../../src/utils/logger.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -65,7 +65,7 @@ function capture(): { lines: string[] } {
 
 async function lock(options: { all?: boolean } = {}): Promise<void> {
   invalidateSpecCache();
-  await runLock({ yes: true, ...options }, { valid: true, issues: [] }, computeGateStateId());
+  await runLock({ yes: true, ...options }, { valid: true, issues: [] }, computeApprovalId());
   invalidateSpecCache();
 }
 

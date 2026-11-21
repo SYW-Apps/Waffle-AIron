@@ -5,4 +5,4 @@
 // reach, runWithProjectBinding — exactly as they do for the core reads). The
 // caller must gate on reach itself.
 // ---------------------------------------------------------------------------
-export { exportSurface, getExternalsStatus } from '../../core/surface-portal.js';
+export { exportSurface, getExternalsStatus, pinExternals, recordPacks } from '../../core/surface-portal.js';

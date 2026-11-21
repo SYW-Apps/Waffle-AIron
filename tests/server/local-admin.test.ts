@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as localAdmin from '../../src/server/local-admin.js';
 import * as cliHostAdapter from '../../src/commands/adapters/host.js';
 import * as admin from '../../src/server/admin.js';
+import * as hostedProducers from '../../src/server/hosted-producers.js';
 import * as packs from '../../src/server/packs.js';
 import * as permissionadmin from '../../src/server/permissionadmin.js';
 import * as projects from '../../src/server/projects.js';
@@ -29,6 +30,7 @@ import { listSecretKeys, resolveSecret } from '../../src/utils/secrets.js';
 
 const OWNERS: Record<string, Record<string, unknown>> = {
   admin,
+  hostedProducers,
   packs,
   permissionadmin,
   projects,
@@ -47,10 +49,6 @@ const PORTAL_SOURCES: Record<string, string> = {
   mintKey: 'admin',
   revokeKey: 'admin',
   listKeys: 'admin',
-  configureProducer: 'admin',
-  produceProducer: 'admin',
-  removeProducer: 'admin',
-  listProducers: 'admin',
   setSecret: 'admin',
   listSecrets: 'admin',
   enableGit: 'admin',
@@ -86,6 +84,10 @@ const PORTAL_SOURCES: Record<string, string> = {
 
 /** Names the portal publishes under its own contract name: portal name -> [owner, owner's name]. */
 const RENAMED: Record<string, [string, string]> = {
+  configureProducer: ['hostedProducers', 'configure'],
+  produceProducer: ['hostedProducers', 'produce'],
+  removeProducer: ['hostedProducers', 'remove'],
+  listProducers: ['hostedProducers', 'list'],
 };
 
 

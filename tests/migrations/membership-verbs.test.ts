@@ -45,7 +45,7 @@ function standalone(dir: string, name: string, id?: string): void {
 const configOf = (dir: string): Record<string, unknown> => readYamlFile(path.join(dir, '.wai', 'project.yaml')) as Record<string, unknown>;
 /** A project's pinned externals, alias → {project, digest}. */
 const pinsOf = (dir: string): Record<string, { project: string; digest: string }> => {
-  const file = path.join(dir, '.wai', 'externals.lock.yaml');
+  const file = path.join(dir, '.wai', 'inputs.lock.yaml');
   const lock = fs.existsSync(file) ? (readYamlFile(file) as { externals?: Record<string, { project: string; digest: string }> }) : {};
   return Object.fromEntries(Object.entries(lock.externals ?? {}).map(([a, e]) => [a, { project: e.project, digest: e.digest }]));
 };
@@ -123,7 +123,7 @@ describe('stage 6 — the membership verbs', () => {
     const f = family();
     const tools = path.join(f.top, 'tools');
     standalone(tools, 'Build Tools');
-    put(path.join(tools, '.wai', 'lock.json'), JSON.stringify({ format: 3, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: STAMP, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'tooling-kit' }));
+    put(path.join(tools, '.wai', 'lock.json'), JSON.stringify({ format: 4, parts: {}, specs: {}, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: STAMP, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'tooling-kit' }));
     const report = migrate(f.top, { verb: 'attach', alias: 'tools', path: 'tools' });
     expect(configOf(tools).id).toBe('tooling-kit');
     expect(report.relock).toEqual([path.resolve(tools)]);
@@ -193,18 +193,17 @@ describe('stage 6 — the membership verbs', () => {
     expect([again.refusals, again.changes]).toEqual([[], []]);
   });
 
-  it('detach: the member leaves the family; the parent and every family consumer reach it by path, the parent pinned last; family-consistent; idempotent', () => {
+  it('detach: the member leaves the family; the parent and every family consumer reach it by path, read live; family-consistent; idempotent', () => {
     const f = family();
     const before = familyFindings(f.top);
-    const billingPin = pinsOf(f.billing).ledger;
     const report = migrate(f.top, { verb: 'detach', alias: 'ledger' });
     expect(report.applied).toBe(true);
     expect(configOf(f.top).members).toEqual({ billing: 'billing' });
     expect(configOf(f.top).externals).toEqual({ ledger: { source: { path: 'ledger' } } });
     expect(configOf(f.billing).externals).toEqual({ ledger: { source: { path: '../ledger' } } });
-    // The parent pinned the detached project; billing's pin is untouched (the producer did not change).
-    expect(Object.keys(pinsOf(f.top))).toEqual(['ledger']);
-    expect(pinsOf(f.billing).ledger).toEqual(billingPin);
+    // A path external is read live: nothing is pinned, in the parent or in billing.
+    expect(Object.keys(pinsOf(f.top))).toEqual([]);
+    expect(pinsOf(f.billing).ledger).toBeUndefined();
     expect(report.plan.notes.some((n) => /Consumers outside the family/.test(n))).toBe(true);
     // No reference text changed.
     expect(report.plan.edits.some((e) => e.kind === 'reference')).toBe(false);

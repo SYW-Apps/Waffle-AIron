@@ -101,29 +101,33 @@ methods:
       - stepNumber: 1
         description: Forward to the admin orchestrator
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: configureProducer
+        targetComponent: hosted_producers
+        targetMethod: configure
+    symbol: configure
   - name: produceProducer
     narrative:
       - stepNumber: 1
         description: Forward to the admin orchestrator
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: produceProducer
+        targetComponent: hosted_producers
+        targetMethod: produce
+    symbol: produce
   - name: removeProducer
     narrative:
       - stepNumber: 1
         description: Forward to the admin orchestrator
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: removeProducer
+        targetComponent: hosted_producers
+        targetMethod: remove
+    symbol: remove
   - name: listProducers
     narrative:
       - stepNumber: 1
         description: Forward to the admin orchestrator
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: listProducers
+        targetComponent: hosted_producers
+        targetMethod: list
+    symbol: list
   - name: setSecret
     narrative:
       - stepNumber: 1
@@ -238,4 +242,4 @@ methods:
         targetMethod: previewProjectPackRemoval
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-10-09T11:40:11.062Z'
+updatedAt: '2026-11-20T19:08:30.662Z'

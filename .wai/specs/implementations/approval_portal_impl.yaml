@@ -95,13 +95,6 @@ methods:
         type: call
         targetComponent: approval_comparison
         targetMethod: verdict
-  - name: computeOwnStateId
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the state hash's own-tree identity
-        type: call
-        targetComponent: state_hash
-        targetMethod: ownTree
   - name: computeOwnDesignId
     narrative:
       - stepNumber: 1
@@ -109,27 +102,6 @@ methods:
         type: call
         targetComponent: state_hash
         targetMethod: ownDesign
-  - name: reexpress
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the approval comparison's re-expression
-        type: call
-        targetComponent: approval_comparison
-        targetMethod: reexpress
-  - name: computeOwnDesignIdAsRecorded
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the state hash's own-design identity in the earlier reading
-        type: call
-        targetComponent: state_hash
-        targetMethod: ownDesignAsRecorded
-  - name: approvedStatuses
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the approval comparison's status recovery
-        type: call
-        targetComponent: approval_comparison
-        targetMethod: approvedStatuses
   - name: requestReview
     narrative:
       - stepNumber: 1
@@ -188,4 +160,4 @@ methods:
         targetMethod: branchConflict
 status: complete
 createdAt: '2026-09-25T17:32:26.946Z'
-updatedAt: '2026-11-10T18:58:20.411Z'
+updatedAt: '2026-11-20T01:26:45.788Z'

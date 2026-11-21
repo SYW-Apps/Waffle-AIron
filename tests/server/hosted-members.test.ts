@@ -29,7 +29,7 @@ import { listCredentials, createCredential } from '../../src/server/credentials.
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { handleMcpRequest } from '../../src/server/request.js';
 import { migratePermissionModel } from '../../src/server/migration.js';
-import { executeApprovedLock } from '../../src/server/admin.js';
+import { execute as executeApprovedLock } from '../../src/server/hosted-lock.js';
 import { executeApprovedRequest } from '../../src/server/projectlifecycle.js';
 import { createApprovalRequest, decideApprovalRequest } from '../../src/server/approvals.js';
 import * as transaction from '../../src/migrations/transaction.js';
@@ -149,7 +149,7 @@ describe('member-is-a-project', () => {
     });
     expect(projectRepositoryScope(dataDir, 'platform')!.pathspecs).toEqual(['.wai/']);
     // Its own lock: written at its own root, nothing at its parent's.
-    const lock = executeApprovedLock(cfg, 'payments', { id: 'u-approver', source: 'hosted' });
+    const lock = executeApprovedLock(cfg, 'payments', { id: 'u-approver', source: 'hosted' }).record;
     expect(lock.projectId).toBe('payments');
     expect(fs.existsSync(path.join(fam.payments, '.wai', 'lock.json'))).toBe(true);
     expect(fs.existsSync(path.join(fam.billing, '.wai', 'lock.json'))).toBe(false);

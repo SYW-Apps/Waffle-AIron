@@ -6,7 +6,8 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, loadSubsystemSpec } from '../../src/core/specs.js';
 import { validateProject, validateFamily, type ValidationIssue } from '../../src/core/validation.js';
 import { pinExternals, getExternalsStatus } from '../../src/core/surfaces.js';
-import { createMember, advanceMember, listDirectChainedSubprojects, findChainingSubprojectsMissingConfig, resolveAgentTopology } from '../../src/core/index.js';
+import { externalsRepository } from '../../src/core/externals.js';
+import { createMember, advanceMember, listDirectChainedSubprojects, resolveAgentTopology } from '../../src/core/index.js';
 import { buildCanvasModel } from '../../src/core/canvas.js';
 import { getStatusReport } from '../../src/core/status.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
@@ -61,14 +62,14 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     const base = tempDir(cleanups, 'wairon-refgit-');
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     const shop = path.join(base, 'shop');
     writeShop(shop, { members: { ledger: `${repo.url}#${repo.commit}` } });
     bind(shop);
     // Pinned as a member, at the declared commit, with the used method recorded.
     const [pin] = pinExternals();
     expect(pin).toMatchObject({ alias: 'ledger', outcome: 'pinned', usedNames: 1 });
-    const lock = yaml.load(fs.readFileSync(path.join(shop, '.wai', 'externals.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
+    const lock = yaml.load(fs.readFileSync(path.join(shop, '.wai', 'inputs.lock.yaml'), 'utf8')) as { externals: Record<string, Record<string, unknown>> };
     expect(lock.externals.ledger).toMatchObject({ role: 'member', commit: repo.commit, used: { 'ledger-portal': { post: expect.stringMatching(/^sha256:/) } } });
     bind(shop);
     expect(externalCodes(validateProject({}).issues)).toEqual([]);
@@ -97,7 +98,7 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     const base = tempDir(cleanups, 'wairon-refgitx-');
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     const shop = path.join(base, 'shop');
     writeShop(shop, { externals: { ledger: { source: { git: repo.url } } } });
     bind(shop);
@@ -112,7 +113,8 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
 
   // Round 8: a `../` sibling MEMBER is composed live like a contained one — no
   // pin, its specs read where they are — so a rename it makes is the
-  // consumer's own finding at once. A path EXTERNAL stays judged against its pin.
+  // consumer's own finding at once. A path EXTERNAL is the same (round 9): a node
+  // of the scan, read live, never pinned.
   it('a sibling member renames a used method: composed live like a contained member — no pin, the consumer\'s own gate names the broken call', () => {
     const base = tempDir(cleanups, 'wairon-refsib-');
     const ledger = path.join(base, 'ledger');
@@ -134,33 +136,33 @@ describe('stage 8 — property: referenced-break-is-incompatible', () => {
     expect((family.projects ?? []).map((p) => p.key)).toContain('ledger');
   });
 
-  for (const shape of ['path external'] as const) {
-    it(`a ${shape} renames a used method: own gate clean, family run EXTERNAL_INCOMPATIBLE`, () => {
-      const base = tempDir(cleanups, 'wairon-refpath-');
-      const ledger = path.join(base, 'ledger');
-      writeLedger(ledger);
-      const shop = path.join(base, 'shop');
-      writeShop(shop, { externals: { ledger: { source: { path: '../ledger' } } } });
-      bind(shop);
-      expect(pinExternals()[0]).toMatchObject({ alias: 'ledger', outcome: 'pinned', usedNames: 1 });
-      bind(shop);
-      expect(externalCodes(validateProject({}).issues)).toEqual([]);
-      renameLedgerMethod(ledger, 'record');
-      bind(shop);
-      expect(externalCodes(validateProject({}).issues)).toEqual([]);
-      bind(shop);
-      const status = getExternalsStatus()[0];
-      expect(status).toMatchObject({ stale: true, uses: [{ publicName: 'ledger-portal', member: 'post', state: 'removed' }] });
-      bind(shop);
-      expect(externalCodes(validateFamily({ family: true }).issues)).toContain('EXTERNAL_INCOMPATIBLE');
-    });
-  }
+  it('a path external renames a used method: read live like a sibling member — no pin, the own gate names the broken call, the family run EXTERNAL_INCOMPATIBLE', () => {
+    const base = tempDir(cleanups, 'wairon-refpath-');
+    const ledger = path.join(base, 'ledger');
+    writeLedger(ledger);
+    const shop = path.join(base, 'shop');
+    writeShop(shop, { externals: { ledger: { source: { path: '../ledger' } } } });
+    bind(shop);
+    // Never pinned: nothing is recorded, nothing is owed.
+    expect(pinExternals()[0]).toMatchObject({ alias: 'ledger', outcome: 'unchanged' });
+    expect(externalsRepository.readLock()).toBeNull();
+    bind(shop);
+    expect(externalCodes(validateProject({}).issues)).toEqual([]);
+    renameLedgerMethod(ledger, 'record');
+    bind(shop);
+    expect(validateProject({}).issues.map((i) => i.code)).toContain('INVALID_TARGET_METHOD_REFERENCE');
+    bind(shop);
+    const status = getExternalsStatus()[0];
+    expect(status).toMatchObject({ stale: true, uses: [{ publicName: 'ledger-portal', member: 'post', state: 'removed' }] });
+    bind(shop);
+    expect(externalCodes(validateFamily({ family: true }).issues)).toContain('EXTERNAL_INCOMPATIBLE');
+  });
 
   it('a git member that cannot be fetched is unavailable — never a pass', () => {
     const base = tempDir(cleanups, 'wairon-refoff-');
     const work = path.join(base, 'ledger-work');
     writeLedger(work);
-    const repo = bareFrom(cleanups, work, 'ledger');
+    const repo = bareFrom(cleanups, work, 'ledger', { approved: true });
     const shop = path.join(base, 'shop');
     writeShop(shop, { members: { ledger: `${repo.url}#${repo.commit}` } });
     bind(shop);
@@ -431,7 +433,6 @@ describe('stage 8 — overview follows composition: parts are the parent\'s subs
     expect(agents.some((a) => a.tags.includes('delegate'))).toBe(false);
     expect(agents.find((a) => a.id === 'system-architect')?.dependencies).toContain('scheduling-owner');
     expect(listDirectChainedSubprojects(root)).toEqual([]);
-    expect(findChainingSubprojectsMissingConfig(root)).toEqual([]);
     expect(fs.existsSync(path.join(part, '.wai', 'project.yaml'))).toBe(false);
   });
 });

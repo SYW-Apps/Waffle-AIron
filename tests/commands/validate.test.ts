@@ -372,18 +372,31 @@ describe('plain validate at a project that declares externals only', () => {
     for (const c of cleanups.splice(0)) { try { c(); } catch { /* win file locks */ } }
   });
 
-  /** A shop whose ledger producer is contained beside its own specs (a path external), pinned, then broken. */
-  async function brokenShop(): Promise<string> {
-    const { tempDir, writeLedger, renameLedgerMethod, writeShop } = await import('../helpers/stage8-family.js');
+  /**
+   * A shop whose ledger producer is an external held beside its own specs, then broken. As a GIT external
+   * (served by a local repository, approved) it is pinned first, the kind of external a pin judges; as a path
+   * external it is read live and never pinned.
+   */
+  async function brokenShop(kind: 'git' | 'path' = 'git'): Promise<string> {
+    const { tempDir, writeLedger, renameLedgerMethod, writeShop, isolateGlobals, serveGit } = await import('../helpers/stage8-family.js');
     const { pinExternals } = await import('../../src/core/surfaces.js');
     const shop = path.join(tempDir(cleanups, 'wairon-ext-only-'), 'shop');
     const ledger = path.join(shop, 'vendor', 'ledger');
     writeLedger(ledger);
-    writeShop(shop, { externals: { ledger: { source: { path: 'vendor/ledger' } } } });
+    if (kind === 'path') {
+      writeShop(shop, { externals: { ledger: { source: { path: 'vendor/ledger' } } } });
+      renameLedgerMethod(ledger, 'record');
+      invalidateSpecCache();
+      return shop;
+    }
+    cleanups.push(isolateGlobals(cleanups));
+    const served = serveGit(cleanups, ledger, 'ledger');
+    writeShop(shop, { externals: { ledger: { source: { git: served.url } } } });
     setProjectRoot(shop);
     invalidateSpecCache();
     pinExternals();
     renameLedgerMethod(ledger, 'record');
+    served.release();
     invalidateSpecCache();
     return shop;
   }
@@ -423,7 +436,16 @@ describe('plain validate at a project that declares externals only', () => {
     expect(own.out).not.toContain('Per project');
     expect(own.out).not.toMatch(/\[EXTERNAL_INCOMPATIBLE\]/);
     expect(own.out).toMatch(/`wairon validate` without `--no-recursive` composes it against its live producer/);
-    expect(own.out).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\]/);
+    // Offline, a pinned git external is not compared: the advisory says so.
+    expect(own.out).toMatch(/\[EXTERNAL_LIVE_UNCOMPARED\]/);
+  });
+
+  it('a path external is read live: --no-recursive still fails the break, in the owner\'s gate itself', async () => {
+    const shop = await brokenShop('path');
+    const own = await runAt(shop, { recursive: false });
+    expect(own.out).not.toContain('Per project');
+    expect(own.out).toMatch(/\[INVALID_TARGET_METHOD_REFERENCE\]/);
+    expect(own.failed).toBe(true);
   });
 
   it('sdd_validate_tree reads the same flags: composed by default, the owner\'s gate with recursive: false', async () => {
@@ -447,7 +469,7 @@ describe('plain validate at a project that declares externals only', () => {
       const own = (await client.callTool({ name: 'sdd_validate_tree', arguments: { recursive: false } })).structuredContent as { errors: { code: string }[]; warnings: { code: string; advisory?: boolean }[]; projects?: unknown[] };
       expect(own.projects).toBeUndefined();
       expect(own.errors.some((e) => e.code === 'EXTERNAL_INCOMPATIBLE')).toBe(false);
-      expect(own.warnings.some((w) => w.code === 'EXTERNAL_LIVE_INCOMPATIBLE' && w.advisory === true)).toBe(true);
+      expect([...own.warnings, ...((own as { notices?: { code: string; advisory?: boolean }[] }).notices ?? [])].some((w) => w.code === 'EXTERNAL_LIVE_UNCOMPARED' && w.advisory === true)).toBe(true);
     } finally {
       await client.close();
     }

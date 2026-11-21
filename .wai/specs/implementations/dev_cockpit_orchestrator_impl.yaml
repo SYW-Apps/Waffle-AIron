@@ -239,14 +239,23 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 9
-        description: Read each direct member project's approval at its own root, so the page can offer its lock
+        description: >-
+          Read each direct member project's own approval at its own root, so the page can offer its
+          lock and name the reason a member is drifted
         type: call
         targetComponent: host_validator_adapter
         targetMethod: familyApprovals
       - stepNumber: 10
         description: >-
-          Answer the approval state with the branch, the project's name and its member projects'
-          approvals
+          Read the subsystems the served tree loads and keep its own (a part's included, never a
+          member project's): the scopes the lock-scope list offers
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 11
+        description: >-
+          Answer the approval state with the branch, the project's name, its member projects' own
+          approvals and the lock scopes
         type: return
         outcome: the approval state
   - name: family
@@ -348,4 +357,4 @@ lint:
         the core approval portal, so the analyzer reads the core workflow behind each forward.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-12T01:03:09.642Z'
+updatedAt: '2026-11-20T00:31:21.329Z'
