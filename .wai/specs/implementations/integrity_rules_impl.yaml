@@ -586,11 +586,12 @@ methods:
           Branch: is the backing component something other than a Portal? Nothing can use it: a hop
           from another subsystem enters through a published Portal, and another project consumes
           only a Portal's verbs — unless it is an Adapter the subsystem publishes as shared, which
-          every subsystem calls directly (public-surface-shared judges it)
+          every subsystem calls directly (public-surface-shared judges it), or an Adapter the entry
+          publishes with role implement, an extension point consumers realize rather than call
         type: branch
         condition: >-
-          backing.componentType is not Portal, and ctx.sharedSet for sub.id does not contain
-          backing.id
+          backing.componentType is not Portal, ctx.sharedSet for sub.id does not contain backing.id,
+          and not (pi.role is implement and backing.componentType is Adapter)
         onFalseStep: 3
       - stepNumber: 15
         description: >-
@@ -1764,4 +1765,4 @@ methods:
     exportedVia: loweredSeveritiesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-11-14T19:09:58.119Z'
+updatedAt: '2026-11-21T01:07:05.431Z'

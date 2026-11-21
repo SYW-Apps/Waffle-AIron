@@ -127,7 +127,9 @@ methods:
       A published component that is not a Portal is reported: nothing can use it, since a hop from
       another subsystem enters through a published Portal and another project consumes only a
       Portal's verbs — except an Adapter its subsystem publishes as shared, which every subsystem of
-      the project may call directly, and which public-surface-shared judges.
+      the project may call directly, and which public-surface-shared judges, and an Adapter
+      published with role implement, an extension point whose realization consumers supply rather
+      than call.
     signature: 'publicSurfaceBinding(ctx: RuleContext): void'
     returns: void
     params:
@@ -797,4 +799,4 @@ methods:
       - iintegrity_rules.loweredRules
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-11-14T19:07:03.807Z'
+updatedAt: '2026-11-21T01:07:03.918Z'
