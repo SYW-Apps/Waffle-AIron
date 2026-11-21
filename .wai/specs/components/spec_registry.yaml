@@ -15,9 +15,8 @@ description: >-
   local id when none does); an outside or unresolved reference is written as it came. It reads the
   owning project's alias table and the producers' public names from the workspace scan — the same
   scan every save already consults to route a key to its member's files — and never emits `super::`,
-  a leading `::` or a member path. Two maintenance writes serve the chaining migration: deleting a
-  legacy L1 mount once its fields are carried, and re-saving a spec with every reference in that
-  canonical form.
+  a leading `::` or a member path. One maintenance write serves the member-boundary writers
+  (internalize, promote, demote): re-saving a spec with every reference in that canonical form.
 subsystem: sdd_core
 componentType: Registry
 owns: []
@@ -25,4 +24,4 @@ dependsOn:
   - spec_file_store
 status: complete
 createdAt: '2026-07-18T22:57:53.067Z'
-updatedAt: '2026-10-03T19:33:43.342Z'
+updatedAt: '2026-11-21T16:12:42.841Z'

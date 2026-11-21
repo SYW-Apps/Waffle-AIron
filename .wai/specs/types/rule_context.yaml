@@ -218,14 +218,6 @@ fields:
       (project_node.targetLanguage): what library-calls judges a contained member's native library
       against. A project that declares none is absent. Absent on a candidate run.
     optional: true
-  - name: retiredReachFacts
-    type: list<RetiredReachFact>
-    description: >-
-      The retired reachability forms the run's scan met (spec_loader.retiredReachFacts): the loaded
-      specs already read them compatibly (a retired invokedBy kind as entry or runtime), so these
-      facts are the only place the stored form is still visible. entry-declarations reports
-      INVOKED_BY_RETIRED_KIND from them. Absent on a candidate run.
-    optional: true
   - name: bindingModules
     type: list<BindingModule>
     description: >-
@@ -528,4 +520,4 @@ methods:
       which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-11-20T14:17:20.962Z'
+updatedAt: '2026-11-21T16:08:57.967Z'

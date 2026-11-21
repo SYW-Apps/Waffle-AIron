@@ -55,12 +55,12 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 8
         description: >-
-          Make one node per root: its key, parent, alias and declaration form, legacy mount and
-          directory as the scan recorded them; its id from project_config.effectiveId() — declared,
-          else the name slug, the one default every reader uses — with where it came from (declared,
-          name, none); its name; whether it has an L0; its alias table; its members, the contained
-          project roots it declares; and its parts as the scan recorded them (stage 8), which are
-          not nodes. A root with no readable configuration has no name and no id
+          Make one node per root: its key, parent, alias and declaration form, and directory as the
+          scan recorded them; its id from project_config.effectiveId() — declared, else the name
+          slug, the one default every reader uses — with where it came from (declared, name, none);
+          its name; whether it has an L0; its alias table; its members, the contained project roots
+          it declares; and its parts as the scan recorded them (stage 8), which are not nodes. A
+          root with no readable configuration has no name and no id
         type: local
       - stepNumber: 9
         description: >-
@@ -144,4 +144,4 @@ methods:
       method's own name, each once in declared order. An unknown contract answers none.
 status: complete
 createdAt: '2026-09-26T17:41:29.805Z'
-updatedAt: '2026-10-19T18:25:39.093Z'
+updatedAt: '2026-11-21T16:16:04.403Z'

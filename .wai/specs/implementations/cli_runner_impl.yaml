@@ -165,9 +165,7 @@ methods:
         type: return
         outcome: this project's outputs generated
       - stepNumber: 16
-        description: >-
-          --family: list this project's direct members (declared in `members`, or, in the v5 reading
-          `wairon upgrade` binds, legacy mounts)
+        description: '--family: list this project''s direct members (declared in `members`)'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: listDirectChainedSubprojects
@@ -4541,4 +4539,4 @@ lint:
         interleave their output. No domain state: nothing to store, list or recover.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-20T00:21:04.210Z'
+updatedAt: '2026-11-21T15:55:47.788Z'

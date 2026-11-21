@@ -197,13 +197,6 @@ methods:
         type: call
         targetComponent: project_family_index
         targetMethod: graph
-  - name: deleteMount
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: deleteMount
   - name: normalizeReferences
     narrative:
       - stepNumber: 1
@@ -279,13 +272,6 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: typeSpellingFacts
-  - name: retiredReachFacts
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the index read face
-        type: call
-        targetComponent: spec_index
-        targetMethod: retiredReachFacts
   - name: typePath
     narrative:
       - stepNumber: 1
@@ -387,4 +373,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-24T11:35:09.928Z'
+updatedAt: '2026-11-21T16:11:02.776Z'

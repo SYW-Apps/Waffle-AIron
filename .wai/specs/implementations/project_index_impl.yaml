@@ -65,10 +65,9 @@ methods:
       - stepNumber: 3
         label: hop
         description: >-
-          Look the alias up among the current root's member declarations (project.yaml `members`, or
-          a legacy L1 mount) and resolve its directory within the current root through the
-          containment guard; an alias that declares no member is null — never the family root, never
-          an internal subsystem
+          Look the alias up among the current root's member declarations (project.yaml `members`)
+          and resolve its directory within the current root through the containment guard; an alias
+          that declares no member is null — never the family root, never an internal subsystem
         type: call
         targetComponent: host_core_adapter
         targetMethod: resolveContainedProjectPath
@@ -193,4 +192,4 @@ methods:
     symbol: assertMintableNarrowingEntry
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-31T23:38:26.068Z'
+updatedAt: '2026-11-21T16:16:06.210Z'

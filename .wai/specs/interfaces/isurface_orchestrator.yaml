@@ -110,19 +110,6 @@ methods:
     signature: 'listExternals(): list<ExternalListing>'
     returns: list<ExternalListing>
     params: []
-  - name: listFamilyPins
-    description: >-
-      The stage-1 family pins the bound root holds in .wai/surfaces/ — every generated snapshot: the
-      family surface (keyed by the parent's system name) and each sibling pin
-      (`<system>::<subsystem>`) that `wairon surface pin` wrote. Nothing reads them since stage 3
-      (externals and their pins replace them); the chaining migration converts the family pin into
-      an external and deletes them all. Foreign imports (exchanged or authored) are never listed.
-      Reads only the bound root, and projects nothing.
-    signature: 'listFamilyPins(): list<FamilyPin>'
-    returns: list<FamilyPin>
-    params: []
-    guarantees:
-      - idempotent
   - name: listPinnedExternals
     description: >-
       The bound project's declared hosted and git externals and referenced git or hosted members,
@@ -340,4 +327,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-11-20T14:17:51.757Z'
+updatedAt: '2026-11-21T16:09:27.947Z'

@@ -27,9 +27,5 @@ values:
     description: 'A part becomes a project: its project content is created'
   - name: demote
     description: 'A project becomes a part: its project content is removed'
-  - name: chaining
-    description: >-
-      The stage 2-4 chaining migration (doctor --fix), which takes no other argument; since stage 8
-      it also rewrites each long-form member path to the one location key
 createdAt: '2026-10-04T23:24:23.421Z'
-updatedAt: '2026-10-04T23:24:23.839Z'
+updatedAt: '2026-11-21T16:05:43.470Z'

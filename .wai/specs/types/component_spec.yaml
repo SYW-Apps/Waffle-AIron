@@ -140,14 +140,13 @@ fields:
     type: Transport
     description: >-
       On a Portal (and expected on every Portal): how callers reach its verbs. One vocabulary with
-      the endpoint discriminator, replacing the retired portalType (read in the v5 reading `wairon
-      upgrade` binds, HTTP_API as HTTP; `wairon upgrade` rewrites it). Which process serves which
-      Portal is implementation: there are no listener mounts. On an Adapter, optional: the transport
-      it calls its target Portal's verbs over — inferred from that target when absent (HTTP for an
-      HTTP API, a database connection for a database Portal, ...), filled in by the creation tools
-      when the target is known, and an error when stated and it disagrees with the target's
-      (ADAPTER_TRANSPORT_MISMATCH), so a Portal's transport change shows its impact on every Adapter
-      that calls it. On no other block
+      the endpoint discriminator, replacing the retired portalType, a wairon 5 form the loader
+      refuses. Which process serves which Portal is implementation: there are no listener mounts. On
+      an Adapter, optional: the transport it calls its target Portal's verbs over — inferred from
+      that target when absent (HTTP for an HTTP API, a database connection for a database Portal,
+      ...), filled in by the creation tools when the target is known, and an error when stated and
+      it disagrees with the target's (ADAPTER_TRANSPORT_MISMATCH), so a Portal's transport change
+      shows its impact on every Adapter that calls it. On no other block
     optional: true
   - name: abi
     type: string
@@ -244,4 +243,4 @@ methods:
     symbol: componentEntryFor
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-21T21:19:51.794Z'
+updatedAt: '2026-11-21T15:57:14.339Z'

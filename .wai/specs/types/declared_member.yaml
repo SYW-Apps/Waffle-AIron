@@ -21,7 +21,7 @@ fields:
     type: string
     description: >-
       A contained member's root as written, relative to the declaring project's root — from a
-      contained `source` or the deprecated long-form `path`; absent for any other storage.
+      contained `source`; absent for any other storage.
     optional: true
   - name: description
     type: string
@@ -59,13 +59,7 @@ fields:
       Where the member's files live, from `path` or the source's one set field. Shown on the canvas
       as the part's storage badge.
     optional: false
-  - name: deprecatedPath
-    type: bool
-    description: >-
-      Whether the entry used the deprecated long-form `path` key (DEPRECATED_MOUNT_FORM; `doctor
-      --fix` rewrites it).
-    optional: false
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:33.853Z'
-updatedAt: '2026-10-04T23:39:03.705Z'
+updatedAt: '2026-11-21T16:11:49.674Z'

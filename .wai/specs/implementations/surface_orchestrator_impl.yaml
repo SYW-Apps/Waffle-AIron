@@ -423,23 +423,6 @@ methods:
         type: return
         outcome: ExternalListing[]
     detail: full
-  - name: listFamilyPins
-    narrative:
-      - stepNumber: 1
-        description: Read the snapshots the bound root holds through the repository
-        type: call
-        targetComponent: surface_repository
-        targetMethod: listSnapshots
-      - stepNumber: 2
-        description: >-
-          Keep the generated ones — foreign imports (exchanged, authored) are never family pins —
-          and classify each by its key: `<system>::<subsystem>` is a sibling pin, any other
-          generated key the parent's family pin
-        type: local
-      - stepNumber: 3
-        description: Answer the family pins in key order
-        type: return
-        outcome: FamilyPin[]
   - name: listPinnedExternals
     sourcePath: src/core/surfaces.ts
     narrative:
@@ -1084,4 +1067,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-11-20T00:10:49.996Z'
+updatedAt: '2026-11-21T16:09:14.762Z'

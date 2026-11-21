@@ -98,8 +98,7 @@ methods:
   - name: runMemberMove
     description: >-
       `wairon member move <alias> <path>`: relocate a member's directory and point its `members`
-      entry there in one step (a member still declared in the legacy L1 form is moved into `members`
-      first). Replaces `wairon subsystem move`.
+      entry there in one step. Replaces `wairon subsystem move`.
     signature: 'runMemberMove(alias: string, path: string): Promise<void>'
     returns: async void
   - name: runSubsystemExternalize
@@ -1006,4 +1005,4 @@ methods:
     returns: async void
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-20T00:22:47.571Z'
+updatedAt: '2026-11-21T16:13:56.900Z'

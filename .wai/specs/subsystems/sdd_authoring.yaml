@@ -15,8 +15,8 @@ description: >-
   doctor repair that retypes or drops a field without adding design — stays on sdd_core directly,
   ungated by construction, which is what lets a spec authored before a rule existed still load and
   still be repaired. A write that authors NEW spec content goes through this seam whoever makes it,
-  a migration included: the chaining migration's L0 export entries are design a person would
-  otherwise have written, and they are judged like it.
+  a migration included: a detach's widened L0 export entries are design a person would otherwise
+  have written, and they are judged like it.
 parentSystem: Waffle-AIron
 publicInterfaces:
   - details: >-
@@ -28,4 +28,4 @@ publicInterfaces:
 trustedLinks: []
 status: complete
 createdAt: '2026-09-18T21:40:20.265Z'
-updatedAt: '2026-10-06T18:55:19.632Z'
+updatedAt: '2026-11-21T16:13:00.507Z'

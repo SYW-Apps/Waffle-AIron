@@ -17,8 +17,7 @@ fields:
     type: PublicInterfaceType
     description: >-
       LEGACY, no longer authored: an entry's export kind is derived from its backing Portal's
-      transport (transport.exportKind). Read only in the v5 reading `wairon upgrade` binds, which
-      drops a value that agrees with the derived one and reports one that does not
+      transport (transport.exportKind). A wairon 5 form the loader refuses
     optional: true
   - name: details
     type: string
@@ -92,4 +91,4 @@ methods:
     symbol: isOwnComponentEntry
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-31T21:55:06.071Z'
+updatedAt: '2026-11-21T15:57:20.077Z'

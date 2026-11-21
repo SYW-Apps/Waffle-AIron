@@ -29,12 +29,10 @@ fields:
   - name: projectPath
     type: string
     description: >-
-      DEPRECATED (stage 3): the legacy L1 mount form. A subsystem carrying it is not a subsystem at
-      all but a member declaration of its project, read by the scan in the v5 reading `wairon
-      upgrade` binds, never loaded as a subsystem and never given content; `wairon upgrade` moves it
-      to project.yaml `members`. MUST be a relative path that resolves strictly within the owning
-      project's root; absolute paths and ../-escaping paths are rejected so a member is always
-      contained by the project declaring it.
+      DEPRECATED (stage 3): the legacy L1 mount form, a wairon 5 form the loader refuses; a member
+      is declared in project.yaml `members`. MUST be a relative path that resolves strictly within
+      the owning project's root; absolute paths and ../-escaping paths are rejected so a member is
+      always contained by the project declaring it.
     optional: true
   - name: publicInterfaces
     type: list<PublicInterface>
@@ -104,4 +102,4 @@ methods:
     symbol: subsystemDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-18T19:09:09.944Z'
+updatedAt: '2026-11-21T15:57:22.754Z'

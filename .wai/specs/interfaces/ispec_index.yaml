@@ -13,12 +13,11 @@ methods:
     description: >-
       Loads all L1 subsystem specifications of the bound root and of every member the scan read,
       each keyed under its project's key (`billing::billing` for member billing's subsystem
-      `billing`; never merged with anything). A legacy L1 mount (a subsystem carrying projectPath)
-      is read as a member declaration of its project and is NOT loaded as a subsystem: a mount
-      carries no content. A member path that escapes the project that DECLARES it — absolute,
-      ../-escaping, or through a link — is refused as PROJECTPATH_ESCAPE and not followed,
-      identically from every loading root; every loader issue about a member (escaping, cyclic,
-      missing) carries the member's key, so a validation scope that includes the member keeps it.
+      `billing`; never merged with anything). A member path that escapes the project that DECLARES
+      it — absolute, ../-escaping, or through a link — is refused as PROJECTPATH_ESCAPE and not
+      followed, identically from every loading root; every loader issue about a member (escaping,
+      cyclic, missing) carries the member's key, so a validation scope that includes the member
+      keeps it.
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
     returns: list<SubsystemSpec>
   - name: loadSubsystemSpec
@@ -109,8 +108,7 @@ methods:
   - name: listProjectRoots
     description: >-
       The project roots the current scan read, bound root first, then each contained project member
-      in walk order: its key, where it sits among its family's members and in which form it is
-      declared (with the legacy L1 mount as written, for the migration), its own L0, its
+      in walk order: its key, where it sits among its family's members, its own L0, its
       configuration (read through that root's binding), its parts (stage 8: what a member is follows
       from its content; each part's specs keyed under the declaring root as its own, with where they
       came from — a contained or `../` sibling directory, or the git cache at the pinned commit),
@@ -199,19 +197,6 @@ methods:
     params: []
     guarantees:
       - idempotent
-  - name: retiredReachFacts
-    description: >-
-      What the current scan met in the forms the reachability model retired: each Portal's
-      portalType and listener mounts, each invokedBy of a retired kind, each authored export type
-      and each in-process Custom endpoint, with what the stored spec held there. The loader reads
-      them compatibly in the v5 reading `wairon upgrade` binds, so the stored value would otherwise
-      be gone by the time the migration asks. Read from the cached scan, rescanning first when the
-      tree changed.
-    signature: 'retiredReachFacts(): list<RetiredReachFact>'
-    returns: list<RetiredReachFact>
-    params: []
-    guarantees:
-      - idempotent
   - name: typePath
     description: >-
       The path the workspace records for a type's spec, or where one not stored yet is placed under
@@ -266,4 +251,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-23T22:18:56.750Z'
+updatedAt: '2026-11-21T16:14:20.404Z'

@@ -619,52 +619,34 @@ methods:
         type: throw
         error: chained-spec, or the L0 is never deleted
       - stepNumber: 4
-        description: >-
-          Decide whether the id names a spec of a legacy L1 mount read through this tree (its key
-          carries the mount's prefix): it has no subtree this project may plan
-        type: branch
-        condition: the id is a legacy mount's key
-        onFalseStep: 7
-      - stepNumber: 5
-        description: >-
-          Delete that one document through the core client adapter, as the store always has; a dry
-          run only reads whether it is there
-        type: call
-        targetComponent: authoring_core_adapter
-        targetMethod: deleteSpec
-      - stepNumber: 6
-        label: single-document
-        description: 'Answer with that single document: removed, or not there'
-        type: return
-        outcome: single document
-      - stepNumber: 7
+        label: plan-scope
         description: >-
           Read the bound project's configuration for the test roots the report searches; a project
           that has none searches nothing
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 8
+      - stepNumber: 5
         description: Read the bound tree's spec index, this project's own specs only
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: scanAllSpecs
-      - stepNumber: 9
+      - stepNumber: 6
         description: Read the L0, whose export table may name what the deletion removes
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadSpec
-      - stepNumber: 10
+      - stepNumber: 7
         description: >-
           Ask the index what deleting the spec takes with it (spec_index.subtreeOf): the spec itself
           and everything it contains, innermost first
         type: local
-      - stepNumber: 11
+      - stepNumber: 8
         description: Decide whether there is anything to delete
         type: branch
         condition: no spec of the kind holds the id
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 10
+      - stepNumber: 9
         label: spec-missing
         description: >-
           Refuse, nothing deleted, with the core's boundary sentence asked to exist: another
@@ -674,58 +656,58 @@ methods:
           the kind does hold
         type: throw
         error: 'spec-missing: this project has no spec of the kind under the id'
-      - stepNumber: 13
+      - stepNumber: 10
         description: >-
           Ask the index which references specs outside that set still hold to it
           (spec_index.referencesTo), each with the spec holding it and its position
         type: local
-      - stepNumber: 14
+      - stepNumber: 11
         description: >-
           Read, before anything goes, every public name a consumer reaches what goes through: the
           deletion's published list, from which the door names the consumers it breaks
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: publishedUsesOf
-      - stepNumber: 15
+      - stepNumber: 12
         description: Decide whether the deletion takes away any method
         type: branch
         condition: >-
           a removed contract, implementation or type held methods and the project declares test
           roots
-        onFalseStep: 18
-      - stepNumber: 16
+        onFalseStep: 15
+      - stepNumber: 13
         description: >-
           Place each removed method in the file realizing it, read now, while those implementations
           still exist
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 17
+      - stepNumber: 14
         description: >-
           Find the tests that encode the removed methods, each searched by its symbol when it
           declared one
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 18
+      - stepNumber: 15
         label: plan
         description: Decide whether the caller asked only for the plan
         type: branch
         condition: the caller asked for a dry run
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 17
+      - stepNumber: 16
         label: dry-run
         description: >-
           Answer with the plan: every spec that would go, every reference that would be left, every
           public name it publishes, and the tests to revisit — nothing removed
         type: return
         outcome: dry run
-      - stepNumber: 20
+      - stepNumber: 17
         description: Decide whether the deletion would leave references dangling
         type: branch
         condition: a spec outside the set still references it and the caller did not force the deletion
-        onFalseStep: 22
-      - stepNumber: 21
+        onFalseStep: 19
+      - stepNumber: 18
         label: referenced
         description: >-
           Refuse before anything is removed, naming each reference with the spec that holds it and
@@ -733,21 +715,21 @@ methods:
           them for validate to report
         type: throw
         error: 'referenced: other specs still reference what the deletion removes'
-      - stepNumber: 22
+      - stepNumber: 19
         label: remove
         description: For each spec of the set, innermost first, so a container goes after its content
         type: loop
         loopKind: forEach
         over: the specs the deletion takes
-        endStep: 23
-      - stepNumber: 23
+        endStep: 20
+      - stepNumber: 20
         description: >-
           Delete the spec document through the core client adapter, which prunes the folders it
           leaves empty
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: deleteSpec
-      - stepNumber: 24
+      - stepNumber: 21
         description: >-
           Return the deletion: the kind and id, that it was removed, every spec it took, the
           references a forced deletion left dangling, the public names it published, and the tests
@@ -756,4 +738,4 @@ methods:
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-10-16T12:02:59.983Z'
+updatedAt: '2026-11-21T16:15:33.146Z'

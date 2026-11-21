@@ -21,11 +21,10 @@ dependsOn:
   - membership_migration
   - identity_migration
   - boundary_migration
-  - chaining_migration_orchestrator
   - family_transaction
   - migration_core_adapter
   - migration_validator_adapter
   - files_adapter
 status: complete
 createdAt: '2026-09-30T20:35:31.532Z'
-updatedAt: '2026-10-31T23:25:12.881Z'
+updatedAt: '2026-11-21T16:05:36.555Z'

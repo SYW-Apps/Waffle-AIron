@@ -201,26 +201,6 @@ methods:
       - name: destination
         type: InternalizeDestination
         description: Where its metadata goes
-  - name: projectConfigExists
-    description: >-
-      Forward to project_config_portal.projectConfigExists: whether the bound project has a
-      configuration.
-    signature: 'projectConfigExists(): bool'
-    returns: bool
-    params: []
-  - name: exportUsage
-    description: >-
-      Forward to spec_tree_portal.exportUsage: one project's references into another mapped onto the
-      producer's public names (used) or not (unexported).
-    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
-    returns: ExportUsage
-    params:
-      - name: consumer
-        type: string
-        description: The consumer's namespace in the family graph
-      - name: producer
-        type: string
-        description: The producer's namespace in the family graph
   - name: loadSpec
     description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
     signature: >-
@@ -234,44 +214,6 @@ methods:
       - name: id
         type: string
         description: The spec id (namespaced if needed)
-  - name: loadTypeSpecs
-    description: >-
-      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
-      members' included.
-    signature: 'loadTypeSpecs(): list<TypeSpec>'
-    returns: list<TypeSpec>
-    params: []
-  - name: resolveSubsystemExports
-    description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
-    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
-    returns: ResolvedExportTable
-    params:
-      - name: subsystemId
-        type: string
-        description: The (qualified) id of the subsystem
-  - name: moveMountToMembers
-    description: >-
-      Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
-      project into its `members`.
-    signature: 'moveMountToMembers(alias: string): bool'
-    returns: bool
-    params:
-      - name: alias
-        type: string
-        description: The mount subsystem's local id
-  - name: normalizeReferences
-    description: >-
-      Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
-      in its canonical stage-3 form.
-    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
-    returns: bool
-    params:
-      - name: kind
-        type: WritableSpecKind
-        description: The kind of spec the id names (the L0 holds no references to normalize)
-      - name: id
-        type: string
-        description: The spec's in-memory key, from the family's top root
   - name: promoteMember
     description: 'Forward to spec_maintenance_portal.promoteMember: a part becomes a project in place.'
     signature: 'promoteMember(alias: string, id?: string): PromoteResult'
@@ -295,20 +237,6 @@ methods:
       - name: destination
         type: InternalizeDestination
         description: Where its metadata goes
-  - name: updateMember
-    description: >-
-      Forward to spec_maintenance_portal.updateMember: change a member's declaration — the chaining
-      migration's rewrite of a deprecated long-form `path` to the one location key, and promote /
-      demote dropping a contradicted `as`.
-    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
-    returns: bool
-    params:
-      - name: alias
-        type: string
-        description: The member's alias
-      - name: changes
-        type: MemberDeclaration
-        description: The fields to set
   - name: diffAgainstApproval
     description: >-
       Forward to approval_portal.diffAgainstApproval: what differs between a project root's tree and
@@ -331,4 +259,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-09-30T20:31:26.576Z'
-updatedAt: '2026-10-09T16:55:56.540Z'
+updatedAt: '2026-11-21T16:17:54.684Z'

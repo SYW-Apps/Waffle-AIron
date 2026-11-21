@@ -189,13 +189,6 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: computeOwnDesignId
-  - name: retiredReachFacts
-    narrative:
-      - stepNumber: 1
-        description: Call retiredReachFacts on the core portal
-        type: call
-        targetComponent: spec_tree_portal
-        targetMethod: retiredReachFacts
   - name: resolveChainingParent
     narrative:
       - stepNumber: 1
@@ -226,4 +219,4 @@ methods:
         targetMethod: loadGroupSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-19T21:56:29.609Z'
+updatedAt: '2026-11-21T16:08:34.244Z'
