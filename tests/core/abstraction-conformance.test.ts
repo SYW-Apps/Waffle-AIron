@@ -616,9 +616,13 @@ describe('only a declaration is the abstraction: a class with behaviour is no de
     expect(crossed[0].message).toContain('"NoticeSender"');
     expect(crossed[0].message).not.toContain('"NoticeSenderPort"');
   });
-  it('reads an abstract class with behaviour no more as the declaration than a concrete one', () => {
+  it('reads an abstract class with a helper as the declaration, the shape named as the component over another that holds the member', () => {
     const behaving = 'export abstract class NoticeSender { abstract sendNotice(recipient: string): void; helper(): number { return 1; } }\nexport interface NoticeSenderPort { sendNotice(recipient: boolean): void }\n';
-    expect(found(flat({ declaration: behaving }), 'PARAM_TYPE_MISMATCH').filter((i) => i.specId === 'notice_sender_impl')).toHaveLength(1);
+    expect(found(flat({ declaration: behaving }), 'PARAM_TYPE_MISMATCH').filter((i) => i.specId === 'notice_sender_impl')).toHaveLength(0);
+  });
+  it('reads a concrete class as no declaration: the interface beside it is the one compared', () => {
+    const concrete = 'export class NoticeSender { sendNotice(recipient: string): void { void recipient; } }\nexport interface NoticeSenderPort { sendNotice(recipient: boolean): void }\n';
+    expect(found(flat({ declaration: concrete }), 'PARAM_TYPE_MISMATCH').filter((i) => i.specId === 'notice_sender_impl')).toHaveLength(1);
   });
   it('still reads an abstract class whose members are all abstract', () => {
     expect(found(flat({ declaration: 'export abstract class NoticeSender { abstract sendNotice(recipient: number): void }\n' }), 'PARAM_TYPE_MISMATCH')).toHaveLength(1);

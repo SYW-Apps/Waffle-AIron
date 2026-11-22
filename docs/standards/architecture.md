@@ -402,10 +402,19 @@ member signatures (TypeScript at exact grade, a Python Protocol or abstract base
 compared with the abstraction's contract as a body is: parameters, return type and
 whether it completes later. So the abstraction's code, its contract, each
 implementer's contract and that implementer's code are held to one another. An
-abstract class with only abstract members is as valid a declaration as an
-interface; in Python an abstract base class (`ABC` or `metaclass=ABCMeta`) whose every method is an
-`@abstractmethod` is read as a Protocol is, and one method with a body, `__init__`
-included, makes it behaviour and no declaration.
+abstract class is as valid a declaration as an interface, whatever constructor,
+helpers or default bodies it also holds: the design reads only the signatures it
+declares for the contract's methods, and never models a body there or lets an
+implementer inherit one, since each implementer realizes every method of its
+contract in its own code (`UNREALIZED_METHOD` otherwise). A concrete class declares
+nothing. In Python an abstract base class (`ABC` or `metaclass=ABCMeta`) with at
+least one `@abstractmethod` declares, `__init__` and helpers included, and one with
+none is a concrete class. An interface that extends another and an intersection
+alias read as the one shape they are, the inherited members included. A declaration
+nothing could compare (a language with no reader of member signatures such as Rust,
+Go or Java, a file read below exact grade, or a member on a concrete class only) is
+the notice `ABSTRACTION_DECLARATION_UNCOMPARED`, once per implementation: an
+uncompared declaration is never silent, and never fails a gate.
 
 **What an implementer owes.** It keeps the abstraction's stereotype
 (`ABSTRACTION_STEREOTYPE_MISMATCH`) and owner (`ABSTRACTION_CONTAINMENT`), declares

@@ -32,15 +32,34 @@ describe('sourceFiles', () => {
     const set = sourceFiles([], [], dir, ['src']);
     expect([...set.files].sort()).toEqual(['src/a.ts', 'src/b.ts']);
     expect(set.claimed).toEqual([]);
-    expect(sourceFiles([], [], dir, []).files).toEqual([]);
+    // Nothing walked: the project's other source files are still named, since the code model reads them.
+    expect([...sourceFiles([], [], dir, []).files].sort()).toEqual(['src/a.ts', 'src/b.ts']);
+  });
+
+  it('names the other project source files the bounded outside walk reads, within its skipped folders', () => {
+    const dir = project({
+      'src/x.ts': 'export const x = 1;\n',
+      'wiring/main.ts': "import { x } from '../src/x.js';\nexport const y = x;\n",
+      'scripts/tool.py': 'print(1)\n',
+      'node_modules/dep/index.js': 'module.exports = 1;\n',
+      'dist/out.js': 'module.exports = 2;\n',
+      '.hidden/h.ts': 'export const h = 1;\n',
+      'README.md': 'not source\n',
+    });
+    const set = sourceFiles([impl], [], dir);
+    expect([...set.files].sort()).toEqual(['scripts/tool.py', 'src/x.ts', 'wiring/main.ts']);
+    expect(set.claimed).toEqual(['src/x.ts']);
+    const model = buildCodeModel([impl], [], dir);
+    expect(model.outsideNames).toContain('y');
   });
 
   it('takes the file set buildCodeModel takes, spec-named files included, exclude honoured', () => {
     const dir = project({ 'src/x.ts': 'export const x = 1;\n', 'src/gen/g.ts': 'export const g = 1;\n' });
     const model = buildCodeModel([impl], [], dir, ['src'], ['src/gen']);
     expect(model.files.map(f => f.path).sort()).toEqual(['src/x.ts']);
+    // An excluded file is not analyzed, but the outside walk reads it, so it is named, after the analyzed ones.
     const set = sourceFiles([impl], [], dir, ['src'], ['src/gen']);
-    expect(set.files).toEqual(['src/x.ts']);
+    expect(set.files).toEqual(['src/x.ts', 'src/gen/g.ts']);
     expect(set.claimed).toEqual(['src/x.ts']);
   });
 

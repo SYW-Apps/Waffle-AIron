@@ -17,6 +17,7 @@ import {
   type ComponentSpec,
   type ImplementationSpec,
   type InterfaceSpec,
+  type MethodImplementation,
   type MemberSignatureFact,
   type ParameterFact,
   type SourceFileFacts,
@@ -813,6 +814,40 @@ export function buildImplementationMethods(ctx: RuleContext): ResolvedMethod[] {
   return out;
 }
 
+/**
+ * The implementation methods a signature rule judges: every method an
+ * implementation lists, and, for an abstraction's implementation, every
+ * contract method it does not list as well. An abstraction's L4 carries code
+ * linkage only and its methods are realized by declaration, so it may list
+ * none of them (contract-symmetry); its declaration is still compared with
+ * each, under the method's own name, from the implementation's file.
+ */
+export function signatureMethods(ctx: RuleContext): ResolvedMethod[] {
+  const listed = ctx.implementationMethods();
+  const out = [...listed];
+  const seen = new Set(listed.map(m => `${m.implementation.id}#${m.method.name}`));
+  for (const impl of ctx.implementations) {
+    const contract = ctx.interfaceMap.get(impl.contract);
+    if (!contract) continue;
+    const component = ctx.componentMap.get(contract.component);
+    if (!component || component.abstract !== true) continue;
+    if (ctx.isInChainedSubproject(component.subsystem)) continue;
+    const draftContext = ctx.isImplementationDraft(impl);
+    for (const contractMethod of contract.methods) {
+      if (seen.has(`${impl.id}#${contractMethod.name}`)) continue;
+      const method = { name: contractMethod.name, narrative: [] } as MethodImplementation;
+      out.push({
+        implementation: impl,
+        method,
+        component,
+        ...(impl.sourcePath !== undefined ? { sourceFile: impl.sourcePath } : {}),
+        draftContext,
+      });
+    }
+  }
+  return out;
+}
+
 /** The three reaches a ref that resolved in this tree (and stayed a tree edge) can have. */
 type EdgeReachResolved = 'internal' | 'shared' | 'cross-subsystem';
 
@@ -959,13 +994,14 @@ export function judgedShapes(facts: SourceFileFacts): Record<string, TypeShapeFa
 }
 
 /**
- * Whether a shape is a DECLARATION: an interface, a trait, a Protocol, a type
- * literal, or a class whose members are all abstract. A class with a member
- * that has a body is behaviour, and declares nothing a caller holds.
+ * Whether a shape is a DECLARATION, as the reader that read it says
+ * (type_shape_fact.declaration): an interface, a trait, a Protocol, a type
+ * literal, or an abstract class, whatever constructor, helpers or default
+ * bodies the class also holds. A concrete class is behaviour, and declares
+ * nothing a caller holds.
  */
-function isDeclaration(facts: SourceFileFacts, name: string): boolean {
-  if (facts.language === 'python') return true;
-  return !Object.values(facts.functionBodies ?? {}).some(bodies => bodies.some(body => body.container === name && !body.nested));
+function isDeclaration(shape: TypeShapeFact): boolean {
+  return shape.declaration === true;
 }
 
 /**
@@ -977,7 +1013,7 @@ function isDeclaration(facts: SourceFileFacts, name: string): boolean {
  */
 function holdingShapes(facts: SourceFileFacts, member: string, component: Pick<ComponentSpec, 'id'>, byMethods = false): [string, TypeShapeFact][] {
   const shapes = facts.typeShapes ?? {};
-  const holding = Object.entries(shapes).filter(([name, shape]) => (holdsOwn(shape.signatures, member) || (byMethods && shape.methods.includes(member))) && isDeclaration(facts, name));
+  const holding = Object.entries(shapes).filter(([, shape]) => (holdsOwn(shape.signatures, member) || (byMethods && shape.methods.includes(member))) && isDeclaration(shape));
   if (holding.length <= 1) return holding;
   const wanted = nameKey(componentCodeName(component.id));
   const named = holding.filter(([name]) => nameKey(name) === wanted);
