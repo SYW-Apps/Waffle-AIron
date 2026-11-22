@@ -39,9 +39,10 @@ export const DESIGN_FORMAT = 'wairon-design';
  * 2.0 is the reachability model's: listener mounts and portalType removed,
  * transport, abi and the Portal-level invokedBy added, invokedBy kinds
  * narrowed to entry and runtime with a scope. 2.1 added detailStated to each
- * method body; 2.2 adds the type group tree (typeGroups) and each type's group.
+ * method body; 2.2 adds the type group tree (typeGroups) and each type's group; 2.3 adds
+ * abstractions: a component's `abstract` mark and a contract's `implements` and `omits`.
  */
-export const DESIGN_FORMAT_VERSION = '2.2';
+export const DESIGN_FORMAT_VERSION = '2.3';
 
 /**
  * design_approval — the approval state a design export is stamped with: the
@@ -195,6 +196,8 @@ export const DesignComponentSchema = z.object({
   subsystem: z.string(),
   stereotype: z.string(),
   variant: z.string().optional(),
+  /** True on an abstraction: a component whose contract other components implement and callers depend on instead of an implementer; absent otherwise. */
+  abstract: z.boolean().optional(),
   dependencyClass: z.string().optional(),
   durability: z.string().optional(),
   /** On a Portal: its transport (format 2.0 replaces portalType and its HTTP_API spelling). */
@@ -227,6 +230,10 @@ export const DesignInterfaceSchema = z.object({
   description: z.string(),
   status: z.string(),
   methods: z.array(DesignMethodSchema),
+  /** The abstractions the contract realizes, each a component key or `alias::publicName` across projects, in declared order; absent when it implements none. */
+  implements: z.array(z.string()).optional(),
+  /** On a Portal implementing a Portal abstraction: the verbs its transport deliberately does not serve, each with its reason; absent otherwise. */
+  omits: z.array(z.object({ method: z.string(), reason: z.string() })).optional(),
   formerly: z.array(z.string()),
   ext: ExtSchema.optional(),
 }).passthrough();

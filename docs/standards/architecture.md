@@ -367,11 +367,108 @@ an emitted topic nobody consumes is `UNCONSUMED_TOPIC`, a subscription with no
 source is `UNSOURCED_SUBSCRIPTION` (topics with external ends are acknowledged
 via `lint.allow`). Trees that use no events see neither check.
 
-**Ports + implementations (the Carrier rule).** When a capability has multiple
-external providers, define an **interface (a port)** and one Adapter per provider:
-`Carrier` interface ← `DhlAdapter`, `UpsAdapter`. Callers depend on the `Carrier`
-interface; the concrete Adapter is injected at bootstrap. This is composition +
-polymorphism via interfaces — **not** inheritance.
+### Abstractions: one contract, several implementers
+
+A component marked `abstract: true` is an **abstraction**: it holds a contract that
+several other components implement. Each implementer's contract lists the
+abstraction in `implements` (a list: a local abstract component id, or an
+`alias::name` extension point of another project, §9). **Callers depend on the
+abstraction**, never on an implementer; the concrete implementer is chosen at
+bootstrap. This is composition and polymorphism through a contract — **not**
+inheritance. Pick the shape by the variation you actually have:
+
+| The variation is… | Model it as |
+|---|---|
+| One engine per deployment (MySQL or Postgres behind a Store) | Several L4 implementations of **one** component's contract, each with its own `technologies` (§10) |
+| Several live implementations used together (carriers, payment providers, rule sets, exporters) | An **abstraction** with one implementer per variant: `Carrier` ← `DhlAdapter`, `UpsAdapter` |
+| A broadcast to whoever listens | **Events**: a topic and a payload, `emits` / `subscribesTo` |
+| The same code, many live instances | **One Actor** and a Registry the Supervisor keeps |
+
+Base classes are never modelled. A Portal over a Portal is a **gateway** (§7), or
+two implementations of one Portal abstraction.
+
+**What an abstraction is.** The mark stands on any block except an Observer, a
+pattern or a UI block (`ABSTRACT_NOT_ALLOWED`). Its L3 contract declares the
+methods; its L4 carries code linkage only — the file that declares the interface,
+trait or Protocol — and no narrative, intent, calls or technologies
+(`ABSTRACTION_HAS_BEHAVIOUR`). An abstraction no concrete component implements,
+directly or down a chain, is `ABSTRACTION_UNIMPLEMENTED` unless it, or one below it,
+is exported with role `implement`; one with a single concrete implementer is the
+notice `ABSTRACTION_SINGLE_IMPLEMENTER` — one engine behind a component needs
+several L4 implementations, not an abstraction.
+
+**The declaration is checked against the contract.** Where the code model reads
+member signatures (TypeScript at exact grade, a Python Protocol or abstract base class), the interface is
+compared with the abstraction's contract as a body is: parameters, return type and
+whether it completes later. So the abstraction's code, its contract, each
+implementer's contract and that implementer's code are held to one another. An
+abstract class with only abstract members is as valid a declaration as an
+interface; in Python an abstract base class (`ABC` or `metaclass=ABCMeta`) whose every method is an
+`@abstractmethod` is read as a Protocol is, and one method with a body, `__init__`
+included, makes it behaviour and no declaration.
+
+**What an implementer owes.** It keeps the abstraction's stereotype
+(`ABSTRACTION_STEREOTYPE_MISMATCH`) and owner (`ABSTRACTION_CONTAINMENT`), declares
+every method of the abstraction with the same signature (`IMPLEMENTS_MISMATCH`), and
+is no wider in effect or dependency class (`IMPLEMENTS_EFFECT_WIDER`), since callers
+rely on the abstraction's. A local `implements` entry must name an abstract
+component (`IMPLEMENTS_NOT_ABSTRACT`). A call that reaches, on an implementer
+directly, a method its abstraction declares bypasses the abstraction
+(`ABSTRACTION_BYPASSED`); the implementer's own extra methods are fine to call. In
+code an implementer may import, extend or call into its abstraction's file; the
+reverse is an undeclared dependency.
+
+**Chains.** An abstraction may implement abstractions, at any depth: `Animal` ←
+`Dog` ← `GoldenRetriever`. Every level is a whole contract: it states each method
+of what it implements, or takes that method's signature with `signatureFrom` from
+the level that states it (§9). Nothing is inherited. A concrete component is never
+implemented, and a chain that returns to itself is `ABSTRACTION_CYCLE`. Calling a
+narrower abstraction (`Dog` where `Animal` would do) is substitution, never a
+bypass. A chain is for depth a system really has; one level is the normal shape.
+
+**Finding codes.** A code an abstraction's method declares is one a caller of the
+abstraction may meet, and only some implementers raise each (one carrier takes
+several parcels in a shipment, another refuses them). It stands when at least one
+concrete implementer declares it on its own method of that name, and that
+implementer's code is held to it; a code none declares is
+`ABSTRACTION_FINDING_UNRAISED`. An implementer may declare codes of its own that the
+abstraction does not, a special state of one carrier: nothing reports them, and the
+brief of a caller lists both, each with who declares it, so the caller handles the
+abstraction's by code and relays the rest. An invariant owned by an abstraction is
+asserted by its concrete implementers, each in its own write method of that name
+(`UNASSERTED_INVARIANT`).
+
+**Across subsystems.** An abstraction implemented from another subsystem is
+published by its own subsystem with role `implement`, for that subsystem when the
+entry names `consumers` (`ABSTRACTION_UNPUBLISHED`).
+
+**Renames follow.** Renaming a method or parameter of an abstraction renames it on
+every implementer in the project, down the whole chain, all or nothing; the dry run
+names each one. The rename is asked of the topmost level that declares the method.
+A hand edit or a moved method follows nothing, so `IMPLEMENTS_MISMATCH` reports
+what drifted. Implementers in other projects are named, never written.
+
+**One contract, several abstractions** is legal but the exception — one vendor
+client serving two roles. It raises the notice `ABSTRACTION_MULTIPLE`; keep it to
+one responsibility serving several roles and document it with a `lint.allow` and a
+reason. Two abstractions whose same-named methods differ in params, returns or
+effect cannot both be served (`IMPLEMENTS_CONFLICT`). An entry that is an ancestor
+of another on the same contract is no second role.
+
+**Portal parity.** An abstract Portal is a parity contract across transports: it
+binds nothing — no transport, endpoints, auth or entry (`ABSTRACT_PORTAL_BINDS`).
+Each implementer Portal binds its own transport and endpoints, and serves every
+verb of the abstraction, or lists the ones it leaves out in `omits` with a reason.
+`omits` stands only on a concrete Portal implementing a Portal abstraction and names
+only verbs an abstraction of its chain declares (`OMISSION_NOT_ALLOWED`); any other missing verb is
+`IMPLEMENTS_MISMATCH`. So an HTTP Portal and a CLI Portal can be held to one verb
+set, the gaps stated rather than silent.
+
+On the canvas an abstraction wears an «abstract» mark and each implementer draws a
+dashed `implements` line with a hollow head to it, like a UML realization — a
+relation of the design, never a dependency. Reachability flows from an
+abstraction's methods to its implementers', and from Portal implementers to the
+verbs of a Portal abstraction.
 
 ---
 
@@ -385,7 +482,7 @@ The test: **can the object do this autonomously, using only its own state?**
   invariants, self-contained state transitions).
 - **No (it needs an external actor or system) → a method on the acting *block*,
   taking the entity as an argument.** An order cannot ship itself → a `Carrier`
-  (interface) with `DhlAdapter.ship(order)`. A dog cannot take itself out → a
+  (an abstraction, §4) with `DhlAdapter.ship(order)`. A dog cannot take itself out → a
   `Caretaker` (an Orchestrator) with `take_out(dog)`.
 
 This is the rich-vs-anemic balance, and it maps onto the blocks: **the Store holds
@@ -401,8 +498,7 @@ together (§10), with the ids generated in the workflow and the dependent
 referencing its owner.
 
 **Composition over inheritance.** The model has no class hierarchies. Variation is
-expressed by **interfaces (ports) with multiple implementations** (the Carrier
-example) and by **composition** (a pattern owns blocks). Inheritance is avoided;
+expressed by **abstractions with several implementers** (see *Abstractions*, §4) and by **composition** (a pattern owns blocks). Inheritance is avoided;
 "is-a" relationships that tempt a hierarchy are almost always "implements-an-
 interface" or "is-composed-of."
 

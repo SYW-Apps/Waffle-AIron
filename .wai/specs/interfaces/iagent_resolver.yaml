@@ -31,14 +31,23 @@ methods:
       rule that governs them, and the stop-and-report line for a shared file that would need a
       responsibility of its own —, for a Portal the handler shape its code takes and, for every
       implementer, that injectedParams are code linkage it declares once its code takes such a
-      parameter, the optional user-owned project guidance file (.wai/agents/<agentId>.md, read live)
-      and, when a type dialect is shipped for the language the agent's implementations are written
-      in, the type mapping (how the contracts' neutral types are spelled in that language), and
-      return the structured AgentBrief — rendered instructions plus
-      ownedPaths/readPaths/codeFence/sharedPaths and typeMapping. Always reflects the CURRENT spec
-      tree and guidance, so a re-lock or a guidance edit changes the next call's result with no
-      session restart; an unknown agentId (or an alias that names no direct member) throws. A hosted
-      caller must gate on reach itself before asking for a member's brief.
+      parameter, for a component taking part in an abstraction what that asks of its code, naming
+      every level of a chain of abstractions (an implementer gets the contract of each abstraction
+      it implements, directly or through the chain, and the interface its class declares it
+      implements, and the finding codes each abstraction declares, of which it declares those it
+      raises beside any of its own; an abstraction declares the interface, trait or Protocol only,
+      in the file its implementation names, with each method's symbol naming the member, and a type
+      name is suggested only when no file is named; a caller holds the abstraction's type, never an
+      implementer's, and is given the finding codes it may meet there: the abstraction's, and those
+      only implementers declare, named with who raises them, to relay rather than to branch on), the
+      optional user-owned project guidance file (.wai/agents/<agentId>.md, read live) and, when a
+      type dialect is shipped for the language the agent's implementations are written in, the type
+      mapping (how the contracts' neutral types are spelled in that language), and return the
+      structured AgentBrief — rendered instructions plus ownedPaths/readPaths/codeFence/sharedPaths
+      and typeMapping. Always reflects the CURRENT spec tree and guidance, so a re-lock or a
+      guidance edit changes the next call's result with no session restart; an unknown agentId (or
+      an alias that names no direct member) throws. A hosted caller must gate on reach itself before
+      asking for a member's brief.
     signature: 'composeAgentBrief(agentId: string, sessionPractices?: list<string>): AgentBrief'
     returns: AgentBrief
     params:
@@ -64,4 +73,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-06T21:45:15.613Z'
+updatedAt: '2026-11-22T15:12:13.584Z'

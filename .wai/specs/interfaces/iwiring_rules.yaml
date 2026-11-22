@@ -117,18 +117,23 @@ methods:
       Rule unused-detection. Walks the narrative execution graph (call steps, register handoffs,
       dispatch-table routing, lifecycle flows) from every declared root and flags the components and
       methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer;
-      each method of an interface that implements an imported extension point (the producer calls
-      it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic
-      reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its
-      Portal's); and each method with a runtime invokedBy, its own or inherited from its
+      each method of an interface that implements an imported extension point (alias::name: the
+      producer calls it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the
+      emitted topic reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or
+      its Portal's); and each method with a runtime invokedBy, its own or inherited from its
       component's. A Portal is no longer a root of its own and a published component is not either,
       so a Portal verb that no modelled caller reaches and nobody declared an entry for is reported:
       the message names the two remedies, modelling the caller or declaring the entry with its
-      scope. A network-scoped entry counts as declared here; the family run proves it. A runtime
-      declaration the INTERNAL walk (without the declared roots) already reaches is stale and is
-      reported: a method's when the walk reaches that method, a component's when it reaches every
-      method that inherits it. An entry never is, because it also states the verb's scope for the
-      network rules and the flow matrix.
+      scope. Abstractions carry reachability across their implementers: an implementer's method
+      counts as reached when the matching method of an abstraction it implements is reached, so an
+      implementer no dependsOn names is never unused merely for that; and an abstract Portal's verb
+      counts as reached when any implementer's matching verb is, implementers being entered through
+      their own entries, while an abstraction method nobody reaches stays unused. A network-scoped
+      entry counts as declared here; the family run proves it. A runtime declaration the INTERNAL
+      walk (without the declared roots) already reaches is stale and is reported: a method's when
+      the walk reaches that method, a component's when it reaches every method that inherits it. An
+      entry never is, because it also states the verb's scope for the network rules and the flow
+      matrix.
     signature: 'unusedDetection(ctx: RuleContext): void'
     returns: void
     params:
@@ -250,10 +255,14 @@ methods:
       (type.invariants), anchored through their componentClass. Every write-effect contract method
       of the owning component must carry a narrative step asserting each invariant
       (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as
-      semantic guarantees. This is an HONEST lint over declarations: a green run means every write
-      path visibly claims the invariant, never that the narrative or code actually enforces it. An
-      invariant with no resolvable owner or no declared write path is unanchored, and nothing
-      further is claimed about it.
+      semantic guarantees. An owner that is an abstraction has no narrative, so its obligation is
+      its implementers': each concrete implementer, direct or through the chain, asserts the
+      invariant in its own method of the write method's name, unless that method states an effect
+      other than write (it writes nothing) or the implementer does not declare it (omitted, or
+      implements-contracts' mismatch). This is an HONEST lint over declarations: a green run means
+      every write path visibly claims the invariant, never that the narrative or code actually
+      enforces it. An invariant with no resolvable owner or no declared write path is unanchored,
+      and nothing further is claimed about it.
     signature: 'invariantBacking(ctx: RuleContext): void'
     returns: void
     params:
@@ -269,7 +278,8 @@ methods:
       - code: UNASSERTED_INVARIANT
         severity: warning
         summary: >-
-          A write-effect method of the invariant's owning component has no narrative step asserting
+          A write-effect method of the invariant's owning component, or, where the owner is an
+          abstraction, that method on a concrete implementer of it, has no narrative step asserting
           it
   - name: invariantReferences
     description: >-
@@ -399,4 +409,4 @@ methods:
         summary: An Adapter states a transport other than the transport of a Portal it calls
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-21T21:19:18.230Z'
+updatedAt: '2026-11-22T15:11:30.638Z'

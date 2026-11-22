@@ -3,7 +3,10 @@ id: method_rename
 name: MethodRename
 description: >-
   What renaming a contract method changed: the specs the method itself moved in, the specs whose
-  references were retargeted, and the specs whose prose still names it.
+  references were retargeted, and the specs whose prose still names it. Renaming a method of an
+  abstraction also moves the same method on every implementer of this project, directly or through a
+  chain of abstractions: the specs they moved in are among the ones reported and each follower is
+  named.
 fields:
   - name: component
     type: string
@@ -21,7 +24,7 @@ fields:
     type: list<string>
     description: >-
       Ids of the specs the method moved in: every interface of the component that declared it, and
-      the implementations of those contracts
+      the implementations of those contracts, and the same on every implementer that followed it
     optional: false
   - name: rewritten
     type: list<string>
@@ -52,10 +55,11 @@ fields:
   - name: publishedIn
     type: list<string>
     description: >-
-      The public names of the export entries (L0 and L1) whose contract carries the renamed method:
-      the rename changed a published member there, which consumers pinning that entry see as one
-      member removed and one added. Reported, never prevented — no mainstream export mechanism
-      aliases a single member. Empty when the contract is not exported.
+      The public names of the export entries (L0 and L1) whose contract carries the renamed method,
+      an implementer's followed method included: the rename changed a published member there, which
+      consumers pinning that entry see as one member removed and one added. Reported, never
+      prevented — no mainstream export mechanism aliases a single member. Empty when the contract is
+      not exported.
     optional: false
   - name: dryRun
     type: bool
@@ -66,12 +70,21 @@ fields:
   - name: breaks
     type: list<ExternalConsumer>
     description: >-
-      The consumers of an export publishing the method whose specs call it by its old name — the
-      family's projects in reach and the consumer checkouts found in the searched folders: each
-      breaks until it follows the rename (the consumer's own gate then names the new name from this
-      method's rename trace). Absent when the method is published nowhere or nobody calls it
+      The consumers of an export publishing the method, or a method that followed it, whose specs
+      call it by its old name — the family's projects in reach and the consumer checkouts found in
+      the searched folders: each breaks until it follows the rename (the consumer's own gate then
+      names the new name from this method's rename trace). Impact is read for each renamed method as
+      for the first. Absent when the method is published nowhere or nobody calls it
     optional: true
+  - name: followed
+    type: list<string>
+    description: >-
+      The methods that followed the rename onto an implementer of this project, each
+      `<component>.<method>`, the implementer's own name for it: empty when the component is no
+      abstraction or nothing implements it. A dry run names them too. Another project's implementers
+      are never written; the consumer impact (breaks) names them instead
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-17T19:21:55.866Z'
-updatedAt: '2026-10-07T18:41:09.735Z'
+updatedAt: '2026-11-22T02:23:15.658Z'

@@ -38,7 +38,9 @@ methods:
     description: >-
       The canvas model render('canvas') draws, for the current project, returned as data instead of
       a self-contained page — so a client that mounts the shared renderer itself receives the model.
-      Pure derivation; relation health is drawn only when passed in.
+      It carries what the canvas build carries for abstractions: the abstract marker on a node and
+      an `implements` edge from each implementer to its abstraction. Pure derivation; relation
+      health is drawn only when passed in.
     signature: >-
       buildCanvasDataModel(relations?: list<ProjectRelations>, issues?: list<ValidationIssue>):
       CanvasModel
@@ -136,4 +138,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-11-12T21:49:46.474Z'
+updatedAt: '2026-11-21T23:31:32.296Z'

@@ -1,5 +1,6 @@
 import { dialectOf, nameKey, parseTypePosition, pathKey, type ShapeMemberFact, type SourceFileFacts, type TypeShapeFact, type TypeSpec } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+import { judgedShapes } from '../read-model.js';
 import { annotationAgreement } from './param-conformance.js';
 
 // ---------------------------------------------------------------------------
@@ -90,7 +91,7 @@ function judgeNamedScalar(ctx: RuleContext, type: TypeSpec, file: string, facts:
     const annotation = facts.aliasTypes![symbol];
     if (dialect.agrees(annotation, holds, new Map())) return;
     declared = `an alias of \`${annotation}\``;
-  } else if (own(facts.typeShapes)) {
+  } else if (own(judgedShapes(facts))) {
     declared = 'a record (an object shape)';
   } else {
     return;
@@ -174,10 +175,10 @@ export const typeShapeRule: SddRule = {
       if (!facts || facts.status !== 'analyzed' || (facts.analysisGrade !== 'exact' && !readsTypes)) continue;
       const key = readsTypes ? nameKey : (name: string): string => name;
       const symbol = type.symbol ?? type.name;
-      const shapes = facts.typeShapes;
+      const shapes = judgedShapes(facts);
       // Own-property lookup: a type may legitimately be named "constructor" or
       // "toString", and a bare index would answer with Object.prototype's.
-      if (!shapes || !Object.prototype.hasOwnProperty.call(shapes, symbol)) continue;
+      if (!Object.prototype.hasOwnProperty.call(shapes, symbol)) continue;
       const shape = shapes[symbol];
 
       // ---- 3. read: the data members, both sides of the comparison ----

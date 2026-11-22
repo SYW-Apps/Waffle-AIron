@@ -16,8 +16,10 @@ import { pinExternals } from '../../src/core/surfaces.js';
 import { runLock } from '../../src/commands/lock.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { buildReferenceFamily } from '../helpers/reference-family.js';
+import { excerpt } from '../../src/core/part-context.js';
 import {
   ComponentSpecSchema,
+  InterfaceSpecSchema,
   SubsystemSpecSchema,
   SystemSpecSchema,
 } from '../../src/models/index.js';
@@ -449,5 +451,50 @@ describe('property: part-alone-judges-against-pin', () => {
     // needs the whole tree, so the part alone skips it (and names it).
     expect(alone).toContain('CROSS_SUBSYSTEM_PRIVATE_ACCESS');
     expect(alone).toEqual(fromParent.filter((code) => code !== 'UNUSED_COMPONENT'));
+  });
+});
+
+describe('a part contract implementing an abstraction of its parent', () => {
+  /** The sibling clinic, with an abstraction only a part contract's implements entry names. */
+  function withAbstraction(): { root: string; part: string } {
+    const root = clinic('sibling');
+    const part = path.join(path.dirname(root), 'scheduling');
+    writeSpecFile(specs(root, 'frontdesk', 'patient-source', '.index.yaml'), ComponentSpecSchema.parse({
+      id: 'patient-source', name: 'patient-source', description: 'Where patients come from', subsystem: 'frontdesk',
+      componentType: 'Orchestrator', abstract: true, owns: [], dependsOn: [], status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+    }));
+    writeSpecFile(specs(root, 'frontdesk', 'patient-source', '.interface.yaml'), InterfaceSpecSchema.parse({
+      id: 'ipatient-source', name: 'ipatient-source', description: 'The source contract', component: 'patient-source',
+      methods: [{ name: 'next', description: 'The next patient', signature: 'next(): void', returns: 'void' }], status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+    }));
+    writeSpecFile(specs(part, 'scheduling', 'appointment-planner', '.interface.yaml'), InterfaceSpecSchema.parse({
+      id: 'iappointment-planner', name: 'iappointment-planner', description: 'The planner contract', component: 'appointment-planner', implements: ['patient-source'],
+      methods: [{ name: 'next', description: 'The next patient', signature: 'next(): void', returns: 'void' }], status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+    }));
+    return { root, part };
+  }
+
+  it('carries the abstraction into the excerpt the part is judged against, and judges the entry alone as the parent does', () => {
+    const { root, part } = withAbstraction();
+    bind(part);
+    pinExternals();
+    const read = excerpt();
+    expect(read.specs.some((s) => (s as { id?: string }).id === 'patient-source')).toBe(true);
+    const alone = gateAt(part).issues.filter((i) => i.specId === 'iappointment-planner').map((i) => i.code).sort();
+    const fromParent = gateAt(root).issues.filter((i) => i.specId === 'iappointment-planner').map((i) => i.code).sort();
+    expect(alone.filter((c) => c === 'IMPLEMENTS_NOT_ABSTRACT' || c === 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual([]);
+    expect(alone).toEqual(fromParent.filter((code) => code !== 'UNUSED_COMPONENT'));
+  });
+
+  it('a part of a project that is itself a member of a hub: the excerpt reads the parent bound at its own root, where keys are bare, so the abstraction is still carried', () => {
+    const { root, part } = withAbstraction();
+    const hub = path.dirname(root);
+    projectYaml(hub, { id: 'hub', name: 'Hub', members: { clinic: 'clinic' } });
+    writeSpecFile(specs(hub, '.index.yaml'), SystemSpecSchema.parse({
+      schemaVersion: '1.0.0', name: 'Hub', vision: 'A hub of clinics', boundaries: [], globalRequirements: [], createdAt: STAMP, updatedAt: STAMP,
+    }));
+    bind(part);
+    pinExternals();
+    expect(excerpt().specs.some((s) => (s as { id?: string }).id === 'patient-source')).toBe(true);
   });
 });

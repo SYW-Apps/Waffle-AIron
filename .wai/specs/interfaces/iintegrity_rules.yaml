@@ -127,9 +127,9 @@ methods:
       A published component that is not a Portal is reported: nothing can use it, since a hop from
       another subsystem enters through a published Portal and another project consumes only a
       Portal's verbs — except an Adapter its subsystem publishes as shared, which every subsystem of
-      the project may call directly, and which public-surface-shared judges, and an Adapter
-      published with role implement, an extension point whose realization consumers supply rather
-      than call.
+      the project may call directly, and which public-surface-shared judges, and an extension point
+      published with role implement, an Adapter or an abstract component whose realization consumers
+      supply rather than call.
     signature: 'publicSurfaceBinding(ctx: RuleContext): void'
     returns: void
     params:
@@ -266,17 +266,17 @@ methods:
       exported component can serve what its role promises (EXPORT_UNCONSUMABLE, at L0 and for L1
       re-exports): an entry consumers call must be a Portal (a gateway being a Portal variant) or an
       Observer for events, and an entry consumers implement (role implement, an extension point) may
-      also be an Adapter whose realization consumers supply. An L0 entry that re-exports a member's
-      or an external's export never declares a wider audience than that export has
-      (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. An own L0 entry
-      exported to `department` is a notice (EXPORT_AUDIENCE_NARROW): outside a hosted instance only
-      the project's family sees it, and a sibling checkout or git consumer — read at `instance` — is
-      refused; whether its consumers are hosted cannot be told from the tree, so it never fails the
-      gate. An entry's export kind is derived from its backing Portal's transport and no longer
-      authored, so no rule compares an authored kind with the stereotype; the retired
-      public-surface-declared-type rule and its codes are gone. The rule judges the facts the export
-      resolver recorded in the scan, for the bound root's table and every contained member's, and
-      resolves nothing itself.
+      also be an Adapter whose realization consumers supply, or an abstract component (an
+      abstraction) that consumers implement. An L0 entry that re-exports a member's or an external's
+      export never declares a wider audience than that export has (EXPORT_WIDENS_AUDIENCE): a
+      re-export can narrow reach, never widen it. An own L0 entry exported to `department` is a
+      notice (EXPORT_AUDIENCE_NARROW): outside a hosted instance only the project's family sees it,
+      and a sibling checkout or git consumer — read at `instance` — is refused; whether its
+      consumers are hosted cannot be told from the tree, so it never fails the gate. An entry's
+      export kind is derived from its backing Portal's transport and no longer authored, so no rule
+      compares an authored kind with the stereotype; the retired public-surface-declared-type rule
+      and its codes are gone. The rule judges the facts the export resolver recorded in the scan,
+      for the bound root's table and every contained member's, and resolves nothing itself.
     signature: 'exportTables(ctx: RuleContext): void'
     returns: void
     params:
@@ -303,7 +303,7 @@ methods:
         severity: error
         summary: >-
           An exported component that cannot serve its role: called but neither a Portal nor an
-          Observer, or implemented but neither a Portal nor an Adapter
+          Observer, or implemented but neither a Portal, an Adapter nor an abstract component
       - code: EXPORT_WIDENS_AUDIENCE
         severity: error
         summary: An L0 entry declares a wider audience than the member or external export it re-exports
@@ -429,11 +429,13 @@ methods:
       author to qualify the reference; a source that itself names a signatureFrom is a chain, which
       is never followed (when that source's own source is a signature type, the finding names it as
       the one to take directly); a method source in the method's own project whose component the
-      method's component does not name in dependsOn or owns is off the design's edges — another
-      project's export (`alias::name.method`) is licensed by the declared relation to that project,
-      an external or a member alike; a stored method that names a source and also states params or
-      returns that differ from the source's restates it, and the source's are in force. Every
-      finding sits at the method.
+      method's component does not name in dependsOn or owns, and is not an implementer of (an
+      implementer, abstract or concrete, may take a signature from a method of an abstraction it
+      implements, directly or through a chain, read through ctx.abstractionsOf) is off the design's
+      edges — another project's export (`alias::name.method`) is licensed by the declared relation
+      to that project, an external or a member alike; a stored method that names a source and also
+      states params or returns that differ from the source's restates it, and the source's are in
+      force. Every finding sits at the method.
     signature: 'signatureSources(ctx: RuleContext): void'
     returns: void
     params:
@@ -451,7 +453,7 @@ methods:
         severity: error
         summary: >-
           A method takes its signature from a method of a component its own component neither
-          dependsOn nor owns
+          dependsOn nor owns nor implements, directly or through a chain
       - code: SIGNATURE_SOURCE_RESTATED
         severity: error
         summary: >-
@@ -616,14 +618,23 @@ methods:
           key
   - name: implementsContracts
     description: >-
-      Rule implements-contracts. An interface that declares `implements: alias::name` realizes
-      another project's extension point, so it must declare every method of that contract with the
-      same params and returns, read from the export the reference resolves to (a contained member's
-      live table, or a declared external's pin). Types are compared semantically, never by spelling:
-      the producer's own bare name and the consumer's `alias::name` (or the bare name its `use`
-      imports) are one type. Whether the reference resolves and names an entry exported with role
-      implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape
-      once it resolves. Extra methods are the implementer's own and are not reported.
+      Rule implements-contracts. A contract's `implements` lists what it realizes, each entry either
+      a local abstract component or another project's extension point (`alias::name`). A local entry
+      resolves to that abstract component's contract; an `alias::name` entry resolves to the export
+      it names (a contained member's live table, or a declared external's pin). The contract must
+      declare every method of each with the same params and returns, types compared semantically,
+      never by spelling: the producer's own bare name and the consumer's `alias::name` (or the bare
+      name its `use` imports) are one type. This holds at every level of a chain of abstractions: an
+      abstraction's own contract that implements abstractions is exploded, declaring every method of
+      each of them itself, so each abstraction is one complete contract and nothing inherits, and a
+      manual edit that renames a method on an abstraction and not on what implements it is the
+      mismatch reported here. A Portal that implements a Portal abstraction may leave a verb out by
+      listing it in `omits` with a reason; any other missing verb is the mismatch. Whether an
+      `alias::name` reference resolves and names an entry exported with role implement is
+      project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape once it
+      resolves. Extra methods are the implementer's own and are not reported. Effects and dependency
+      class are implements-compatibility's; conflicts between entries and where omits may stand are
+      implements-consistency's.
     signature: 'implementsContracts(ctx: RuleContext): void'
     returns: void
     params:
@@ -634,8 +645,9 @@ methods:
       - code: IMPLEMENTS_MISMATCH
         severity: error
         summary: >-
-          An interface implementing an extension point lacks one of its methods, or declares one
-          with different params or returns
+          An interface implementing an abstraction or extension point lacks one of its methods (and
+          does not list it in omits, where a Portal may), or declares one with different params or
+          returns
   - name: memberNames
     description: >-
       Rule member-names. The names inside a spec — a contract's methods and each method's
@@ -797,6 +809,63 @@ methods:
           severity
     previousNames:
       - iintegrity_rules.loweredRules
+  - name: implementsCompatibility
+    description: >-
+      Rule implements-compatibility. What an implementing contract promises beyond its shape. A
+      local implements entry names an abstract component (IMPLEMENTS_NOT_ABSTRACT otherwise: a
+      concrete component is never implemented, so there is no class inheritance). Each implemented
+      method's effect, and the implementer's dependencyClass, are no wider than the abstraction's or
+      extension point's (IMPLEMENTS_EFFECT_WIDER), since callers rely on the narrower promise: none,
+      read, lifecycle, write in that order, io matching only io or none, and pure, read, workflow
+      for the class; an effect is judged only where both sides state one, for a cross-project
+      extension point as for a local abstraction. It is judged on each direct implements edge, and
+      so on every edge of a chain of abstractions: a concrete implementer is no wider than the
+      abstraction it names, which is no wider than the one it names in turn.
+    signature: 'implementsCompatibility(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: IMPLEMENTS_NOT_ABSTRACT
+        severity: error
+        summary: A local implements entry names a component that is not abstract, or none at all
+      - code: IMPLEMENTS_EFFECT_WIDER
+        severity: error
+        summary: >-
+          An implemented method's effect, or the implementer's dependencyClass, is wider than the
+          abstraction's or extension point's
+  - name: implementsConsistency
+    description: >-
+      Rule implements-consistency. What a contract's several implements entries and its omissions
+      ask of it together. Two entries asking one method name to differ in params, returns or effect
+      cannot both be served (IMPLEMENTS_CONFLICT); the params and returns are compared semantically
+      exactly as implements-contracts compares them, every type expression in canonical form and the
+      producer's own name and the consumer's alias::name one type, never by a name's last segment.
+      `omits` stands only on a concrete Portal implementing a Portal abstraction, directly or
+      through a chain of abstractions (an abstract Portal never omits: its own contract is
+      complete), and names only verbs of a Portal abstraction it implements transitively, read
+      through ctx.abstractionsOf (OMISSION_NOT_ALLOWED).
+    signature: 'implementsConsistency(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: IMPLEMENTS_CONFLICT
+        severity: error
+        summary: >-
+          Two abstractions or extension points one contract implements declare a method of the same
+          name with different params, returns (compared semantically, never by a name's last
+          segment) or effect: one method cannot serve both
+      - code: OMISSION_NOT_ALLOWED
+        severity: error
+        summary: >-
+          omits on a contract that is not a concrete Portal implementing a Portal abstraction, or
+          naming a method no Portal abstraction it implements, directly or through the chain,
+          declares
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-11-21T01:07:03.918Z'
+updatedAt: '2026-11-22T02:33:31.861Z'

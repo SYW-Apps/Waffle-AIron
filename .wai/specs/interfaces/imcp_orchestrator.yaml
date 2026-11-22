@@ -24,19 +24,20 @@ methods:
     returns: SpecWriteReceipt
   - name: addComponent
     description: >-
-      Verify the parent subsystem exists, then persist an L2 component specification and answer with
-      the receipt for it: which spec was written, at what status, and whether one already held that
-      id.
+      Verify the parent subsystem exists, then persist an L2 component specification, its abstract
+      mark included, and answer with the receipt for it: which spec was written, at what status, and
+      whether one already held that id.
     signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: defineInterface
     description: >-
-      Verify the owning component exists, then persist an L3 interface specification and answer with
-      the receipt for it: which spec was written, at what status, and whether one already held that
-      id. The tool's method items take params, returns, signatureFrom and an optional prose
-      signature: a method states params with returns, or a signatureFrom alone, or a prose signature
-      with returns — the authoring seam refuses a signatureFrom stated beside params or returns
-      (SIGNATURE_SOURCE_RESTATED), and the writer stores the text params derive.
+      Verify the owning component exists, then persist an L3 interface specification, its implements
+      list and omits included, and answer with the receipt for it: which spec was written, at what
+      status, and whether one already held that id. The tool's method items take params, returns,
+      signatureFrom and an optional prose signature: a method states params with returns, or a
+      signatureFrom alone, or a prose signature with returns — the authoring seam refuses a
+      signatureFrom stated beside params or returns (SIGNATURE_SOURCE_RESTATED), and the writer
+      stores the text params derive.
     signature: 'defineInterface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
   - name: writeNarrative
@@ -142,9 +143,10 @@ methods:
     description: >-
       Resolve the namespaced component id against the bound tree, read the projects that consume the
       bound project (the family in reach, and the searched folders' consumer checkouts), then rename
-      its contract method through the core adapter — or, with dryRun, answer what the rename would
-      do and write nothing — and name every consumer whose specs call the method through an export
-      publishing it: the ones the rename breaks
+      its contract method through the core adapter, an abstraction's method following onto every
+      implementer of this project — or, with dryRun, answer what the rename would do and write
+      nothing — and name every consumer whose specs call the method, or a method that followed it,
+      through an export publishing it: the ones the rename breaks
     signature: >-
       renameMethod(id: string, method: string, newName: string, pinSymbol?: bool, dryRun?: bool,
       search?: list<string>): MethodRename
@@ -507,7 +509,8 @@ methods:
     description: >-
       Resolve the component id against the bound tree, read the projects that consume the bound
       project (the family in reach — members included — and the searched folders' consumer
-      checkouts), then rename the parameter of its contract method through the core adapter — or,
+      checkouts), then rename the parameter of its contract method through the core adapter, an
+      abstraction's parameter following onto every implementer of this project that holds it — or,
       with dryRun, answer what the rename would do and write nothing — and name every consumer whose
       specs call the method through an export publishing it
     signature: >-
@@ -666,4 +669,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-07T02:39:40.470Z'
+updatedAt: '2026-11-22T02:26:06.761Z'

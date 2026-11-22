@@ -98,6 +98,8 @@ function referencedKeys(part: ScannedPart, types: TypeSpec[]): Set<string> {
   }
   for (const i of loadInterfaceSpecs().filter((x) => own.has(x.id))) {
     add(i.component);
+    // A local implements entry names an abstraction as a component, like a dependsOn; an alias::name entry is another project's.
+    (i.implements ?? []).filter((e) => !e.includes('::')).forEach(add);
     for (const m of i.methods) addTypes(sourcedMethodTypeRefs(m));
   }
   for (const impl of loadImplementationSpecs().filter((x) => own.has(x.id))) {

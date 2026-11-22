@@ -95,7 +95,7 @@ describe('the new fields parse', () => {
 
   it('a contract may implement an exported extension point; a Portal implementation names its router', () => {
     expect(InterfaceSpecSchema.parse({ id: 'igeo', name: 'G', description: 'd', component: 'geo', implements: 'geo::geocoding_provider', createdAt: now, updatedAt: now }).implements)
-      .toBe('geo::geocoding_provider');
+      .toEqual(['geo::geocoding_provider']);
     expect(ImplementationSpecSchema.parse({ id: 'web_impl', name: 'W', description: 'd', contract: 'iweb', router: 'handleWebRequest', createdAt: now, updatedAt: now }).router)
       .toBe('handleWebRequest');
   });

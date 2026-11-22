@@ -48,11 +48,12 @@ methods:
       - stepNumber: 7
         description: >-
           Collect the referenced parent specs: every spec key a part spec's reference bound to that
-          the part does not itself declare (dependsOn and owns targets, call, register and dispatch
-          targets, declared calls, dispatch-table bindings, lifecycle entries, trusted links, type
-          positions — a contract method's signatureFrom read as a type among them, and a signature
-          type's params and returns), each a component, subsystem or type of the parent — or of
-          another of its parts
+          the part does not itself declare (dependsOn and owns targets, an interface's local
+          implements entries naming an abstraction, call, register and dispatch targets, declared
+          calls, dispatch-table bindings, lifecycle entries, trusted links, type positions — a
+          contract method's signatureFrom read as a type among them, and a signature type's params
+          and returns), each a component, subsystem or type of the parent — or of another of its
+          parts
         type: local
       - stepNumber: 8
         description: Close the excerpt over what judging them needs
@@ -95,4 +96,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-02T20:23:56.291Z'
-updatedAt: '2026-10-31T23:34:11.027Z'
+updatedAt: '2026-11-22T02:29:06.457Z'

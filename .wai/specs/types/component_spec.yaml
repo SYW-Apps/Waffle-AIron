@@ -165,6 +165,17 @@ fields:
       method's own declaration replaces it. Never defaulted by a tool and never invented by a
       migration: a blanket declaration nobody decided would hide unreached methods
     optional: true
+  - name: abstract
+    type: bool
+    description: >-
+      Marks an abstraction: a component that holds a contract several OTHER components implement, so
+      callers depend on it rather than on an implementer. Allowed on every block (Portal,
+      Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter); refused on an
+      Observer, a pattern and a UI block (ABSTRACT_NOT_ALLOWED). An abstract Portal declares no
+      transport, endpoints, auth, basePath, dispatch or invokedBy (ABSTRACT_PORTAL_BINDS) and an
+      abstract Store declares no durability: each implementer binds its own. Implementers are
+      ordinary components of the same stereotype whose contracts declare implements on it.
+    optional: true
 methods:
   - name: defaultConformanceTier
     signature: 'defaultConformanceTier(): string'
@@ -243,4 +254,4 @@ methods:
     symbol: componentEntryFor
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-11-21T15:57:14.339Z'
+updatedAt: '2026-11-21T23:16:41.412Z'

@@ -11,24 +11,24 @@ methods:
       Rule portal-endpoints. A Portal binds every interface method to a concrete endpoint of its own
       transport, when that transport requires one (transport.requiresEndpoint): every transport but
       InProcess, whose verbs are the contract methods themselves, and Custom, whose address is
-      free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the
-      method's parameters, so each must be closed, appear once and name a parameter of the method or
-      a field of a parameter's type (a method that states no structured params is not judged on
-      names). An HTTP endpoint's stated `status` is the success code its callers and its OpenAPI
-      document read, so it must be a standard success or redirect code (200-208, 226, 300-308) and
-      must agree with what the method answers: a 204 or a 304 carries no body, so a method that
-      answers a value cannot state it, and a redirect sends the caller on with a Location header and
-      no body, so the value a redirecting method answers is that location — a string (or a named
-      type holding one), never a record. One HTTP route binds one verb: two methods bound to the
-      same HTTP method and path — the Portal's basePath joined in, placeholders compared by position
-      whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal,
-      or across Portals that declare the same basePath, are a duplicate route: no router can
-      dispatch both and an OpenAPI document holds one operation per path and verb. An endpoint's
-      path is written under its Portal's basePath, which is joined in front of it, so a path
-      beginning with the basePath's own whole segments (basePath /products with /products/{id}) is
-      joined into a route that repeats the prefix (/products/products/{id}):
-      ENDPOINT_BASEPATH_REPEATED, a warning, naming the joined route and both fixes — a segment
-      prefix only, so /apiary under /api is not judged.
+      free-form. An abstract Portal binds none, since each implementer Portal binds its own verbs.
+      An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the method's
+      parameters, so each must be closed, appear once and name a parameter of the method or a field
+      of a parameter's type (a method that states no structured params is not judged on names). An
+      HTTP endpoint's stated `status` is the success code its callers and its OpenAPI document read,
+      so it must be a standard success or redirect code (200-208, 226, 300-308) and must agree with
+      what the method answers: a 204 or a 304 carries no body, so a method that answers a value
+      cannot state it, and a redirect sends the caller on with a Location header and no body, so the
+      value a redirecting method answers is that location — a string (or a named type holding one),
+      never a record. One HTTP route binds one verb: two methods bound to the same HTTP method and
+      path — the Portal's basePath joined in, placeholders compared by position whatever their name
+      or spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals
+      that declare the same basePath, are a duplicate route: no router can dispatch both and an
+      OpenAPI document holds one operation per path and verb. An endpoint's path is written under
+      its Portal's basePath, which is joined in front of it, so a path beginning with the basePath's
+      own whole segments (basePath /products with /products/{id}) is joined into a route that
+      repeats the prefix (/products/products/{id}): ENDPOINT_BASEPATH_REPEATED, a warning, naming
+      the joined route and both fixes — a segment prefix only, so /apiary under /api is not judged.
     signature: 'portalEndpoints(ctx: RuleContext): void'
     returns: void
     params:
@@ -246,10 +246,12 @@ methods:
     description: >-
       Rule entrypoint-dependencies. Judges the edges at the system's entry points and its process
       layer. Portals and Observers are top-level entry points and subscribers, so nothing may depend
-      on them — and that is the edge's one finding, which is why no other matrix rule judges it.
-      Downward, a Portal dispatches to Orchestrators and may READ through Indexes and Repository
-      facades but never reaches Store/Registry/Query or an Adapter, while an Observer forwards to
-      one Orchestrator or Supervisor over a message-bus Adapter. A View stays a passive presenter. A
+      on them — and that is the edge's one finding, which is why no other matrix rule judges it; the
+      message points to the two legal shapes of a Portal over a Portal: a gateway (the variant) in
+      front of the services it guards, or two implementations of one Portal abstraction. Downward, a
+      Portal dispatches to Orchestrators and may READ through Indexes and Repository facades but
+      never reaches Store/Registry/Query or an Adapter, while an Observer forwards to one
+      Orchestrator or Supervisor over a message-bus Adapter. A View stays a passive presenter. A
       Supervisor stays out of presentation; what it may do to the data it reaches is judged per call
       (supervisor-shared-data), and what it owns as its supervision state by the ownership rules. A
       component depending on a live Actor reaches it through the Actor's supervision: by depending
@@ -381,8 +383,10 @@ methods:
       no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent
       store that belongs typed Store) or orphaned — unless a Supervisor maintains it through
       lifecycle-effect calls: then it is that Supervisor's directory of live handles, which holds
-      the handles itself and writes to no Store. A Query has no standalone form at all: it computes
-      reads over its own Repository's Store.
+      the handles itself and writes to no Store — or unless it is an abstraction (abstract): an
+      abstract Registry holds a contract and no state, and each implementing Registry wires its own
+      Store. A Query has no standalone form at all: it computes reads over its own Repository's
+      Store.
     signature: 'unownedBlocks(ctx: RuleContext): void'
     returns: void
     params:
@@ -564,6 +568,157 @@ methods:
       - code: LANGUAGE_BRIDGE_MISSING
         severity: error
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
+  - name: abstractionShape
+    description: >-
+      Rule abstraction-shape. An abstraction is a component marked abstract: it holds a contract
+      several other components implement, and callers depend on it, never on an implementer. The
+      mark stands on a Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry or
+      Adapter, and never on an Observer (reached by its topic), a pattern or a UI block. An abstract
+      Portal states only its verbs: transport, endpoints, auth, basePath, dispatch and invokedBy
+      belong to each implementer Portal, which binds its own, and an abstract Portal never omits a
+      verb: its contract is complete. An abstraction's own L4 carries code linkage only, the
+      sourcePath of the file declaring the interface, trait or Protocol and, per method, the symbol
+      naming the member (an abstraction's implementation has no symbol of its own): no narrative,
+      intent, calls or technologies, because its methods are realized by declaration and its
+      behaviour lives in the implementers. In a language or codebase that uses one, an abstract
+      class with only abstract members is such a declaration, and is never inheritance of behaviour:
+      it holds no behaviour for an implementer to inherit.
+    signature: 'abstractionShape(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ABSTRACT_NOT_ALLOWED
+        severity: error
+        summary: abstract on an Observer, a pattern or a UI block
+      - code: ABSTRACT_PORTAL_BINDS
+        severity: error
+        summary: An abstract Portal declaring a transport, endpoints, auth, basePath, dispatch or invokedBy
+      - code: ABSTRACTION_HAS_BEHAVIOUR
+        severity: error
+        summary: >-
+          An abstraction's L4 carries a narrative, an intent, calls or technologies: it carries code
+          linkage only
+  - name: abstractions
+    description: >-
+      Rule abstractions. Judges an abstraction against what implements it. A contract realizes an
+      abstraction by declaring it in implements, and an abstraction's own contract may implement
+      abstractions in turn (Animal, Dog, GoldenRetriever): it is exploded, declaring every method of
+      what it implements (implements-contracts holds it at every level), so each abstraction is one
+      complete contract and nothing inherits, and a concrete component is never implemented
+      (IMPLEMENTS_NOT_ABSTRACT). The chain is read through ctx.abstractionsOf and
+      ctx.implementersOf, the two cycle-safe queries every rule shares; an implements path that
+      returns to its start, the component itself included, is a cycle (ABSTRACTION_CYCLE), and a
+      member of one is judged by no other check here. An abstraction needs a concrete implementer,
+      direct or through the abstractions below it, unless it, or an abstraction below it, is
+      exported with role implement for other projects to implement (several L4 implementations of
+      one component's contract serve one engine per deployment, and need no abstraction); each
+      implementer, abstract or concrete, is the same stereotype as the abstraction it implements and
+      is owned by the same owner (both unowned, or both owned by the same pattern), judged on each
+      direct edge and so on every edge of the chain. An abstraction implemented from another
+      subsystem must be published by its own subsystem with role implement, honouring the entry's
+      consumers (ABSTRACTION_UNPUBLISHED), since a subsystem's components are reached by others only
+      through what it publishes. A contract implementing more than one abstraction is legal and the
+      exception, one vendor client serving two roles; an entry that is an ancestor of another entry
+      of the same contract is no second role and is not counted. What an implementing contract must
+      declare, its effects and its omissions are implements-contracts' own, and where the mark may
+      stand is abstraction-shape's.
+    signature: 'abstractions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ABSTRACTION_UNIMPLEMENTED
+        severity: error
+        summary: >-
+          An abstraction with no concrete implementer, direct or through the abstractions below it,
+          when neither it nor an abstraction below it is exported with role implement
+      - code: ABSTRACTION_SINGLE_IMPLEMENTER
+        severity: notice
+        summary: >-
+          An abstraction with exactly one concrete implementer, direct or through the abstractions
+          below it, unless it or an abstraction below it is exported with role implement: several L4
+          implementations of one component's contract suffice for one engine behind it
+      - code: ABSTRACTION_STEREOTYPE_MISMATCH
+        severity: error
+        summary: An implementer whose stereotype differs from its abstraction's
+      - code: ABSTRACTION_CONTAINMENT
+        severity: error
+        summary: >-
+          An implementer not owned by the abstraction's owner: both unowned, or both owned by the
+          same pattern
+      - code: ABSTRACTION_MULTIPLE
+        severity: notice
+        summary: >-
+          A contract implementing more than one abstraction or extension point that is not an
+          ancestor of another entry of the same contract: legal and the exception; keep it to one
+          responsibility serving several roles, and document it with a lint.allow and a reason
+      - code: ABSTRACTION_CYCLE
+        severity: error
+        summary: >-
+          An implements path returns to its start, a component implementing itself included:
+          abstractions form a chain, never a loop
+      - code: ABSTRACTION_UNPUBLISHED
+        severity: error
+        summary: >-
+          An abstraction implemented from another subsystem that its own subsystem does not publish
+          with role implement, or publishes only to consumers that leave the implementing subsystem
+          out
+  - name: abstractionBypass
+    description: >-
+      Rule abstraction-bypass. Callers depend on the abstraction, so a call step, declared call or
+      dispatch binding that reaches, on a concrete implementer directly, a method any abstraction it
+      implements declares, directly or through the chain (ctx.abstractionsOf), skips the
+      substitution: the caller stops working when an implementer is added or replaced. Only a
+      concrete target is judged: calling a narrower abstraction (`dog.eat` on an abstract Dog) is
+      the substitution itself, never a bypass. Calling a method only the implementer declares is its
+      own extra and is fine, and an implementer's own narrative may call its own methods. A
+      decorator, an implementer that also depends on its abstraction and calls it, is legal: its
+      call lands on the abstraction, not on a concrete implementer, and the walk terminates. A
+      Portal over a Portal stays refused by entrypoint-dependencies, which is why a Portal
+      abstraction is judged by parity rather than by calls.
+    signature: 'abstractionBypass(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ABSTRACTION_BYPASSED
+        severity: warning
+        summary: >-
+          A call step, declared call or dispatch binding reaches, on a concrete implementer
+          directly, a method an abstraction it implements declares, at any level of the chain;
+          calling the implementer's own extra method, or a narrower abstraction, is fine
+  - name: abstractionFindings
+    description: >-
+      Rule abstraction-findings. The finding codes an abstraction's method declares are what a
+      caller of the abstraction may meet, and only some implementers need raise each (one carrier
+      takes several parcels in a shipment, another refuses them): a code stands when at least one
+      concrete implementer, direct or through the chain (ctx.implementersOf), declares it on its own
+      method of that name, whose code finding-realization then holds to it, and one that none
+      declares is ABSTRACTION_FINDING_UNRAISED. An abstract implementer declaring it raises nothing.
+      An abstraction nothing concrete implements yet (abstractions reports it), or one other
+      projects implement (it, or an abstraction below it, exported with role implement), is not
+      judged. A code only an implementer declares is that implementer's own, a special state of one
+      carrier, and is never reported: the abstraction need not grow with each implementer.
+    signature: 'abstractionFindings(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ABSTRACTION_FINDING_UNRAISED
+        severity: warning
+        summary: >-
+          A finding code an abstraction's method declares that no concrete implementer, direct or
+          through the chain, declares on that method: callers would handle a code nobody raises; a
+          code only an implementer declares is its own and is never reported
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-11-14T19:07:20.823Z'
+updatedAt: '2026-11-22T15:13:13.614Z'

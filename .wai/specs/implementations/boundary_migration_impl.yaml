@@ -59,15 +59,16 @@ methods:
         description: >-
           Plan each consumer's edits: one that already declares an alias for the bound project gets
           its `member::name` references respelled to that alias at their positions (from the graph's
-          authoredReferences), the member alias's `use` merged into it, and the member external
-          removed; any other gets its external repointed at the bound project's id (a source path
-          re-expressed; a path external stays unpinned, being read live), and — when the bound
-          project (or the member it takes in) uses that consumer — a note that the two now depend on
-          each other in a loop (PROJECT_DEPENDENCY_CYCLE), with the uses that close it and the exits
-          (move what the consumer uses into it, or demote it first). A project member in a `../`
-          sibling checkout is demoted in place and moved in as the part it became. Plan the core's
-          internalize with the completed destination, and the carried externals declared in the
-          bound project, pinned only when git or hosted and owed
+          authoredReferences, a contract's implements entry among the positions), the member alias's
+          `use` merged into it, and the member external removed; any other gets its external
+          repointed at the bound project's id (a source path re-expressed; a path external stays
+          unpinned, being read live), and — when the bound project (or the member it takes in) uses
+          that consumer — a note that the two now depend on each other in a loop
+          (PROJECT_DEPENDENCY_CYCLE), with the uses that close it and the exits (move what the
+          consumer uses into it, or demote it first). A project member in a `../` sibling checkout
+          is demoted in place and moved in as the part it became. Plan the core's internalize with
+          the completed destination, and the carried externals declared in the bound project, pinned
+          only when git or hosted and owed
         type: local
       - stepNumber: 10
         description: Answer the plan
@@ -127,7 +128,8 @@ methods:
         targetMethod: resolveProjectExports
       - stepNumber: 9
         description: >-
-          For each component a moved component names outside the moved subtree, read the resolved
+          For each component a moved component names outside the moved subtree — in dependsOn, owns,
+          a dispatch binding, a call, or a contract's local implements entry — read the resolved
           export table of that component's subsystem
         type: call
         targetComponent: migration_core_adapter
@@ -136,7 +138,10 @@ methods:
         description: >-
           From the graph, find each reference of the moved subtree back into the bound project at a
           component whose subsystem does not publish it: externalize-refused, naming it — publishing
-          is a design decision to make first
+          is a design decision to make first. A contract's implements entry is such a reference too,
+          and only an abstraction its subsystem exports with role implement may be named across the
+          boundary (as `alias::name`): any other is externalize-refused, naming the entry and the
+          abstraction
         type: local
       - stepNumber: 11
         description: >-
@@ -312,12 +317,13 @@ methods:
       - stepNumber: 3
         description: >-
           From the graph, collect what crosses the would-be boundary: each reference between the
-          part's specs and the rest of the bound project, with the component's subsystem export (one
-          not published is externalize-refused), and each trustedLink joining a part subsystem and
-          another (trusted-link-crosses); the new id against every family project's id and the bound
-          project's aliases (id-collision, alias-taken); every other family project's used names
-          realized in the part, which must stay exported through the re-pointed re-exports
-          (externalize-updates-siblings)
+          part's specs and the rest of the bound project, a contract's local implements entry among
+          them, with the component's subsystem export (one not published is externalize-refused, and
+          an implemented abstraction not exported with role implement is externalize-refused naming
+          it), and each trustedLink joining a part subsystem and another (trusted-link-crosses); the
+          new id against every family project's id and the bound project's aliases (id-collision,
+          alias-taken); every other family project's used names realized in the part, which must
+          stay exported through the re-pointed re-exports (externalize-updates-siblings)
         type: local
       - stepNumber: 4
         description: >-
@@ -472,4 +478,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-11-21T17:27:52.582Z'
+updatedAt: '2026-11-22T02:28:53.832Z'

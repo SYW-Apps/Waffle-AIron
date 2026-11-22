@@ -1,5 +1,6 @@
 import { defaultConformanceTier, parseTypeExpression, pathKey } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+import { declaredReading } from '../read-model.js';
 
 // ---------------------------------------------------------------------------
 // Code↔spec for ASYNC: does the function realizing a contract method complete
@@ -19,6 +20,12 @@ import { RuleContext, SddRule } from '../types.js';
 // one entry per such body). A file that only CALLS the function holds no body
 // and is methodRealization's finding, never a second voice here.
 //
+// An ABSTRACTION's method has no body: it is read where a body would be, from
+// the signature its declaring interface, trait or Protocol states for the
+// member (member_signature_fact.completesLater, one per overload), and
+// reported with the same code. Where the grade cannot read member signatures
+// nothing is compared.
+//
 // CARRYABLE: it measures this project's own code against its own spec at a
 // site the finding names, the contract method; paying it means changing one
 // side — usually the spec, whose returns gains `async`.
@@ -27,7 +34,7 @@ import { RuleContext, SddRule } from '../types.js';
 export const asyncConformanceRule: SddRule = {
   name: 'async-conformance',
   judges: 'code',
-  description: 'Code-to-contract for ASYNC: a contract method whose returns is `async T` is realized by a function that completes later, and one whose returns is not, by one that completes now — every caller in every language with async/await is shaped by the difference, so a contract that hides it misleads every implementer and translation built from it. Compared with source_file_facts.asyncFunctions for the method\'s realizing function (under its `symbol`), at exact grade only; where a name has several bodies only what they all agree on is reported, as param-conformance does. A method whose file only calls the function is methodRealization\'s finding, and a method whose conformance dial is off (its own, else its implementation\'s) is not judged.',
+  description: 'Code-to-contract for ASYNC: a contract method whose returns is `async T` is realized by a function that completes later, and one whose returns is not, by one that completes now — every caller in every language with async/await is shaped by the difference, so a contract that hides it misleads every implementer and translation built from it. Compared with source_file_facts.asyncFunctions for the method\'s realizing function (under its `symbol`), at exact grade only; where a name has several bodies only what they all agree on is reported, as param-conformance does. An abstraction\'s method, which has no body, is compared with whether the signature its declaring interface, trait or Protocol states for the member completes later (member_signature_fact.completesLater, per overload, read at exact grade and by the Python reader for a Protocol), reported with the same ASYNC_MISMATCH; where the grade cannot read member signatures nothing is compared. A method whose file only calls the function is methodRealization\'s finding, and a method whose conformance dial is off (its own, else its implementation\'s) is not judged.',
   codes: [
     {
       code: 'ASYNC_MISMATCH',
@@ -52,12 +59,25 @@ export const asyncConformanceRule: SddRule = {
       // ---- 2 / 6. silent unless a body is there to read ----
       // The bodies are the signatures the analyzer recorded under the name,
       // one per body; a name with none has no body in this file.
-      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+      // A body is read at exact grade only; an abstraction's declaration is read wherever a reader
+      // recorded member signatures (exact grade, or the Python reader for a Protocol).
+      if (!facts || facts.status !== 'analyzed' || !(facts.analysisGrade === 'exact' || component?.abstract === true)) continue;
       const symbol = method.symbol ?? method.name;
-      const signatures = facts.functionParams;
-      if (!signatures || !Object.prototype.hasOwnProperty.call(signatures, symbol)) continue;
-      const bodies = signatures[symbol].length;
-      if (bodies === 0) continue;
+      // The bodies, or — for an abstraction, which has none — the signatures its declaration states.
+      let bodies: number;
+      let asyncBodies: number;
+      if (component?.abstract === true) {
+        const declaration = declaredReading(facts, symbol, component);
+        if (!declaration) continue;
+        bodies = declaration.params.length;
+        asyncBodies = declaration.completing;
+      } else {
+        const signatures = facts.functionParams;
+        if (!signatures || !Object.prototype.hasOwnProperty.call(signatures, symbol)) continue;
+        bodies = signatures[symbol].length;
+        if (bodies === 0) continue;
+        asyncBodies = (facts.asyncFunctions ?? []).filter((name) => name === symbol).length;
+      }
 
       // ---- 3. read both sides ----
       // The contract's returns is canonical once loaded; one that does not
@@ -65,7 +85,6 @@ export const asyncConformanceRule: SddRule = {
       const returns = parseTypeExpression(contractMethod.returns, 'returns');
       if (!returns.expression) continue;
       const contractAsync = returns.expression.form === 'async';
-      const asyncBodies = (facts.asyncFunctions ?? []).filter((name) => name === symbol).length;
 
       // ---- 4. report only what every body agrees on ----
       const subject = bodies > 1

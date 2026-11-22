@@ -11,13 +11,15 @@ methods:
   - name: captureApprovedSpecs
     description: >-
       Build the per-spec digest map to write into an approval record, for the tree as it stands:
-      each spec parsed and projected to its design view — an implementation, type or component
-      through its type's designView, every other kind with its timestamps dropped — canonicalized
-      and digested, so code linkage (sourcePath, symbol, exportedVia, simPath, injectedParams,
-      conformance tiers, external links), readiness, whitespace and a no-op re-save never move a
-      digest. Keyed by the project's own spec files' path from its root, and each part's under
-      `members/<alias>/<path inside the part>`. A part fetched from git is digested from the cache
-      at its pinned commit.
+      each spec parsed and projected to its design view — an implementation, type, component,
+      subsystem or contract through its type's designView, every other kind with its timestamps
+      dropped — canonicalized and digested, so code linkage (sourcePath, symbol, exportedVia,
+      simPath, injectedParams, conformance tiers, external links), readiness, whitespace and a no-op
+      re-save never move a digest. A contract's implements is read in one canonical form (a
+      one-entry list as its plain string, an empty list as absent), so an approval recorded over the
+      string form survives a re-save that writes the list. Keyed by the project's own spec files'
+      path from its root, and each part's under `members/<alias>/<path inside the part>`. A part
+      fetched from git is digested from the cache at its pinned commit.
     signature: 'captureApprovedSpecs(root?: string, scope?: any): map<string, string>'
     returns: map<string, string>
     params:
@@ -100,4 +102,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T15:19:05.602Z'
-updatedAt: '2026-11-20T01:26:50.255Z'
+updatedAt: '2026-11-22T02:20:50.742Z'

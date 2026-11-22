@@ -1,6 +1,7 @@
 import { isDraftSubsystem, methodCasingFor } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 import { ownGet } from '../../../utils/own.js';
+import { isLocalEntry } from '../read-model.js';
 
 const casingPatterns: Record<string, RegExp> = {
   camelCase: /^[a-z][a-zA-Z0-9]*$/,
@@ -61,14 +62,25 @@ function getBaseId(id: string): string {
 const isAllUppercase = (s: string) => /^[A-Z0-9_]+$/.test(s);
 
 /**
- * The method names of the extension point an interface implements
- * (`implements: alias::name`), read where implements-contracts reads them: a
+ * The method names of the extension points an interface implements
+ * (`implements: [alias::name]`), read where implements-contracts reads them: a
  * declared external's pin (or a foreign snapshot), else a contained member's
  * live export table. Empty when the interface implements nothing or the
  * reference does not resolve (project-boundaries reports that).
  */
-function implementedNames(ctx: RuleContext, ref: string | undefined): Set<string> {
-  if (ref === undefined) return new Set();
+function implementedNames(ctx: RuleContext, specId: string, refs: string[] | undefined): Set<string> {
+  const names = new Set<string>();
+  for (const ref of refs ?? []) {
+    // A local entry (no `::`) names an abstract component of this project, whose methods follow
+    // this project's casing: never resolved through a snapshot that exports the same bare name.
+    if (isLocalEntry(ctx.componentMap, ctx.projectOf, specId, ref)) continue;
+    for (const name of implementedNamesOf(ctx, ref)) names.add(name);
+  }
+  return names;
+}
+
+/** The method names of one `alias::name` extension point; a local abstraction names none (its methods follow this project's casing). */
+function implementedNamesOf(ctx: RuleContext, ref: string): Set<string> {
   const surface = ctx.resolveSurfaceRef(ref);
   if (surface.kind === 'resolved') {
     return surface.entry.role === 'implement' ? new Set(surface.entry.methods.map((m) => m.name)) : new Set();
@@ -88,7 +100,7 @@ export const namingRule: SddRule = {
   name: 'naming-conventions',
   judges: 'design',
   description:
-    "Enforces naming conventions (casing styles or regular expressions) for subsystem, component, interface, type (differentiating entities and value-objects), method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming patterns. A method name is judged by naming_rule_config.methodCasingFor the subsystem's effective targetLanguage: the configured methods casing when set, else the language's own convention, so a Rust tree is snake_case without configuring anything, and the authoring and rename tools accept exactly what this rule accepts. A contract that implements another project's extension point (`implements`) takes the names of the methods it implements — and of their parameters — from the producer, whose language they are spelled in: those methods, on the contract and on its implementations, are exempt from the casing rule, and the rename tools accept them.",
+    "Enforces naming conventions (casing styles or regular expressions) for subsystem, component, interface, type (differentiating entities and value-objects), method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming patterns. A method name is judged by naming_rule_config.methodCasingFor the subsystem's effective targetLanguage: the configured methods casing when set, else the language's own convention, so a Rust tree is snake_case without configuring anything, and the authoring and rename tools accept exactly what this rule accepts. A contract that implements another project's extension point (an `alias::name` entry of `implements`) takes the names of the methods it implements — and of their parameters — from the producer, whose language they are spelled in: those methods, on the contract and on its implementations, are exempt from the casing rule, and the rename tools accept them. The exemption is for `alias::name` entries only: the methods of a local abstraction are this project's own and keep the project's casing.",
   codes: [
     { code: 'NAMING_CONVENTION_VIOLATION', defaultSeverity: 'warning', summary: 'Item name or ID does not match the configured casing pattern or regex' },
     { code: 'STEREOTYPE_NAMING_VIOLATION', defaultSeverity: 'warning', summary: 'Component name or ID does not match stereotype suffix/prefix/regex rules' },
@@ -191,7 +203,7 @@ export const namingRule: SddRule = {
       const methodCasing = methodCasingFor(namingConfig, ctx.targetLanguageFor(comp?.subsystem));
       // The producer named the methods of an extension point this contract
       // implements — and their parameters — in its own language.
-      const dictated = implementedNames(ctx, intf.implements);
+      const dictated = implementedNames(ctx, intf.id, intf.implements);
       for (const m of intf.methods) {
         if (dictated.has(m.name)) continue;
         checkNamedValue(ctx, m.name, methodCasing, `Interface method "${m.name}" on "${intf.id}" does not match naming convention "${methodCasing}"${namingConfig?.methods ? '' : ' (its target language\'s convention)'}.`, intf.id, isDraft);
@@ -213,7 +225,7 @@ export const namingRule: SddRule = {
       const isDraft = ctx.isImplementationDraft(impl);
 
       const methodCasing = methodCasingFor(namingConfig, ctx.targetLanguageFor(comp?.subsystem));
-      const dictated = implementedNames(ctx, intf?.implements);
+      const dictated = implementedNames(ctx, intf?.id ?? impl.contract, intf?.implements);
       for (const m of impl.methods) {
         if (dictated.has(m.name)) continue;
         checkNamedValue(ctx, m.name, methodCasing, `Implementation method "${m.name}" on "${impl.id}" does not match naming convention "${methodCasing}".`, impl.id, isDraft);

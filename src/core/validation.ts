@@ -1153,7 +1153,11 @@ function namedKeys(specs: { subsystems: SubsystemSpec[]; components: ComponentSp
     add(c.subsystem, c.id);
     c.dependsOn.forEach((d) => add(d, c.id));
   }
-  for (const i of specs.interfaces) add(i.component, i.id);
+  for (const i of specs.interfaces) {
+    add(i.component, i.id);
+    // A local implements entry is a binding position like a dependsOn; an alias::name entry is skipped by add.
+    (i.implements ?? []).forEach((e) => add(e, i.id));
+  }
   for (const impl of specs.implementations) {
     add(impl.contract, impl.id);
     for (const m of impl.methods) for (const step of m.narrative) if (step.type === 'call') add(step.targetComponent, impl.id);

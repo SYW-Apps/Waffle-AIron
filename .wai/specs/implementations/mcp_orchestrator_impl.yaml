@@ -257,12 +257,14 @@ methods:
         targetMethod: renameMethod
       - stepNumber: 4
         description: >-
-          Shape the tool response from the report: the specs the method moved in (or would), the
-          specs whose references were retargeted, the specs whose prose still names it, the pinned
-          symbol when one was set, and `breaks` — every consumer read above whose specs reach the
-          old method on a public name the report says publishes it, a contract they depend on as a
-          whole included, each narrowed to what breaks (external_consumer.narrowedToUses: those
-          public names, with that one method), as the CLI dry run names it
+          Shape the tool response from the report: the specs the method moved in (or would), on the
+          component and on every implementer that followed it, the implementer methods that followed
+          (followed), the specs whose references were retargeted, the specs whose prose still names
+          it, the pinned symbol when one was set, and `breaks` — every consumer read above whose
+          specs reach the old method, or the old name of a followed method, on a public name the
+          report says publishes it, a contract they depend on as a whole included, each narrowed to
+          what breaks (external_consumer.narrowedToUses: those public names, with that one method),
+          as the CLI dry run names it, for each renamed method as for the first
         type: return
         outcome: MethodRename
   - name: updateSpec
@@ -945,11 +947,12 @@ methods:
         description: >-
           Shape the tool response from the report: the component, method, from and to (and
           routedFrom, when the request named a method forwarding its signature and the rename was
-          made on its source), the interfaces it moved in, the placeholders respelled (its
-          followers' through signatureFrom included), publishedIn — the entries publishing the
-          method and every follower's verb — and `breaks`: every consumer read above that the
-          report's published list reaches, each narrowed to what it calls there, a call by a former
-          method name and a broken former public name included (external_consumer.narrowedToUses)
+          made on its source), the interfaces it moved in, the implementer methods it followed onto
+          (followed), the placeholders respelled (its followers' through signatureFrom included),
+          publishedIn — the entries publishing the method and every follower's verb — and `breaks`:
+          every consumer read above that the report's published list reaches, each narrowed to what
+          it calls there, a call by a former method name and a broken former public name included
+          (external_consumer.narrowedToUses)
         type: return
         outcome: ParamRename
   - name: renameSpec
@@ -1174,4 +1177,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-21T15:55:51.252Z'
+updatedAt: '2026-11-22T02:26:08.803Z'

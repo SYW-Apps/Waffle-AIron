@@ -30,14 +30,14 @@ describe('design export of type groups', () => {
     fs.rmSync(proj, { recursive: true, force: true });
   });
 
-  it('is format 2.2 and lists the group tree sorted by key, each type naming its group', () => {
-    expect(DESIGN_FORMAT_VERSION).toBe('2.2');
+  it('is format 2.3 and lists the group tree sorted by key, each type naming its group', () => {
+    expect(DESIGN_FORMAT_VERSION).toBe('2.3');
     group('runtime', { parent: 'platform', description: 'The runtime' });
     group('platform');
     put('heap', { group: 'runtime' });
     put('plain');
     const design = exportDesign();
-    expect(design.formatVersion).toBe('2.2');
+    expect(design.formatVersion).toBe('2.3');
     expect(design.typeGroups).toEqual([
       { key: 'platform', name: 'PLATFORM' },
       { key: 'runtime', name: 'RUNTIME', description: 'The runtime', parent: 'platform' },

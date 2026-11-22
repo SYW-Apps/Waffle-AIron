@@ -49,7 +49,7 @@ export const detailSufficiencyRule: SddRule = {
   name: 'detail-sufficiency',
   judges: 'code',
   description:
-    'A method dialed below detail: full with no narrative may not be hiding behavior it owes a reader. A method whose realized function — in the method\'s own source file, else the implementation\'s — measures real branching (cyclomatic complexity above rules.complexity.maxUnnarratedComplexity, exact AST grade only) is reported (UNNARRATED_COMPLEXITY), and an explicit dial below a full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE) — reported only where the measured finding did not already fire, since evidence outranks expectation. Both are honest lints over declarations: they never claim a narrative would be correct, only that the dial hides something.',
+    'A method dialed below detail: full with no narrative may not be hiding behavior it owes a reader. A method whose realized function — in the method\'s own source file, else the implementation\'s — measures real branching (cyclomatic complexity above rules.complexity.maxUnnarratedComplexity, exact AST grade only) is reported (UNNARRATED_COMPLEXITY), and an explicit dial below a full-floor logic stereotype without a narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE) — reported only where the measured finding did not already fire, since evidence outranks expectation. Both are honest lints over declarations: they never claim a narrative would be correct, only that the dial hides something. An abstraction\'s implementation is never judged, as narrative-detail never judges it: it declares an interface and has no function body to measure or narrate.',
   codes: [
     { code: 'UNNARRATED_COMPLEXITY', defaultSeverity: 'warning', summary: 'Method below detail: full with no narrative whose realized function, in the method\'s source file, has real branching (cyclomatic complexity over the configured threshold, exact-grade analysis only)' },
     { code: 'DETAIL_BELOW_STEREOTYPE', defaultSeverity: 'warning', summary: 'Method explicitly dialed below the full narrative floor of its logic stereotype, with no narrative' },
@@ -67,6 +67,8 @@ export const detailSufficiencyRule: SddRule = {
       const contract = ctx.interfaceMap.get(impl.contract);
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
+      // An abstraction's implementation declares an interface: no function body to measure, no narrative owed.
+      if (component?.abstract === true) continue;
       const draftContext = ctx.isImplementationDraft(impl);
       for (const method of impl.methods) {
         const detail = effectiveDetail(method, impl, component);

@@ -26,7 +26,7 @@ export interface LayoutModel {
     owns: string[];
     dependsOn: string[];
   }[];
-  edges: { from: string; to: string; cross: boolean }[];
+  edges: { from: string; to: string; cross: boolean; kind?: string }[];
 }
 
 export interface LayoutResult {
@@ -55,7 +55,7 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
   function subsystemOrder(): string[] {
     const deps: Record<string, Record<string, number>> = Object.create(null);
     model.edges.forEach(function (e) {
-      if (!e.cross) return;
+      if (!e.cross || e.kind === 'implements') return; // a realization never orders subsystems
       const from = compById[e.from], to = compById[e.to];
       if (!from || !to) return;
       (deps[from.subsystem] = deps[from.subsystem] || Object.create(null))[to.subsystem] = 1;

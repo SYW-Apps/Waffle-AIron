@@ -423,6 +423,39 @@ export interface TypeShapeFact {
    * cannot.
    */
   inherited?: boolean;
+  /**
+   * The signature of each method-style member by member name, one entry per
+   * overload, function-typed properties included. Filled by the exact reader,
+   * and by the Python reader for a Protocol's methods; absent where the grade
+   * cannot read member signatures, and a check then compares nothing, as it
+   * guesses none. Read by own name only: a member may be called
+   * `constructor` or `toString`.
+   */
+  signatures?: Record<string, MemberSignatureFact[]>;
+}
+
+/**
+ * One signature of a method-style member of a shape a file declares (an
+ * interface, trait or Protocol, a class, a type literal): the parameters it
+ * declares, the return annotation it states and whether it completes later.
+ * One entry is one overload, so a member written with several overloads
+ * records one of these per overload, and a function-typed property records
+ * its function type as one. What lets the signature of an abstraction, which
+ * has no body to read, be compared with the contract that declares it, the
+ * way functionParams and functionReturns let a body be.
+ */
+export interface MemberSignatureFact {
+  /**
+   * The parameters the signature declares, in order, as the code declares them
+   * (the receiver of a Python method set aside); the reading-based facts a
+   * body would add (reads, members, unused) stay unset, since a declaration
+   * has no body.
+   */
+  params: ParameterFact[];
+  /** The return annotation as written and whitespace-normalized; absent when the signature states none. */
+  returns?: string;
+  /** Whether the signature completes later: declared async, or annotated to return a Promise (an `async def` in Python). */
+  completesLater: boolean;
 }
 
 export interface SourceFileFacts {

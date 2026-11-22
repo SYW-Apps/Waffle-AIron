@@ -25,16 +25,18 @@ export const narrativeDetailRule: SddRule = {
   name: 'narrative-detail',
   judges: 'design',
   description:
-    'The narrative detail dial: each method resolves to full | calls-only | intent (method override → spec default → stereotype default). full requires a narrative; intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit declarations are held to their promise as errors; stereotype-defaulted gaps surface as warnings. An honest lint over declarations — it never claims the narrative or the prose is CORRECT.',
+    'The narrative detail dial: each method resolves to full | calls-only | intent (method override → spec default → stereotype default). full requires a narrative; intent-level methods without a narrative must specify behavior as non-trivial prose (L4 intent or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit declarations are held to their promise as errors; stereotype-defaulted gaps surface as warnings. An honest lint over declarations — it never claims the narrative or the prose is CORRECT. An abstraction\'s implementation is never judged: it carries code linkage only, its methods are realized by declaration and its behaviour lives in the implementers (abstraction-shape reports behaviour written there), so it owes no narrative and no intent.',
   codes: [
-    { code: 'MISSING_NARRATIVE', defaultSeverity: 'warning', summary: 'Method resolved to detail: full but has no narrative (error when the level was declared explicitly)' },
-    { code: 'INTENT_FLOOR', defaultSeverity: 'warning', summary: 'Intent-level method whose intent/description prose is missing or placeholder-thin (error when declared explicitly)' },
+    { code: 'MISSING_NARRATIVE', defaultSeverity: 'warning', summary: 'Method resolved to detail: full but has no narrative (error when the level was declared explicitly); never an abstraction\'s method' },
+    { code: 'INTENT_FLOOR', defaultSeverity: 'warning', summary: 'Intent-level method whose intent/description prose is missing or placeholder-thin (error when declared explicitly); never an abstraction\'s method' },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
+      // An abstraction's implementation carries code linkage only: it owes no narrative and no intent.
+      if (component?.abstract === true) continue;
       const isDraftCtx = ctx.isImplementationDraft(impl);
 
       for (const implMethod of impl.methods) {

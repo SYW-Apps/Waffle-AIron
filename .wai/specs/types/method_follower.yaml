@@ -1,0 +1,31 @@
+kind: value-object
+id: method_follower
+name: MethodFollower
+description: >-
+  An implementer of this project that a rename of an abstraction's method or parameter follows onto:
+  the component, abstract or concrete, that implements the abstraction directly or through a chain,
+  and the contract of it that declares the method. The rename moves the same method on it
+  automatically, since an implementer is bound to its abstraction's names by IMPLEMENTS_MISMATCH and
+  a manual follow-up would only restate what the tool already knows.
+subsystem: sdd_core
+fields:
+  - name: component
+    type: string
+    description: The implementing component, a local abstract or concrete component id of the bound project
+    optional: false
+  - name: contract
+    type: string
+    description: >-
+      The contract of that component that declares the method, or that lists it in omits when the
+      contract is a Portal's that deliberately does not serve it
+    optional: false
+  - name: omitted
+    type: bool
+    description: >-
+      True when the contract does not declare the method but lists it in omits, so only the omits
+      entry follows the rename
+    optional: false
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-11-22T02:23:07.763Z'
+updatedAt: '2026-11-22T02:23:08.143Z'

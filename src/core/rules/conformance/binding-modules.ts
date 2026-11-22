@@ -3,6 +3,7 @@ import type { ImplementationSpec, SurfaceContractEntry, SurfaceTypeDef, TypeSpec
 import type { ProjectNode } from '../../../models/project-family.js';
 import type { BindingDeclaration, BindingMember, BindingModule } from '../../binding-modules.js';
 import { RuleContext, SddRule } from '../types.js';
+import { isLocalEntry } from '../read-model.js';
 
 // ---------------------------------------------------------------------------
 // Code↔pin for a consumer's hand-written BINDING MODULE
@@ -170,7 +171,9 @@ function reachedSegments(ctx: RuleContext, impl: ImplementationSpec): Set<string
   const contract = ctx.interfaceMap.get(impl.contract);
   const component = contract ? ctx.componentMap.get(contract.component) : undefined;
   if (component) refs.push(...component.dependsOn, ...(component.owns ?? []));
-  if (contract?.implements) refs.push(contract.implements);
+  // An implements entry the loader bound to a component of this very project is local, however it is
+  // spelled; only another project's `alias::name` extension point reaches a project.
+  if (contract) refs.push(...(contract.implements ?? []).filter(entry => !isLocalEntry(ctx.componentMap, ctx.projectOf, contract.id, entry)));
   for (const other of ctx.implementations) {
     if (other.contract !== impl.contract) continue;
     for (const method of other.methods) {

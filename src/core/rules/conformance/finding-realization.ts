@@ -30,7 +30,7 @@ export const findingRealizationRule: SddRule = {
   name: 'finding-realization',
   judges: 'code',
   description:
-    'Code↔spec Level 1: every finding code an L3 contract method declares must be anchored in the method\'s own source file (the method\'s sourcePath, else the implementation\'s) — as a string literal or, at exact grade, a property-access name, so a code reported through a constants object counts. Below exact grade any identifier or word counts, and the grade rides on the finding. Respects the conformance dial (off skips), leaves unresolvable files to source-file-linkage, and skips implementations under chained subsystems (projectPath), which validate standalone in their own project run.',
+    'Code↔spec Level 1: every finding code an L3 contract method declares must be anchored in the method\'s own source file (the method\'s sourcePath, else the implementation\'s) — as a string literal or, at exact grade, a property-access name, so a code reported through a constants object counts. Below exact grade any identifier or word counts, and the grade rides on the finding. An abstraction\'s implementation is never judged: its file only declares the interface, so whether a code it declares is raised is abstraction-findings\' (ABSTRACTION_FINDING_UNRAISED), which asks that an implementer declare it, and each implementer\'s own file is held here to the codes that implementer declares. Respects the conformance dial (off skips), leaves unresolvable files to source-file-linkage, and skips implementations under chained subsystems (projectPath), which validate standalone in their own project run.',
   codes: [
     { code: 'UNREALIZED_FINDING', defaultSeverity: 'warning', summary: 'A finding code a contract method declares appears in the method\'s source file neither as a string literal nor as a property-access name (below exact grade, any identifier counts)' },
   ],
@@ -45,6 +45,9 @@ export const findingRealizationRule: SddRule = {
       if (!contract) continue;
       const component = ctx.componentMap.get(contract.component);
       if (!component) continue;
+      // An abstraction's file only declares the interface and raises nothing: the codes it
+      // declares are held by the implementers that declare them (abstraction-findings).
+      if (component.abstract === true) continue;
       if (ctx.isInChainedSubproject(component.subsystem)) continue;
 
       const draft = ctx.isImplementationDraft(impl);

@@ -7,6 +7,7 @@ import {
   localTypesOf,
   memberTypesOf,
   methodSourceFile,
+  nameKey,
   pathKey,
   resolveImport,
   returnTypeOf,
@@ -15,7 +16,11 @@ import {
   type CodeModel,
   type ComponentSpec,
   type ImplementationSpec,
+  type InterfaceSpec,
+  type MemberSignatureFact,
+  type ParameterFact,
   type SourceFileFacts,
+  type TypeShapeFact,
 } from '../../models/index.js';
 import type {
   CodeIndex,
@@ -843,4 +848,177 @@ function offTreeEdge(ctx: RuleContext, from: ComponentSpec, ref: string, fromDra
     return { ...base, reach, surface, resolution };
   }
   return { ...base, reach: 'cross-project', resolution };
+}
+
+// ---------------------------------------------------------------------------
+// An abstraction's implements chain (rule_context.abstractionsOf / implementersOf).
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether an `implements` entry is local to the project that writes it. A bare
+ * id always is. A qualified one is only when it is the key the loader bound a
+ * contained project's own component to: the same project as the contract's.
+ * Every other qualified entry is another project's `alias::name` extension point.
+ */
+export function isLocalEntry(
+  components: ReadonlyMap<string, ComponentSpec>,
+  projectOf: (specId: string) => string,
+  specId: string,
+  entry: string,
+): boolean {
+  return !entry.includes('::') || (components.has(entry) && projectOf(entry) === projectOf(specId));
+}
+
+/**
+ * The two chain queries of rule_context, read from the contracts' `implements`
+ * entries on first ask and kept. A path stops at a component already visited,
+ * so a cyclic design answers instead of looping.
+ */
+export function implementsChain(
+  components: ReadonlyMap<string, ComponentSpec>,
+  interfaces: readonly InterfaceSpec[],
+  projectOf: (specId: string) => string,
+): { abstractionsOf(componentId: string): string[]; implementersOf(abstractionId: string): string[] } {
+  let edges: { up: Map<string, Set<string>>; down: Map<string, Set<string>> } | undefined;
+  const link = (map: Map<string, Set<string>>, from: string, to: string): void => {
+    map.set(from, (map.get(from) ?? new Set<string>()).add(to));
+  };
+  const read = (): NonNullable<typeof edges> => {
+    if (edges) return edges;
+    const up = new Map<string, Set<string>>();
+    const down = new Map<string, Set<string>>();
+    for (const intf of interfaces) {
+      for (const entry of intf.implements ?? []) {
+        if (!isLocalEntry(components, projectOf, intf.id, entry)) {
+          link(up, intf.component, entry); // an extension point is answered and never walked past
+        } else if (components.get(entry)?.abstract === true) {
+          link(up, intf.component, entry);
+          if (components.has(intf.component)) link(down, entry, intf.component);
+        }
+      }
+    }
+    edges = { up, down };
+    return edges;
+  };
+  const closure = (next: Map<string, Set<string>>, from: string, walks: (id: string) => boolean): string[] => {
+    const found = new Set<string>();
+    const queue = [from];
+    for (let i = 0; i < queue.length; i++) {
+      for (const id of next.get(queue[i]) ?? []) {
+        if (found.has(id)) continue;
+        found.add(id);
+        if (walks(id)) queue.push(id);
+      }
+    }
+    return [...found];
+  };
+  const isAbstract = (id: string): boolean => components.get(id)?.abstract === true;
+  const above = new Map<string, string[]>();
+  const below = new Map<string, string[]>();
+  return {
+    abstractionsOf(componentId) {
+      if (!above.has(componentId)) above.set(componentId, closure(read().up, componentId, isAbstract));
+      return above.get(componentId)!;
+    },
+    implementersOf(abstractionId) {
+      if (!below.has(abstractionId)) below.set(abstractionId, closure(read().down, abstractionId, isAbstract));
+      return below.get(abstractionId)!;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// An abstraction's declaration, as the code conformance rules read it.
+//
+// An abstraction (a component marked abstract) has no body: its methods are
+// the members of the interface, trait, Protocol or abstract class its file
+// declares. That declaration is compared with its contract where a body would
+// be (param-conformance, async-conformance, the return annotation), and is
+// promised surface of its file (export-conformance). All three read the shape
+// the same way, here.
+// ---------------------------------------------------------------------------
+
+/** The class name a component id is written as in code: notice-sender → NoticeSender. */
+function componentCodeName(componentId: string): string {
+  const local = componentId.slice(componentId.lastIndexOf('::') + 1);
+  return local.split(/[_\-]/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('');
+}
+
+const holdsOwn = (record: object | undefined, name: string): boolean => !!record && Object.prototype.hasOwnProperty.call(record, name);
+
+/**
+ * The shapes of a file a data-model or realization check may judge. A Python
+ * Protocol is read for its signatures only (its shape carries them, which no
+ * declarative class's does): it is no record of fields, so the type checks and
+ * the realization's table-only reading see the file as they did before.
+ */
+export function judgedShapes(facts: SourceFileFacts): Record<string, TypeShapeFact> {
+  const shapes = facts.typeShapes ?? {};
+  if (facts.language !== 'python') return shapes;
+  return Object.fromEntries(Object.entries(shapes).filter(([, shape]) => shape.signatures === undefined));
+}
+
+/**
+ * Whether a shape is a DECLARATION: an interface, a trait, a Protocol, a type
+ * literal, or a class whose members are all abstract. A class with a member
+ * that has a body is behaviour, and declares nothing a caller holds.
+ */
+function isDeclaration(facts: SourceFileFacts, name: string): boolean {
+  if (facts.language === 'python') return true;
+  return !Object.values(facts.functionBodies ?? {}).some(bodies => bodies.some(body => body.container === name && !body.nested));
+}
+
+/**
+ * The shapes of a file that declare a member: those whose signatures hold it by
+ * its own name (never an Object.prototype name it does not declare). Where the
+ * file declares several that hold it, the one named as the component's code name
+ * is the abstraction's own; where none is, every one stays a candidate, and
+ * what a caller judges is only what they all say.
+ */
+function holdingShapes(facts: SourceFileFacts, member: string, component: Pick<ComponentSpec, 'id'>, byMethods = false): [string, TypeShapeFact][] {
+  const shapes = facts.typeShapes ?? {};
+  const holding = Object.entries(shapes).filter(([name, shape]) => (holdsOwn(shape.signatures, member) || (byMethods && shape.methods.includes(member))) && isDeclaration(facts, name));
+  if (holding.length <= 1) return holding;
+  const wanted = nameKey(componentCodeName(component.id));
+  const named = holding.filter(([name]) => nameKey(name) === wanted);
+  return named.length > 0 ? named : holding;
+}
+
+/** What an abstraction's method says in its declaration, one entry per signature (per overload, per candidate shape). */
+export interface DeclaredReading {
+  /** Each signature's parameters. */
+  params: ParameterFact[][];
+  /** Each signature's return annotation as written, null where it states none. */
+  returns: (string | null)[];
+  /** How many of the signatures complete later. */
+  completing: number;
+}
+
+/**
+ * The signatures a file's declaration states for an abstraction's method: the
+ * member of the shape it declares under the method's code name. Undefined where
+ * the file was read by no reader that records member signatures (below exact
+ * grade, a language without one), or declares no such member: nothing is then
+ * compared, and nothing guessed from a name.
+ */
+export function declaredReading(facts: SourceFileFacts, symbol: string, component: Pick<ComponentSpec, 'id'>): DeclaredReading | undefined {
+  const signatures: MemberSignatureFact[] = holdingShapes(facts, symbol, component)
+    .flatMap(([, shape]) => (shape.signatures as Record<string, MemberSignatureFact[]>)[symbol]);
+  if (signatures.length === 0) return undefined;
+  return {
+    params: signatures.map(s => s.params),
+    returns: signatures.map(s => s.returns ?? null),
+    completing: signatures.filter(s => s.completesLater).length,
+  };
+}
+
+/**
+ * The names of the shapes a file declares that realize an abstraction: for each
+ * of its methods (by code name), the interface, trait, Protocol or class holding
+ * it, selected as declaredReading selects. What export-conformance promises.
+ */
+export function declaringShapeNames(facts: SourceFileFacts, symbols: Iterable<string>, component: Pick<ComponentSpec, 'id'>): Set<string> {
+  const names = new Set<string>();
+  for (const symbol of symbols) for (const [name] of holdingShapes(facts, symbol, component, true)) names.add(name);
+  return names;
 }

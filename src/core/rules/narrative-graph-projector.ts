@@ -126,6 +126,36 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
     }
   };
 
+  /**
+   * Reach a method and its counterparts, transitively through a chain of
+   * abstractions (read through ctx.implementersOf and ctx.abstractionsOf, both
+   * cycle-safe): the matching method of every implementer below a non-Portal
+   * abstraction, abstract and concrete (no dependsOn needs to name an
+   * implementer), and the matching verb of every Portal abstraction above an
+   * implementer Portal's verb (implementers are entered through their own
+   * entries, and an abstraction's verb counts as reached when any
+   * implementer's, at any depth, is). A counterpart is a method of the same
+   * name, and one already reached is not enqueued again, which also ends the
+   * walk on a cyclic design.
+   */
+  const reachMethod = (compId: string, methodName: string): void => {
+    enqueueMethod(compId, methodName);
+    if (ctx.componentMap.get(compId)?.componentType === 'Portal') {
+      for (const abstraction of ctx.abstractionsOf(compId)) {
+        const above = ctx.componentMap.get(abstraction);
+        if (above?.componentType !== 'Portal' || above.abstract !== true) continue;
+        if (!ctx.interfaceMethodsOf(abstraction).some((m) => m.name === methodName)) continue;
+        reachComponent(abstraction);
+        enqueueMethod(abstraction, methodName);
+      }
+    } else {
+      for (const implementer of ctx.implementersOf(compId)) {
+        reachComponent(implementer);
+        enqueueMethod(implementer, methodName);
+      }
+    }
+  };
+
   const reachComponent = (compId: string): void => {
     if (reachedComponents.has(compId)) return;
     reachedComponents.add(compId);
@@ -144,7 +174,7 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
   const enqueueAllMethods = (compId: string): void => {
     for (const intf of ctx.interfacesByComponent.get(compId) ?? []) {
       for (const m of intf.methods) {
-        enqueueMethod(compId, m.name);
+        reachMethod(compId, m.name);
       }
     }
   };
@@ -152,7 +182,7 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
   for (const seed of seeds) {
     reachComponent(seed.compId);
     if (seed.methodName) {
-      enqueueMethod(seed.compId, seed.methodName);
+      reachMethod(seed.compId, seed.methodName);
     } else {
       enqueueAllMethods(seed.compId);
     }
@@ -176,7 +206,7 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
     for (const step of methodImpl.narrative) {
       for (const edge of stepEdges(step, ctx, followRegisterEdges)) {
         reachComponent(edge.compId);
-        if (edge.methodName) enqueueMethod(edge.compId, edge.methodName);
+        if (edge.methodName) reachMethod(edge.compId, edge.methodName);
       }
     }
 
@@ -191,7 +221,7 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
       const parsed = parseDeclaredCall(ref);
       if (!parsed || !ctx.componentMap.has(parsed.compId)) continue;
       reachComponent(parsed.compId);
-      enqueueMethod(parsed.compId, parsed.methodName);
+      reachMethod(parsed.compId, parsed.methodName);
     }
   }
 

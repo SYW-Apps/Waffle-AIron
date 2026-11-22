@@ -12,7 +12,7 @@ export const durabilityDeclarationRule: SddRule = {
   judges: 'design',
   scope: 'spec',
   description:
-    'Every Store declares its durability (MISSING_DURABILITY) and nothing but a Store may declare one (DURABILITY_ON_NON_STORE). Intrinsic to one component: no tree required. The round-trip consequences of the declaration are enforced by durability-round-trip.',
+    'Every Store declares its durability (MISSING_DURABILITY) except an abstract Store, whose implementers each declare their own, and nothing but a Store may declare one (DURABILITY_ON_NON_STORE). Intrinsic to one component: no tree required. The round-trip consequences of the declaration are enforced by durability-round-trip.',
   codes: [
     { code: 'DURABILITY_ON_NON_STORE', defaultSeverity: 'error', summary: 'durability declared on a component that is not a Store' },
     { code: 'MISSING_DURABILITY', defaultSeverity: 'warning', summary: 'Store with no durability declaration — the round-trip machinery cannot know whether restart-survival is promised' },
@@ -25,7 +25,7 @@ export const durabilityDeclarationRule: SddRule = {
         // Undeclared durability hollows out the round-trip machinery: on a
         // 12-store tree with 2 declarations the flagship check protects
         // almost nothing. Exemption is by declaration, never by omission.
-        if (comp.componentType === 'Store') {
+        if (comp.componentType === 'Store' && comp.abstract !== true) {
           ctx.addIssue(
             'warning',
             'MISSING_DURABILITY',

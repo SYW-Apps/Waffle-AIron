@@ -607,12 +607,13 @@ methods:
         description: >-
           Collect the base roots: every Observer, seeding all its contract methods; each lifecycle
           entrypoint of ctx.subsystems, seeding its one method; every method of each interface in
-          ctx.interfaces that declares `implements` (an imported extension point the producer
-          calls); and every MessageBus subscribe verb of a Portal whose topic the tree emits (an
-          emits declaration or a MessageBus publish endpoint): the emitted topic reaches it, as an
-          Observer's subscription is reached. A subscribe verb whose topic nothing in the tree emits
-          is not a root: an entry declared for its outside publisher reaches it, and
-          UNSOURCED_SUBSCRIPTION already reports the missing source. A Portal and a published
+          ctx.interfaces that declares an `implements` entry with `::` (an imported extension point
+          the producer calls; a local abstraction is no root, its implementers being reached through
+          the abstraction by the walk); and every MessageBus subscribe verb of a Portal whose topic
+          the tree emits (an emits declaration or a MessageBus publish endpoint): the emitted topic
+          reaches it, as an Observer's subscription is reached. A subscribe verb whose topic nothing
+          in the tree emits is not a root: an entry declared for its outside publisher reaches it,
+          and UNSOURCED_SUBSCRIPTION already reports the missing source. A Portal and a published
           component are no longer roots of their own
         type: local
       - stepNumber: 2
@@ -879,12 +880,18 @@ methods:
         toStep: 1
       - stepNumber: 8
         label: writePaths
-        description: Check every write path of every implementation against every invariant
+        description: >-
+          Check every write path of every implementation against every invariant. An abstraction's
+          implementation carries no narrative, so where the owner is abstract the write paths are
+          its concrete implementers'
         type: loop
         loopKind: forEach
         over: >-
-          each write-effect method of each owner contract intf, then each implementation impl of
-          that contract (ctx.implementationsByContract.get(intf.id)), then each invariant inv of t
+          each write-effect method of each owner contract, then each implementation realizing it,
+          then each invariant inv of t: for an owner that is not abstract, the implementations of
+          that contract (ctx.implementationsByContract.get(intf.id)); for an abstract owner, those
+          of each contract of each concrete component of ctx.implementersOf(comp.id) that declares a
+          method of the same name whose effect is write or unstated
         endStep: 10
       - stepNumber: 9
         description: >-
@@ -906,7 +913,8 @@ methods:
         description: >-
           Report UNASSERTED_INVARIANT (warning; draft context when entityDraft or
           ctx.isImplementationDraft(impl)) on impl.id, naming the write method, the owner, the
-          implementation and the invariant with its description
+          implementer when the owner is an abstraction, the implementation and the invariant with
+          its description
         type: local
     symbol: check
     exportedVia: invariantBackingRule
@@ -1065,4 +1073,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-21T21:22:07.016Z'
+updatedAt: '2026-11-22T15:11:32.582Z'

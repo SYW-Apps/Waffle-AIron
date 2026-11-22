@@ -360,6 +360,7 @@ function componentSection(c: ComponentSpec, keys: KeyTable): DesignComponent {
     subsystem: c.subsystem,
     stereotype: c.componentType,
     ...(c.variant !== undefined ? { variant: c.variant } : {}),
+    ...(c.abstract === true ? { abstract: true } : {}),
     ...(c.dependencyClass !== undefined ? { dependencyClass: c.dependencyClass } : {}),
     ...(c.durability !== undefined ? { durability: c.durability } : {}),
     ...(c.transport !== undefined ? { transport: c.transport } : {}),
@@ -420,6 +421,8 @@ function interfaceSection(intf: InterfaceSpec, keys: KeyTable, owner?: string): 
     description: intf.description,
     status: intf.status,
     methods: intf.methods.map((m) => contractMethod(intf, m, keys, owner)),
+    ...(intf.implements !== undefined && intf.implements.length > 0 ? { implements: intf.implements.map((e) => keys.componentRef(e)) } : {}),
+    ...(intf.omits !== undefined && intf.omits.length > 0 ? { omits: intf.omits.map((o) => ({ method: o.method, reason: o.reason })) } : {}),
     formerly: [...(intf.previousIds ?? [])],
     ...(intf.ext !== undefined ? { ext: intf.ext } : {}),
   };

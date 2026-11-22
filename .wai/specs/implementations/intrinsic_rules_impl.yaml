@@ -13,56 +13,66 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 15
+        endStep: 16
       - stepNumber: 2
+        label: abstractPortal
+        description: >-
+          Is the component an abstract Portal? An abstraction holds only a contract and binds no
+          transport: each implementer Portal binds its own, so MISSING_PORTAL_TRANSPORT never
+          applies to it, and what it must not declare is abstraction-shape's ABSTRACT_PORTAL_BINDS
+        type: branch
+        condition: comp.componentType is "Portal" and comp.abstract is true
+        onTrueStep: 16
+        onFalseStep: 3
+      - stepNumber: 3
         description: isDraftCtx = ctx.isComponentDraft(comp.id).
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: 'Branch: is the component a Portal?'
         type: branch
         condition: comp.componentType is "Portal"
-        onFalseStep: 11
-      - stepNumber: 4
+        onFalseStep: 12
+      - stepNumber: 5
         description: 'Branch (Portal only): is its transport missing?'
         type: branch
         condition: comp.transport is unset
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Report MISSING_PORTAL_TRANSPORT (error; isDraftCtx) naming the component as a Portal with
           no transport.
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         label: abi
         description: >-
           Branch (Portal only): an abi says how a foreign language links a library, so it belongs on
           an InProcess Portal only
         type: branch
         condition: comp.abi is set and comp.transport is not InProcess
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
           Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's transport and
           that abi is for InProcess Portals only.
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Branch (Portal only): Custom, the free-form escape hatch, is read as a network transport,
           an assumption about where its callers are
         type: branch
         condition: comp.transport is Custom
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 11
+      - stepNumber: 10
         description: >-
           Report CUSTOM_TRANSPORT_AS_NETWORK (notice; isDraftCtx) naming what the network reading
           means (scopes, the gateway rule, network flows) and the local and in-process transports to
           state when its callers are not across a network.
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Continue with the next component.
         type: jump
-        toStep: 15
-      - stepNumber: 11
+        toStep: 16
+      - stepNumber: 12
         label: nonPortal
         description: >-
           Branch (non-Portal): is an abi or basePath set, or a transport on anything but an Adapter
@@ -71,25 +81,25 @@ methods:
         condition: >-
           comp.abi or comp.basePath is set, or comp.transport is set on a component that is not an
           Adapter
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 14
+      - stepNumber: 13
         description: >-
           Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's actual
           componentType and that abi and basePath are Portal-only and transport is a Portal's (or an
           Adapter's, as the one it calls over).
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         label: auth
         description: 'Branch (non-Portal): is auth declared?'
         type: branch
         condition: comp.auth is set
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 16
+      - stepNumber: 15
         description: >-
           Report AUTH_ON_NON_PORTAL (warning; isDraftCtx) naming the component's componentType and
           that auth is inbound transport auth, meaningful only on a Portal.
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         label: next
         description: Continue with the next component.
         type: local
@@ -114,9 +124,12 @@ methods:
         condition: comp.durability is unset
         onFalseStep: 7
       - stepNumber: 4
-        description: 'Branch (no durability declared): is the component a Store?'
+        description: >-
+          Branch (no durability declared): is the component a Store that is not abstract? An
+          abstract Store declares no durability, since its contract is realized by implementers that
+          each declare their own
         type: branch
-        condition: comp.componentType is "Store"
+        condition: comp.componentType is "Store" and comp.abstract is not true
         onFalseStep: 9
       - stepNumber: 5
         description: >-
@@ -188,4 +201,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-10-21T21:19:45.730Z'
+updatedAt: '2026-11-22T02:17:14.745Z'

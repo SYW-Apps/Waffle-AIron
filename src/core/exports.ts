@@ -62,7 +62,8 @@ const CONSUMABLE: ReadonlySet<string> = new Set(['Portal', 'Observer']);
 /**
  * The stereotypes an extension point (role implement) may be backed by: a
  * Portal (a webhook or callback contract) or the Adapter holding the port the
- * producer calls and consumers realize.
+ * producer calls and consumers realize — or an abstract component of any
+ * stereotype (an abstraction consumers implement; see servesImplement).
  */
 const IMPLEMENTABLE: ReadonlySet<string> = new Set(['Portal', 'Adapter']);
 
@@ -75,11 +76,13 @@ function exportKindOf(comp: ComponentSpec, role?: string): string | undefined {
   // free-form network kind Custom a generator would read as a wire surface.
   if (comp.componentType === 'Portal' && comp.transport === 'InProcess') return 'InProcess';
   if (comp.componentType === 'Portal' && comp.transport) return transportExportKind(comp.transport);
-  // An extension point held by an Adapter (a trait, a port) is realized
-  // in-process by its consumers — over the transport it calls, when it names one.
+  // An extension point held by an Adapter (a trait, a port) or by an abstract
+  // component (an abstraction) is realized in-process by its consumers — over the
+  // transport an Adapter calls, when it names one.
   if (role === 'implement' && comp.componentType === 'Adapter') {
     return !comp.transport || comp.transport === 'InProcess' ? 'InProcess' : transportExportKind(comp.transport);
   }
+  if (role === 'implement' && comp.abstract === true) return 'InProcess';
   return undefined;
 }
 
@@ -154,21 +157,36 @@ function checkPublicName(name: string, owner: string, problems: ExportProblem[])
 }
 
 /**
+ * Whether an entry consumers implement is backed by something that can serve it: a
+ * Portal or an Adapter, or an abstract component. The abstract mark is read from the
+ * scan's own components where the entry's component is one of them; an entry bound from
+ * another project's table (which carries no abstract flag) reads as an abstract
+ * component's extension point by its InProcess kind, which exportKindOf gives exactly
+ * the extension points an abstract component holds (an Adapter is judged by its type).
+ */
+function servesImplement(entry: ResolvedExport, world?: ExportWorld): boolean {
+  if (IMPLEMENTABLE.has(entry.componentType!)) return true;
+  if (entry.component !== undefined && world?.components.get(entry.component)?.abstract === true) return true;
+  return entry.type === 'InProcess';
+}
+
+/**
  * Report a re-exported component that cannot serve its role: an entry
  * consumers call must be a Portal or an Observer; an entry consumers implement
- * (role implement, an extension point) a Portal or an Adapter.
+ * (role implement, an extension point) a Portal, an Adapter or an abstract
+ * component.
  */
-function checkConsumable(entry: ResolvedExport, owner: string, problems: ExportProblem[]): void {
+function checkConsumable(entry: ResolvedExport, owner: string, problems: ExportProblem[], world?: ExportWorld): void {
   if (entry.kind !== 'component' || !entry.componentType) return;
   const implemented = entry.role === 'implement';
-  if ((implemented ? IMPLEMENTABLE : CONSUMABLE).has(entry.componentType)) return;
+  if (implemented ? servesImplement(entry, world) : CONSUMABLE.has(entry.componentType)) return;
   problems.push({
     kind: 'unconsumable',
     owner,
     publicName: entry.publicName,
     targets: [entry.component!],
     detail: implemented
-      ? `"${entry.publicName}" exports ${entry.componentType} "${entry.component}" for consumers to implement, but an extension point is backed only by a Portal (a webhook or callback contract) or the Adapter holding the port the producer calls`
+      ? `"${entry.publicName}" exports ${entry.componentType} "${entry.component}" for consumers to implement, but an extension point is backed only by a Portal (a webhook or callback contract), the Adapter holding the port the producer calls, or an abstract component consumers implement`
       : `"${entry.publicName}" exports ${entry.componentType} "${entry.component}", which no caller across the boundary may reach — only a Portal (a gateway is a Portal variant) or an Observer can serve one (an Adapter only as an extension point consumers implement, with role implement)`
         + (entry.componentType === 'Adapter'
           ? '. An Adapter published as shared is reachable only inside its own project; to offer that I/O to other projects, put a library (an InProcess Portal) in front of it and export the Portal'
@@ -417,13 +435,13 @@ function subsystemCandidates(
         ...(pi.details !== undefined ? { details: pi.details } : {}),
         ...(pi.role ? { role: pi.role } : {}),
       };
-      checkConsumable(entry, sub.id, problems);
+      checkConsumable(entry, sub.id, problems, world);
       out.push({ entry, explicit: true, from: index });
       return;
     }
     for (const e of sourceTable.entries) {
       const entry = { ...e, via: [source.id, ...e.via] };
-      checkConsumable(entry, sub.id, problems);
+      checkConsumable(entry, sub.id, problems, world);
       out.push({ entry, explicit: false, from: index });
     }
   });
@@ -684,6 +702,7 @@ function emptySourceDetail(source: string, why: string): string {
  * narrow reach, never widen it.
  */
 function bindFromProject(
+  world: ExportWorld,
   owner: string,
   e: SystemPublicInterface,
   source: { namespace: string; label: string },
@@ -724,7 +743,7 @@ function bindFromProject(
       bound.audience = found.audience ?? 'instance';
     }
     checkPublicName(publicName, owner, problems);
-    checkConsumable(bound, owner, problems);
+    checkConsumable(bound, owner, problems, world);
     return { entry: bound, explicit: named, from: index };
   });
 }
@@ -751,7 +770,7 @@ function bindFromSubsystem(
     if (!bound) return [];
     checkPublicName(bound.publicName, owner, problems);
     const entry = withEntryMetadata(bound, e);
-    checkConsumable(entry, owner, problems);
+    checkConsumable(entry, owner, problems, world);
     return [{ entry, explicit: true, from: index }];
   }
   // A wildcard over a subsystem that exports nothing publishes nothing, while
@@ -762,7 +781,7 @@ function bindFromSubsystem(
   }
   return sourceTable.entries.map((found) => {
     const entry = withEntryMetadata({ ...found, via: [subsystem.id, ...found.via] }, e);
-    checkConsumable(entry, owner, problems);
+    checkConsumable(entry, owner, problems, world);
     return { entry, explicit: false, from: index };
   });
 }
@@ -815,7 +834,7 @@ export function resolveProjectTable(
           problems.push({ kind: 'invalid', owner, publicName: label, detail: `re-exports "${label}" from ${source.label}, whose table the scan did not resolve` });
           return;
         }
-        candidates.push(...bindFromProject(owner, e, source, table, index, problems));
+        candidates.push(...bindFromProject(world, owner, e, source, table, index, problems));
         return;
       }
       default:

@@ -55,7 +55,8 @@ methods:
           target twice under one name is one entry; two wildcards binding one name to different
           targets is a duplicate problem and the name is left out; a re-export whose target cannot
           serve its role is an unconsumable problem (an entry called must be a Portal or an
-          Observer; an entry implemented, role implement, may also be an Adapter)
+          Observer; an entry implemented, role implement, may also be an Adapter or an abstract
+          component, an abstraction consumers implement)
         type: local
       - stepNumber: 8
         description: Answer every subsystem's table by key
@@ -150,10 +151,11 @@ methods:
           every name it brought in, with the export kind derived from the backing component
           (transport.exportKind of a Portal's transport; an InProcess Portal — a library — is shown
           as InProcess, never as the free-form Custom; an extension point (role implement) held by
-          an Adapter is realized in-process by its consumers, so InProcess unless the Adapter names
-          a transport; an authored kind is read only as the legacy value), and record a re-exported
-          component that cannot serve its role (a called entry neither a Portal nor an Observer; an
-          implemented entry neither a Portal nor an Adapter) as an unconsumable problem
+          an Adapter or by an abstract component is realized in-process by its consumers, so
+          InProcess unless an Adapter names a transport; an authored kind is read only as the legacy
+          value), and record a re-exported component that cannot serve its role (a called entry
+          neither a Portal nor an Observer; an implemented entry neither a Portal, an Adapter nor an
+          abstract component) as an unconsumable problem
         type: local
       - stepNumber: 12
         description: >-
@@ -169,4 +171,4 @@ methods:
     symbol: resolveProjectTable
 status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-10-19T06:12:36.025Z'
+updatedAt: '2026-11-22T02:16:39.733Z'

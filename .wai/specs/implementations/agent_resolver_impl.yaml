@@ -330,6 +330,41 @@ methods:
           (OPEN_ROUTE_CALL). An agent that implements nothing gets none of these
         type: local
       - stepNumber: 16
+        label: abstractionBrief
+        description: >-
+          Fold in the abstractions the record's components take part in, in a '## Abstractions'
+          section ahead of the project guidance, naming every level of a chain (ctx.abstractionsOf
+          and ctx.implementersOf read the chain: an abstraction may implement abstractions). For a
+          component that IMPLEMENTS one (its contract names a local abstract component in
+          implements, or an abstraction that does): the contract of each abstraction it implements,
+          directly or through the chain, is added to readPaths and its methods are listed, and the
+          section names the interface, trait or Protocol to implement at each level — the
+          declaration in the abstraction's own file, named by its implementation's sourcePath, with
+          each method's own symbol naming the member (an abstraction's implementation has no symbol
+          of its own) — that this component's code must satisfy with every method, the effects and
+          dependencyClass no wider than the abstraction's, and, for a concrete Portal, the omits it
+          states with their reasons; it binds its own transport, endpoints, auth and entry. Where
+          those abstractions' methods declare finding codes, they are listed, and it is told to
+          declare on its own contract each it raises, and any code of its own beside them: only some
+          implementers raise some codes. An `alias::name` extension point it implements is the
+          externals section's, unchanged. For an ABSTRACTION itself (a component marked abstract):
+          the section says to declare the interface, trait or Protocol only, in the one file its
+          implementation names — and suggests a type name for it only when no file is named — with
+          no behaviour, no body, no narrative, no technology, lists its implementers at every level
+          below it so the declaration serves them all, and, where it implements abstractions in
+          turn, names them: its declaration states every method of each itself, since nothing
+          inherits; its methods are realized by that declaration. A CALLER of an abstraction gets
+          its dependency's contract as for any dependency and is told to hold the abstraction's
+          interface type, never an implementer's, a narrower abstraction's included. It is given,
+          per method, the finding codes it may meet there, each with its severity and summary: those
+          the abstraction declares, and those only implementers below it declare on that method,
+          each named with the implementers that declare it, read now from their contracts so a new
+          implementer's code shows on the next brief. It handles the abstraction's by code, and
+          relays any other with its code and the message or work instruction it carries, never
+          branching on which implementer raised it, so it keeps working when an implementer is
+          added. An agent that touches no abstraction gets no such section
+        type: local
+      - stepNumber: 17
         description: >-
           Return the AgentBrief: rendered instructions plus the structured scope fields (ownedPaths,
           readPaths, codeFence, sharedPaths, domainRoot, template)
@@ -352,4 +387,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-21T15:55:45.745Z'
+updatedAt: '2026-11-22T15:12:30.594Z'

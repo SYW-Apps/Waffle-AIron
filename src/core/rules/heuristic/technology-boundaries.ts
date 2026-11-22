@@ -140,7 +140,8 @@ export const technologyRule: SddRule = {
       if (!impl.technologies?.length) continue;
       const intf = ctx.interfaceMap.get(impl.contract);
       const comp = intf ? ctx.componentMap.get(intf.component) : undefined;
-      if (!comp) continue;
+      // An abstraction declares no technology (abstraction-shape reports it).
+      if (!comp || comp.abstract === true) continue;
       for (const tech of impl.technologies) {
         declarations.push({ comp, name: technologyName(tech), tokens: technologyTokens(tech) });
       }

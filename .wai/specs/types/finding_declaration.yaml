@@ -4,8 +4,11 @@ name: FindingDeclaration
 description: >-
   One finding code a method can report: the unit of a contract method's findings list. The code must
   be anchored in the method's source file, as a string literal or a property-access name such as
-  Codes.X, or UNREALIZED_FINDING says so; below exact analysis grade any identifier counts. For a
-  validator rule, its findings are its catalog entry.
+  Codes.X, or UNREALIZED_FINDING says so; below exact analysis grade any identifier counts. On an
+  abstraction's method, whose file only declares the interface, a code is instead one a caller of
+  the abstraction may meet: at least one concrete implementer declares it on its own method
+  (ABSTRACTION_FINDING_UNRAISED otherwise), and an implementer may declare codes of its own that the
+  abstraction does not. For a validator rule, its findings are its catalog entry.
 fields:
   - name: code
     type: string
@@ -25,4 +28,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T18:36:53.603Z'
-updatedAt: '2026-10-04T23:39:44.774Z'
+updatedAt: '2026-11-22T15:11:34.663Z'

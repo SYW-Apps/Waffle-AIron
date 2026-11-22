@@ -268,9 +268,10 @@ methods:
         label: methodLoop
         description: >-
           For each method on the interface, check its name and its parameters' names — except a
-          method the extension point the interface implements (`implements`, resolved as
-          implements-contracts resolves it) declares under the same name: the producer named it and
-          its parameters, in its own language, so it is exempt.
+          method the other project's extension point the interface implements (an `alias::name`
+          entry of `implements`, resolved as implements-contracts resolves it) declares under the
+          same name: the producer named it and its parameters, in its own language, so it is exempt.
+          A local abstraction's methods are this project's own and are never exempt.
         type: loop
         loopKind: forEach
         over: intf.methods
@@ -811,13 +812,16 @@ methods:
         label: binding_guard
         description: >-
           Branch on whether this implementation binds a technology on a component that may not hold
-          one. A dangling contract is the hierarchy rule's finding, not this one's.
+          one. A dangling contract is the hierarchy rule's finding, not this one's, and an
+          abstraction's technologies are abstraction-shape's ABSTRACTION_HAS_BEHAVIOUR, so it is
+          never judged twice.
         type: branch
         condition: >-
-          impl.technologies is non-empty, comp resolves, and comp.componentType is not one of the
-          technology-seam stereotypes (Adapter, Store, Registry, Index, Observer, Portal) — or comp
-          is a Portal binding a technology (by technology.label, case set aside) that an
-          implementation of an Adapter, Store, Registry, Index or Observer of the tree also binds
+          impl.technologies is non-empty, comp resolves, comp.abstract is not true, and
+          comp.componentType is not one of the technology-seam stereotypes (Adapter, Store,
+          Registry, Index, Observer, Portal) — or comp is a Portal binding a technology (by
+          technology.label, case set aside) that an implementation of an Adapter, Store, Registry,
+          Index or Observer of the tree also binds
         onFalseStep: 5
       - stepNumber: 4
         label: report_binding
@@ -851,9 +855,10 @@ methods:
         label: declarations
         description: >-
           Gather the declarations: for every implementation that declares at least one technology
-          and whose contract's component resolves (a dangling contract declares nothing - the
-          hierarchy rule reports it), one entry per declared technology, carrying that component,
-          the technology's name (technology.label) and the tokens it is matched by
+          and whose contract's component resolves and is not abstract (a dangling contract declares
+          nothing - the hierarchy rule reports it; an abstraction declares no technology,
+          abstraction-shape reporting it), one entry per declared technology, carrying that
+          component, the technology's name (technology.label) and the tokens it is matched by
           (technology.tokens: its declared `matches`, else its name).
         type: local
       - stepNumber: 3
@@ -1132,4 +1137,4 @@ methods:
     exportedVia: removableForwarderRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-31T23:30:12.819Z'
+updatedAt: '2026-11-22T02:26:26.068Z'
