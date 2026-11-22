@@ -46,7 +46,8 @@ export const abstractionBypassRule: SddRule = {
           caller.id,
           ctx.isComponentDraft(caller.id),
           undefined,
-          { at: `${targetComp}.${targetMethod}` },
+          // An edge and a method unit, the two forms a component or method rename rekeys.
+          { at: `${caller.id} -> ${targetComp}`, covers: [`${targetComp}.${targetMethod}`] },
         );
         return;
       }

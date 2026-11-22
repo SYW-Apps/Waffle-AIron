@@ -1138,6 +1138,55 @@ function linkageSection(record: AgentRecord): string {
   return parts.join('\n');
 }
 
+/** One finding code a method may report, with who declares it: the severity and summary as its contract declares them. */
+interface BriefFinding { code: string; severity: string; summary: string; declaredBy: string[]; own: boolean }
+
+/** The finding codes an abstraction's contract declares on each of its methods, by method name (a Map: a code or method name is only ever a key). */
+function declaredFindings(contracts: readonly InterfaceSpec[]): Map<string, { code: string; severity: string; summary: string }[]> {
+  const out = new Map<string, { code: string; severity: string; summary: string }[]>();
+  for (const contract of contracts) {
+    for (const method of contract.methods) {
+      for (const finding of method.findings ?? []) {
+        const held = out.get(method.name) ?? [];
+        if (!held.some((h) => h.code === finding.code)) held.push({ code: finding.code, severity: finding.severity, summary: finding.summary });
+        out.set(method.name, held);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The finding codes a caller of an abstraction may meet, per method: the ones the abstraction
+ * declares and those only its concrete implementers declare on their own method of that name,
+ * each with its severity, summary and the implementers that declare it, read now from their
+ * contracts so a new implementer's code shows on the next brief. No codes, no lines.
+ */
+function callerFindingLines(dep: ComponentSpec, interfaces: readonly InterfaceSpec[], concrete: readonly string[]): string[] {
+  const own = declaredFindings(interfaces.filter((i) => i.component === dep.id));
+  const methods = [...new Set(interfaces.filter((i) => i.component === dep.id).flatMap((i) => i.methods.map((m) => m.name)))];
+  const out: string[] = [];
+  for (const method of methods) {
+    const found = new Map<string, BriefFinding>();
+    for (const x of own.get(method) ?? []) found.set(x.code, { ...x, declaredBy: [], own: true });
+    for (const id of concrete) {
+      for (const contract of interfaces.filter((i) => i.component === id)) {
+        for (const finding of contract.methods.find((m) => m.name === method)?.findings ?? []) {
+          const held = found.get(finding.code) ?? { code: finding.code, severity: finding.severity, summary: finding.summary, declaredBy: [], own: false };
+          if (!held.declaredBy.includes(id)) held.declaredBy.push(id);
+          found.set(finding.code, held);
+        }
+      }
+    }
+    for (const x of found.values()) {
+      const who = x.declaredBy.length > 0 ? `declared by ${x.declaredBy.map((id) => `\`${id}\``).join(', ')}` : 'declared by no implementer yet';
+      out.push(`  - \`${dep.id}.${method}\` may report \`${x.code}\` (${x.severity}: ${x.summary}); ${x.own ? "the abstraction's own" : 'its implementers\' own'}, ${who}.`);
+    }
+  }
+  if (out.length === 0) return out;
+  return [`  Finding codes a call to \`${dep.id}\` may meet: handle the abstraction's own by code, and relay any other with its code and the message or work instruction it carries, never branching on which implementer raised it, so the caller keeps working when an implementer is added.`, ...out];
+}
+
 /** The code name of an abstraction's declared interface: the component id in PascalCase (a symbol names a method, never the interface). */
 function abstractionTypeName(abstraction: ComponentSpec): string {
   return abstraction.id.split(/[-_]/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join('');
@@ -1193,6 +1242,12 @@ function abstractionBrief(record: AgentRecord): { section: string; readPaths: st
         const omits = interfaces.filter((i) => i.component === comp.id).flatMap((i) => i.omits ?? []);
         line += ` It binds its own transport, endpoints, auth and entry${omits.length > 0 ? `, and deliberately leaves out ${omits.map((o) => `\`${o.method}\` (${o.reason})`).join('; ')}` : ''}.`;
       }
+      // The finding codes its methods declare: only some implementers raise some of them, so it
+      // declares on its own contract each it raises, beside any code of its own.
+      const codes = [...declaredFindings(abstractContracts)].flatMap(([method, found]) => found.map((x) => `\`${x.code}\` on \`${method}\` (${x.severity}: ${x.summary})`));
+      if (codes.length > 0) {
+        line += ` \`${abstraction.id}\` declares finding codes: ${codes.join('; ')}. Declare on your own contract, on the method of that name, each of them your code raises (only some implementers raise some of them), and any code of your own beside them.`;
+      }
       lines.push(line);
     }
     // The abstraction itself: the declaration only.
@@ -1210,6 +1265,7 @@ function abstractionBrief(record: AgentRecord): { section: string; readPaths: st
       const depFile = implsOf(dep.id).flatMap((impl) => implementationSourceFiles(impl))[0];
       const depType = depFile ? `the one \`${depFile}\` declares` : `not written yet; name it \`${abstractionTypeName(dep)}\` when it is written`;
       lines.push(`- \`${comp.id}\` depends on the abstraction \`${dep.id}\`: hold its interface type, ${depType}, never an implementer's class, nor a narrower abstraction's, so the code keeps working when an implementer is added or replaced.`);
+      lines.push(...callerFindingLines(dep, interfaces, chain.implementersOf(dep.id).filter((id) => byId.has(id) && byId.get(id)!.abstract !== true)));
     }
   }
   if (lines.length === 0) return null;

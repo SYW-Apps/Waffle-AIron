@@ -67,6 +67,7 @@ import { facadeForwardingRule } from './doctrine/facade-forwarding.js';
 import { abstractionShapeRule } from './doctrine/abstraction-shape.js';
 import { abstractionsRule } from './doctrine/abstractions.js';
 import { abstractionBypassRule } from './doctrine/abstraction-bypass.js';
+import { abstractionFindingsRule } from './doctrine/abstraction-findings.js';
 import { profileRegistrationRule } from './extension/profile-registration.js';
 import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
 import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
@@ -252,6 +253,7 @@ export const SDD_RULES: SddRule[] = [
   abstractionShapeRule,
   abstractionsRule,
   abstractionBypassRule,
+  abstractionFindingsRule,
   // Profiles in three questions, three owners: is the name real (the
   // project's config), does the built-in family doctrine allow this
   // stereotype (wairon), does the pack's declared doctrine allow it (the pack).

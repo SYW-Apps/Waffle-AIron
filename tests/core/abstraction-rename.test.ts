@@ -422,6 +422,36 @@ describe('a parameter name an implementer retired', () => {
   });
 });
 
+describe('a parameter name an implementer cannot take in its own language', () => {
+  // The component is written in TypeScript and its implementer, in the kennel subsystem, in Python:
+  // a word only Python reserves is a fine parameter on the abstraction and refused on the implementer.
+  const mixed = (): FixtureTree => {
+    const tree = zoo();
+    tree.system = { ...tree.system, targetLanguage: 'typescript' };
+    tree.subsystems = [SUB, { id: 'kennel', description: 'The kennel.', targetLanguage: 'python' }];
+    tree.components = tree.components!.map((c) => (c.id === 'retriever' ? { ...c, subsystem: 'kennel' } : c));
+    return tree;
+  };
+
+  it('refuses invalid-name naming the implementer, on a dry run and a real rename, leaving every byte', () => {
+    const dir = project(mixed());
+    const before = snapshot(dir);
+    expect(() => renameParam('animal', 'speak', 'volume', 'lambda', true)).toThrow(/invalid-name: .*implementer "retriever".*subsystem "kennel"/);
+    expect(() => renameParam('animal', 'speak', 'volume', 'lambda')).toThrow(/invalid-name: .*implementer "retriever".*subsystem "kennel"/);
+    expect(() => planRenameCascade('animal', 'speak', 'lambda', 'volume')).toThrow(/invalid-name: .*implementer "retriever"/);
+    expect(snapshot(dir)).toEqual(before);
+  });
+
+  it('lets the same name through where every implementer is written in the same language, and another name through here', () => {
+    project(mixed());
+    expect(renameParam('animal', 'speak', 'volume', 'gain', true).followed).toEqual(['dog.speak', 'retriever.speak']);
+    const same = zoo();
+    same.system = { ...same.system, targetLanguage: 'typescript' };
+    project(same);
+    expect(renameParam('animal', 'speak', 'volume', 'lambda', true).followed).toEqual(['dog.speak', 'retriever.speak']);
+  });
+});
+
 describe('the method casing exemption is for alias::name entries only', () => {
   const tree = (implementsEntries: string[]): FixtureTree => ({
     system: { name: 'Zoo', vision: 'A zoo.', targetLanguage: 'typescript' },

@@ -267,6 +267,22 @@ export default [
     tree: senders(),
   }),
 
+  // ---- ABSTRACTION_FINDING_UNRAISED ----------------------------------------
+  defineRuleFixture({
+    code: 'ABSTRACTION_FINDING_UNRAISED', severity: 'warning', anchoredTo: 'notice-sender', expectFire: true,
+    scenario: 'The notice sender declares NOTICE_UNDELIVERABLE on sendNotice, but neither the email sender nor the SMS sender declares it.',
+    tree: senders({ abstractContract: { methods: [{ ...SEND, findings: [{ code: 'NOTICE_UNDELIVERABLE', severity: 'warning', summary: 'The recipient cannot be reached over this channel' }] }] } }),
+  }),
+  defineRuleFixture({
+    code: 'ABSTRACTION_FINDING_UNRAISED', expectFire: false,
+    reason: 'One concrete implementer, the SMS sender, declares the code on its own sendNotice, which is enough: only some channels refuse a recipient.',
+    scenario: 'The notice sender declares NOTICE_UNDELIVERABLE and only the SMS sender declares it too.',
+    tree: senders({
+      abstractContract: { methods: [{ ...SEND, findings: [{ code: 'NOTICE_UNDELIVERABLE', severity: 'warning', summary: 'The recipient cannot be reached over this channel' }] }] },
+      smsContract: { methods: [{ ...SEND, findings: [{ code: 'NOTICE_UNDELIVERABLE', severity: 'warning', summary: 'The recipient cannot be reached over this channel' }] }] },
+    }),
+  }),
+
   // ---- IMPLEMENTS_MISMATCH (local) -----------------------------------------
   defineRuleFixture({
     code: 'IMPLEMENTS_MISMATCH', severity: 'error', anchoredTo: 'isms_sender', expectFire: true,

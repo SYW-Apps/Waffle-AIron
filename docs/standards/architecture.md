@@ -398,12 +398,14 @@ notice `ABSTRACTION_SINGLE_IMPLEMENTER` — one engine behind a component needs
 several L4 implementations, not an abstraction.
 
 **The declaration is checked against the contract.** Where the code model reads
-member signatures (TypeScript at exact grade, a Python Protocol), the interface is
+member signatures (TypeScript at exact grade, a Python Protocol or abstract base class), the interface is
 compared with the abstraction's contract as a body is: parameters, return type and
 whether it completes later. So the abstraction's code, its contract, each
 implementer's contract and that implementer's code are held to one another. An
 abstract class with only abstract members is as valid a declaration as an
-interface.
+interface; in Python an abstract base class (`ABC` or `metaclass=ABCMeta`) whose every method is an
+`@abstractmethod` is read as a Protocol is, and one method with a body, `__init__`
+included, makes it behaviour and no declaration.
 
 **What an implementer owes.** It keeps the abstraction's stereotype
 (`ABSTRACTION_STEREOTYPE_MISMATCH`) and owner (`ABSTRACTION_CONTAINMENT`), declares
@@ -423,6 +425,18 @@ the level that states it (§9). Nothing is inherited. A concrete component is ne
 implemented, and a chain that returns to itself is `ABSTRACTION_CYCLE`. Calling a
 narrower abstraction (`Dog` where `Animal` would do) is substitution, never a
 bypass. A chain is for depth a system really has; one level is the normal shape.
+
+**Finding codes.** A code an abstraction's method declares is one a caller of the
+abstraction may meet, and only some implementers raise each (one carrier takes
+several parcels in a shipment, another refuses them). It stands when at least one
+concrete implementer declares it on its own method of that name, and that
+implementer's code is held to it; a code none declares is
+`ABSTRACTION_FINDING_UNRAISED`. An implementer may declare codes of its own that the
+abstraction does not, a special state of one carrier: nothing reports them, and the
+brief of a caller lists both, each with who declares it, so the caller handles the
+abstraction's by code and relays the rest. An invariant owned by an abstraction is
+asserted by its concrete implementers, each in its own write method of that name
+(`UNASSERTED_INVARIANT`).
 
 **Across subsystems.** An abstraction implemented from another subsystem is
 published by its own subsystem with role `implement`, for that subsystem when the

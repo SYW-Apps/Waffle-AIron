@@ -1,4 +1,4 @@
-import { ComponentSpec, ImplementationSpec, InterfaceSpec, TypeSpec, isDraftSubsystem } from '../../../models/index.js';
+import { ComponentSpec, ImplementationSpec, InterfaceSpec, MethodSignature, TypeSpec, isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 import { familyAliases, refMatchesInvariant } from './invariant-ref.js';
 
@@ -74,10 +74,10 @@ export const invariantBackingRule: SddRule = {
   name: 'invariant-backing',
   judges: 'design',
   description:
-    'The invariant registry: entities may declare domain invariants (type.invariants), anchored through their componentClass. Every write-effect contract method of the owning component must carry a narrative step asserting each invariant (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as semantic guarantees. This is an HONEST lint over declarations: a green run means every write path visibly claims the invariant, never that the narrative or code actually enforces it. An invariant with no resolvable owner or no declared write path is unanchored, and nothing further is claimed about it.',
+    'The invariant registry: entities may declare domain invariants (type.invariants), anchored through their componentClass. Every write-effect contract method of the owning component must carry a narrative step asserting each invariant (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as semantic guarantees. An owner that is an abstraction has no narrative, so its obligation is its implementers\': each concrete implementer, direct or through the chain, asserts the invariant in its own method of the write method\'s name, unless that method states an effect other than write (it writes nothing) or the implementer does not declare it (omitted, or implements-contracts\' mismatch). This is an HONEST lint over declarations: a green run means every write path visibly claims the invariant, never that the narrative or code actually enforces it. An invariant with no resolvable owner or no declared write path is unanchored, and nothing further is claimed about it.',
   codes: [
     { code: 'INVARIANT_UNANCHORED', defaultSeverity: 'warning', summary: 'An entity declares invariants but has no componentClass, its componentClass does not resolve, or the owning component declares no write-effect contract methods' },
-    { code: 'UNASSERTED_INVARIANT', defaultSeverity: 'warning', summary: 'A write-effect method of the invariant\'s owning component has no narrative step asserting it' },
+    { code: 'UNASSERTED_INVARIANT', defaultSeverity: 'warning', summary: 'A write-effect method of the invariant\'s owning component, or, where the owner is an abstraction, that method on a concrete implementer of it, has no narrative step asserting it' },
   ],
   check(ctx) {
     // A type named through an alias is read through the family's alias tables.
@@ -115,15 +115,32 @@ export const invariantBackingRule: SddRule = {
         continue;
       }
 
+      // An abstraction has no narrative: its write paths are those of each concrete implementer,
+      // direct or through the chain, whose own method of that name states write or no effect.
+      // One that does not declare the method (omitted, or implements-contracts' mismatch) or
+      // states a narrower effect has no write path to hold.
+      const concrete = comp.abstract === true
+        ? ctx.implementersOf(comp.id).filter(id => ctx.componentMap.get(id)?.abstract !== true && ctx.componentMap.has(id))
+        : [];
+      const paths = (intf: InterfaceSpec, method: MethodSignature): { impl: ImplementationSpec; implementer?: string }[] => {
+        if (comp.abstract !== true) return (ctx.implementationsByContract.get(intf.id) ?? []).map(impl => ({ impl }));
+        return concrete.flatMap(implementer =>
+          (ctx.interfacesByComponent.get(implementer) ?? []).flatMap(contract => {
+            const own = contract.methods.find(m => m.name === method.name);
+            if (!own || (own.effect !== undefined && own.effect !== 'write')) return [];
+            return (ctx.implementationsByContract.get(contract.id) ?? []).map(impl => ({ impl, implementer }));
+          }));
+      };
+
       for (const { intf, method } of writeMethods) {
-        for (const impl of ctx.implementationsByContract.get(intf.id) ?? []) {
+        for (const { impl, implementer } of paths(intf, method)) {
           const isDraftCtx = entityDraft || ctx.isImplementationDraft(impl);
           for (const inv of invariants) {
             if (stepAsserts(impl, method.name, t, inv.id, aliases)) continue;
             ctx.addIssue(
               'warning',
               'UNASSERTED_INVARIANT',
-              `Write method "${method.name}" of "${comp.id}" (implementation "${impl.id}") has no narrative step asserting invariant "${t.id}.${inv.id}" (${inv.description}). Add the step that upholds it and mark it with assertsInvariants — or lint.allow with a reason. Note: an assertion only declares the intent; it does not prove enforcement.`,
+              `Write method "${method.name}" of "${comp.id}"${implementer ? ` on its implementer "${implementer}"` : ''} (implementation "${impl.id}") has no narrative step asserting invariant "${t.id}.${inv.id}" (${inv.description}). Add the step that upholds it and mark it with assertsInvariants — or lint.allow with a reason. Note: an assertion only declares the intent; it does not prove enforcement.`,
               impl.id,
               isDraftCtx,
             );

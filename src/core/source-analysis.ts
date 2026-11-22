@@ -6630,6 +6630,11 @@ interface Block {
   tries?: PythonTry[];
   /** For a class: the shape it declares when it is a Protocol, filled as its members are met. */
   protocol?: TypeShapeFact;
+  /**
+   * For a class: the shape it declares when it is an abstract base class (ABC or ABCMeta),
+   * and whether a member of it holds behaviour, which makes it no declaration at all.
+   */
+  abc?: { shape: TypeShapeFact; behaviour: boolean };
 }
 
 /** One `try` the walk is inside: its indent, whether the walk is in its body, and whether it has an `except`. */
@@ -6643,6 +6648,9 @@ interface PythonTry {
 
 /** Words a call-shaped `word(` can be that are no call. */
 const PYTHON_KEYWORDS = new Set(['if', 'elif', 'while', 'for', 'return', 'not', 'and', 'or', 'in', 'is', 'await', 'lambda', 'yield', 'with', 'assert', 'del', 'raise', 'except', 'else', 'async', 'from', 'import', 'as', 'global', 'nonlocal', 'pass', 'break', 'continue', 'try', 'finally', 'match', 'case']);
+
+/** The decorators that make a method of an abstract base class abstract (abc.abstractmethod and its legacy forms). */
+const ABSTRACT_DECORATORS = new Set(['abstractmethod', 'abstractproperty', 'abstractclassmethod', 'abstractstaticmethod']);
 
 /** The names a reader treats as a decorator saying "not an instance method". */
 const STATIC_DECORATORS = new Set(['staticmethod', 'classmethod']);
@@ -6668,6 +6676,8 @@ function readPython(text: string): PythonFacts {
   let decorators: string[] = [];
   /** The shape each Protocol class declares, by class name: its methods with their signatures, and its annotated attributes. */
   const protocolShapes = new Map<string, TypeShapeFact>();
+  /** The abstract base classes met, by class name: read as a Protocol is once every method of one proved abstract. */
+  const abcClasses = new Map<string, { shape: TypeShapeFact; behaviour: boolean }>();
   // How each call site was written: one record per writing, by site.
   const writingsOf = new Map<CallSiteFact, { awaited: boolean; guarded: boolean }[]>();
   const allTries: PythonTry[] = [];
@@ -6750,7 +6760,18 @@ function readPython(text: string): PythonFacts {
         protocol = { origin: 'declared', fields: [], methods: [], ...(baseNames.some(base => !roots.has(base.split('.').pop() ?? '')) ? { inherited: true } : {}) };
         protocolShapes.set(name, protocol);
       }
-      stack.push({ kind: 'class', name, indent: line.indent, ...(protocol ? { protocol } : {}) });
+      // An abstract base class (ABC or ABCMeta) is read the same way, but is a declaration only
+      // when every method it defines is an @abstractmethod: the shape is kept at the end.
+      const metaclass = bases.map(part => (part[0]?.text === 'metaclass' && part[1]?.text === '=' ? dottedName(part, 2).name : '')).find(Boolean);
+      const isAbc = stack.length === 0 && !isProtocol
+        && (baseNames.some(base => base.split('.').pop() === 'ABC') || metaclass?.split('.').pop() === 'ABCMeta');
+      let abc: Block['abc'];
+      if (isAbc) {
+        const roots = new Set(['ABC', 'metaclass', 'Generic', 'object']);
+        abc = { shape: { origin: 'declared', fields: [], methods: [], ...(baseNames.some(base => !roots.has(base.split('.').pop() ?? '')) ? { inherited: true } : {}) }, behaviour: false };
+        abcClasses.set(name, abc);
+      }
+      stack.push({ kind: 'class', name, indent: line.indent, ...(protocol ? { protocol } : {}), ...(abc ? { abc } : {}) });
       decorators = [];
       continue;
     }
@@ -6765,6 +6786,8 @@ function readPython(text: string): PythonFacts {
       const isStatic = decorators.some(d => STATIC_DECORATORS.has(d));
       const isStaticMethod = decorators.includes('staticmethod');
       const isAccessor = decorators.some(d => d === 'property' || /\.(setter|getter|deleter)$/.test(d) || d === 'cached_property' || d === 'functools.cached_property');
+      const isAbstract = decorators.some(d => ABSTRACT_DECORATORS.has(d.split('.').pop() ?? ''));
+      const isAbstractProperty = decorators.some(d => d.split('.').pop() === 'abstractproperty');
       decorators = [];
       if (close < 0) continue;
       // Parameters, the receiver of an instance method (self) or a class method (cls) set aside.
@@ -6814,6 +6837,19 @@ function readPython(text: string): PythonFacts {
         const held = shape.signatures ?? (shape.signatures = {});
         // Own-name keyed: a method called `constructor` is its own entry.
         Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
+      }
+      // A method of an abstract base class: a signature when abstract, and otherwise behaviour that
+      // makes the class no declaration (an abstract property is no method with a signature).
+      if (methodOf !== undefined && innermost?.abc) {
+        if (!isAbstract) {
+          innermost.abc.behaviour = true;
+        } else if (!isAccessor && !name.startsWith('_') && !isAbstractProperty) {
+          const shape = innermost.abc.shape;
+          if (!shape.methods.includes(name)) shape.methods.push(name);
+          const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: isAsync };
+          const held = shape.signatures ?? (shape.signatures = {});
+          Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
+        }
       }
       if (methodOf !== undefined) {
         classMembers.get(methodOf)?.push({
@@ -6883,7 +6919,10 @@ function readPython(text: string): PythonFacts {
   }
   const exportedNames = moduleNames.filter(name => !name.startsWith('_') && (declaredAll ? declaredAll.has(name) : true));
   const declarative = readPythonDeclarative(lines, importBindings);
-  const protocolSignatured = [...protocolShapes].filter(([, shape]) => shape.signatures !== undefined);
+  const protocolSignatured = [
+    ...protocolShapes,
+    ...[...abcClasses].filter(([, abc]) => !abc.behaviour).map(([name, abc]) => [name, abc.shape] as const),
+  ].filter(([, shape]) => shape.signatures !== undefined);
 
   // The top-level classes the module names outside their own `class` block:
   // a name token anywhere else — a call constructing it, a base class, an

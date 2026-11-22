@@ -4544,6 +4544,12 @@ export function planRenameCascade(componentId: string, methodName: string, newNa
       if (retired) {
         throw new WaironError(`name-retired: implementer "${f.component}": parameter "${retired.name}" of "${f.contract}.${methodName}" lists "${newName}" in its previousNames — the name is retired on that method. Unsetting that previousNames releases it.`);
       }
+      // The follower's subsystem may be written in another language than the component's: the new name
+      // must be an identifier there and no word that language reserves for a parameter.
+      const refusal = memberNameRefusal(newName, 'param', components.get(f.component)?.subsystem);
+      if (refusal !== null) {
+        throw new WaironError(`invalid-name: ${refusal} (implementer "${f.component}", method "${methodName}", subsystem "${components.get(f.component)?.subsystem}").`);
+      }
     }
     // Step 12.
     return kept;
