@@ -572,7 +572,9 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
     const raw: unknown = iface.implements;
     const named: string[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
     for (const entry of named) {
-      if (entry.includes('::')) continue;
+      // An `alias::name` entry is another project's; a contained member's own entry reads as its
+      // key (`member::name`) once the loader binds it, and is local to the contract's own project.
+      if (entry.includes('::') && !(componentIds.has(entry) && ownerOfSpec(entry) === ownerOfSpec(iface.component))) continue;
       const target = resolveTarget(entry, ownerOfSpec(iface.component));
       if (target && componentIds.has(target) && componentIds.has(iface.component)) addEdge(iface.component, target, 'implements');
     }
@@ -2891,7 +2893,7 @@ var MODEL = __MODEL_JSON__;
       } else {
         var c = compById[e.id];
         classes = stereoClass(c.componentType);
-        label = c.name + '\\n\\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\\u00BB' + (e.hasKids && !inner ? ' \\u25B8' : '');
+        label = c.name + '\\n\\u00AB' + (c.abstract ? 'abstract ' : '') + c.componentType +(c.transport ? '/' + c.transport : '') + '\\u00BB' + (e.hasKids && !inner ? ' \\u25B8' : '');
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '') + (e.kind === 'component' && compById[e.id] && compById[e.id].abstract ? ' abstractNode' : '')
         + (dim ? ' dimmed' : '')

@@ -1,4 +1,5 @@
 import { SddRule } from '../types.js';
+import { isLocalEntry } from '../read-model.js';
 import { implementedEntry } from './implements-contracts.js';
 
 /**
@@ -11,7 +12,7 @@ export const implementsCompatibilityRule: SddRule = {
   name: 'implements-compatibility',
   judges: 'design',
   description:
-    "What an implementing contract promises beyond its shape. A local implements entry names an abstract component (IMPLEMENTS_NOT_ABSTRACT otherwise). Each implemented method's effect, and the implementer's dependencyClass, are no wider than the abstraction's or extension point's (IMPLEMENTS_EFFECT_WIDER), since callers rely on the narrower promise: none, read, lifecycle, write in that order, io matching only io or none, and pure, read, workflow for the class; an effect is judged only where both sides state one, for a cross-project extension point as for a local abstraction.",
+    "What an implementing contract promises beyond its shape. A local implements entry names an abstract component (IMPLEMENTS_NOT_ABSTRACT otherwise: a concrete component is never implemented, so there is no class inheritance). Each implemented method's effect, and the implementer's dependencyClass, are no wider than the abstraction's or extension point's (IMPLEMENTS_EFFECT_WIDER), since callers rely on the narrower promise: none, read, lifecycle, write in that order, io matching only io or none, and pure, read, workflow for the class; an effect is judged only where both sides state one, for a cross-project extension point as for a local abstraction. It is judged on each direct implements edge, and so on every edge of a chain of abstractions: a concrete implementer is no wider than the abstraction it names, which is no wider than the one it names in turn.",
   codes: [
     { code: 'IMPLEMENTS_NOT_ABSTRACT', defaultSeverity: 'error', summary: 'A local implements entry names a component that is not abstract, or none at all' },
     { code: 'IMPLEMENTS_EFFECT_WIDER', defaultSeverity: 'error', summary: "An implemented method's effect, or the implementer's dependencyClass, is wider than the abstraction's or extension point's" },
@@ -25,7 +26,7 @@ export const implementsCompatibilityRule: SddRule = {
       // Step 2: each entry the contract implements.
       for (const entry of intf.implements) {
         // Steps 3-5: a local entry that is no abstraction.
-        if (!entry.includes('::') && ctx.componentMap.get(entry)?.abstract !== true) {
+        if (isLocalEntry(ctx.componentMap, ctx.projectOf, intf.id, entry) && ctx.componentMap.get(entry)?.abstract !== true) {
           const named = ctx.componentMap.has(entry) ? `names "${entry}", a component that is not abstract` : `names "${entry}", which is no component of this tree`;
           ctx.addIssue(
             'error',

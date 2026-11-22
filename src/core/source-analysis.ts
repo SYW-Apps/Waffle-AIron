@@ -16,6 +16,7 @@ import {
   type FunctionBodyFact,
   type ImplementationSpec,
   type ImportBindingFact,
+  type MemberSignatureFact,
   type MethodImplementation,
   type ParameterFact,
   type ParameterKind,
@@ -1818,6 +1819,41 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     localTypes.set(name.text, named);
   };
 
+  // One declaration's signature, as a caller reads it off the shape: its
+  // parameters as declared (a declaration has no body, so nothing a body would
+  // add — unused, reads, members — is recorded), the return annotation as
+  // written, and whether it completes later.
+  const memberSignature = (fn: import('typescript').SignatureDeclarationBase): MemberSignatureFact => {
+    const params = declaredParameters(fn).map(({ unused: _unused, reads: _reads, members: _members, handedWhole: _whole, ...rest }) => rest);
+    return {
+      params,
+      ...(fn.type ? { returns: fn.type.getText(sf).replace(/\s+/g, ' ').trim() } : {}),
+      completesLater: completesLater(fn),
+    };
+  };
+  const addSignature = (into: Map<string, MemberSignatureFact[]>, name: string, signature: MemberSignatureFact): void => {
+    into.set(name, [...(into.get(name) ?? []), signature]);
+  };
+  // The signatures a property states by its type: one function type, or the
+  // call signatures of a type literal (an overloaded function); a class
+  // property initialized by an arrow function or a function expression says
+  // the same by its initializer where it annotates no type.
+  const functionTypeSignatures = (member: import('typescript').PropertySignature | import('typescript').PropertyDeclaration): MemberSignatureFact[] => {
+    let type: import('typescript').TypeNode | undefined = member.type;
+    while (type && ts.isParenthesizedTypeNode(type)) type = type.type;
+    if (type && ts.isFunctionTypeNode(type)) return [memberSignature(type)];
+    if (type && ts.isTypeLiteralNode(type)) {
+      const calls = type.members.filter(ts.isCallSignatureDeclaration);
+      return calls.length > 0 && calls.length === type.members.length ? calls.map(memberSignature) : [];
+    }
+    if (!type && ts.isPropertyDeclaration(member) && member.initializer) {
+      let init: import('typescript').Expression = member.initializer;
+      while (ts.isParenthesizedExpression(init) || ts.isAsExpression(init) || ts.isSatisfiesExpression(init)) init = init.expression;
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) return [memberSignature(init)];
+    }
+    return [];
+  };
+
   // What a named shape's MEMBERS are. Property-style members are the DATA;
   // method-style ones are behaviour, which the spec models on the axis
   // `typeRealization` judges — `structure?(text: string): string` is a method
@@ -1830,6 +1866,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
   ): void => {
     const fields: ShapeMemberFact[] = [];
     const methods: string[] = [];
+    // The signature of each method-style member, by name: held in a Map so a
+    // member called `constructor` or `__proto__` is its own entry.
+    const signatures = new Map<string, MemberSignatureFact[]>();
     // A PRIVATE field a getter of the same class reads is backing storage:
     // the getter is the member the type's data is read through, and the
     // field behind it is implementation (`private readonly a` behind
@@ -1867,13 +1906,24 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
       if (!memberName) continue;
       if (ts.isMethodSignature(member) || ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
         methods.push(memberName);
+        if (!ts.isGetAccessorDeclaration(member) && !isPrivate(member)) {
+          // A class method's overloads are the bodiless declarations before its implementation, and the
+          // implementation signature is not what a caller may write: where overloads exist only they count.
+          const overloaded = ts.isMethodDeclaration(member) && !!member.body
+            && members.some(other => other !== member && ts.isMethodDeclaration(other) && !other.body
+              && !!other.name && propertyNameText(other.name) === memberName);
+          if (!overloaded) addSignature(signatures, memberName, memberSignature(member));
+        }
       } else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {
         if (isBacking(member, memberName)) continue;
+        // A property typed by a function type IS a method as far as any caller can tell.
+        if (!isPrivate(member)) for (const signature of functionTypeSignatures(member)) addSignature(signatures, memberName, signature);
         fields.push({ name: memberName, optional: !!member.questionToken, ...(member.type ? { type: member.type.getText(sf).replace(/\s+/g, ' ').trim() } : {}) });
       }
     }
     const shape: TypeShapeFact = { origin: 'declared', fields, methods };
     if (inherited) shape.inherited = true;
+    if (signatures.size > 0) shape.signatures = Object.fromEntries(signatures);
     typeShapes.set(name, shape);
   };
 
@@ -6578,6 +6628,8 @@ interface Block {
   methodOf?: string;
   /** For a def: the try statements the walk is inside, innermost last. */
   tries?: PythonTry[];
+  /** For a class: the shape it declares when it is a Protocol, filled as its members are met. */
+  protocol?: TypeShapeFact;
 }
 
 /** One `try` the walk is inside: its indent, whether the walk is in its body, and whether it has an `except`. */
@@ -6614,6 +6666,8 @@ function readPython(text: string): PythonFacts {
   let declaredAll: Set<string> | undefined;
   const stack: Block[] = [];
   let decorators: string[] = [];
+  /** The shape each Protocol class declares, by class name: its methods with their signatures, and its annotated attributes. */
+  const protocolShapes = new Map<string, TypeShapeFact>();
   // How each call site was written: one record per writing, by site.
   const writingsOf = new Map<CallSiteFact, { awaited: boolean; guarded: boolean }[]>();
   const allTries: PythonTry[] = [];
@@ -6684,7 +6738,19 @@ function readPython(text: string): PythonFacts {
         moduleNames.push(name);
         if (!classMembers.has(name)) classMembers.set(name, []);
       }
-      stack.push({ kind: 'class', name, indent: line.indent });
+      // A Protocol's members are the shape its callers see: the class is read for the signatures it declares.
+      const open = 2;
+      const close = t[open]?.text === '(' ? closingIndex(t, open) : -1;
+      const bases = close > 0 ? splitTopLevel(t.slice(open + 1, close)).filter(part => part.length > 0) : [];
+      const baseNames = bases.map(part => dottedName(part).name).filter(Boolean);
+      const isProtocol = stack.length === 0 && baseNames.some(base => base.split('.').pop() === 'Protocol');
+      let protocol: TypeShapeFact | undefined;
+      if (isProtocol) {
+        const roots = new Set(['Protocol', 'Generic', 'object']);
+        protocol = { origin: 'declared', fields: [], methods: [], ...(baseNames.some(base => !roots.has(base.split('.').pop() ?? '')) ? { inherited: true } : {}) };
+        protocolShapes.set(name, protocol);
+      }
+      stack.push({ kind: 'class', name, indent: line.indent, ...(protocol ? { protocol } : {}) });
       decorators = [];
       continue;
     }
@@ -6740,6 +6806,15 @@ function readPython(text: string): PythonFacts {
       const bodies = functionBodies.get(name) ?? [];
       bodies.push(body);
       functionBodies.set(name, bodies);
+      // A method of a Protocol: its signature as the Protocol declares it, one per def (an overload each).
+      if (methodOf !== undefined && innermost?.protocol && !isAccessor && !name.startsWith('_')) {
+        const shape = innermost.protocol;
+        if (!shape.methods.includes(name)) shape.methods.push(name);
+        const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: isAsync };
+        const held = shape.signatures ?? (shape.signatures = {});
+        // Own-name keyed: a method called `constructor` is its own entry.
+        Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
+      }
       if (methodOf !== undefined) {
         classMembers.get(methodOf)?.push({
           name: name === '__init__' ? 'constructor' : name,
@@ -6766,7 +6841,11 @@ function readPython(text: string): PythonFacts {
     // ---- class body: an annotated field (`store: BlobStore`) ----
     if (innermost?.kind === 'class' && first.kind === 'name' && t[1]?.kind === 'op' && t[1].text === ':') {
       const eq = t.findIndex(x => x.kind === 'op' && x.text === '=');
-      addType(fieldTypes, first.text, annotationText(t.slice(2, eq >= 0 ? eq : undefined)));
+      const written = annotationText(t.slice(2, eq >= 0 ? eq : undefined));
+      addType(fieldTypes, first.text, written);
+      if (innermost.protocol && stack.length === 1 && !first.text.startsWith('_')) {
+        innermost.protocol.fields.push({ name: first.text, optional: eq >= 0, ...(written ? { type: written } : {}) });
+      }
       continue;
     }
 
@@ -6804,6 +6883,7 @@ function readPython(text: string): PythonFacts {
   }
   const exportedNames = moduleNames.filter(name => !name.startsWith('_') && (declaredAll ? declaredAll.has(name) : true));
   const declarative = readPythonDeclarative(lines, importBindings);
+  const protocolSignatured = [...protocolShapes].filter(([, shape]) => shape.signatures !== undefined);
 
   // The top-level classes the module names outside their own `class` block:
   // a name token anywhere else — a call constructing it, a base class, an
@@ -6837,7 +6917,8 @@ function readPython(text: string): PythonFacts {
     localTypes: Object.fromEntries([...localTypes].map(([k, v]) => [k, [...v]])),
     imports: [...imports],
     exportedNames: [...new Set(exportedNames)],
-    ...(Object.keys(declarative.typeShapes).length > 0 ? { typeShapes: declarative.typeShapes } : {}),
+    // A Protocol that states no method is no declaration of anything a caller reaches: only the ones with signatures are shapes.
+    ...(Object.keys(declarative.typeShapes).length + protocolSignatured.length > 0 ? { typeShapes: { ...Object.fromEntries(protocolSignatured), ...declarative.typeShapes } } : {}),
     routing: declarative.routers,
     reads: PYTHON_READS,
   };

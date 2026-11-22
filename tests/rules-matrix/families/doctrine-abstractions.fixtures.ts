@@ -8,7 +8,7 @@
  *  - ABSTRACT_NOT_ALLOWED, ABSTRACT_PORTAL_BINDS, ABSTRACTION_HAS_BEHAVIOUR
  *  - ABSTRACTION_UNIMPLEMENTED, ABSTRACTION_SINGLE_IMPLEMENTER,
  *    ABSTRACTION_STEREOTYPE_MISMATCH, ABSTRACTION_CONTAINMENT,
- *    ABSTRACTION_MULTIPLE
+ *    ABSTRACTION_MULTIPLE, ABSTRACTION_CYCLE, ABSTRACTION_UNPUBLISHED
  *  - ABSTRACTION_BYPASSED
  *  - IMPLEMENTS_MISMATCH (a local abstraction, and a Portal's omits),
  *    IMPLEMENTS_NOT_ABSTRACT, IMPLEMENTS_EFFECT_WIDER
@@ -38,6 +38,9 @@ function senders(over: {
   caller?: Record<string, unknown>;
   callerTarget?: string;
   abstractImpl?: Record<string, unknown>;
+  abstractContract?: Record<string, unknown>;
+  emailComponent?: Record<string, unknown>;
+  subsystems?: NonNullable<FixtureTree['subsystems']>;
   only?: 'one' | 'none';
   abstractEffect?: string;
   extraComponents?: Comps;
@@ -46,13 +49,13 @@ function senders(over: {
 } = {}): FixtureTree {
   const components: Comps = [
     { id: 'notice-sender', componentType: 'Adapter', abstract: true, description: 'Delivers one notice over some channel; callers hold this, never a channel.', ...over.abstract },
-    { id: 'email-sender', componentType: over.emailType ?? 'Adapter', description: 'Delivers a notice by email.' },
+    { id: 'email-sender', componentType: over.emailType ?? 'Adapter', description: 'Delivers a notice by email.', ...over.emailComponent },
     ...(over.only === 'one' ? [] : [{ id: 'sms-sender', componentType: 'Adapter', description: 'Delivers a notice by SMS.' }]),
     { id: 'order-notifier', componentType: 'Orchestrator', description: 'Tells the customer an order moved on.', dependsOn: ['notice-sender'], ...over.caller },
     ...(over.extraComponents ?? []),
   ];
   const interfaces: Intfs = [
-    { id: 'inotice_sender', component: 'notice-sender', methods: [over.abstractEffect ? { ...SEND, effect: over.abstractEffect } : SEND] },
+    { id: 'inotice_sender', component: 'notice-sender', methods: [over.abstractEffect ? { ...SEND, effect: over.abstractEffect } : SEND], ...over.abstractContract },
     { id: 'iemail_sender', component: 'email-sender', implements: ['notice-sender'], methods: [SEND], ...over.emailContract },
     ...(over.only === 'one' ? [] : [{ id: 'isms_sender', component: 'sms-sender', implements: ['notice-sender'], methods: [SEND], ...over.smsContract }]),
     { id: 'iorder_notifier', component: 'order-notifier', methods: [{ name: 'notifyShipped', description: 'Tell the customer the order shipped.' }] },
@@ -64,7 +67,7 @@ function senders(over: {
     { id: 'order_notifier_impl', contract: 'iorder_notifier', methods: [{ name: 'notifyShipped', narrative: [{ stepNumber: 1, type: 'call', description: 'Send the notice through the sender.', targetComponent: over.callerTarget ?? 'notice-sender', targetMethod: 'sendNotice' }] }] },
     ...(over.extraImplementations ?? []),
   ];
-  return { system: SYSTEM, subsystems: [SUB], components: sub(components), interfaces, implementations };
+  return { system: SYSTEM, subsystems: over.subsystems ?? [SUB], components: sub(components), interfaces, implementations };
 }
 
 export default [
@@ -205,6 +208,50 @@ export default [
     reason: 'Each contract implements exactly one abstraction.',
     scenario: 'Each sender contract implements only the notice sender.',
     tree: senders(),
+  }),
+
+  // ---- ABSTRACTION_CYCLE ---------------------------------------------------
+  defineRuleFixture({
+    code: 'ABSTRACTION_CYCLE', severity: 'error', anchoredTo: 'channel-sender', expectFire: true,
+    scenario: 'The notice sender implements the channel sender, which implements the notice sender: the two abstractions form a loop.',
+    tree: senders({
+      abstractContract: { implements: ['channel-sender'] },
+      extraComponents: [{ id: 'channel-sender', componentType: 'Adapter', abstract: true, description: 'Delivers one notice over a channel.' }],
+      extraInterfaces: [{ id: 'ichannel_sender', component: 'channel-sender', implements: ['notice-sender'], methods: [SEND] }],
+    }),
+  }),
+  defineRuleFixture({
+    code: 'ABSTRACTION_CYCLE', expectFire: false,
+    reason: 'The channel sender implements the notice sender and nothing implements the channel sender back: a chain from the broadest to the narrowest.',
+    scenario: 'A straight chain: the channel sender narrows the notice sender and the email and SMS senders implement the channel sender.',
+    tree: senders({
+      emailContract: { implements: ['channel-sender'] },
+      smsContract: { implements: ['channel-sender'] },
+      extraComponents: [{ id: 'channel-sender', componentType: 'Adapter', abstract: true, description: 'Delivers one notice over a channel.' }],
+      extraInterfaces: [{ id: 'ichannel_sender', component: 'channel-sender', implements: ['notice-sender'], methods: [SEND] }],
+    }),
+  }),
+
+  // ---- ABSTRACTION_UNPUBLISHED ---------------------------------------------
+  defineRuleFixture({
+    code: 'ABSTRACTION_UNPUBLISHED', severity: 'error', anchoredTo: 'email-sender', expectFire: true,
+    scenario: 'The email sender lives in a mail channels subsystem and implements the notice sender of the notifications subsystem, which publishes nothing.',
+    tree: senders({
+      subsystems: [SUB, { id: 'mail-channels', description: 'The mail channel implementers.' }],
+      emailComponent: { subsystem: 'mail-channels' },
+    }),
+  }),
+  defineRuleFixture({
+    code: 'ABSTRACTION_UNPUBLISHED', expectFire: false,
+    reason: 'The notifications subsystem publishes the notice sender with role implement, so the mail channels subsystem may implement it.',
+    scenario: 'The email sender implements the notice sender of another subsystem, which publishes it with role implement.',
+    tree: senders({
+      subsystems: [
+        { ...SUB, publicInterfaces: [{ component: 'notice-sender', details: 'The sender contract the channel subsystems implement.', role: 'implement' }] },
+        { id: 'mail-channels', description: 'The mail channel implementers.' },
+      ],
+      emailComponent: { subsystem: 'mail-channels' },
+    }),
   }),
 
   // ---- ABSTRACTION_BYPASSED ------------------------------------------------

@@ -1,4 +1,5 @@
 import { SddRule, type RuleContext } from '../types.js';
+import { isLocalEntry } from '../read-model.js';
 import { canonicalTypeText, isTypeVocabulary, parseTypeExpression, type ComponentSpec, type MethodSignature, type TypeExpression } from '../../../models/index.js';
 
 /**
@@ -17,7 +18,7 @@ export const implementsContractsRule: SddRule = {
   name: 'implements-contracts',
   judges: 'design',
   description:
-    "A contract's `implements` lists what it realizes, each entry either a local abstract component or another project's extension point (`alias::name`). A local entry resolves to that abstract component's contract; an `alias::name` entry resolves to the export it names (a contained member's live table, or a declared external's pin). The contract must declare every method of each with the same params and returns, types compared semantically, never by spelling: the producer's own bare name and the consumer's `alias::name` (or the bare name its `use` imports) are one type. A Portal that implements a Portal abstraction may leave a verb out by listing it in `omits` with a reason; any other missing verb is the mismatch. Whether an `alias::name` reference resolves and names an entry exported with role implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape once it resolves. Extra methods are the implementer's own and are not reported. Effects and dependency class are implements-compatibility's; conflicts between entries and where omits may stand are implements-consistency's.",
+    "A contract's `implements` lists what it realizes, each entry either a local abstract component or another project's extension point (`alias::name`). A local entry resolves to that abstract component's contract; an `alias::name` entry resolves to the export it names (a contained member's live table, or a declared external's pin). The contract must declare every method of each with the same params and returns, types compared semantically, never by spelling: the producer's own bare name and the consumer's `alias::name` (or the bare name its `use` imports) are one type. This holds at every level of a chain of abstractions: an abstraction's own contract that implements abstractions is exploded, declaring every method of each of them itself, so each abstraction is one complete contract and nothing inherits, and a manual edit that renames a method on an abstraction and not on what implements it is the mismatch reported here. A Portal that implements a Portal abstraction may leave a verb out by listing it in `omits` with a reason; any other missing verb is the mismatch. Whether an `alias::name` reference resolves and names an entry exported with role implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape once it resolves. Extra methods are the implementer's own and are not reported. Effects and dependency class are implements-compatibility's; conflicts between entries and where omits may stand are implements-consistency's.",
   codes: [
     { code: 'IMPLEMENTS_MISMATCH', defaultSeverity: 'error', summary: 'An interface implementing an abstraction or extension point lacks one of its methods (and does not list it in omits, where a Portal may), or declares one with different params or returns' },
   ],
@@ -34,12 +35,13 @@ export const implementsContractsRule: SddRule = {
         // abstraction implements-compatibility's.
         const point = implementedEntry(ctx, intf.id, entry);
         if (!point) continue;
-        const { methods: contract, publicNames } = point;
+        const { methods: contract } = point;
         // Types compare semantically: the producer's bare name and the
         // implementer's `alias::name` (or the bare name its `use` imports) are one type.
         const alias = entry.split('::')[0];
-        const expectedType = (t: string): string => respelled(t, (n) => publicNames.get(lastName(n)) ?? lastName(n));
-        const ownType = entry.includes('::')
+        const foreign = !isLocalEntry(ctx.componentMap, ctx.projectOf, intf.id, entry);
+        const expectedType = entryTypeText(point);
+        const ownType = foreign
           ? (t: string): string => respelled(t, (n) => (n.startsWith(`${alias}::`) ? lastName(n.slice(alias.length + 2)) : n))
           : expectedType;
         // Steps 6-10: each method of the abstraction or extension point, declared alike.
@@ -59,7 +61,7 @@ export const implementsContractsRule: SddRule = {
           ctx.addIssue(
             'error',
             'IMPLEMENTS_MISMATCH',
-            `Interface "${intf.id}" implements "${entry}", whose method "${expected.name}" ${differs === 'is not declared' ? 'it does not declare' : `it declares with ${differs}`}.${renamedFrom}${portalHint} An implementation of ${entry.includes('::') ? 'an extension point' : 'an abstraction'} declares every method of it with the same signature: ${expected.name}(${(expected.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${expected.returns}.`,
+            `Interface "${intf.id}" implements "${entry}", whose method "${expected.name}" ${differs === 'is not declared' ? 'it does not declare' : `it declares with ${differs}`}.${renamedFrom}${portalHint} An implementation of ${foreign ? 'an extension point' : 'an abstraction'} declares every method of it with the same signature: ${expected.name}(${(expected.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${expected.returns}.`,
             intf.id,
             draft,
             undefined,
@@ -70,6 +72,16 @@ export const implementsContractsRule: SddRule = {
     }
   },
 };
+
+/**
+ * A type text in the one spelling an `implements` entry's methods are compared by: the expression in canonical
+ * form, its named types read as the public names the entry's producer exports them by (the bare name where it
+ * exports none). implements-contracts compares an implementer by it, and implements-consistency compares two
+ * entries by it, so the two rules never disagree on whether two types are one.
+ */
+export function entryTypeText(point: ExtensionPoint): (text: string) => string {
+  return (t) => respelled(t, (n) => point.publicNames.get(lastName(n)) ?? lastName(n));
+}
 
 /** The last segment of a possibly-qualified type name. */
 function lastName(name: string): string {
@@ -127,7 +139,7 @@ export interface ExtensionPoint {
  * resolve with role implement: those are other rules' findings.
  */
 export function implementedEntry(ctx: RuleContext, specId: string, entry: string): ExtensionPoint | undefined {
-  if (entry.includes('::')) return extensionPoint(ctx, specId, entry);
+  if (!isLocalEntry(ctx.componentMap, ctx.projectOf, specId, entry)) return extensionPoint(ctx, specId, entry);
   const abstraction = ctx.componentMap.get(entry);
   if (!abstraction || abstraction.abstract !== true) return undefined;
   return { methods: ctx.interfaceMethodsOf(entry), publicNames: new Map(), abstraction };

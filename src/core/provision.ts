@@ -55,6 +55,8 @@ import {
   type SpecRefKind,
   type WritableSpecKind,
   assertSpecsInReach,
+  assertContractsWritable,
+  readPinnedSpec,
   PartReadOnly,
   signatureFacts,
   crossProjectWriteRefusal,
@@ -62,6 +64,8 @@ import {
   missingSpecSentence,
 } from './specs.js';
 import { aiPathsAt } from '../config/paths.js';
+// Which of a contract's implements entries name a component of this project.
+import { isLocalEntry } from './rules/read-model.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
 import * as gitSource from './adapters/git-source.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
@@ -951,6 +955,8 @@ interface Crossing {
   spec: RawSpec;
   target: string;
   position: RefPosition | 'bare-type';
+  /** Set when the reference is a contract's local `implements` entry: it crosses only to an abstraction exported with role implement. */
+  viaImplements?: boolean;
 }
 
 /**
@@ -993,6 +999,12 @@ function referencesOf(spec: RawSpec, wholeParams: boolean): { ref: string; posit
   return out;
 }
 
+/** The entries of an interface document's `implements`, a single string or a list as the file stores it. */
+function implementsEntriesOf(raw: { implements?: unknown }): string[] {
+  const stated = Array.isArray(raw.implements) ? raw.implements : typeof raw.implements === 'string' ? [raw.implements] : [];
+  return stated.filter((e): e is string => typeof e === 'string');
+}
+
 /** What crosses between the `inside` specs and the `outside` ones, both ways, by the ids each side declares. */
 function crossingsOf(inside: RawSpec[], outside: RawSpec[]): { out: Crossing[]; in: Crossing[]; insideIds: Set<string>; outsideIds: Set<string>; insideTargets: Set<string>; outsideTargets: Set<string> } {
   const idsOf = (specs: RawSpec[]): Set<string> => new Set(specs.filter((s) => s.kind !== 'system').map((s) => s.id));
@@ -1014,7 +1026,7 @@ function crossingsOf(inside: RawSpec[], outside: RawSpec[]): { out: Crossing[]; 
           const id = otherTypes.get(nameKey(ref));
           if (id !== undefined && !found.some((c) => c.spec === spec && c.target === id && c.position === 'bare-type')) found.push({ spec, target: id, position });
         } else if (!ref.includes('::') && other.has(ref) && position !== 'method') {
-          found.push({ spec, target: ref, position });
+          found.push({ spec, target: ref, position, ...(spec.kind === 'interface' && implementsEntriesOf(spec.raw).includes(ref) && ref !== spec.raw.component ? { viaImplements: true } : {}) });
         }
       }
     }
@@ -1050,6 +1062,13 @@ function promoteRefusals(family: ProjectFamily, insideFiles: string[], outsideFi
   for (const c of [...crossing.out, ...crossing.in].filter((x) => x.position === 'component')) {
     const target = [...inside, ...outside].find((s) => s.kind === 'component' && s.id === c.target);
     if (!target) continue;
+    // An implements entry crosses only to an abstraction its subsystem exports with role implement:
+    // an extension point for the other side to implement.
+    if (c.viaImplements) {
+      const extensionPoint = resolveSubsystemExports(String(target.raw.subsystem)).entries.some((e) => e.kind === 'component' && e.component === c.target && e.role === 'implement');
+      if (!extensionPoint) out.push(`"${c.spec.id}" implements "${c.target}", an abstraction its subsystem "${target.raw.subsystem}" does not export with role implement — publish it with role implement first, or the entry cannot cross the project boundary`);
+      continue;
+    }
     const published = resolveSubsystemExports(String(target.raw.subsystem)).entries.some((e) => e.kind === 'component' && e.component === c.target);
     if (!published) out.push(`"${c.spec.id}" uses "${c.target}", which its subsystem "${target.raw.subsystem}" does not publish — making it public is a design decision to make first`);
   }
@@ -4337,7 +4356,7 @@ export interface MethodRename {
   from: string;
   /** The method name after it. */
   to: string;
-  /** Ids of the specs the method moved in: the contracts that declared it, and the implementations of those contracts that realized it. */
+  /** Ids of the specs the method moved in: the contracts that declared it, and the implementations of those contracts that realized it, and the same on every implementer that followed it. */
   renamed: string[];
   /** Ids of the specs whose references were retargeted: narrative call, register and dispatch steps, dispatch-table bindings, and lifecycle entrypoints. */
   rewritten: string[];
@@ -4354,14 +4373,47 @@ export interface MethodRename {
   carried: CarriedRekey[];
   /**
    * The public names of the export entries (L0 and L1) whose contract carries
-   * the renamed method: consumers pinning them see one member removed and one
-   * added. Reported, never prevented. Empty when the contract is not exported.
+   * the renamed method, an implementer's followed method included: consumers
+   * pinning them see one member removed and one added. Reported, never
+   * prevented. Empty when the contract is not exported.
    */
   publishedIn: string[];
   /** True when this report is a dry run: nothing was written. */
   dryRun?: boolean;
-  /** The consumers of an export publishing the method whose specs call it by its old name: the ones the rename breaks. Filled by the caller that read them. */
+  /** The consumers of an export publishing the method, or a method that followed it, whose specs call it by its old name: the ones the rename breaks. Filled by the caller that read them. */
   breaks?: ExternalConsumer[];
+  /**
+   * The methods that followed the rename onto an implementer of this project,
+   * each `<component>.<method>` under the name it now carries (a dry run: would
+   * carry): empty when the component is no abstraction or nothing implements it.
+   * A Portal implementer that merely lists the verb in omits has that entry
+   * renamed, which `renamed` names, and is not listed here. Another project's
+   * implementers are never written: the consumer impact (breaks) names them.
+   */
+  followed: string[];
+}
+
+/**
+ * method_follower — an implementer of this project that a rename of an
+ * abstraction's method or parameter follows onto: the component, abstract or
+ * concrete, and the contract of it that declares the method, or lists it in
+ * omits (omitted).
+ */
+export interface MethodFollower {
+  /** The implementing component. */
+  component: string;
+  /** The contract that declares the method, or that lists it in omits when only that entry follows. */
+  contract: string;
+  /** True when the contract does not declare the method but lists it in omits. */
+  omitted: boolean;
+}
+
+/** method_move — what moving one method name on one component's contracts and implementations wrote. */
+export interface MethodMove {
+  /** Ids of the specs the method moved in: every contract of the component that declared it (or listed it in omits), and the implementations of those contracts. */
+  renamed: string[];
+  /** The code symbol an implementation now declares, when the move pinned the old name. */
+  pinnedSymbol?: string;
 }
 
 /**
@@ -4382,17 +4434,233 @@ function shouldPinSymbol(implementation: ImplementationSpec, methodName: string,
 }
 
 /**
+ * Whether a contract's `implements` entry names a component of this project: a
+ * bare id, or the key the loader bound a contained member's own entry to. Any
+ * other entry is another project's `alias::name` extension point.
+ */
+function localImplementsEntry(components: ReadonlyMap<string, ComponentSpec>, contractId: string, entry: string): boolean {
+  const owners = graph().owners;
+  return isLocalEntry(components, (id) => owners.get(id) ?? '', contractId, entry);
+}
+
+/** Whether a contract of `componentId` implements another project's extension point (an `alias::name` entry), whose producer names its methods and parameters. */
+function implementsExtensionPoint(componentId: string, contracts: readonly InterfaceSpec[]): boolean {
+  const components = new Map(loadComponentSpecs().map((c) => [c.id, c] as const));
+  return contracts.some((i) => i.component === componentId && (i.implements ?? []).some((e) => !localImplementsEntry(components, i.id, e)));
+}
+
+/**
+ * The method names an `alias::name` implements entry asks for: a contained
+ * member's live export table, else the declared external's pin. None when
+ * neither is read — the producer names those methods and IMPLEMENTS_MISMATCH
+ * judges them, so an unread point cannot be shown to conflict.
+ */
+function extensionPointMethodNames(entry: string): string[] {
+  const at = entry.indexOf('::');
+  if (at <= 0) return [];
+  const key = graph().nodes.find((n) => n.namespace === '')?.aliases.get(entry.slice(0, at));
+  if (key !== undefined && key !== '') {
+    const exported = resolveProjectExports(key).entries.find((e) => e.kind === 'component' && e.publicName === entry.slice(at + 2) && e.role === 'implement');
+    if (!exported?.component) return [];
+    return loadInterfaceSpecs()
+      .filter((i) => i.component === exported.component && (exported.interface === undefined || i.id === exported.interface))
+      .flatMap((i) => i.methods.map((m) => m.name));
+  }
+  const pinned = readPinnedSpec('interface', entry)?.spec as { methods?: { name?: unknown }[] } | undefined;
+  return (pinned?.methods ?? []).map((m) => m.name).filter((n): n is string => typeof n === 'string');
+}
+
+/**
+ * core_orchestrator.planRenameCascade — what a rename of an abstraction's
+ * method (or, with `param`, of one of its parameters) follows onto, refused
+ * before anything is written when it cannot. The implementers of the component
+ * in this project, directly or through a chain of abstractions (every local
+ * implements entry of every loaded contract, each component once, so a cyclic
+ * design cannot loop it), each with the contract that declares the method, or
+ * the Portal contract that lists it in omits. Another project's implementers are
+ * never in the answer. A read: writes nothing.
+ */
+export function planRenameCascade(componentId: string, methodName: string, newName: string, param?: string): MethodFollower[] {
+  // Step 1: every contract, whose local implements entries say who realizes what.
+  const components = new Map(loadComponentSpecs().map((c) => [c.id, c] as const));
+  const contracts = loadInterfaceSpecs();
+  const owners = graph().owners;
+  const ownerOf = (id: string): string => owners.get(id) ?? '';
+  const contractsOf = (id: string): InterfaceSpec[] => contracts.filter((i) => i.component === id);
+  const isLocal = (contract: InterfaceSpec, entry: string): boolean => isLocalEntry(components, ownerOf, contract.id, entry);
+  const declares = (id: string): boolean => contractsOf(id).some((i) => i.methods.some((m) => m.name === methodName));
+  // Step 2: the implementers, from those entries.
+  const down = new Map<string, string[]>();
+  const up = new Map<string, string[]>();
+  for (const contract of contracts) {
+    for (const entry of contract.implements ?? []) {
+      if (!isLocal(contract, entry) || components.get(entry)?.abstract !== true || !components.has(contract.component)) continue;
+      down.set(entry, [...(down.get(entry) ?? []), contract.component]);
+      up.set(contract.component, [...(up.get(contract.component) ?? []), entry]);
+    }
+  }
+  const walk = (edges: Map<string, string[]>, from: string): string[] => {
+    const seen = new Set<string>([from]);
+    const order: string[] = [];
+    const queue = [from];
+    for (let i = 0; i < queue.length; i++) {
+      for (const id of edges.get(queue[i]) ?? []) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        order.push(id);
+        queue.push(id);
+      }
+    }
+    return order;
+  };
+  const implementers = walk(down, componentId);
+  const followers: MethodFollower[] = [];
+  for (const id of implementers) {
+    if (ownerOf(id) !== ownerOf(componentId)) continue;
+    const own = contractsOf(id);
+    const declaring = own.find((i) => i.methods.some((m) => m.name === methodName));
+    const omitting = declaring ? undefined : own.find((i) => (i.omits ?? []).some((o) => o.method === methodName));
+    if (declaring) followers.push({ component: id, contract: declaring.id, omitted: false });
+    else if (omitting) followers.push({ component: id, contract: omitting.id, omitted: true });
+  }
+  // Step 3: a parameter rename follows by position.
+  if (param !== undefined) {
+    // Step 9: the followers whose method holds the parameter under the old name where the component's own does.
+    const own = contractsOf(componentId).find((i) => i.methods.some((m) => m.name === methodName))?.methods.find((m) => m.name === methodName);
+    const at = (own?.params ?? []).findIndex((p) => p.name === param);
+    const kept = followers.filter((f) => {
+      if (f.omitted) return false;
+      const method = contracts.find((i) => i.id === f.contract)?.methods.find((m) => m.name === methodName);
+      // A method taking its signature from a source reads the renamed parameter through its loader: nothing is written to it.
+      return method !== undefined && method.signatureFrom === undefined && at >= 0 && (method.params ?? [])[at]?.name === param;
+    });
+    // Step 10-11: the same parameter name cannot be held twice.
+    for (const f of kept) {
+      const method = contracts.find((i) => i.id === f.contract)!.methods.find((m) => m.name === methodName)!;
+      if ((method.params ?? []).some((p, i) => i !== at && p.name === newName)) {
+        throw new WaironError(`name-taken: implementer "${f.component}" ("${f.contract}.${methodName}") already has a parameter "${newName}".`);
+      }
+      const retired = (method.params ?? []).find((p) => (p.previousNames ?? []).includes(newName));
+      if (retired) {
+        throw new WaironError(`name-retired: implementer "${f.component}": parameter "${retired.name}" of "${f.contract}.${methodName}" lists "${newName}" in its previousNames — the name is retired on that method. Unsetting that previousNames releases it.`);
+      }
+    }
+    // Step 12.
+    return kept;
+  }
+  // Step 4-5: a component that implements an abstraction still declaring the method is renamed there.
+  // A member of a cycle is also an implementer: the chain follows, it does not bar the rename.
+  const above = walk(up, componentId).filter((a) => declares(a) && !implementers.includes(a));
+  if (above.length > 0) {
+    const topmost = above.filter((a) => !walk(up, a).some(declares));
+    const named = (topmost.length > 0 ? topmost : above).map((a) => `"${a}"`).join(', ');
+    throw new WaironError(`declared-above: ${named} still declares "${methodName}", and "${componentId}" implements it — rename it on ${named} and every implementer follows.`);
+  }
+  // Step 6-7: can every follower follow?
+  const chain = new Set([componentId, ...implementers]);
+  for (const f of followers) {
+    const follower = components.get(f.component)!;
+    const own = contractsOf(f.component);
+    const taken = own.find((i) => i.methods.some((m) => m.name === newName));
+    if (taken) throw new WaironError(`name-taken: implementer "${f.component}" already declares a method "${newName}" on "${taken.id}", so "${methodName}" cannot follow the rename onto it.`);
+    const retired = own.find((i) => i.methods.some((m) => (m.previousNames ?? []).includes(`${i.id}.${newName}`)));
+    if (retired) throw new WaironError(`name-retired: implementer "${f.component}" lists "${newName}" in a previousNames of "${retired.id}" — the name is retired there. Unsetting that previousNames releases it.`);
+    for (const contract of own) {
+      for (const entry of contract.implements ?? []) {
+        const conflicts = isLocal(contract, entry)
+          ? !chain.has(entry) && declares(entry)
+          : extensionPointMethodNames(entry).includes(methodName);
+        if (conflicts) {
+          throw new WaironError(`follow-conflict: implementer "${f.component}" also implements "${entry}", outside the chain of "${componentId}", which declares "${methodName}" too — one method cannot follow both abstractions.`);
+        }
+      }
+    }
+    const refusal = memberNameRefusal(newName, 'method', follower.subsystem, methodCasingOf(follower));
+    if (refusal !== null) throw new WaironError(`invalid-name: ${refusal} (implementer "${f.component}", subsystem "${follower.subsystem}").`);
+  }
+  // Step 8.
+  return followers;
+}
+
+/** The contracts of a component that declare a method or list it in omits: where a move of the name writes. */
+function contractsMoving(componentId: string, methodName: string): InterfaceSpec[] {
+  return loadInterfaceSpecs().filter((i) => i.component === componentId
+    && (i.methods.some((m) => m.name === methodName) || (i.omits ?? []).some((o) => o.method === methodName)));
+}
+
+/**
+ * core_orchestrator.moveContractMethod — move one method name on ONE
+ * component's contracts and implementations, and nothing else: the contract's
+ * method renamed with its former key appended to its rename trace (an omits
+ * entry naming it renamed in place, its reason kept), and each implementation of
+ * those contracts with the method renamed carrying narrative, sourcePath,
+ * symbol, detail and intent, an implementation that named no symbol pinned to
+ * the old name when its code exists. The move beneath renameMethod: the
+ * component asked about and each implementer that follows it take the same one.
+ */
+export function moveContractMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean): MethodMove {
+  // Steps 1-4: each contract of the component that declares the method or lists it in omits.
+  const owning = contractsMoving(componentId, methodName);
+  const renamed: string[] = [];
+  for (const contract of owning) {
+    saveInterfaceSpec({
+      ...contract,
+      methods: contract.methods.map((m) => (m.name === methodName
+        ? {
+          ...m,
+          name: newName,
+          previousNames: traced(m.previousNames, `${contract.id}.${methodName}`),
+          ...(m.params === undefined && m.signatureFrom === undefined
+            ? { signature: renameInSignature(m.signature, methodName, newName) }
+            : {}),
+        }
+        : m)),
+      ...((contract.omits ?? []).some((o) => o.method === methodName)
+        ? { omits: (contract.omits ?? []).map((o) => (o.method === methodName ? { ...o, method: newName } : o)) }
+        : {}),
+    });
+    renamed.push(contract.id);
+  }
+  // Steps 5-9: and on the implementations of those contracts that realize it,
+  // carrying narrative, sourcePath, symbol, detail and intent unchanged.
+  const movingContracts = new Set(owning.map((i) => i.id));
+  let pinnedSymbol: string | undefined;
+  for (const implementation of loadImplementationSpecs()) {
+    if (!movingContracts.has(implementation.contract)) continue;
+    if (!implementation.methods.some((m) => m.name === methodName)) continue;
+    // An implementation that named no symbol needs one now — the function it
+    // binds to still carries the old name — unless the caller declined the pin.
+    const pin = shouldPinSymbol(implementation, methodName, pinSymbol);
+    if (pin) pinnedSymbol = methodName;
+    saveImplementationSpec({
+      ...implementation,
+      methods: implementation.methods.map((m) => (m.name === methodName
+        ? { ...m, name: newName, ...(pin ? { symbol: methodName } : {}) }
+        : m)),
+    });
+    renamed.push(implementation.id);
+  }
+  // Step 10: the next read sees the moved names.
+  invalidateSpecCache();
+  // Step 11.
+  return { renamed, ...(pinnedSymbol ? { pinnedSymbol } : {}) };
+}
+
+/**
  * Rename a contract method and every reference to it in the bound tree. The
  * method moves on every interface of the component that declares it — its name,
  * and the name inside its signature — and on the implementations of those
  * contracts, carrying narrative, sourcePath, symbol, detail, intent and
  * findings unchanged; an implementation that declared no symbol is pinned to
  * the old name unless `pinSymbol` is false, so the function it already binds to
- * keeps binding. Before writing anything it refuses a component that does not
+ * keeps binding. Renaming a method of an abstraction moves the same method on
+ * every implementer of this project, directly or through a chain, all or
+ * nothing. Before writing anything it refuses a component that does not
  * exist (spec-missing), one another project holds
  * (chained-spec), a new name outside the identifier grammar
- * (invalid-name), a method the component does not declare (method-missing), and
- * a new name a moving contract already declares (name-taken).
+ * (invalid-name), a method the component does not declare (method-missing), a
+ * new name a moving contract already declares (name-taken), and what
+ * planRenameCascade refuses.
  */
 export function renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: boolean, dryRun?: boolean): MethodRename {
   // Steps 1–5: the component must exist and belong to the bound project itself —
@@ -4400,10 +4668,11 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   const component = writeTarget('component', componentId, 'sdd_rename_method', `sdd_rename_method ${localOf(componentId)} ${methodName} <new name>`, () => loadComponentSpec(componentId));
   // Steps 6–7: the new name must be an identifier in the tree's method casing —
   // unless a contract of the component implements another project's extension
-  // point, whose producer names those methods in its own language: then any
-  // identifier, and IMPLEMENTS_MISMATCH judges it against the producer's.
+  // point (an `alias::name` entry), whose producer names those methods in its
+  // own language: then any identifier, and IMPLEMENTS_MISMATCH judges it
+  // against the producer's. A local abstraction's methods are this project's own.
   const casing = methodCasingOf(component);
-  const dictated = loadInterfaceSpecs().some((i) => i.component === componentId && (i.implements ?? []).some((e) => e.includes('::')));
+  const dictated = implementsExtensionPoint(componentId, loadInterfaceSpecs());
   // The identifier grammar and the target language's reserved words, whatever the casing.
   const refusal = memberNameRefusal(newName, 'method', component.subsystem, casing);
   if (refusal !== null) throw new WaironError(`invalid-name: ${refusal}.`);
@@ -4437,133 +4706,120 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     );
   }
 
-  // Step 13: every implementation, for the realizations of those contracts.
-  const implementations = loadImplementationSpecs();
-  const movingContracts = new Set(moving.map((i) => i.id));
-  const renamed: string[] = [];
+  // Step 11 (cascade): the implementers the rename follows onto, refused before any write when one cannot follow.
+  const followers = planRenameCascade(componentId, methodName, newName);
+  const movers = [componentId, ...followers.map((f) => f.component)];
 
-  // Step 14: the move as the register and the lint allows are keyed by it: the
+  // Step 12: every implementation, for the realizations of those contracts.
+  const implementations = loadImplementationSpecs();
+  const everyContract = loadInterfaceSpecs();
+  const declaring = (id: string): InterfaceSpec[] => everyContract.filter((i) => i.component === id && i.methods.some((m) => m.name === methodName));
+  const realizing = (id: string): ImplementationSpec[] => {
+    const ids = new Set(declaring(id).map((i) => i.id));
+    return implementations.filter((impl) => ids.has(impl.contract) && impl.methods.some((m) => m.name === methodName));
+  };
+  // The contracts a move writes: the declaring ones and a Portal's that only lists the verb in omits.
+  const written = (id: string): InterfaceSpec[] => everyContract.filter((i) => i.component === id
+    && (i.methods.some((m) => m.name === methodName) || (i.omits ?? []).some((o) => o.method === methodName)));
+
+  // Step 13: the move as the register and the lint allows are keyed by it: the
   // method on the contracts that declare it and the implementations that
-  // realize it, and `<component>.<method>` wherever a unit names it. Refused
-  // before the first write when the register cannot be rewritten precisely.
+  // realize it — the component's and each follower's — and `<component>.<method>`
+  // wherever a unit names it. Refused before the first write when the register
+  // cannot be rewritten precisely.
   const rename: IdentityRename = {
-    methods: [{
-      component: componentId,
+    methods: movers.map((id) => ({
+      component: id,
       method: methodName,
-      toComponent: componentId,
+      toComponent: id,
       toMethod: newName,
-      specs: [
-        ...moving.map((i) => i.id),
-        ...implementations
-          .filter((impl) => movingContracts.has(impl.contract) && impl.methods.some((m) => m.name === methodName))
-          .map((impl) => impl.id),
-      ],
-    }],
+      specs: [...declaring(id).map((i) => i.id), ...realizing(id).map((impl) => impl.id)],
+    })),
   };
   const registerEdits = projectConfigRepository.rekeyCarried(rename, true);
 
-  // Inside a hosted request, every spec the rename would write — the contracts
-  // and implementations it moves the method in, and every spec whose
-  // references it retargets — is judged against the request's write reach
-  // before the first write; nothing is written on a refusal.
+  // Step 14: inside a hosted request, every spec the rename would write — the
+  // contracts and implementations it moves the method in, each follower's, and
+  // every spec whose references it retargets — is judged against the request's
+  // write reach before the first write; nothing is written on a refusal.
+  const owners = new Set(movers);
   const methodRemap = (ref: string, position: RefPosition, owner?: string): string =>
-    (position === 'method' && owner === componentId && ref === methodName ? newName : ref);
+    (position === 'method' && owner !== undefined && owners.has(owner) && ref === methodName ? newName : ref);
   const reachDir = ownSpecsDirs();
   assertSpecsInReach(
     [
-      ...(rename.methods?.[0]?.specs ?? []).map((id) => ({ kind: moving.some((i) => i.id === id) ? 'interface' : 'implementation', id })),
+      ...movers.flatMap((id) => [
+        ...written(id).map((i) => ({ kind: 'interface', id: i.id })),
+        ...realizing(id).map((impl) => ({ kind: 'implementation', id: impl.id })),
+      ]),
       ...rewriteRefFields(reachDir, methodRemap, undefined, true),
       ...rekeyLintAllows(reachDir, rename, true),
     ],
     `renaming method "${componentId}.${methodName}"`,
     Array.isArray(registerEdits) && registerEdits.length > 0,
   );
+  // Every contract and implementation the move saves must be writable where it lives (a part fetched from git is not),
+  // asked before the first write so the refusal never lands after it.
+  assertContractsWritable(movers.flatMap((id) => [
+    ...written(id).map((i) => ({ kind: 'interface' as const, id: i.id })),
+    ...realizing(id).map((impl) => ({ kind: 'implementation' as const, id: impl.id })),
+  ]));
+  const followed = followers.filter((f) => !f.omitted).map((f) => `${f.component}.${newName}`);
+  const moved = movers.flatMap((id) => written(id));
+  const publishedIn = [...new Set(movers.flatMap((id) => exportsPublishing(id, new Set(declaring(id).map((i) => i.id)))))].sort();
 
   // Steps 15-16: a dry run answers what the rename WOULD do — refused exactly
   // as the real one above — and writes nothing.
   if (dryRun) {
-    const realizing = implementations.filter((impl) => movingContracts.has(impl.contract) && impl.methods.some((m) => m.name === methodName));
-    const wouldPin = realizing.some((impl) => shouldPinSymbol(impl, methodName, pinSymbol));
+    const wouldPin = movers.some((id) => realizing(id).some((impl) => shouldPinSymbol(impl, methodName, pinSymbol)));
     const wouldRewrite = [...rewriteRefFields(reachDir, methodRemap, undefined, true), ...rekeyLintAllows(reachDir, rename, true)];
     return {
       component: componentId,
       from: methodName,
       to: newName,
-      renamed: [...moving.map((i) => i.id), ...realizing.map((impl) => impl.id)],
+      renamed: movers.flatMap((id) => [...written(id).map((i) => i.id), ...realizing(id).map((impl) => impl.id)]),
       rewritten: [...new Set(wouldRewrite.map((spec) => spec.id))],
-      mentions: collectMentions(reachDir, methodName, moving),
+      mentions: collectMentions(reachDir, methodName, moved),
       ...(wouldPin ? { pinnedSymbol: methodName } : {}),
       carried: Array.isArray(registerEdits) ? registerEdits : [],
-      publishedIn: exportsPublishing(componentId, new Set(moving.map((i) => i.id))),
+      publishedIn,
+      followed,
       dryRun: true,
     };
   }
 
-  // Steps 15–16: the method moves on each of those contracts — its name, and,
-  // for a prose method, the name inside its signature. A method with params has
-  // its text derived from the new name by the writer, and a sourced method
-  // stores no text at all. Params, returns, signatureFrom, description,
-  // guarantees, endpoint and findings stay exactly as they are.
-  for (const contract of moving) {
-    saveInterfaceSpec({
-      ...contract,
-      methods: contract.methods.map((m) => (m.name === methodName
-        ? {
-          ...m,
-          name: newName,
-          previousNames: traced(m.previousNames, `${contract.id}.${methodName}`),
-          ...(m.params === undefined && m.signatureFrom === undefined
-            ? { signature: renameInSignature(m.signature, methodName, newName) }
-            : {}),
-        }
-        : m)),
-    });
-    renamed.push(contract.id);
-  }
-
-  // Steps 17–20: and on the implementations of those contracts that realize it,
-  // carrying narrative, sourcePath, symbol, detail and intent unchanged.
+  // Steps 17–18: the method moves on the component and on every implementer
+  // that follows it, the same move for each.
+  const renamed: string[] = [];
   let pinnedSymbol: string | undefined;
-  for (const implementation of implementations) {
-    if (!movingContracts.has(implementation.contract)) continue;
-    const realization = implementation.methods.find((m) => m.name === methodName);
-    if (!realization) continue;
-    // Steps 18–19: an implementation that named no symbol needs one now — the
-    // function it binds to still carries the old name — unless the caller
-    // declined the pin.
-    const pin = shouldPinSymbol(implementation, methodName, pinSymbol);
-    if (pin) pinnedSymbol = methodName;
-    saveImplementationSpec({
-      ...implementation,
-      methods: implementation.methods.map((m) => (m.name === methodName
-        ? { ...m, name: newName, ...(pin ? { symbol: methodName } : {}) }
-        : m)),
-    });
-    renamed.push(implementation.id);
+  for (const id of movers) {
+    const move = moveContractMethod(id, methodName, newName, pinSymbol);
+    renamed.push(...move.renamed);
+    if (move.pinnedSymbol) pinnedSymbol = move.pinnedSymbol;
   }
 
-  // Step 21: the saves moved names the retargeting below must read.
+  // Step 19: the saves moved names the retargeting below must read.
   invalidateSpecCache();
 
-  // Step 22: every reference to the method on THIS component, retargeted where
-  // it is named: a narrative call, register or dispatch step, a dispatch-table
-  // binding, and a lifecycle entrypoint. The rewriter persists what it changes.
+  // Step 20: every reference to the method on the component and on each
+  // follower, retargeted where it is named: a narrative call, register or
+  // dispatch step, a dispatch-table binding, a lifecycle entrypoint and a
+  // signatureFrom. The rewriter persists what it changes.
   const specsDir = ownSpecsDirs();
   const retargeted = rewriteRefFields(specsDir, methodRemap);
-  // Still step 22: the lint allows naming it — a site on a spec it moved in, a
+  // Still step 20: the lint allows naming it — a site on a spec it moved in, a
   // covered unit — follow as the register does.
   const allowsRekeyed = rekeyLintAllows(specsDir, rename);
   const rewritten = [...new Set([...retargeted, ...allowsRekeyed].map((spec) => spec.id))];
 
-  // Step 23: what names the method and is left alone — and the export
+  // Step 21: what names the method and is left alone — and the export
   // entries publishing it, whose consumers see a member renamed.
-  const mentions = collectMentions(specsDir, methodName, moving);
-  const publishedIn = exportsPublishing(componentId, new Set(moving.map((i) => i.id)));
+  const mentions = collectMentions(specsDir, methodName, moved);
 
-  // Step 24: the debt register, keyed by exactly the identity just moved.
+  // Step 22: the debt register, keyed by exactly the identity just moved.
   const carried = projectConfigRepository.rekeyCarried(rename);
 
-  // Step 25: the report.
+  // Step 23: the report.
   return {
     component: componentId,
     from: methodName,
@@ -4574,6 +4830,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
     ...(pinnedSymbol ? { pinnedSymbol } : {}),
     carried,
     publishedIn,
+    followed,
   };
 }
 
@@ -5251,6 +5508,15 @@ export interface ParamRename {
   dryRun?: boolean;
   /** The consumers whose specs call the method on one of publishedIn: the ones that must follow. Filled by the caller that read them. */
   breaks?: ExternalConsumer[];
+  /**
+   * The implementer methods the parameter rename followed onto, each
+   * `<component>.<method>`: an implementer of this project, directly or through a
+   * chain of abstractions, whose method held the parameter under the old name at
+   * the same position. Empty when nothing implements the component. A dry run
+   * names them too; another project's implementers are never written and are
+   * named by breaks.
+   */
+  followed: string[];
 }
 
 /**
@@ -5307,23 +5573,33 @@ export function renameParam(componentId: string, methodName: string, param: stri
   }
   const paramRefusal = memberNameRefusal(newName, 'param', component.subsystem);
   if (paramRefusal !== null) throw new WaironError(`invalid-name: ${paramRefusal}.`);
-  // A producer names the parameters of an extension point this component implements.
+  // A producer names the parameters of an extension point (an `alias::name` entry) this component implements.
   const variables = projectConfigRepository.load()?.rules?.naming?.variables;
-  const dictated = contracts.some((i) => (i.implements ?? []).some((e) => e.includes('::')));
+  const dictated = implementsExtensionPoint(componentId, contracts);
   if (variables && !dictated && !methodNameFits(newName, variables)) {
     throw new WaironError(`invalid-name: "${newName}" does not match this tree's parameter naming (rules.naming.variables: ${variables}).`);
   }
-  if (newName === param) return { component: componentId, method: methodName, from: param, to: newName, movedIn: [], rewritten: [], publishedIn: [], ...(dryRun ? { dryRun: true } : {}) };
-  // Step 5: the followers — every contract method of the bound tree whose
-  // signatureFrom takes this method's signature, so it reads the renamed
-  // parameter through the loader — and the export entries publishing it.
-  const source = `${componentId}.${methodName}`;
-  const followers = loadInterfaceSpecs().filter((i) => !moving.includes(i) && i.methods.some((m) => followsSource(m.signatureFrom, source, i.component)));
-  // What publishes the method: its own contract's entries, and every
-  // follower's (a published Portal verb forwarding it) under the follower's verb.
+  if (newName === param) return { component: componentId, method: methodName, from: param, to: newName, movedIn: [], rewritten: [], publishedIn: [], followed: [], ...(dryRun ? { dryRun: true } : {}) };
+  // Step 8: the implementers of this project the parameter follows onto, refused before any write when one holds the new name.
+  const implementers = planRenameCascade(componentId, methodName, newName, param);
+  const implementing = implementers.flatMap((f) => loadInterfaceSpecs().filter((i) => i.component === f.component && i.methods.some((m) => m.name === methodName)));
+  const followed = implementers.map((f) => `${f.component}.${methodName}`);
+  // Step 9: the followers — every contract method of the bound tree whose
+  // signatureFrom takes the signature of this method, or of an implementer's
+  // that follows, so it reads the renamed parameter through the loader — and
+  // the export entries publishing them.
+  const sources = [
+    { component: componentId, contracts: moving },
+    ...implementers.map((f) => ({ component: f.component, contracts: implementing.filter((i) => i.component === f.component) })),
+  ];
+  const sourceNames = sources.map((s) => `${s.component}.${methodName}`);
+  const isFollowerOf = (i: InterfaceSpec, signatureFrom: string | undefined): boolean => sourceNames.some((s) => followsSource(signatureFrom, s, i.component));
+  const followers = loadInterfaceSpecs().filter((i) => !moving.includes(i) && !implementing.includes(i) && i.methods.some((m) => isFollowerOf(i, m.signatureFrom)));
+  // What publishes the method: its own contract's entries, each implementer's,
+  // and every follower's (a published Portal verb forwarding it) under the follower's verb.
   const published = mergeUses([
-    ...publishingUses(componentId, moving, (m) => m.name === methodName),
-    ...followers.flatMap((i) => publishingUses(i.component, [i], (m) => followsSource(m.signatureFrom, source, i.component))),
+    ...sources.flatMap((s) => publishingUses(s.component, s.contracts, (m) => m.name === methodName)),
+    ...followers.flatMap((i) => publishingUses(i.component, [i], (m) => isFollowerOf(i, m.signatureFrom))),
   ]);
   const publishedIn = published.map((u) => u.publicName);
   // Step 6: the hosted request's write reach, before the first write — the
@@ -5332,7 +5608,7 @@ export function renameParam(componentId: string, methodName: string, param: stri
     const rewritten: string[] = [];
     const methods = contract.methods.map((m) => {
       const own = !isFollower && m.name === methodName;
-      if (!own && !(isFollower && followsSource(m.signatureFrom, source, contract.component))) return m;
+      if (!own && !(isFollower && isFollowerOf(contract, m.signatureFrom))) return m;
       const params = own
         ? (m.params ?? []).map((p) => (p.name === param ? { ...p, name: newName, previousNames: [...(p.previousNames ?? []), param] } : p))
         : m.params;
@@ -5343,24 +5619,26 @@ export function renameParam(componentId: string, methodName: string, param: stri
   };
   const followerEdits = followers.map((i) => ({ contract: i, ...respelled(i, true) })).filter((e) => e.rewritten.length > 0);
   assertSpecsInReach(
-    [...moving, ...followerEdits.map((e) => e.contract)].map((i) => ({ kind: 'interface', id: i.id })),
+    [...moving, ...implementing, ...followerEdits.map((e) => e.contract)].map((i) => ({ kind: 'interface', id: i.id })),
     `renaming parameter "${param}" of "${componentId}.${methodName}"`,
     false,
   );
-  const ownEdits = moving.map((i) => ({ contract: i, ...respelled(i, false) }));
+  const moves = [...moving, ...implementing];
+  assertContractsWritable([...moves, ...followerEdits.map((e) => e.contract)].map((i) => ({ kind: 'interface' as const, id: i.id })));
+  const ownEdits = moves.map((i) => ({ contract: i, ...respelled(i, false) }));
   const rewritten = [...ownEdits, ...followerEdits].flatMap((e) => e.rewritten);
-  // Steps 7-8: a dry run stops here, refused exactly as the real rename above.
+  // Steps 10-12: a dry run stops here, refused exactly as the real rename above.
   if (dryRun) {
-    return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), dryRun: true };
+    return { component: componentId, method: methodName, from: param, to: newName, movedIn: moves.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), followed, dryRun: true };
   }
-  // Steps 9-11: the parameter moves on each contract; the writer derives the signature.
+  // Steps 13-15: the parameter moves on each contract, the component's own and each implementer's; the writer derives the signature.
   for (const edit of ownEdits) saveInterfaceSpec({ ...edit.contract, methods: edit.methods });
-  // Steps 12-14: each follower's placeholder follows.
+  // Steps 16-18: each follower's placeholder follows.
   for (const edit of followerEdits) saveInterfaceSpec({ ...edit.contract, methods: edit.methods });
-  // Step 15.
+  // Step 19.
   invalidateSpecCache();
-  // Step 16.
-  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moving.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}) };
+  // Step 20.
+  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moves.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), followed };
 }
 
 /**

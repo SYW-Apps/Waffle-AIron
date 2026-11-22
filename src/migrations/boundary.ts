@@ -73,7 +73,7 @@ function planOwedPins(plan: MigrationPlan, project: string, root: string, bound:
 
 /** The positions a reference may stand at, by the kinds of spec that hold them. */
 const KINDS_AT: Record<string, WritableSpecKind[]> = {
-  dependsOn: ['component'], owns: ['component'], dispatch: ['component'],
+  dependsOn: ['component'], owns: ['component'], dispatch: ['component'], implements: ['interface'],
   lifecycle: ['subsystem'], publicInterfaces: ['subsystem'], trustedLinks: ['subsystem'],
   contract: ['implementation', 'interface'], narrative: ['implementation'], calls: ['implementation'], auth: ['implementation'],
   subsystem: ['component', 'type'], group: ['type'], type: ['interface', 'type', 'implementation'],
@@ -389,6 +389,17 @@ function crossingsBack(plan: MigrationPlan, family: ProjectFamily, bound: string
     if (!impl || !contract || !moved.has(contract.component)) continue;
     for (const m of impl.methods) for (const step of m.narrative) add(contract.component, step.targetComponent);
   }
+  // A contract of the moved subtree realizing an abstraction that stays: its local implements entry.
+  const realized = new Map<string, Set<string>>();
+  for (const k of owned) {
+    const contract = core.loadSpec('interface', k) as InterfaceSpec | null;
+    if (!contract || !moved.has(contract.component)) continue;
+    // A loaded entry naming a component of this project is its key (`member::name` when the bound project is a
+    // member); one naming none is another project's extension point, matched below against the components only.
+    for (const entry of contract.implements ?? []) {
+      realized.set(contract.component, new Set([...(realized.get(contract.component) ?? []), entry]));
+    }
+  }
   let crosses = false;
   for (const [from, tos] of targets) {
     for (const to of tos) {
@@ -397,6 +408,16 @@ function crossingsBack(plan: MigrationPlan, family: ProjectFamily, bound: string
       crosses = true;
       const published = core.resolveSubsystemExports(target.subsystem).entries.some((e) => e.kind === 'component' && e.component === to);
       if (!published) refuse(plan, 'externalize-refused', bound, `${from} names ${to}, which its subsystem ${target.subsystem} does not publish — publishing it is a design decision to make first`);
+    }
+  }
+  // An implements entry crosses only to an abstraction exported with role implement: an extension point.
+  for (const [from, entries] of realized) {
+    for (const entry of entries) {
+      const target = components.find((c) => c.id === entry);
+      if (!target || moved.has(entry)) continue;
+      crosses = true;
+      const extensionPoint = core.resolveSubsystemExports(target.subsystem).entries.some((e) => e.kind === 'component' && e.component === entry && e.role === 'implement');
+      if (!extensionPoint) refuse(plan, 'externalize-refused', bound, `${from} implements ${entry}, an abstraction its subsystem ${target.subsystem} does not export with role implement — publishing it as an extension point is a design decision to make first`);
     }
   }
   return crosses;

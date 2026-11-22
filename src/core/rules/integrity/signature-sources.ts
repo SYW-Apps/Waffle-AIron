@@ -32,12 +32,12 @@ export const signatureSourcesRule: SddRule = {
   name: 'signature-sources',
   judges: 'design',
   description:
-    'Judges every signatureFrom the loader met, from ctx.signatureFacts (the loaded specs are already resolved). The value is read both ways, as a contract method and as a signature type: neither resolving — or only a type that is an entity or value-object — is unresolved; both resolving is ambiguous, and the finding names both candidates and asks the author to qualify the reference; a source that itself names a signatureFrom is a chain, which is never followed (when that source\'s own source is a signature type, the finding names it as the one to take directly); a method source in the method\'s own project whose component the method\'s component does not name in dependsOn or owns is off the design\'s edges — another project\'s export (`alias::name.method`) is licensed by the declared relation to that project, an external or a member alike; a stored method that names a source and also states params or returns that differ from the source\'s restates it, and the source\'s are in force. Every finding sits at the method.',
+    'Judges every signatureFrom the loader met, from ctx.signatureFacts (the loaded specs are already resolved). The value is read both ways, as a contract method and as a signature type: neither resolving — or only a type that is an entity or value-object — is unresolved; both resolving is ambiguous, and the finding names both candidates and asks the author to qualify the reference; a source that itself names a signatureFrom is a chain, which is never followed (when that source\'s own source is a signature type, the finding names it as the one to take directly); a method source in the method\'s own project whose component the method\'s component does not name in dependsOn or owns, and is not an implementer of (an implementer, abstract or concrete, may take a signature from a method of an abstraction it implements, directly or through a chain, read through ctx.abstractionsOf) is off the design\'s edges — another project\'s export (`alias::name.method`) is licensed by the declared relation to that project, an external or a member alike; a stored method that names a source and also states params or returns that differ from the source\'s restates it, and the source\'s are in force. Every finding sits at the method.',
   codes: [
     { code: 'SIGNATURE_SOURCE_UNRESOLVED', defaultSeverity: 'error', summary: 'A method\'s signatureFrom names no contract method and no signature type' },
     { code: 'SIGNATURE_SOURCE_AMBIGUOUS', defaultSeverity: 'error', summary: 'A method\'s signatureFrom resolves both as a contract method and as a signature type; qualify it' },
     { code: 'SIGNATURE_SOURCE_CHAINED', defaultSeverity: 'error', summary: 'A method\'s signature source takes its own signature from a source; sources do not chain' },
-    { code: 'SIGNATURE_SOURCE_OFF_EDGE', defaultSeverity: 'error', summary: 'A method takes its signature from a method of a component its own component neither dependsOn nor owns' },
+    { code: 'SIGNATURE_SOURCE_OFF_EDGE', defaultSeverity: 'error', summary: 'A method takes its signature from a method of a component its own component neither dependsOn nor owns nor implements, directly or through a chain' },
     { code: 'SIGNATURE_SOURCE_RESTATED', defaultSeverity: 'error', summary: 'A method names a signature source and also states params or returns that differ from the source\'s' },
   ],
   check(ctx) {
@@ -112,12 +112,13 @@ export const signatureSourcesRule: SddRule = {
       if (fact.source.includes('::') && projectOf(source) !== projectOf(fact.component)) continue;
       const owner = ctx.componentMap.get(fact.component);
       const reached = new Set([...(owner?.dependsOn ?? []), ...(owner?.owns ?? [])]);
-      if (reached.has(source)) continue;
+      // An implementer, abstract or concrete, takes a signature from an abstraction it implements, whatever its level.
+      if (reached.has(source) || ctx.abstractionsOf(fact.component).includes(source)) continue;
       // Step 13.
       ctx.addIssue(
         'error',
         'SIGNATURE_SOURCE_OFF_EDGE',
-        `${where} takes its signature from "${fact.target}", but "${fact.component}" neither dependsOn nor owns "${source}". Add "${source}" to its dependsOn (or owns, for a member), or name a source it reaches.`,
+        `${where} takes its signature from "${fact.target}", but "${fact.component}" neither dependsOn, owns nor implements "${source}". Add "${source}" to its dependsOn (or owns, for a member, or implements, for an abstraction), or name a source it reaches.`,
         fact.interfaceId, isDraft, undefined, at,
       );
     }

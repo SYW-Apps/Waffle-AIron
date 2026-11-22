@@ -1,5 +1,6 @@
 import { SddRule } from '../types.js';
 import { walk, type WalkSeed } from '../narrative-graph-projector.js';
+import { isLocalEntry } from '../read-model.js';
 import { componentEntryFor, transportKind, type ComponentSpec } from '../../../models/index.js';
 
 /**
@@ -41,7 +42,7 @@ export const reachabilityRule: SddRule = {
       for (const le of sub.lifecycle ?? []) baseRoots.push({ compId: le.component, methodName: le.method });
     }
     for (const intf of ctx.interfaces) {
-      if (!(intf.implements ?? []).some((e) => e.includes('::')) || !ctx.componentMap.has(intf.component)) continue;
+      if (!(intf.implements ?? []).some((e) => !isLocalEntry(ctx.componentMap, ctx.projectOf, intf.id, e)) || !ctx.componentMap.has(intf.component)) continue;
       for (const m of intf.methods) baseRoots.push({ compId: intf.component, methodName: m.name });
     }
     // A MessageBus subscribe verb of a Portal is reached by its topic when the

@@ -125,7 +125,7 @@ const NOT_A_REFERENCE: Record<string, string> = {
   'component.dispatch.capability': 'a capability key of this portal', 'component.dispatch.method': 'a method name (sdd_rename_method)',
   'component.dispatch.description': 'prose',
   'component.abi': 'an ABI name (c, wasm)', 'component.invokedBy.caller': 'prose',
-  'interface.implements': 'a list of local abstract component ids and alias::name extension points: the alias::name entries are a raw position (rawReferences, respelled with the others by respellStoredReferences); a local entry is not rewritten by sdd_rename_component, which the approved design does not list (core_orchestrator_impl renameComponent step 18)',
+  'interface.implements': 'a list of local abstract component ids and alias::name extension points: the alias::name entries are a raw position (rawReferences, respelled with the others by respellStoredReferences); a local entry is a component reference like a dependsOn (mapSpecReferences, rewriteSpecRefs, spec_index.referencesTo), proven in tests/core/abstraction-rename.test.ts and tests/migrations/implements-boundary.test.ts',
   'interface.omits.method': 'a method name of the implemented Portal abstraction; a rename that leaves it stale is reported as OMISSION_NOT_ALLOWED', 'interface.omits.reason': 'prose',
   'implementation.router': 'a code symbol (linkage)',
   'component.emits.topic': 'a bus topic', 'component.emits.event': 'an event name', 'component.emits.description': 'prose',

@@ -647,6 +647,10 @@ export interface RuleContext {
   aliasSpelling(ref: string): string | null;
   /** Every contract method across the component's interfaces (memoized — eight rules ask per binding or per step). */
   interfaceMethodsOf(compId: string): MethodSignature[];
+  /** rule_context.abstractionsOf — every local abstraction and extension point the component implements, through any chain (memoized, cycle-safe). */
+  abstractionsOf(componentId: string): string[];
+  /** rule_context.implementersOf — every component, abstract or concrete, that implements the abstraction through any chain (memoized, cycle-safe). */
+  implementersOf(abstractionId: string): string[];
   /** The run's source-code model keyed for lookup (memoized). */
   codeIndex(): CodeIndex;
   /** Which files realize which components, both ways (memoized). */

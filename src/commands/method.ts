@@ -45,6 +45,7 @@ export async function runMethodRename(componentId: string, methodName: string, n
   // Step 5: what moved, and who breaks.
   const would = result.dryRun ? 'would move' : 'moved';
   logger.success(`${result.dryRun ? 'Dry run: renaming' : 'Renamed'} "${result.component}.${result.from}" to "${result.to}" — ${would} in ${result.renamed.join(', ')}; "${result.from}" joins its rename trace (previousNames; \`formerly\` in the design export).`);
+  if (result.followed.length > 0) logger.info(`${result.dryRun ? 'It would also rename' : 'Also renamed'} the method on each implementer of "${result.component}" in this project: ${result.followed.join(', ')}. Another project's implementers are never written: the consumers below name them.`);
   if (result.rewritten.length > 0) logger.info(`References ${result.dryRun ? 'it would retarget' : 'retargeted'}: ${result.rewritten.join(', ')}.`);
   if (result.mentions.length > 0) logger.info(`Left alone (prose or a gRPC wire method still names "${result.from}"): ${result.mentions.join(', ')}.`);
   if (result.pinnedSymbol) logger.info(`symbol ${result.dryRun ? 'would be kept' : 'kept'} at "${result.pinnedSymbol}" so existing code stays linked — \`--no-pin-symbol\` when the code is not written yet.`);
@@ -95,6 +96,7 @@ export async function runMethodRenameParam(componentId: string, methodName: stri
   const would = result.dryRun ? 'would move' : 'moved';
   if (result.routedFrom) logger.info(`"${result.routedFrom}" takes its signature from "${result.component}.${result.method}", so the parameter is renamed there and reaches "${result.routedFrom}" through its signatureFrom.`);
   logger.success(`${result.dryRun ? 'Dry run: renaming' : 'Renamed'} parameter "${result.from}" of "${result.component}.${result.method}" to "${result.to}" — ${would} in ${result.movedIn.join(', ')}; "${result.from}" joins its rename trace (previousNames; \`formerly\` in the design export).`);
+  if (result.followed.length > 0) logger.info(`${result.dryRun ? 'It would also rename' : 'Also renamed'} the parameter on each implementer of "${result.component}.${result.method}" in this project that holds it: ${result.followed.join(', ')}. Another project's implementers are never written: the consumers below name them.`);
   if (result.rewritten.length > 0) logger.info(`Endpoint path placeholders ${result.dryRun ? 'it would respell' : 'respelled'}: ${result.rewritten.join('; ')} (the URL a caller sends is unchanged).`);
   reportBreaks(result.publishedIn, breaks, `call "${result.method}"${result.publishedIn.length > 0 && result.published?.some((u) => !u.members.includes(result.method)) ? ' (or a published verb forwarding it)' : ''}`, options);
   if (result.dryRun) logger.info('Nothing was written.');

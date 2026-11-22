@@ -161,6 +161,7 @@ function placeOfSpec(index: Index, project: string, ref: SpecRef): LookupPlace {
 function kindOfPosition(position: string, holder: SpecRef['kind']): LookupReference['kind'] {
   if (/narrative\.step|\.calls$|^dispatch$|^lifecycle$/.test(position)) return 'call-step';
   if (holder === 'type' || /^fields\.|^signature$|^methods\.[^.]+$/.test(position)) return 'type-position';
+  if (position === 'implements') return 'implements';
   return 'depends-on';
 }
 

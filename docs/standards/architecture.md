@@ -391,10 +391,19 @@ two implementations of one Portal abstraction.
 pattern or a UI block (`ABSTRACT_NOT_ALLOWED`). Its L3 contract declares the
 methods; its L4 carries code linkage only — the file that declares the interface,
 trait or Protocol — and no narrative, intent, calls or technologies
-(`ABSTRACTION_HAS_BEHAVIOUR`). An abstraction no contract implements is
-`ABSTRACTION_UNIMPLEMENTED` unless it is exported with role `implement`; one with a
-single implementer is the notice `ABSTRACTION_SINGLE_IMPLEMENTER` — one engine
-behind a component needs several L4 implementations, not an abstraction.
+(`ABSTRACTION_HAS_BEHAVIOUR`). An abstraction no concrete component implements,
+directly or down a chain, is `ABSTRACTION_UNIMPLEMENTED` unless it, or one below it,
+is exported with role `implement`; one with a single concrete implementer is the
+notice `ABSTRACTION_SINGLE_IMPLEMENTER` — one engine behind a component needs
+several L4 implementations, not an abstraction.
+
+**The declaration is checked against the contract.** Where the code model reads
+member signatures (TypeScript at exact grade, a Python Protocol), the interface is
+compared with the abstraction's contract as a body is: parameters, return type and
+whether it completes later. So the abstraction's code, its contract, each
+implementer's contract and that implementer's code are held to one another. An
+abstract class with only abstract members is as valid a declaration as an
+interface.
 
 **What an implementer owes.** It keeps the abstraction's stereotype
 (`ABSTRACTION_STEREOTYPE_MISMATCH`) and owner (`ABSTRACTION_CONTAINMENT`), declares
@@ -403,20 +412,41 @@ is no wider in effect or dependency class (`IMPLEMENTS_EFFECT_WIDER`), since cal
 rely on the abstraction's. A local `implements` entry must name an abstract
 component (`IMPLEMENTS_NOT_ABSTRACT`). A call that reaches, on an implementer
 directly, a method its abstraction declares bypasses the abstraction
-(`ABSTRACTION_BYPASSED`); the implementer's own extra methods are fine to call.
+(`ABSTRACTION_BYPASSED`); the implementer's own extra methods are fine to call. In
+code an implementer may import, extend or call into its abstraction's file; the
+reverse is an undeclared dependency.
+
+**Chains.** An abstraction may implement abstractions, at any depth: `Animal` ←
+`Dog` ← `GoldenRetriever`. Every level is a whole contract: it states each method
+of what it implements, or takes that method's signature with `signatureFrom` from
+the level that states it (§9). Nothing is inherited. A concrete component is never
+implemented, and a chain that returns to itself is `ABSTRACTION_CYCLE`. Calling a
+narrower abstraction (`Dog` where `Animal` would do) is substitution, never a
+bypass. A chain is for depth a system really has; one level is the normal shape.
+
+**Across subsystems.** An abstraction implemented from another subsystem is
+published by its own subsystem with role `implement`, for that subsystem when the
+entry names `consumers` (`ABSTRACTION_UNPUBLISHED`).
+
+**Renames follow.** Renaming a method or parameter of an abstraction renames it on
+every implementer in the project, down the whole chain, all or nothing; the dry run
+names each one. The rename is asked of the topmost level that declares the method.
+A hand edit or a moved method follows nothing, so `IMPLEMENTS_MISMATCH` reports
+what drifted. Implementers in other projects are named, never written.
 
 **One contract, several abstractions** is legal but the exception — one vendor
 client serving two roles. It raises the notice `ABSTRACTION_MULTIPLE`; keep it to
 one responsibility serving several roles and document it with a `lint.allow` and a
 reason. Two abstractions whose same-named methods differ in params, returns or
-effect cannot both be served (`IMPLEMENTS_CONFLICT`).
+effect cannot both be served (`IMPLEMENTS_CONFLICT`). An entry that is an ancestor
+of another on the same contract is no second role.
 
 **Portal parity.** An abstract Portal is a parity contract across transports: it
 binds nothing — no transport, endpoints, auth or entry (`ABSTRACT_PORTAL_BINDS`).
 Each implementer Portal binds its own transport and endpoints, and serves every
 verb of the abstraction, or lists the ones it leaves out in `omits` with a reason.
-`omits` stands only on a Portal implementing a Portal abstraction and names only
-verbs that abstraction declares (`OMISSION_NOT_ALLOWED`); any other missing verb is
+`omits` stands only on a concrete Portal implementing a Portal abstraction and names
+only verbs an abstraction of its chain declares (`OMISSION_NOT_ALLOWED`); any other missing verb is
 `IMPLEMENTS_MISMATCH`. So an HTTP Portal and a CLI Portal can be held to one verb
 set, the gaps stated rather than silent.
 

@@ -36,6 +36,7 @@ import {
 import { ComponentSpec, callClaims, implementationSourceFiles, statesCalls, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type TypeSpec } from '../models/specs.js';
 import { fieldTypeRefs, methodTypeRefs, resolveTypeRef, typeMatchesRef } from '../models/type-references.js';
 import { languageOfSourcePath } from '../models/code-model.js';
+import { implementsChain } from './rules/read-model.js';
 import { typeMappingFor } from '../models/type-dialects.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
@@ -1144,12 +1145,17 @@ function abstractionTypeName(abstraction: ComponentSpec): string {
 
 /**
  * What the abstractions a record's components take part in ask of its code, in
- * an '## Abstractions' section, and the abstractions' contracts to read. An
- * implementer is told each abstraction's contract and the interface its class
- * declares it implements; an abstraction declares the interface, trait or
- * Protocol only, in the one file its implementation names; a caller holds the
- * abstraction's type, never an implementer's. Null when the record touches no
- * abstraction.
+ * an '## Abstractions' section, and the abstractions' contracts to read. Every
+ * level of a chain is named (an abstraction may implement abstractions; the
+ * chain is read through implementsChain, the queries rule_context answers). An
+ * implementer is told the contract of each abstraction it implements, directly
+ * or through the chain, and the interface its class declares it implements at
+ * each level; an abstraction declares the interface, trait or Protocol only, in
+ * the one file its implementation names, with each method's symbol naming the
+ * member, states every method of the abstractions it implements itself (nothing
+ * inherits) and lists its implementers at every level below it; a caller holds
+ * the abstraction's type, never an implementer's, a narrower abstraction's
+ * included. Null when the record touches no abstraction.
  */
 function abstractionBrief(record: AgentRecord): { section: string; readPaths: string[] } | null {
   const comps = scopeComponents(record);
@@ -1157,6 +1163,7 @@ function abstractionBrief(record: AgentRecord): { section: string; readPaths: st
   const byId = new Map(loadComponentSpecs().filter((c) => !c.id.includes('::')).map((c) => [c.id, c]));
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
+  const chain = implementsChain(byId, interfaces, () => '');
   const implsOf = (componentId: string): ImplementationSpec[] => {
     const ids = new Set(interfaces.filter((i) => i.component === componentId).map((i) => i.id));
     return implementations.filter((impl) => ids.has(impl.contract));
@@ -1165,33 +1172,36 @@ function abstractionBrief(record: AgentRecord): { section: string; readPaths: st
   const lines: string[] = [];
   const readPaths: string[] = [];
   for (const comp of comps) {
-    // Implementer: each local abstraction a contract of this component names.
-    for (const contract of interfaces.filter((i) => i.component === comp.id)) {
-      for (const entry of contract.implements ?? []) {
-        const abstraction = entry.includes('::') ? undefined : byId.get(entry);
-        if (!abstraction || abstraction.abstract !== true) continue;
-        const abstractImpls = implsOf(abstraction.id);
-        const typeName = abstractionTypeName(abstraction);
-        const file = abstractImpls.flatMap((impl) => implementationSourceFiles(impl))[0];
-        const abstractContracts = interfaces.filter((i) => i.component === abstraction.id);
-        for (const i of abstractContracts) readPaths.push(rel(getInterfacePath(i.id, abstraction.id)));
-        const methods = abstractContracts.flatMap((i) => i.methods.map((m) => m.name));
-        const declaration = file
-          ? `the interface, trait or Protocol that \`${file}\` declares for \`${abstraction.id}\``
-          : `the interface, trait or Protocol for \`${abstraction.id}\`, which is not written yet (name it \`${typeName}\` when you write it)`;
-        let line = `- \`${comp.id}\` implements the abstraction \`${abstraction.id}\` (${methods.length > 0 ? `methods: ${methods.join(', ')}` : 'no methods yet'}). Its class declares that it implements ${declaration}, and provides every one of those methods with the same signature, with effects and a dependencyClass no wider than the abstraction's.`;
-        if (comp.componentType === 'Portal') {
-          const omits = contract.omits ?? [];
-          line += ` It binds its own transport, endpoints, auth and entry${omits.length > 0 ? `, and deliberately leaves out ${omits.map((o) => `\`${o.method}\` (${o.reason})`).join('; ')}` : ''}.`;
-        }
-        lines.push(line);
+    // Implementer: each local abstraction this component implements, directly or through the chain.
+    const above = chain.abstractionsOf(comp.id).map((id) => byId.get(id)).filter((c): c is ComponentSpec => c !== undefined && c.abstract === true);
+    for (const abstraction of above) {
+      const abstractImpls = implsOf(abstraction.id);
+      const abstractContracts = interfaces.filter((i) => i.component === abstraction.id);
+      for (const i of abstractContracts) readPaths.push(rel(getInterfacePath(i.id, abstraction.id)));
+      // An abstraction's own declaration states every method of what it implements itself, so it
+      // reads each contract but has no class to declare anything with.
+      if (comp.abstract === true) continue;
+      const typeName = abstractionTypeName(abstraction);
+      const file = abstractImpls.flatMap((impl) => implementationSourceFiles(impl))[0];
+      const methods = abstractContracts.flatMap((i) => i.methods.map((m) => m.name));
+      const symbols = abstractImpls.flatMap((impl) => impl.methods.filter((m) => m.symbol !== undefined).map((m) => `\`${m.name}\` as \`${m.symbol}\``));
+      const declaration = file
+        ? `the interface, trait or Protocol that \`${file}\` declares for \`${abstraction.id}\`${symbols.length > 0 ? ` (its members are named by each method's symbol: ${symbols.join(', ')})` : ''}`
+        : `the interface, trait or Protocol for \`${abstraction.id}\`, which is not written yet (name it \`${typeName}\` when you write it)`;
+      let line = `- \`${comp.id}\` implements the abstraction \`${abstraction.id}\` (${methods.length > 0 ? `methods: ${methods.join(', ')}` : 'no methods yet'}). Its class declares that it implements ${declaration}, and provides every one of those methods with the same signature, with effects and a dependencyClass no wider than the abstraction's.`;
+      if (comp.componentType === 'Portal') {
+        const omits = interfaces.filter((i) => i.component === comp.id).flatMap((i) => i.omits ?? []);
+        line += ` It binds its own transport, endpoints, auth and entry${omits.length > 0 ? `, and deliberately leaves out ${omits.map((o) => `\`${o.method}\` (${o.reason})`).join('; ')}` : ''}.`;
       }
+      lines.push(line);
     }
     // The abstraction itself: the declaration only.
     if (comp.abstract === true) {
       const files = [...new Set(implsOf(comp.id).flatMap((impl) => implementationSourceFiles(impl)))];
-      const implementers = [...new Set(interfaces.filter((i) => (i.implements ?? []).includes(comp.id)).map((i) => i.component))];
-      lines.push(`- \`${comp.id}\` IS an abstraction. Declare the interface, trait or Protocol only${files.length > 0 ? ` in ${files.map((f) => `\`${f}\``).join(', ')}` : ''} — no behaviour, no body, no narrative, no technology: its methods are realized by that declaration, which serves every implementer${implementers.length > 0 ? ` (${implementers.map((c) => `\`${c}\``).join(', ')})` : ''}.`);
+      const implementers = chain.implementersOf(comp.id).filter((id) => byId.has(id));
+      const named = files.length > 0 ? ` in ${files.map((f) => `\`${f}\``).join(', ')}` : ` (the file is not named yet; name the type \`${abstractionTypeName(comp)}\` when you write it)`;
+      const inTurn = above.length > 0 ? ` It implements ${above.map((c) => `\`${c.id}\``).join(', ')} in turn: its declaration states every method of each itself, since nothing inherits.` : '';
+      lines.push(`- \`${comp.id}\` IS an abstraction. Declare the interface, trait or Protocol only${named} — no behaviour, no body, no narrative, no technology: its methods are realized by that declaration, which serves every implementer${implementers.length > 0 ? ` (${implementers.map((c) => `\`${c}\``).join(', ')})` : ''}, at every level below it.${inTurn}`);
     }
     // Caller: a dependency that is an abstraction.
     for (const depId of [...comp.dependsOn, ...(comp.owns ?? [])]) {
@@ -1199,7 +1209,7 @@ function abstractionBrief(record: AgentRecord): { section: string; readPaths: st
       if (!dep || dep.abstract !== true) continue;
       const depFile = implsOf(dep.id).flatMap((impl) => implementationSourceFiles(impl))[0];
       const depType = depFile ? `the one \`${depFile}\` declares` : `not written yet; name it \`${abstractionTypeName(dep)}\` when it is written`;
-      lines.push(`- \`${comp.id}\` depends on the abstraction \`${dep.id}\`: hold its interface type, ${depType}, never an implementer's class, so the code keeps working when an implementer is added or replaced.`);
+      lines.push(`- \`${comp.id}\` depends on the abstraction \`${dep.id}\`: hold its interface type, ${depType}, never an implementer's class, nor a narrower abstraction's, so the code keeps working when an implementer is added or replaced.`);
     }
   }
   if (lines.length === 0) return null;

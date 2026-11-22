@@ -1708,7 +1708,7 @@ export function mountCanvas(host, model, opts = {}) {
       } else {
         var c = compById[e.id];
         classes = stereoClass(c.componentType);
-        label = c.name + '\n\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
+        label = c.name + '\n\u00AB' + (c.abstract ? 'abstract ' : '') + c.componentType +(c.transport ? '/' + c.transport : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '') + (e.kind === 'component' && compById[e.id] && compById[e.id].abstract ? ' abstractNode' : '')
         + (dim ? ' dimmed' : '')

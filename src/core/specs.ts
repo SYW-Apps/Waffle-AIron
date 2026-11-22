@@ -918,7 +918,7 @@ export function typeExpressionSlots(kind: string, doc: unknown): TypeExpressionS
  * it out, or an `unset` that removed it. Absent reads as empty, as the schema
  * will read it; it is never a reason to throw.
  */
-function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper): T {
+function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper, anotherProjects: (entry: string) => boolean = hasQualifier): T {
   switch (kind) {
     case 'subsystem': {
       const s = spec as unknown as SubsystemSpec;
@@ -950,6 +950,11 @@ function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper
       return {
         ...i,
         component: map('contract', i.component),
+        // A local implements entry is a component reference like a dependsOn.
+        // An `alias::name` entry is another project's extension point: raw, never
+        // bound to a component key, resolved by its authored text.
+        // The write path calls this before the schema reads a single string as a list.
+        ...(i.implements ? { implements: ([] as string[]).concat(i.implements).map((e) => (anotherProjects(e) ? e : map('implements', e))) } : {}),
         // A method source's head is a component reference; a value with no
         // head is a raw type position the mapper is never asked about.
         ...(i.methods?.some((m) => m.signatureFrom !== undefined) ? {
@@ -984,6 +989,9 @@ function mapSpecReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper
       return spec;
   }
 }
+
+/** Whether an authored `implements` entry carries a project qualifier: another project's `alias::name`. */
+const hasQualifier = (entry: string): boolean => entry.includes('::');
 
 /** A type string's identifiers that carry `::` (a leading `::` and `super::` included). */
 function qualifiedTypeNames(typeStr: string | undefined): string[] {
@@ -1273,6 +1281,10 @@ function mapRawReferences<T>(kind: ReferenceKind, spec: T, map: ReferenceMapper)
         const value = slot.holder[slot.key] as string;
         if (slot.path === 'methods.signatureFrom' && signatureSourceParts(value)) continue;
         slot.holder[slot.key] = mapTypeNames(value, map);
+      }
+      // An `alias::name` implements entry is raw too: the extension point of another project.
+      if (kind === 'interface' && Array.isArray(copy.implements)) {
+        copy.implements = copy.implements.map((e: unknown) => (typeof e === 'string' && hasQualifier(e) ? map('implements', e) : e));
       }
       return copy as unknown as T;
     }
@@ -2526,6 +2538,10 @@ export function rewriteSpecRefs(
     rewritePublished(raw.publicInterfaces);
   } else if (kind === 'interface') {
     rewrite(raw, 'component', 'component');
+    // A local implements entry names an abstraction as a component, a single string or a list
+    // entry; an `alias::name` entry is another project's, which no local id equals.
+    if (typeof raw.implements === 'string') rewrite(raw, 'implements', 'component');
+    else rewriteEach(raw.implements, 'component');
     for (const method of entries(raw.methods)) {
       for (const param of entries(method?.params)) rewrite(param, 'type', 'type');
       // A signatureFrom is read both ways, as its resolver reads it: as a
@@ -4095,6 +4111,19 @@ export class SpecWorkspace {
    * refused before anything is written when it lies in a part fetched from
    * git — its files are the fetch cache's, read-only.
    */
+  /**
+   * Whether the contracts and implementations named can each be written where they live: refuses (PartReadOnly,
+   * naming the part) one that lives in a part fetched from git, before anything is written. A write guard a
+   * multi-spec edit asks up front, so a refusal never lands after its first write.
+   */
+  assertContractsWritable(targets: { kind: 'interface' | 'implementation'; id: string }[]): void {
+    for (const t of targets) {
+      const spec = this.load(t.kind, t.id) as { id: string; component?: string; contract?: string } | null;
+      if (!spec) continue;
+      this.assertHomeWritable(t.kind === 'interface' ? this.getInterfacePath(spec.id, spec.component!) : this.getImplementationPath(spec.id, spec.contract!));
+    }
+  }
+
   private assertHomeWritable(file: string): void {
     const held = this.partHolding(file);
     if (held?.part.storage !== 'git') return;
@@ -4348,9 +4377,12 @@ export class SpecWorkspace {
     // A signatureFrom's head is written back only when the scan bound it as a
     // component; a type reference stays as it came, exactly as it was read.
     const components = new Set(this.scanAll().components.map((c) => c.id));
+    // An implements entry with `::` is another project's extension point, except the key
+    // the loader bound a local entry of this project's own component to.
+    const anotherProjects = (entry: string): boolean => hasQualifier(entry) && !(components.has(entry) && this.ownerKeyOf(entry) === from);
     const mapped = mapSpecReferences(kind, spec, (position, value) => (position === 'signatureFrom' && !components.has(value)
       ? value
-      : this.writeReference(from, spec.id, position, value, carrying)));
+      : this.writeReference(from, spec.id, position, value, carrying)), anotherProjects);
     // A local id never carries `::`: a subsystem-qualified own id is written by its last segment.
     return { ...mapped, id: localOf(from, spec.id).split('::').pop()! };
   }
@@ -5369,8 +5401,14 @@ export class SpecWorkspace {
       }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
-    const interfaceOut = parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id);
-    this.writeHome(p, interfaceOut, 'interface');
+    const parsedOut = parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id);
+    // A single implements entry stored as a plain string stays one: the written form is kept.
+    let keepsString = false;
+    if (parsedOut.implements?.length === 1 && pathExists(p)) {
+      try { keepsString = typeof (readSpecFile(p) as { implements?: unknown }).implements === 'string'; } catch { /* unreadable: written as a list */ }
+    }
+    const interfaceOut = keepsString ? { ...parsedOut, implements: parsedOut.implements![0] } : parsedOut;
+    this.writeHome(p, interfaceOut as typeof parsedOut, 'interface');
     registryInvalidateCache();
     return notices;
   }
@@ -7423,6 +7461,9 @@ export class SpecWorkspace {
           break;
         case 'interface':
           if (typeof out.component === 'string') out.component = q(out.component);
+          // A local implements entry binds like a dependsOn; an alias::name entry stays as written.
+          if (typeof out.implements === 'string') out.implements = hasQualifier(out.implements) ? out.implements : q(out.implements);
+          if (Array.isArray(out.implements)) out.implements = out.implements.map((e: unknown) => (typeof e === 'string' && !hasQualifier(e) ? q(e) : e));
           break;
         case 'implementation':
           if (typeof out.contract === 'string') out.contract = q(out.contract);
@@ -9250,6 +9291,11 @@ export function crossProjectWriteRefusal(targets: { kind: string; id: string }[]
 /** core_orchestrator.crossProjectWriteRefusal's sentence for a qualified id a write cannot take across (a legacy L1 mount's). */
 export function foreignSpecRefusal(id: string, call: string): string {
   return current().foreignSpecRefusal(id, call);
+}
+
+/** Refuses a contract or implementation that lives in a git part (read-only here) before anything is written. */
+export function assertContractsWritable(targets: { kind: 'interface' | 'implementation'; id: string }[]): void {
+  current().assertContractsWritable(targets);
 }
 
 export function assertSpecsInReach(targets: { kind: string; id: string }[], what: string, projectRung = false): void {

@@ -128,6 +128,8 @@ describe('sdd_rename_method', () => {
       carried: [],
       // The contract is not exported.
       publishedIn: [],
+      // Nothing implements the ledger: no implementer's method follows.
+      followed: [],
     });
     invalidateSpecCache();
     expect(loadInterfaceSpec('iledger')?.methods.map((m) => m.name)).toEqual(['append', 'close']);
@@ -173,5 +175,66 @@ describe('sdd_rename_method', () => {
     }
     invalidateSpecCache();
     expect(loadInterfaceSpec('iledger')?.methods.map((m) => m.name)).toEqual(['post', 'close']);
+  });
+});
+
+describe('sdd_rename_method and sdd_rename_param on an abstraction', () => {
+  let root: string | undefined;
+  let client: Client | undefined;
+
+  afterEach(async () => {
+    try { await client?.close(); } catch { /* already gone */ }
+    client = undefined;
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    root = undefined;
+  });
+
+  /** An abstract `ledger` and its implementer `pg-ledger`, both declaring post(entry). */
+  function abstraction(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-abstraction-'));
+    fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
+    writeYamlFile(path.join(dir, '.wai', 'project.yaml'), {
+      schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'books', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
+    });
+    setProjectRoot(dir);
+    saveSystemSpec({ schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+    saveSpec('subsystem', sub('books'));
+    saveComponentSpec(comp('ledger', 'books', 'Adapter', { abstract: true }));
+    saveComponentSpec(comp('pg-ledger', 'books', 'Adapter'));
+    const post = { name: 'post', description: 'd', params: [{ name: 'entry', type: 'string' }], returns: 'void' };
+    saveInterfaceSpec({ ...intf('iledger', 'ledger', []), methods: [post] } as unknown as InterfaceSpec);
+    saveInterfaceSpec({ ...intf('ipg_ledger', 'pg-ledger', []), implements: ['ledger'], methods: [post] } as unknown as InterfaceSpec);
+    invalidateSpecCache();
+    return dir;
+  }
+
+  const callTool = async (name: string, args: Record<string, unknown>): Promise<ToolResult> =>
+    await client!.callTool({ name, arguments: args }) as ToolResult;
+
+  it('answers followed on a dry run and on the rename, and moves the implementer', async () => {
+    root = abstraction();
+    client = await connect(createMcpServer());
+    const dry = JSON.parse(textOf(await callTool('sdd_rename_method', { id: 'ledger', method: 'post', newName: 'append', dryRun: true })));
+    expect(dry.followed).toEqual(['pg-ledger.append']);
+    expect(loadInterfaceSpec('ipg_ledger')?.methods.map((m) => m.name)).toEqual(['post']);
+    const done = JSON.parse(textOf(await callTool('sdd_rename_method', { id: 'ledger', method: 'post', newName: 'append' })));
+    expect(done.followed).toEqual(['pg-ledger.append']);
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('ipg_ledger')?.methods.map((m) => m.name)).toEqual(['append']);
+  });
+
+  it('answers followed on a parameter rename too, and refuses an implementer asked first (declared-above)', async () => {
+    root = abstraction();
+    client = await connect(createMcpServer());
+    const refused = await callTool('sdd_rename_method', { id: 'pg-ledger', method: 'post', newName: 'append' });
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused)).toMatch(/declared-above: "ledger"/);
+    const param = JSON.parse(textOf(await callTool('sdd_rename_param', { id: 'ledger', method: 'post', param: 'entry', newName: 'line' })));
+    expect(param.followed).toEqual(['pg-ledger.post']);
+    invalidateSpecCache();
+    expect(loadInterfaceSpec('ipg_ledger')?.methods[0].params?.[0].name).toBe('line');
   });
 });

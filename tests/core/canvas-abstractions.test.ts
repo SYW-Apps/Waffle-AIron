@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { writeSpecFile } from '../../src/core/spec-files.js';
 import { InterfaceSpecSchema } from '../../src/models/index.js';
-import { buildCanvasModel, type CanvasModel } from '../../src/core/canvas.js';
+import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from '../../src/core/canvas.js';
 import { buildDrawioXml, buildExcalidrawScene } from '../../src/core/diagram-export.js';
 import { computeLayout } from '../../src/core/canvas-layout.js';
 import {
@@ -88,6 +89,12 @@ describe('canvas abstractions', () => {
     expect(edgesOf(model, 'checkout', 'carrier')).toEqual([expect.objectContaining({ kind: 'depends' })]);
   });
 
+  it('writes the mark beside the stereotype on the node itself, not only in the detail panel', () => {
+    const html = renderCanvasHtml(modelAt(writeShipping()));
+    const label = html.split('\n').find((line) => line.trim().startsWith('label = c.name +'));
+    expect(label).toContain("(c.abstract ? 'abstract ' : '')");
+  });
+
   it('carries the realization into the draw.io and Excalidraw exports, and out of subsystem ordering', () => {
     const model = modelAt(writeShipping());
     const layout = computeLayout(model as never, {});
@@ -96,5 +103,36 @@ describe('canvas abstractions', () => {
     expect(drawio).toContain('«abstract Orchestrator»');
     const scene = JSON.parse(buildExcalidrawScene(model, layout));
     expect(scene.elements.some((e: { endArrowhead?: string }) => e.endArrowhead === 'triangle_outline')).toBe(true);
+  });
+});
+
+describe('canvas abstractions of a contained member project', () => {
+  /** A family whose member project `pets` holds an abstraction chain: animal, dog (implements animal), retriever (implements dog). */
+  function writeFamily(): string {
+    const root = tempDir(cleanups, 'wairon-abstractions-family-');
+    projectYaml(root, { id: 'fam', name: 'Fam', members: { pets: 'pets' } });
+    system(root, 'Fam');
+    const pets = path.join(root, 'pets');
+    projectYaml(pets, { id: 'pets', name: 'Pets' });
+    system(pets, 'Pets');
+    subsystem(pets, 'Pets', 'zoo');
+    component(pets, 'zoo', 'animal', 'Orchestrator', [], { abstract: true });
+    component(pets, 'zoo', 'dog', 'Orchestrator', [], { abstract: true });
+    component(pets, 'zoo', 'retriever', 'Orchestrator');
+    for (const [comp, implementsList] of [['animal', undefined], ['dog', ['animal']], ['retriever', ['dog']]] as const) {
+      writeSpecFile(specs(pets, 'zoo', comp, '.interface.yaml'), InterfaceSpecSchema.parse({
+        id: `i${comp}`, name: `i${comp}`, description: `The ${comp} contract`, component: comp,
+        methods: [{ name: 'speak', description: 'Make a sound', signature: 'speak(): void', returns: 'void' }],
+        ...(implementsList ? { implements: implementsList } : {}),
+        status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+      }));
+    }
+    return root;
+  }
+
+  it('draws one implements edge per link of the chain, between the member\'s own components', () => {
+    const model = modelAt(writeFamily());
+    expect(model.edges.filter((e) => e.kind === 'implements').map((e) => `${e.from}->${e.to}`).sort(), JSON.stringify(model.edges))
+      .toEqual(['pets::dog->pets::animal', 'pets::retriever->pets::dog']);
   });
 });

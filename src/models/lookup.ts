@@ -14,7 +14,7 @@ export type LookupApproval = 'approved' | 'changed' | 'added' | 'unlocked' | 'no
 
 /** What shape a reference to an element takes. */
 export type LookupReferenceKind =
-  | 'depends-on' | 'call-step' | 'type-position' | 'export-use' | 'code-call' | 'import' | 'mention';
+  | 'depends-on' | 'call-step' | 'type-position' | 'export-use' | 'code-call' | 'import' | 'mention' | 'implements';
 
 /** Whether the design and the code agree on one reference. */
 export type LookupAgreement = 'confirmed' | 'declared-only' | 'observed-only' | 'unjudged';

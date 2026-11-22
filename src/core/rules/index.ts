@@ -35,6 +35,7 @@ import type { VariantDef } from '../variants.js';
 import type { DeclaredMember, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
 import { BUILTIN_AGENT_ROLES } from '../../models/practices.js';
 import type { CarriedFindingEntry, FindingParts } from './types.js';
+import { implementsChain } from './read-model.js';
 import {
   ArchProfile,
   BUILTIN_PROFILES,
@@ -748,6 +749,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     contractMethods.set(compId, out);
     return out;
   };
+  const { abstractionsOf, implementersOf } = implementsChain(componentMap, interfaces, projectOf);
 
   /** The pack profile governing a subsystem: its own profile, else the project type (an empty profile is no profile). */
   const profileDefFor = (subsystemId?: string) => {
@@ -1074,6 +1076,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     resolveCrossProject,
     importHint,
     interfaceMethodsOf,
+    abstractionsOf,
+    implementersOf,
     codeIndex,
     realizationIndex,
     importGraph,

@@ -61,30 +61,6 @@ export interface NarrativeEdge {
   methodName?: string;
 }
 
-/**
- * The abstractions of the tree, read once per walk: for each local `implements`
- * entry (no `::`) of a contract, the abstract component it names and the
- * component that contract belongs to.
- */
-function abstractionsOf(ctx: RuleContext): { implementersOf: Map<string, string[]>; abstractionsOfPortal: Map<string, string[]> } {
-  const implementersOf = new Map<string, string[]>();
-  const abstractionsOfPortal = new Map<string, string[]>();
-  for (const intf of ctx.interfaces) {
-    for (const entry of intf.implements ?? []) {
-      if (entry.includes('::')) continue;
-      const abstraction = ctx.componentMap.get(entry);
-      const implementer = ctx.componentMap.get(intf.component);
-      if (!abstraction || !implementer || abstraction.abstract !== true) continue;
-      if (abstraction.componentType === 'Portal') {
-        if (implementer.componentType === 'Portal') abstractionsOfPortal.set(implementer.id, [...(abstractionsOfPortal.get(implementer.id) ?? []), abstraction.id]);
-      } else {
-        implementersOf.set(abstraction.id, [...(implementersOf.get(abstraction.id) ?? []), implementer.id]);
-      }
-    }
-  }
-  return { implementersOf, abstractionsOfPortal };
-}
-
 // Key with '#': component ids may themselves contain '::' (namespaced subprojects),
 // so '::' cannot separate component from method.
 const methodKey = (compId: string, methodName: string): string => `${compId}#${methodName}`;
@@ -141,7 +117,6 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
   const reachedComponents = new Set<string>();
   const reachedMethods = new Set<string>();
   const queue: { compId: string; methodName: string }[] = [];
-  const { implementersOf, abstractionsOfPortal } = abstractionsOf(ctx);
 
   const enqueueMethod = (compId: string, methodName: string): void => {
     const key = methodKey(compId, methodName);
@@ -152,23 +127,32 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
   };
 
   /**
-   * Reach a method and its counterparts: the matching method of each
-   * implementer of a non-Portal abstraction (no dependsOn needs to name an
-   * implementer), and the matching verb of the Portal abstraction an
-   * implementer Portal's verb implements (implementers are entered through
-   * their own entries, and the abstraction's verb counts as reached when any
-   * implementer's is). A counterpart is a method of the same name.
+   * Reach a method and its counterparts, transitively through a chain of
+   * abstractions (read through ctx.implementersOf and ctx.abstractionsOf, both
+   * cycle-safe): the matching method of every implementer below a non-Portal
+   * abstraction, abstract and concrete (no dependsOn needs to name an
+   * implementer), and the matching verb of every Portal abstraction above an
+   * implementer Portal's verb (implementers are entered through their own
+   * entries, and an abstraction's verb counts as reached when any
+   * implementer's, at any depth, is). A counterpart is a method of the same
+   * name, and one already reached is not enqueued again, which also ends the
+   * walk on a cyclic design.
    */
   const reachMethod = (compId: string, methodName: string): void => {
     enqueueMethod(compId, methodName);
-    for (const implementer of implementersOf.get(compId) ?? []) {
-      reachComponent(implementer);
-      enqueueMethod(implementer, methodName);
-    }
-    for (const abstraction of abstractionsOfPortal.get(compId) ?? []) {
-      if (!(ctx.interfaceMethodsOf(abstraction)).some((m) => m.name === methodName)) continue;
-      reachComponent(abstraction);
-      enqueueMethod(abstraction, methodName);
+    if (ctx.componentMap.get(compId)?.componentType === 'Portal') {
+      for (const abstraction of ctx.abstractionsOf(compId)) {
+        const above = ctx.componentMap.get(abstraction);
+        if (above?.componentType !== 'Portal' || above.abstract !== true) continue;
+        if (!ctx.interfaceMethodsOf(abstraction).some((m) => m.name === methodName)) continue;
+        reachComponent(abstraction);
+        enqueueMethod(abstraction, methodName);
+      }
+    } else {
+      for (const implementer of ctx.implementersOf(compId)) {
+        reachComponent(implementer);
+        enqueueMethod(implementer, methodName);
+      }
     }
   };
 

@@ -2264,11 +2264,19 @@ export function asSchemaReads(kind: keyof typeof SCHEMA_OF_KIND, doc: Record<str
  * signatureFrom is read as authored: the params, returns and signature text
  * its source supplies are left out (the source's design, digested where the
  * source is), so a producer read live never moves this approval through them;
- * its signatureFrom and its effect stay. Pure, and reads a stored (raw) spec
- * as readily as a loaded one.
+ * its signatureFrom and its effect stay. Its implements is read in one
+ * canonical form, so a re-save that writes the same entries differently never
+ * moves the approval: a one-entry list reads as that entry's plain string and an
+ * empty list as absent (the form an approval recorded over a string survives a
+ * save in). Pure, and reads a stored (raw) spec as readily as a loaded one.
  */
 export function interfaceDesignView<T extends object>(contract: T): T {
-  const view = withoutFields(contract, outOfApproval('interface')) as T & { methods?: unknown };
+  let view = withoutFields(contract, outOfApproval('interface')) as T & { methods?: unknown; implements?: unknown };
+  if (Array.isArray(view.implements)) {
+    const entries = view.implements;
+    const { implements: _stated, ...rest } = view;
+    view = (entries.length === 0 ? rest : { ...rest, implements: entries.length === 1 ? entries[0] : entries }) as typeof view;
+  }
   if (!Array.isArray(view.methods)) return view;
   return { ...view, methods: eachOf(view.methods, asAuthored) } as T;
 }
@@ -3200,6 +3208,8 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
     if (inTargets('interface', intf.id)) continue;
     const note = holder('interface', intf.id);
     component(note, 'component', intf.component);
+    // A local implements entry names the abstraction as a component, like a dependsOn does.
+    for (const entry of intf.implements ?? []) component(note, 'implements', entry);
     for (const method of intf.methods) {
       const source = method.signatureFrom;
       const cut = source?.lastIndexOf('.') ?? -1;
