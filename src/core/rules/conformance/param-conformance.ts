@@ -933,7 +933,7 @@ function reportUncomparedDeclarations(ctx: RuleContext): void {
       + [...reasons].map(([name, why]) => `"${name}": ${why}`).join('; ')
       + '. Where the code declares an abstraction through an interface, a trait, a Protocol or an abstract class that a reader of member signatures '
       + 'can read, its parameters, return and async are compared with the contract like a body; here nothing was, so a drift in it is not reported. '
-      + 'It never fails a gate. Declare the member on an interface or an abstract class in a language the analyzer reads at exact grade, or accept it as uncompared.',
+      + 'It never fails a gate. Where the member sits only on a concrete class, declare it on an interface or an abstract class; where the language or grade has no reader, the declaration stays uncompared until one exists, and the implementers are still held to their contracts.',
       implementation.id,
       draftContext,
       undefined,
