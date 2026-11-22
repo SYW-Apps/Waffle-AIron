@@ -90,6 +90,32 @@ describe('public_interface.consumers round-trips through the MCP doors', () => {
     expect(stored()).toEqual([open]);
   });
 
+  it('sdd_set_public_interfaces REPLACES a restated consumers list: [claims, audit] restated as [claims] leaves [claims]', async () => {
+    const call = await bound();
+    await call('sdd_add_subsystem', { id: 'billing', name: 'Billing', description: 'invoicing' });
+    const wide = { ...restricted, consumers: ['claims', 'audit'] };
+    const set = await call('sdd_set_public_interfaces', { subsystem: 'billing', publicInterfaces: [wide] });
+    expect(set.isError ?? false, textOf(set)).toBe(false);
+    expect(stored()).toEqual([wide]);
+
+    const narrowed = await call('sdd_set_public_interfaces', { subsystem: 'billing', publicInterfaces: [restricted] });
+    expect(narrowed.isError ?? false, textOf(narrowed)).toBe(false);
+    expect(narrowed.structuredContent.written).toBe(true);
+    expect(stored()).toEqual([restricted]);
+  });
+
+  it('sdd_set_public_interfaces removes an entry the restated list leaves out, and keeps the others', async () => {
+    const call = await bound();
+    await call('sdd_add_subsystem', { id: 'billing', name: 'Billing', description: 'invoicing' });
+    const other = { details: 'invoice reads', component: 'invoice_reader', consumers: ['claims', 'audit'] };
+    await call('sdd_set_public_interfaces', { subsystem: 'billing', publicInterfaces: [restricted, other] });
+    expect(stored()).toEqual([restricted, other]);
+
+    const kept = await call('sdd_set_public_interfaces', { subsystem: 'billing', publicInterfaces: [other] });
+    expect(kept.isError ?? false, textOf(kept)).toBe(false);
+    expect(stored()).toEqual([other]);
+  });
+
   it('sdd_update_spec merges consumers into an entry by its identity', async () => {
     const call = await bound();
     await call('sdd_add_subsystem', {

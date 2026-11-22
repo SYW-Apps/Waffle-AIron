@@ -40,7 +40,7 @@ import {
 } from '../models/type-grammar.js';
 import { fitsMethodCasing, methodCasingFor, type RulesConfig } from '../models/project.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
-import type { MethodMoveReport, SpecChangeReport, SpecIndex, SpecWriteHooks, WritableSpecKind } from './specs.js';
+import type { CallersToReview, MethodMoveReport, SpecChangeReport, SpecIndex, SpecWriteHooks, WritableSpecKind } from './specs.js';
 import type { SpecMove } from './provision.js';
 import type { ExportUse } from '../models/exports.js';
 import type { ExternalConsumer } from '../models/project-family.js';
@@ -65,7 +65,7 @@ import {
   scanAllSpecs,
   updateSpec,
 } from './adapters/authoring-core.js';
-import { validateComponentCandidate, introducedFindings, findTestsReferencing, implementsProblem, validateProject, listRules } from './adapters/authoring-validator.js';
+import { validateComponentCandidate, introducedFindings, findTestsReferencing, implementsProblem, validateProject, listRules, findReferences } from './adapters/authoring-validator.js';
 import type { TestsToRevisit } from './validation.js';
 import { formatCandidateRefusal, type CandidateVerdict } from '../models/candidate.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
@@ -209,6 +209,8 @@ export interface SpecWriteReceipt {
   dryRun?: boolean;
   /** Each implementation method entry a contract restatement removed with a method it dropped, as `<implementation>.<method>`. */
   cascaded?: string[];
+  /** For each contract method whose signature the restatement changed, the callers to review. Information only. */
+  callersToReview?: CallersToReview[];
 }
 
 /**
@@ -1056,7 +1058,12 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
       cascade = removal.cascade;
     }
   }
-  // Steps 18-19: the tests this write invalidates, each placed in its file.
+  // Step 18: the callers of a contract method whose signature the restatement changes.
+  const callers = restatement.kind === 'interface' && existing
+    ? callersToReviewOf(existing as InterfaceSpec, application.spec as InterfaceSpec)
+    : [];
+  const callersField = callers.length > 0 ? { callersToReview: callers } : {};
+  // Steps 19-20: the tests this write invalidates, each placed in its file.
   const testsToRevisit = testsInvalidatedBy(restatement.kind, id, application.changedMethods, [existing, application.spec], bound);
   const cascaded = cascade.map((c) => `${c.implementation}.${c.method}`);
   const name = (application.spec as { name: string }).name;
@@ -1066,7 +1073,7 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
     return {
       kind: restatement.kind, id, name, replacedExisting: application.replacedExisting, ...status,
       notices: [...gateNotices, ...application.notices, ...cascadeNotices(cascade, true)],
-      respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), dryRun: true,
+      respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), ...callersField, dryRun: true,
     };
   }
   // Step 22: to disk.
@@ -1079,7 +1086,7 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   return {
     kind: restatement.kind, id, name, replacedExisting: application.replacedExisting, ...status,
     notices: [...gateNotices, ...persisted.notices, ...application.notices, ...cascadeNotices(cascade, false)],
-    respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}),
+    respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), ...callersField,
   };
 }
 
@@ -1467,7 +1474,10 @@ export function updateSpecGated(
     published = publishedUsesOf([], removal.referenced.map((m) => `${id}.${m}`));
   }
   // Step 12: the judgement as a write hook over those same settings.
-  const gate = componentCandidateGate(bound, (stored as { subsystem?: string } | null)?.subsystem, stored as Spec | null);
+  const judged = componentCandidateGate(bound, (stored as { subsystem?: string } | null)?.subsystem, stored as Spec | null);
+  // The merged spec the judgement sees, kept for the signature comparison below (a dry run included).
+  let merged: Spec | null = null;
+  const gate: SpecWriteHooks = { ...judged, gate: (k, m) => { merged = m as Spec; return judged.gate?.(k, m); } };
   // Step 13: apply the delta with the hook injected, so the judgement runs on
   // the merged spec at the last point before anything reaches disk.
   const report = updateSpec(kind, id, delta, gate, dryRun);
@@ -1499,16 +1509,105 @@ export function updateSpecGated(
     }
   }
 
-  // Step 18: did this write invalidate any test?
+  // Steps 18-19: the callers of a contract method whose signature this write changed.
+  if (kind === 'interface' && merged !== null && report.changes.length > 0) {
+    const callers = callersToReviewOf(stored as InterfaceSpec | null, merged as InterfaceSpec);
+    if (callers.length > 0) report.callersToReview = callers;
+  }
+
+  // Step 20: did this write invalidate any test?
   const changed = changedMethods(report);
   if (changed.length > 0 && testRoots.length > 0) {
-    // Steps 19-20: search them by the code name and the file realizing each.
+    // Steps 21-22: search them by the code name and the file realizing each.
     const written: Record<string, any>[] = Array.isArray(delta?.methods) ? delta.methods : [];
     report.testsToRevisit = testsInvalidatedBy(kind, id, changed, [stored], bound, written);
   }
 
-  // Step 21.
+  // Step 23.
   return report;
+}
+
+/** Cap on the callers one changed method lists; the total says how many there were. */
+const CALLERS_LISTED = 10;
+
+type SignatureView = {
+  params: { name: string; type: string; optional: boolean }[];
+  returns: string;
+  from?: string;
+};
+
+/** A contract method as its signature is compared: a sourced one by its source alone. */
+function signatureView(m: { params?: { name: string; type: string; optional?: boolean }[]; returns?: string; signatureFrom?: string }): SignatureView {
+  if (m.signatureFrom) return { params: [], returns: '', from: m.signatureFrom };
+  return { params: (m.params ?? []).map((p) => ({ name: p.name, type: p.type, optional: p.optional === true })), returns: m.returns ?? '' };
+}
+
+/** What changed between two signatures in one line, or null when the signature is the same. */
+function signatureChange(before: SignatureView, after: SignatureView): string | null {
+  if (before.from !== after.from) return `signature source changed ${before.from ?? 'stated'} -> ${after.from ?? 'stated'}`;
+  const parts: string[] = [];
+  const named = (xs: SignatureView['params'], n: string) => xs.find((p) => p.name === n);
+  for (const p of after.params) if (!named(before.params, p.name)) parts.push(`added parameter "${p.name}"${p.optional ? ' (optional)' : ''}`);
+  for (const p of before.params) if (!named(after.params, p.name)) parts.push(`removed parameter "${p.name}"`);
+  for (const p of after.params) {
+    const was = named(before.params, p.name);
+    if (!was) continue;
+    if (was.type !== p.type) parts.push(`parameter "${p.name}" retyped ${was.type} -> ${p.type}`);
+    if (was.optional !== p.optional) parts.push(`parameter "${p.name}" made ${p.optional ? 'optional' : 'required'}`);
+  }
+  const kept = (xs: SignatureView['params'], other: SignatureView['params']) => xs.filter((p) => named(other, p.name)).map((p) => p.name).join(',');
+  if (parts.length === 0 && kept(before.params, after.params) !== kept(after.params, before.params)) parts.push('parameters reordered');
+  if (before.returns !== after.returns) {
+    const later = (r: string) => r.trim().startsWith('async ');
+    const completes = later(before.returns) === later(after.returns) ? '' : (later(after.returns) ? ' (completes later now)' : ' (no longer completes later)');
+    parts.push(`returns ${before.returns || 'unstated'} -> ${after.returns || 'unstated'}${completes}`);
+  }
+  return parts.length > 0 ? parts.join('; ') : null;
+}
+
+/**
+ * Steps 18-19 of updateSpecGated and step 18 of writeSpec: for each contract
+ * method whose signature the write changes, the callers to review — the
+ * calling specs (an abstraction's callers included, since they reach the
+ * method through it), then the code sites. Information only: a lookup that
+ * fails names no callers, and nothing here ever refuses or fails a write.
+ */
+function callersToReviewOf(before: InterfaceSpec | null, after: InterfaceSpec): CallersToReview[] {
+  if (!before) return [];
+  const out: CallersToReview[] = [];
+  for (const method of after.methods ?? []) {
+    const was = before.methods?.find((m) => m.name === method.name);
+    if (!was) continue;
+    const change = signatureChange(signatureView(was), signatureView(method));
+    if (change === null) continue;
+    const callers = callersOf(before.component, method.name, [...(before.implements ?? []), ...(after.implements ?? [])]);
+    if (callers.length === 0) continue;
+    out.push({ method: `${before.component}.${method.name}`, change, callers: callers.slice(0, CALLERS_LISTED), total: callers.length });
+  }
+  return out;
+}
+
+/** The callers of <component>.<method> and of the same method on each abstraction it implements: specs first, then code sites. */
+function callersOf(component: string, method: string, abstractions: string[]): string[] {
+  const specs = new Set<string>();
+  const sites = new Set<string>();
+  const impls = loadImplementationSpecs();
+  const contracts = new Map<string, string>();
+  const componentOf = (implId: string): string => {
+    const impl = impls.find((i) => i.id === implId);
+    if (!impl) return implId;
+    if (!contracts.has(impl.contract)) contracts.set(impl.contract, (loadSpec('interface', impl.contract) as { component?: string } | null)?.component ?? implId);
+    return contracts.get(impl.contract)!;
+  };
+  for (const owner of [component, ...new Set(abstractions)]) {
+    const found = findReferences(`${owner}.${method}`, false);
+    if (!found.target) continue;
+    for (const ref of found.references) {
+      if (ref.kind === 'call-step' && ref.fromSpec) specs.add(ref.fromMember ? `${componentOf(ref.fromSpec)}.${ref.fromMember}` : componentOf(ref.fromSpec));
+      else if (ref.kind === 'code-call' && ref.file) sites.add(ref.line !== undefined ? `${ref.file}:${ref.line}` : ref.file);
+    }
+  }
+  return [...specs, ...sites];
 }
 
 /**
