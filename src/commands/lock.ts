@@ -1045,7 +1045,7 @@ function assertScopeApprovable(options: LockOptions, captured: StateId): void {
   }
   const outside = [
     ...diff.changed.map((p) => `~ ${p}`), ...diff.added.map((p) => `+ ${p}`), ...diff.removed.map((p) => `- ${p}`),
-  ].filter((entry) => !inScope.has(entry.slice(2)));
+  ].filter((entry) => !inScope.has(entry.slice(2)) && !(entry.startsWith('- ') && removedInScope(entry.slice(2), scope, inScope)));
   if (outside.length > 0) {
     throw new LockRefusedError(
       `\`wairon lock --subsystem ${scope}\` re-approves only that subsystem, but ${outside.length} spec(s) outside it moved since the approval `
@@ -1054,6 +1054,19 @@ function assertScopeApprovable(options: LockOptions, captured: StateId): void {
     );
   }
   logger.info(`--subsystem ${scope}: ${inScope.size} spec file(s) in scope; nothing outside it moved since the approval, so the rest stays approved as it was.`);
+}
+
+/**
+ * Whether a spec REMOVED since the approval lay inside the scope. A removed spec
+ * has no content left to read its subsystem from, so its stored path answers: in
+ * the nested layout a subsystem's specs live under the folder holding its own
+ * `.index.yaml`. A removed spec stored where the path shows no subsystem (the flat
+ * legacy layout) cannot be told from one outside, and stays outside.
+ */
+function removedInScope(key: string, scope: string, inScope: ReadonlySet<string>): boolean {
+  const homes = [...inScope].filter((p) => p.endsWith('/.index.yaml')).sort((a, b) => a.length - b.length);
+  const home = homes.length > 0 ? path.posix.dirname(homes[0]) : null;
+  return home !== null && path.posix.basename(home) === scope && key.startsWith(`${home}/`);
 }
 
 /** The direct member PROJECT a `<alias>::<subsystem>` scope names, or null (a local scope, or a part's). */

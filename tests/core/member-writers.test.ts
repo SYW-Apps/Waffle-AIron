@@ -138,6 +138,18 @@ describe('createMember', () => {
     expect(fs.readFileSync(configFile).equals(configBytes)).toBe(true);
   });
 
+  it('refuses a project with no project.yaml before writing anything, naming the fix', () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-member-'));
+    fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(rootDir);
+    for (const as of [undefined, 'project'] as const) {
+      expect(() => createMember('p', 'services/p', undefined, as)).toThrow(/no \.wai\/project\.yaml.*Nothing was written/s);
+      expect(() => createMember('p', 'services/p', undefined, as, true)).toThrow(/no \.wai\/project\.yaml/);
+    }
+    expect(fs.existsSync(path.join(rootDir, 'services'))).toBe(false);
+    expect(fs.existsSync(path.join(rootDir, '.wai', 'project.yaml'))).toBe(false);
+  });
+
   it('completes a partially scaffolded member without overwriting its spec tree', () => {
     rootDir = makeRoot();
     const memberDir = path.join(rootDir, 'packages', 'billing');
