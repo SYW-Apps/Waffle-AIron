@@ -880,12 +880,18 @@ methods:
         toStep: 1
       - stepNumber: 8
         label: writePaths
-        description: Check every write path of every implementation against every invariant
+        description: >-
+          Check every write path of every implementation against every invariant. An abstraction's
+          implementation carries no narrative, so where the owner is abstract the write paths are
+          its concrete implementers'
         type: loop
         loopKind: forEach
         over: >-
-          each write-effect method of each owner contract intf, then each implementation impl of
-          that contract (ctx.implementationsByContract.get(intf.id)), then each invariant inv of t
+          each write-effect method of each owner contract, then each implementation realizing it,
+          then each invariant inv of t: for an owner that is not abstract, the implementations of
+          that contract (ctx.implementationsByContract.get(intf.id)); for an abstract owner, those
+          of each contract of each concrete component of ctx.implementersOf(comp.id) that declares a
+          method of the same name whose effect is write or unstated
         endStep: 10
       - stepNumber: 9
         description: >-
@@ -907,7 +913,8 @@ methods:
         description: >-
           Report UNASSERTED_INVARIANT (warning; draft context when entityDraft or
           ctx.isImplementationDraft(impl)) on impl.id, naming the write method, the owner, the
-          implementation and the invariant with its description
+          implementer when the owner is an abstraction, the implementation and the invariant with
+          its description
         type: local
     symbol: check
     exportedVia: invariantBackingRule
@@ -1066,4 +1073,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-11-21T23:23:36.650Z'
+updatedAt: '2026-11-22T15:11:32.582Z'

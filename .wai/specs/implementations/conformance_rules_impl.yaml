@@ -622,10 +622,14 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
-          Unresolvable and chained-subproject implementations are skipped: continue with the next
-          implementation
+          Unresolvable and chained-subproject implementations are skipped, and so is an
+          abstraction's: its file declares an interface and raises nothing, the codes it declares
+          being held by the implementers that declare them (abstraction-findings reports one none
+          declares). Continue with the next implementation
         type: branch
-        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        condition: >-
+          contract and component both resolve, component.abstract is not true and
+          !ctx.isInChainedSubproject(component.subsystem)
         onFalseStep: 2
       - stepNumber: 5
         description: >-
@@ -2660,4 +2664,4 @@ methods:
     exportedVia: callMannerConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-11-22T02:37:03.036Z'
+updatedAt: '2026-11-22T15:13:26.764Z'

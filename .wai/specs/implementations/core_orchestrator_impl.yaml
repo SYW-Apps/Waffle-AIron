@@ -1186,7 +1186,10 @@ methods:
           each follower's contract and implementations, and every spec the rewriter and the
           lint-allow rekey would retarget among them. A spec of a subsystem the request may not
           change refuses the whole rename (SubsystemWriteDenied, naming every such subsystem and the
-          rung that decided each), and nothing is written
+          rung that decided each), and nothing is written. The same holds outside a hosted request
+          for a contract or implementation it would move that lives in a read-only git part
+          (assertContractsWritable: PartReadOnly), dry run included, so a follower there never
+          leaves the rename half-applied
         type: local
       - stepNumber: 15
         label: dry-run
@@ -3038,7 +3041,8 @@ methods:
         description: >-
           Judge every interface file the rename would write — the moving contracts, those of each
           implementer that follows, and each follower whose HTTP binding spells the old placeholder
-          — against the hosted request's write reach before the first write
+          — against the hosted request's write reach before the first write, and refuse one that
+          lives in a read-only git part (PartReadOnly) there too, dry run included
         type: local
       - stepNumber: 11
         label: paramDryRun
@@ -3882,6 +3886,21 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadInterfaceSpecs
       - stepNumber: 2
+        description: >-
+          Read every component of the bound tree: which of them an entry names that is abstract, and
+          each follower's subsystem, whose language the new name must suit
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 3
+        description: >-
+          Read which project of the family owns each spec, so an entry the loader bound to a
+          contained project's own component is told from another project's alias::name and no other
+          project's implementer is followed
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 4
         label: followers
         description: >-
           Find the implementers of the component, directly and through the abstractions that
@@ -3892,13 +3911,13 @@ methods:
           implementer with neither is not a follower. Another project's implementers are not read:
           an `alias::name` entry never names a component here
         type: local
-      - stepNumber: 3
+      - stepNumber: 5
         description: Is this a parameter rename?
         type: branch
         condition: param is set
-        onTrueStep: 9
-        onFalseStep: 4
-      - stepNumber: 4
+        onTrueStep: 11
+        onFalseStep: 6
+      - stepNumber: 6
         description: >-
           Is the component itself an implementer of an abstraction that still declares the method?
           Then the rename belongs on that abstraction, and the implementer follows it; an
@@ -3908,8 +3927,8 @@ methods:
         condition: >-
           an abstraction the component implements, directly or through a chain, declares methodName
           on its contract
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 8
+      - stepNumber: 7
         label: declared-above
         description: >-
           Refuse before any write, naming the topmost abstraction that declares the method: rename
@@ -3918,7 +3937,7 @@ methods:
         error: >-
           declared-above: an abstraction this component implements still declares the method; rename
           it on the topmost one
-      - stepNumber: 6
+      - stepNumber: 8
         description: >-
           Can every follower follow? A follower already declaring newName or retiring it in its
           trace cannot; one that also implements, outside the renamed abstraction's chain, an
@@ -3932,8 +3951,8 @@ methods:
           method's previousNames, or a follower implements, outside the chain, an abstraction or an
           extension point (local or alias::name) that declares methodName, or newName is outside the
           identifier grammar or reserved in the effective targetLanguage of a follower's subsystem
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 10
+      - stepNumber: 9
         label: follow-blocked
         description: >-
           Refuse before any write, naming the implementer and the reason: name-taken, name-retired,
@@ -3941,32 +3960,41 @@ methods:
           is not acceptable in that implementer's subsystem language)
         type: throw
         error: name-taken, name-retired, follow-conflict or invalid-name, naming the implementer
-      - stepNumber: 8
+      - stepNumber: 10
         description: Answer the followers, empty when nothing implements the component
         type: return
         outcome: >-
           the followers: each implementer's component, the contract holding the method and whether
           only its omits entry names it
-      - stepNumber: 9
+      - stepNumber: 11
         label: paramFollowers
         description: >-
           For a parameter rename, keep each follower whose method holds the parameter under the old
           name at the same position as the component's own method; an implementer that holds it
           under another name, or does not declare the method, is left alone
         type: local
-      - stepNumber: 10
-        description: Does a kept follower's method already hold newName on another parameter?
-        type: branch
-        condition: a kept follower's method has a parameter, other than the one renamed, named newName
-        onFalseStep: 12
-      - stepNumber: 11
-        label: param-name-taken
-        description: >-
-          Refuse before any write, naming the implementer and its method: the same parameter name
-          cannot be held twice
-        type: throw
-        error: 'name-taken: an implementer''s method already holds the new parameter name'
       - stepNumber: 12
+        description: >-
+          Can every kept follower take the new name? One whose method already holds newName on
+          another parameter, or retired it in a parameter's trace, cannot; and newName must be
+          acceptable in that follower's own subsystem, which may be written in another language than
+          the component's: an identifier there (identifier.problemAs) and no word its effective
+          targetLanguage reserves for a parameter (identifier.reservedIn)
+        type: branch
+        condition: >-
+          a kept follower's method has a parameter, other than the one renamed, named newName, or a
+          parameter whose previousNames hold newName, or newName is outside the identifier grammar
+          or reserved for a parameter in the effective targetLanguage of that follower's subsystem
+        onFalseStep: 14
+      - stepNumber: 13
+        label: param-follow-blocked
+        description: >-
+          Refuse before any write, naming the implementer, its method and the reason: name-taken
+          (one parameter name cannot be held twice), name-retired, or invalid-name (the new name is
+          not acceptable in that implementer's subsystem language)
+        type: throw
+        error: name-taken, name-retired or invalid-name, naming the implementer and its method
+      - stepNumber: 14
         description: Answer the followers whose parameter follows
         type: return
         outcome: the kept followers
@@ -4048,4 +4076,4 @@ methods:
         outcome: the specs the method moved in and the pinned symbol, when one was set
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-22T02:37:14.609Z'
+updatedAt: '2026-11-22T15:12:34.245Z'

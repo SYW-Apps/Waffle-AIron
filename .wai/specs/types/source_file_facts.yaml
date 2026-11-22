@@ -142,9 +142,10 @@ fields:
       overload), what lets an abstraction's interface, trait or Protocol be compared with the
       contract that declares it, the abstraction having no body to read. EXACT grade, and the Python
       reader for a class whose body declares its fields in its framework's own form (a dataclass, a
-      Pydantic model, a TypedDict, a NamedTuple, an attrs class) and for a Protocol's methods:
-      elsewhere below exact grade a member list cannot be told from a mention, and a guess about
-      somebody's data model is worse than silence.
+      Pydantic model, a TypedDict, a NamedTuple, an attrs class) and for a Protocol's methods, an
+      abstract base class with only abstract methods read as a Protocol is: elsewhere below exact
+      grade a member list cannot be told from a mention, and a guess about somebody's data model is
+      worse than silence.
     optional: true
   - name: functionParams
     type: map<string, list<list<ParameterFact>>>
@@ -487,4 +488,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-11-22T02:30:46.489Z'
+updatedAt: '2026-11-22T15:11:41.100Z'

@@ -694,6 +694,31 @@ methods:
           A call step, declared call or dispatch binding reaches, on a concrete implementer
           directly, a method an abstraction it implements declares, at any level of the chain;
           calling the implementer's own extra method, or a narrower abstraction, is fine
+  - name: abstractionFindings
+    description: >-
+      Rule abstraction-findings. The finding codes an abstraction's method declares are what a
+      caller of the abstraction may meet, and only some implementers need raise each (one carrier
+      takes several parcels in a shipment, another refuses them): a code stands when at least one
+      concrete implementer, direct or through the chain (ctx.implementersOf), declares it on its own
+      method of that name, whose code finding-realization then holds to it, and one that none
+      declares is ABSTRACTION_FINDING_UNRAISED. An abstract implementer declaring it raises nothing.
+      An abstraction nothing concrete implements yet (abstractions reports it), or one other
+      projects implement (it, or an abstraction below it, exported with role implement), is not
+      judged. A code only an implementer declares is that implementer's own, a special state of one
+      carrier, and is never reported: the abstraction need not grow with each implementer.
+    signature: 'abstractionFindings(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ABSTRACTION_FINDING_UNRAISED
+        severity: warning
+        summary: >-
+          A finding code an abstraction's method declares that no concrete implementer, direct or
+          through the chain, declares on that method: callers would handle a code nobody raises; a
+          code only an implementer declares is its own and is never reported
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-11-22T02:37:06.083Z'
+updatedAt: '2026-11-22T15:13:13.614Z'

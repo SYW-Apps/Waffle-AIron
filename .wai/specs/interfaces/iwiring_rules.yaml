@@ -255,10 +255,14 @@ methods:
       (type.invariants), anchored through their componentClass. Every write-effect contract method
       of the owning component must carry a narrative step asserting each invariant
       (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as
-      semantic guarantees. This is an HONEST lint over declarations: a green run means every write
-      path visibly claims the invariant, never that the narrative or code actually enforces it. An
-      invariant with no resolvable owner or no declared write path is unanchored, and nothing
-      further is claimed about it.
+      semantic guarantees. An owner that is an abstraction has no narrative, so its obligation is
+      its implementers': each concrete implementer, direct or through the chain, asserts the
+      invariant in its own method of the write method's name, unless that method states an effect
+      other than write (it writes nothing) or the implementer does not declare it (omitted, or
+      implements-contracts' mismatch). This is an HONEST lint over declarations: a green run means
+      every write path visibly claims the invariant, never that the narrative or code actually
+      enforces it. An invariant with no resolvable owner or no declared write path is unanchored,
+      and nothing further is claimed about it.
     signature: 'invariantBacking(ctx: RuleContext): void'
     returns: void
     params:
@@ -274,7 +278,8 @@ methods:
       - code: UNASSERTED_INVARIANT
         severity: warning
         summary: >-
-          A write-effect method of the invariant's owning component has no narrative step asserting
+          A write-effect method of the invariant's owning component, or, where the owner is an
+          abstraction, that method on a concrete implementer of it, has no narrative step asserting
           it
   - name: invariantReferences
     description: >-
@@ -404,4 +409,4 @@ methods:
         summary: An Adapter states a transport other than the transport of a Portal it calls
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-11-21T23:23:40.554Z'
+updatedAt: '2026-11-22T15:11:30.638Z'

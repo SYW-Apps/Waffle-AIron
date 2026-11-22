@@ -254,10 +254,13 @@ methods:
           completes later (declared async, or annotated to return a Promise). The Python reader
           fills the same where it already reads a Protocol's members: each method of a Protocol
           class with its parameters (the receiver set aside), return annotation and `async def`. An
-          overload set records every signature, never only the implementation's, because the shape
-          declares what a caller may write. A grade or a shape the reader cannot read member
-          signatures from records nothing, and a check then compares nothing: no signature is
-          guessed from a name
+          abstract base class is read as a Protocol is, when it derives from ABC or states
+          metaclass=ABCMeta and every method it defines is an @abstractmethod: a class with one
+          method that is not (an __init__ included) holds behaviour and is no declaration, so it
+          records none. An overload set records every signature, never only the implementation's,
+          because the shape declares what a caller may write. A grade or a shape the reader cannot
+          read member signatures from records nothing, and a check then compares nothing: no
+          signature is guessed from a name
         type: local
       - stepNumber: 10
         label: chaseReexports
@@ -503,4 +506,4 @@ methods:
       roots), deduplicated by path key in walk order, beside the files the implementations name.
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-11-22T02:30:32.494Z'
+updatedAt: '2026-11-22T15:12:23.999Z'

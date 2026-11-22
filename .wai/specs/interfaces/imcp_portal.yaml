@@ -1246,11 +1246,12 @@ methods:
       abstraction's method renames the parameter at the same position on every implementer of this
       project that holds it under the old name, directly or through a chain of abstractions, and
       names each (followed). Refuses a name another parameter of the method, or of an implementer
-      that would follow, holds or retired. Reports the interfaces it moved in, the placeholders
-      respelled, the public names publishing the method and, as `breaks`, the consumers — family
-      members included, plus checkouts in the searched folders — that call it; another project's
-      implementers are never written, the breaks name them. With dryRun it answers all of that and
-      writes nothing.
+      that would follow, holds or retired, and one that is no identifier, or a reserved word, in the
+      language of an implementer that would follow. Reports the interfaces it moved in, the
+      placeholders respelled, the public names publishing the method and, as `breaks`, the consumers
+      — family members included, plus checkouts in the searched folders — that call it; another
+      project's implementers are never written, the breaks name them. With dryRun it answers all of
+      that and writes nothing.
     signature: >-
       renameParam(id: string, method: string, param: string, newName: string, dryRun?: bool,
       search?: list<string>): ParamRename
@@ -1594,4 +1595,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-22T02:32:57.952Z'
+updatedAt: '2026-11-22T15:12:07.545Z'

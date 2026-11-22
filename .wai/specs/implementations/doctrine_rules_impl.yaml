@@ -1941,6 +1941,47 @@ methods:
         type: local
     symbol: check
     exportedVia: abstractionBypassRule
+  - name: abstractionFindings
+    sourcePath: src/core/rules/doctrine/abstraction-findings.ts
+    narrative:
+      - stepNumber: 1
+        label: setup
+        description: >-
+          exposed = the component ids that an entry with role implement of ctx.exportTables resolves
+          to, as abstractions reads it: an abstraction other projects implement
+        type: local
+      - stepNumber: 2
+        label: declared
+        description: For each finding code an abstraction's method declares
+        type: loop
+        loopKind: forEach
+        over: >-
+          each code of the findings of each method of ctx.interfaceMethodsOf(comp.id), for each
+          component comp of ctx.components whose abstract is true, that has a concrete component in
+          ctx.implementersOf(comp.id) and where exposed holds neither comp.id nor an abstraction of
+          ctx.implementersOf(comp.id)
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Does no concrete implementer declare the code on its own method of that name? Only some
+          implementers need raise a code, so one is enough; an abstract implementer declaring it
+          raises nothing
+        type: branch
+        condition: >-
+          no concrete component of ctx.implementersOf(comp.id) has, in ctx.interfaceMethodsOf of it,
+          a method of the same name whose findings hold the code
+        onFalseStep: 2
+      - stepNumber: 4
+        label: declaredEnd
+        description: >-
+          Report ABSTRACTION_FINDING_UNRAISED (warning, on comp.id; draft context
+          ctx.isComponentDraft(comp.id)) naming the method and the code: callers of the abstraction
+          would handle a code nobody raises, so declare it on the contract of each implementer that
+          raises it, or remove it from the abstraction. A code only an implementer declares is that
+          implementer's own and is never judged here
+        type: local
+    symbol: check
+    exportedVia: abstractionFindingsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-11-22T02:32:41.486Z'
+updatedAt: '2026-11-22T15:13:19.785Z'
