@@ -47,16 +47,21 @@ methods:
       target Portal over; when it states none and the Portals its dependsOn names share one
       transport, the tool fills it in from them and says so (a stated transport that disagrees with
       the target's is ADAPTER_TRANSPORT_MISMATCH). A component may state `abstract: true` to be an
-      abstraction several other components implement, on any building block but an Observer (an
-      abstract Portal states no transport, endpoints, auth, basePath or entry, and an abstract Store
-      no durability); the tool carries the mark through and never defaults it. The input may state
-      the spec's lifecycle status, so a component can be authored straight at design or complete
-      instead of being born draft and needing a follow-up edit nobody remembers. An unstated status
-      means draft for a new spec and the stored status for a re-authoring, and a stated status that
-      would lower the stored one is refused by name: reopening a frozen spec is an update, not a
-      restatement. The answer carries the write receipt as structured content beside the sentence,
-      so a caller learns the status written and whether a spec already held that id without parsing
-      English; the sentence itself is unchanged.
+      abstraction several other components implement, on any building block but an Observer, a
+      pattern or a UI block (an abstract Portal states no transport, endpoints, auth, basePath,
+      dispatch or entry, and an abstract Store no durability); abstractions chain, an abstraction's
+      own contract implementing abstractions in turn (Animal, Dog, GoldenRetriever), each one a
+      complete contract that declares every method of what it implements, and a concrete component
+      is never implemented, so there is no class inheritance; an abstraction implemented from
+      another subsystem is published by its own subsystem with role implement
+      (ABSTRACTION_UNPUBLISHED otherwise). The tool carries the mark through and never defaults it.
+      The input may state the spec's lifecycle status, so a component can be authored straight at
+      design or complete instead of being born draft and needing a follow-up edit nobody remembers.
+      An unstated status means draft for a new spec and the stored status for a re-authoring, and a
+      stated status that would lower the stored one is refused by name: reopening a frozen spec is
+      an update, not a restatement. The answer carries the write receipt as structured content
+      beside the sentence, so a caller learns the status written and whether a spec already held
+      that id without parsing English; the sentence itself is unchanged.
     signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -70,23 +75,29 @@ methods:
       three ways: structured params with returns (the signature text is then DERIVED and written by
       the server — a text the caller passes is ignored, and a notice names one that differed), a
       signatureFrom naming its source — a signature type, or `component.method` along a
-      dependsOn/owns edge — with neither params nor returns (both together are refused,
-      SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose signature with returns.
-      Every param type and returns is written in the neutral type grammar; today's spellings (`T[]`,
-      `T | null`, `Promise<T>`, `boolean`, `Record<K, V>`, ...) are accepted and stored canonical,
-      the receipt's respellings naming each, and a position that is not canonical is refused with
-      its replacement (`number`: int or float?; an inline function type: a signature type; a literal
-      union: an enum). The contract may state `implements`, a list of the abstractions it realizes:
-      each a local abstract component id, or `alias::name` for another project's extension point (a
-      single string is read as a one-element list), and, on a Portal that implements a Portal
-      abstraction, `omits`, the verbs this transport deliberately does not serve, each with a
-      reason. The input may state the spec's lifecycle status, so a contract can be authored
-      straight at design or complete instead of being born draft and needing a follow-up edit nobody
-      remembers. An unstated status means draft for a new spec and the stored status for a
-      re-authoring, and a stated status that would lower the stored one is refused by name —
-      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
-      as structured content beside the sentence, so a caller learns the status written and whether a
-      spec already held that id without parsing English; the sentence itself is unchanged.
+      dependsOn/owns edge, or, on an implementer, a method of an abstraction it implements, directly
+      or through a chain — with neither params nor returns (both together are refused,
+      SIGNATURE_SOURCE_RESTATED; a source never chains: name the level that states the signature),
+      or, for a method without params, a prose signature with returns. Every param type and returns
+      is written in the neutral type grammar; today's spellings (`T[]`, `T | null`, `Promise<T>`,
+      `boolean`, `Record<K, V>`, ...) are accepted and stored canonical, the receipt's respellings
+      naming each, and a position that is not canonical is refused with its replacement (`number`:
+      int or float?; an inline function type: a signature type; a literal union: an enum). The
+      contract may state `implements`, a list of the abstractions it realizes: each a local abstract
+      component id, or `alias::name` for another project's extension point (a single string is read
+      as a one-element list; a concrete component is never implemented). An abstraction's own
+      contract may implement abstractions too, and is then exploded: it declares every method of
+      each itself, so each abstraction is one complete contract and nothing inherits, and a path
+      that returns to its start is ABSTRACTION_CYCLE. On a concrete Portal that implements a Portal
+      abstraction, directly or through a chain, `omits` states the verbs this transport deliberately
+      does not serve, each with a reason (an abstract Portal never omits). The input may state the
+      spec's lifecycle status, so a contract can be authored straight at design or complete instead
+      of being born draft and needing a follow-up edit nobody remembers. An unstated status means
+      draft for a new spec and the stored status for a re-authoring, and a stated status that would
+      lower the stored one is refused by name — reopening a frozen spec is an update, not a
+      restatement. The answer carries the write receipt as structured content beside the sentence,
+      so a caller learns the status written and whether a spec already held that id without parsing
+      English; the sentence itself is unchanged.
     signature: 'defineInterface(spec: InterfaceSpec): SpecWriteReceipt'
     returns: SpecWriteReceipt
     endpoint:
@@ -292,11 +303,22 @@ methods:
   - name: renameMethod
     description: >-
       Tool: rename a contract method and retarget every reference to it; the method moves on the
-      component's interfaces and their implementations, carrying its narrative and bindings. Reports
-      the specs moved, the specs retargeted, the specs whose prose still names it, and every
-      consumer of an export publishing the method whose specs call it (breaks) — the family in reach
-      and, with search, the consumer checkouts in the named folders. dryRun answers all of it and
-      writes nothing.
+      component's interfaces and their implementations, carrying its narrative and bindings.
+      Renaming a method of an abstraction renames it on every implementer of this project too,
+      directly or through a chain of abstractions, all or nothing: the implementer's contract with
+      its own rename trace, its implementation, every call, dispatch, lifecycle and signatureFrom
+      reference and every matching omits entry, the lint allows and the debt register entries, and
+      the dry run and the report name each implementer method that follows (followed). It refuses,
+      before any write, an implementer that already holds the new name, one that also implements an
+      abstraction or extension point outside the chain that declares the old name, and a rename
+      asked of an implementer for a method an abstraction it implements still declares, naming the
+      abstraction to rename instead; when the abstraction no longer declares the old name, renaming
+      the implementer is allowed, which is the repair of a manual edit that IMPLEMENTS_MISMATCH
+      reported. Another project's implementers are never written: the consumer impact names them.
+      Reports the specs moved, the specs retargeted, the specs whose prose still names it, and every
+      consumer of an export publishing the method, or a method that followed it, whose specs call it
+      (breaks) — the family in reach and, with search, the consumer checkouts in the named folders.
+      dryRun answers all of it and writes nothing.
     signature: >-
       renameMethod(id: string, method: string, newName: string, pinSymbol?: bool, dryRun?: bool,
       search?: list<string>): MethodRename
@@ -313,8 +335,9 @@ methods:
         description: >-
           Its new name, an identifier in the tree's method casing
           (naming_rule_config.methodCasingFor its targetLanguage) — any identifier for a component
-          one of whose contracts implements another project's extension point, whose producer names
-          those methods
+          one of whose contracts implements another project's extension point (an `alias::name`
+          entry), whose producer names those methods; a local abstraction's methods are this
+          project's own and follow the casing
       - name: pinSymbol
         type: bool
         description: >-
@@ -1219,11 +1242,15 @@ methods:
       Tool: rename a parameter of a contract method; the old name joins the parameter's rename trace
       (previousNames), which the design export shows as `formerly`, each signature is re-derived and
       an HTTP path placeholder that bound the parameter is respelled — on the method's own binding
-      and on every method whose signatureFrom takes its signature. Refuses a name another parameter
-      of the method holds or retired. Reports the interfaces it moved in, the placeholders
+      and on every method whose signatureFrom takes its signature. Renaming a parameter of an
+      abstraction's method renames the parameter at the same position on every implementer of this
+      project that holds it under the old name, directly or through a chain of abstractions, and
+      names each (followed). Refuses a name another parameter of the method, or of an implementer
+      that would follow, holds or retired. Reports the interfaces it moved in, the placeholders
       respelled, the public names publishing the method and, as `breaks`, the consumers — family
-      members included, plus checkouts in the searched folders — that call it. With dryRun it
-      answers all of that and writes nothing.
+      members included, plus checkouts in the searched folders — that call it; another project's
+      implementers are never written, the breaks name them. With dryRun it answers all of that and
+      writes nothing.
     signature: >-
       renameParam(id: string, method: string, param: string, newName: string, dryRun?: bool,
       search?: list<string>): ParamRename
@@ -1567,4 +1594,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-21T23:30:50.586Z'
+updatedAt: '2026-11-22T02:32:57.952Z'

@@ -242,6 +242,24 @@ methods:
           (source_file_facts.classReferences)
         type: local
       - stepNumber: 9
+        label: readMemberSignatures
+        description: >-
+          Beside the shape's member names, read at exact grade the SIGNATURE of each method-style
+          member of every shape a file declares (type_shape_fact.signatures: an interface's method
+          signatures, a class's methods, a type literal's method signatures, and a property typed by
+          a function type, since `ship: (weight: number) => string` is a method of the shape as far
+          as any caller can tell), one entry per overload, each overload's parameters as
+          parameter_fact reads them (the name unless destructured, its annotation as written,
+          whether a caller may leave it out), its return annotation as written and whether it
+          completes later (declared async, or annotated to return a Promise). The Python reader
+          fills the same where it already reads a Protocol's members: each method of a Protocol
+          class with its parameters (the receiver set aside), return annotation and `async def`. An
+          overload set records every signature, never only the implementation's, because the shape
+          declares what a caller may write. A grade or a shape the reader cannot read member
+          signatures from records nothing, and a check then compares nothing: no signature is
+          guessed from a name
+        type: local
+      - stepNumber: 10
         label: chaseReexports
         description: >-
           Chase the re-export barrels through their relative specifiers, and their package
@@ -258,7 +276,7 @@ methods:
           than guessed. A carried site keeps the file it was READ in, so its bare names and
           receivers resolve in the real module's scope and never in the barrel's
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         label: resolveCalls
         description: >-
           Resolve every call with the type checker: build one program over every exact-grade ts/js
@@ -323,7 +341,7 @@ methods:
           (no declaration file, nothing under node_modules) is kept as that file's canonical key,
           and a bare one that does not (never a relative path or a node: builtin) as a package
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         label: checkerReadings
         description: >-
           With the same program, three readings more. The RECEIVER is read the way the code means
@@ -363,7 +381,7 @@ methods:
           that resolves under each name it binds (`*` for a namespace import, none for a side-effect
           import), marked resolved, with the module it lands in relative to that project's root
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         label: pythonRouteIncludes
         description: >-
           Fold each Python router's includes across modules: an included router bound by an import
@@ -378,12 +396,12 @@ methods:
           module, or on an unread one, makes the including router unread
           (source_file_facts.unreadRouters), its routes removed
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Return the assembled CodeModel: per-file facts, the resolved project root, the walked
           root-file list the unclaimed-source rule judges, the local-package map every import
@@ -485,4 +503,4 @@ methods:
       roots), deduplicated by path key in walk order, beside the files the implementations name.
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-11-10T19:07:27.409Z'
+updatedAt: '2026-11-22T02:30:32.494Z'

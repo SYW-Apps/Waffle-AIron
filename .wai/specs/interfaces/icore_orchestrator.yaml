@@ -163,11 +163,12 @@ methods:
       keeps its spelling, no export or external is written, and the verdict is the same as before
       (part-is-the-parents-subsystem). With `as: project` it then promotes the new part
       (promoteMember with the subsystem id), which is the pre-stage-8 externalize: the moved
-      subsystem becomes a member project with what crosses the boundary declared on both sides.
-      Throws if the subsystem is missing or is already in a part or member, if the path does not
-      resolve strictly within the owning project root (absolute, ../-escaping and link-escaping
-      paths are rejected), or if it holds a project, before anything moves. Source code is not
-      moved.
+      subsystem becomes a member project with what crosses the boundary declared on both sides, an
+      `implements` entry that crosses it included, which needs its abstraction exported with role
+      implement. Throws if the subsystem is missing or is already in a part or member, if the path
+      does not resolve strictly within the owning project root (absolute, ../-escaping and
+      link-escaping paths are rejected), or if it holds a project, before anything moves. Source
+      code is not moved.
     signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult?'
     returns: PromoteResult?
     params:
@@ -408,19 +409,21 @@ methods:
       pattern staying under its owner, each with its old id appended to its rename trace
       (previousIds) — the record the design export shows as `formerly`, so a consumer can tell the
       rename from a delete plus an add. Every reference in the bound tree is rewritten: dependsOn,
-      owns, dispatch and lifecycle entries, published interfaces at L1 and L0 (their component and
-      interface), narrative targets, auth sources naming a component, an entity's componentClass, an
-      interface's component, an interface method's signatureFrom naming one of its methods
-      (`component.method`), and an implementation's contract; rename traces are never rewritten. A
-      published name survives: an L1 or L0 export entry whose public name was derived from the old
-      id (it states no `as`) gets `as: <that name>` written before its target is respelled, and the
-      report lists it as kept. Findings keyed on the component follow it too, because they are keyed
-      by exactly the ids a rename exists to rewrite and left alone would read as debt both paid and
-      new: every lint allow naming it on an edge site or in a covered unit, and every entry of the
-      debt register (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or
-      naming the component in its site or covered units — rewritten in place, every comment and all
-      other formatting of the register kept, and each register edit reported. References from
-      chained subprojects (super::) are not rewritten: validate each child after renaming. Refuses a
+      owns, dispatch and lifecycle entries, an interface's local implements entry naming an
+      abstraction (a single string or a list entry; an `alias::name` entry is another project's and
+      is never rewritten), published interfaces at L1 and L0 (their component and interface),
+      narrative targets, auth sources naming a component, an entity's componentClass, an interface's
+      component, an interface method's signatureFrom naming one of its methods (`component.method`),
+      and an implementation's contract; rename traces are never rewritten. A published name
+      survives: an L1 or L0 export entry whose public name was derived from the old id (it states no
+      `as`) gets `as: <that name>` written before its target is respelled, and the report lists it
+      as kept. Findings keyed on the component follow it too, because they are keyed by exactly the
+      ids a rename exists to rewrite and left alone would read as debt both paid and new: every lint
+      allow naming it on an edge site or in a covered unit, and every entry of the debt register
+      (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or naming the
+      component in its site or covered units — rewritten in place, every comment and all other
+      formatting of the register kept, and each register edit reported. References from chained
+      subprojects (super::) are not rewritten: validate each child after renaming. Refuses a
       component that does not exist, a new id already taken or outside the id grammar, a new id (or
       the interface or implementation id it implies) that a spec of its kind retired (id-retired,
       naming the holder), a component inside a chained subproject (rename it from that project's
@@ -459,21 +462,39 @@ methods:
       so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering
       <component>.<method>, and every debt-register entry (.wai/project.yaml
       rules.conformance.carried) keyed the same way, rewritten in place with every comment and all
-      other formatting kept and each edit reported. An implementation that declared no symbol is
-      pinned to the old name when its code exists — the file realizing the method is on disk — so
-      the function it already binds to keeps binding; with no code written yet nothing binds, and no
-      pin is set unless pinSymbol is true. pinSymbol false never pins. Prose is never rewritten and
-      a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently
-      rename an RPC; both are reported as mentions. When the contract is exported (an L1 or L0
-      entry), the rename changes a published member: the report names those entries (publishedIn),
-      and nothing prevents it. Refuses, before the first write: a component or method that does not
-      exist, a name already declared on that interface or retired there by one of its methods
-      (name-retired), a name outside the identifier grammar, a component inside a chained subproject
-      (rename it from that project's root), and a register that cannot be rewritten that precisely.
-      A lock goes stale as with any edit. Inside a hosted request every spec the rename would write
-      is judged against the request's write reach before the first write: a rename that would change
-      a spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming
-      every such subsystem and the rung that decided each, and nothing is written.
+      other formatting kept and each edit reported. Renaming a method of an abstraction renames the
+      same method on every implementer of this project, directly or through a chain of abstractions,
+      all or nothing (planRenameCascade finds them, moveContractMethod moves each): the
+      implementer's contract with its own rename trace, its L4 method, every call, register,
+      dispatch, lifecycle and signatureFrom reference to it, every matching `omits` entry of a
+      Portal implementer, the lint allows and the debt register entries, with consumer impact
+      reported for each renamed method as for the first; the dry run and the report name every
+      implementer method that follows (followed). Another project's implementers are never written:
+      the consumer-impact report names them. An implementation that declared no symbol is pinned to
+      the old name when its code exists — the file realizing the method is on disk — so the function
+      it already binds to keeps binding; with no code written yet nothing binds, and no pin is set
+      unless pinSymbol is true. pinSymbol false never pins. Prose is never rewritten and a gRPC
+      endpoint binding keeps its wire method — renaming a contract method must not silently rename
+      an RPC; both are reported as mentions. When the contract is exported (an L1 or L0 entry), the
+      rename changes a published member: the report names those entries (publishedIn), and nothing
+      prevents it. Refuses, before the first write: a component or method that does not exist, a
+      name already declared on that interface or retired there by one of its methods (name-retired),
+      a name outside the identifier grammar, a component inside a chained subproject (rename it from
+      that project's root), a register that cannot be rewritten that precisely, an implementer that
+      already declares the new name or retired it (name-taken, name-retired, naming the
+      implementer), an implementer whose own subsystem's language does not accept the new name
+      (invalid-name, naming the implementer), an implementer that also implements, outside the
+      renamed abstraction's chain, an abstraction or extension point that declares the old name,
+      since one method cannot follow both (follow-conflict), and a rename asked of an implementer
+      for a method an abstraction it implements still declares (declared-above, naming the topmost
+      abstraction to rename instead). When the abstraction no longer declares the old name, a manual
+      edit having moved it, renaming the implementer is allowed: that is the repair.
+      IMPLEMENTS_MISMATCH stays the check for a manual edit. A lock goes stale as with any edit.
+      Inside a hosted request every spec the rename would write — the component's, each
+      implementer's that follows and every one it retargets — is judged against the request's write
+      reach before the first write: a rename that would change a spec of a subsystem the request may
+      not change is refused (SubsystemWriteDenied), naming every such subsystem and the rung that
+      decided each, and nothing is written.
     signature: >-
       renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
       dryRun?: bool): MethodRename
@@ -490,8 +511,9 @@ methods:
         description: >-
           Its new name, an identifier in the tree's method casing
           (naming_rule_config.methodCasingFor its targetLanguage) — any identifier for a component
-          one of whose contracts implements another project's extension point, since the producer
-          names those methods
+          one of whose contracts implements another project's extension point (an `alias::name`
+          entry), since the producer names those methods; a local abstraction's methods are this
+          project's own and follow the casing
       - name: pinSymbol
         type: bool
         description: >-
@@ -637,26 +659,30 @@ methods:
       bindings, lifecycle entrypoints, `calls` entries and every signatureFrom naming a moved method
       (`component.method`) are retargeted to the new one. A moved method keeps its own signatureFrom
       as written; whether its new component still reaches the source is the validator's question
-      (SIGNATURE_SOURCE_OFF_EDGE). Findings keyed on a moved method follow it: a lint allow anchored
-      at it moves to the receiving spec, one covering <from>.<method> names <to>.<method>, and the
-      debt register (.wai/project.yaml rules.conformance.carried) is rekeyed the same way in place,
-      every comment and all other formatting kept, each register edit reported (on a dry run, the
-      edits it would make). Prose is never rewritten and a wire endpoint keeps its address — moving
-      a method between components must not silently re-address an RPC; both are reported as
-      mentions. Every edit is computed before the first is written, and a write that fails — the
-      register's included, which is written last — restores the ones already made, because a
-      half-moved method leaves callers naming a home it no longer has. The caller's judgement runs
-      as a write hook on the resulting components at the last point before anything reaches disk,
-      which is where a move that breaks a dependency rule is refused. Refuses, before the first
-      write: a component or method that does not exist, a method name already declared on the target
-      or retired on the receiving contract, a source and target that are the same component, a
-      target with several contracts none of which is named i<target>, a contract or implementation
-      to create whose id another spec already holds, a component inside a chained subproject (move
-      it from that project's root), and a register that cannot be rewritten without disturbing its
-      formatting. A lock goes stale as with any edit. Inside a hosted request every spec the move
-      would write — the source, the target, what it creates and every referrer it retargets — is
-      judged against the request's write reach with the rest of its edits, before the first write: a
-      move that would change a spec of a subsystem the request may not change is refused
+      (SIGNATURE_SOURCE_OFF_EDGE). A method moved off an abstraction, or onto one, does not carry
+      its implementers with it: an implementer keeps declaring what it declared, and
+      implements-contracts reports the mismatch on each (IMPLEMENTS_MISMATCH), so the same move is
+      asked of each implementer. A local implements entry names the component, which a move of
+      methods never changes. Findings keyed on a moved method follow it: a lint allow anchored at it
+      moves to the receiving spec, one covering <from>.<method> names <to>.<method>, and the debt
+      register (.wai/project.yaml rules.conformance.carried) is rekeyed the same way in place, every
+      comment and all other formatting kept, each register edit reported (on a dry run, the edits it
+      would make). Prose is never rewritten and a wire endpoint keeps its address — moving a method
+      between components must not silently re-address an RPC; both are reported as mentions. Every
+      edit is computed before the first is written, and a write that fails — the register's
+      included, which is written last — restores the ones already made, because a half-moved method
+      leaves callers naming a home it no longer has. The caller's judgement runs as a write hook on
+      the resulting components at the last point before anything reaches disk, which is where a move
+      that breaks a dependency rule is refused. Refuses, before the first write: a component or
+      method that does not exist, a method name already declared on the target or retired on the
+      receiving contract, a source and target that are the same component, a target with several
+      contracts none of which is named i<target>, a contract or implementation to create whose id
+      another spec already holds, a component inside a chained subproject (move it from that
+      project's root), and a register that cannot be rewritten without disturbing its formatting. A
+      lock goes stale as with any edit. Inside a hosted request every spec the move would write —
+      the source, the target, what it creates and every referrer it retargets — is judged against
+      the request's write reach with the rest of its edits, before the first write: a move that
+      would change a spec of a subsystem the request may not change is refused
       (SubsystemWriteDenied), naming every such subsystem and the rung that decided each, and
       nothing is written.
     signature: >-
@@ -993,16 +1019,21 @@ methods:
       references into the part become `alias::name`; the part's references back into the bound
       project become `<parent id>::name`, the bound project exports what they use in the same way,
       and the new project declares the parent as an external; a bare type name the other side no
-      longer owns is imported by name (`use`) rather than respelled, so the text stays as written.
-      The bound project's L0 entries that re-exported the part's subsystems re-export the member by
-      alias. An asserted `as: part` on the declaration is dropped (it would now contradict the
-      content); nothing else in the declaration changes. This is exactly the boundary half of the
-      pre-stage-8 externalize, which now composes it after the storage move. Locks nothing: both
-      projects are to re-lock (the new one has never been approved). Throws, before anything is
-      written, when the alias names no part, the part is fetched from git (its files are the
-      cache's: promote it from a checkout of its repository), a trustedLink joins the part's
-      subsystems and the rest (it would cross a project boundary — remove or replace it first), a
-      used component is unpublished, or the id collides with a family project's.
+      longer owns is imported by name (`use`) rather than respelled, so the text stays as written. A
+      contract's local `implements` entry is a reference like a dependsOn: one that would cross the
+      boundary becomes `alias::name` only where the abstraction it names is exported with role
+      implement, an extension point for the other side to implement, and refuses otherwise, naming
+      the entry and the abstraction. The bound project's L0 entries that re-exported the part's
+      subsystems re-export the member by alias. An asserted `as: part` on the declaration is dropped
+      (it would now contradict the content); nothing else in the declaration changes. This is
+      exactly the boundary half of the pre-stage-8 externalize, which now composes it after the
+      storage move. Locks nothing: both projects are to re-lock (the new one has never been
+      approved). Throws, before anything is written, when the alias names no part, the part is
+      fetched from git (its files are the cache's: promote it from a checkout of its repository), a
+      trustedLink joins the part's subsystems and the rest (it would cross a project boundary —
+      remove or replace it first), a used component is unpublished, an abstraction a contract
+      implements across the boundary is not exported with role implement, or the id collides with a
+      family project's.
     signature: 'promoteMember(alias: string, id?: string): PromoteResult'
     returns: PromoteResult
     params:
@@ -1025,16 +1056,16 @@ methods:
       L0, its project.yaml, its own lock, pins and derived outputs are deleted — a non-contained
       member keeps a configuration holding only its PartOf — every reference is re-saved from where
       it now lives (the bound project's `alias::name` references and the member's `<parent
-      id>::name` references become local ids, and the parent's exports that existed only for the
-      member, and the member's external for the parent, are removed), the bound project's L0
-      re-exports from the member become re-exports of its subsystems, and an asserted `as: project`
-      or a `use` on the declaration is dropped. Locks nothing: the bound project is to re-lock.
-      Throws, before anything is written, for the same reasons internalizeMember does (no such
-      project member, a subsystem, type or spec file landing on an existing one, a carried alias
-      declared differently, a pack differing with no adopt or drop, conformance debt or severity
-      overrides the parent does not share, a destination export colliding, an unrecognised file in
-      the member's .wai) and when the member is fetched from git (demote it from a checkout of its
-      repository).
+      id>::name` references, a contract's `implements` entries among them, become local ids, and the
+      parent's exports that existed only for the member, and the member's external for the parent,
+      are removed), the bound project's L0 re-exports from the member become re-exports of its
+      subsystems, and an asserted `as: project` or a `use` on the declaration is dropped. Locks
+      nothing: the bound project is to re-lock. Throws, before anything is written, for the same
+      reasons internalizeMember does (no such project member, a subsystem, type or spec file landing
+      on an existing one, a carried alias declared differently, a pack differing with no adopt or
+      drop, conformance debt or severity overrides the parent does not share, a destination export
+      colliding, an unrecognised file in the member's .wai) and when the member is fetched from git
+      (demote it from a checkout of its repository).
     signature: 'demoteMember(alias: string, destination: InternalizeDestination): InternalizeResult'
     returns: InternalizeResult
     params:
@@ -1248,14 +1279,19 @@ methods:
       every interface of the component that declares the method — keeping its place, type,
       description and optionality under the new name, its old name appended to its rename trace
       (previousNames, shown as `formerly` in the design export) — and each such method is re-saved
-      with the signature text its params derive. A method whose signatureFrom names this one reads
-      the new name through the loader, and its HTTP endpoint path placeholder follows too: `{old}`
-      (or `/:old`) on the method's own binding AND on every follower method's binding — any contract
-      method in the bound tree whose signatureFrom takes this method's signature — is respelled in
-      the form it was written (the URL a caller sends is unchanged — only the name binding the
-      segment to the parameter moves). Asked of a method that takes its signature from another of
-      this project's contract methods (a Portal verb with signatureFrom), the rename is made on that
-      source and reaches the asked method through its signatureFrom; the report says so
+      with the signature text its params derive. Renaming a parameter of an abstraction's method
+      renames the parameter at the same position on every implementer of this project, directly or
+      through a chain of abstractions, whose method holds it under the old name (planRenameCascade
+      finds them), all or nothing, the dry run and the report naming each (followed); another
+      project's implementers are never written, the consumer-impact report names them, and
+      IMPLEMENTS_MISMATCH stays the check for a manual edit. A method whose signatureFrom names this
+      one reads the new name through the loader, and its HTTP endpoint path placeholder follows too:
+      `{old}` (or `/:old`) on the method's own binding AND on every follower method's binding — any
+      contract method in the bound tree whose signatureFrom takes this method's signature — is
+      respelled in the form it was written (the URL a caller sends is unchanged — only the name
+      binding the segment to the parameter moves). Asked of a method that takes its signature from
+      another of this project's contract methods (a Portal verb with signatureFrom), the rename is
+      made on that source and reaches the asked method through its signatureFrom; the report says so
       (routedFrom). The report names the export entries publishing the method and every follower's
       verb (publishedIn), method-granular with their former names (published), so a consumer calling
       a published Portal verb that forwards the method is named among the breaks. Prose is never
@@ -1266,16 +1302,17 @@ methods:
       method does not declare, or one it takes from another project's method or a signature type —
       the refusal names the source and says a rename made there reaches this method (param-missing),
       a new name that is not an identifier — or, when rules.naming.variables is set and no contract
-      of the component implements another project's extension point, not in that casing
-      (invalid-name) — a name another parameter of the method holds (name-taken), and a name any
-      parameter of the method retired in its trace — its own included, so renaming back to a former
-      name is refused as a method rename refuses it, since the trace would then list the parameter's
-      own name (RENAME_TRACE_CONFLICT) and a consumer holding the old key could not tell the two
-      apart; unsetting that previousNames releases it (name-retired). With dryRun it answers what it
-      would move and respell, refusing exactly as the real rename would, and writes nothing. A lock
-      goes stale as with any edit. Inside a hosted request every spec it would write — the moving
-      contracts and every follower's — is judged against the request's write reach before the first
-      write (SubsystemWriteDenied).
+      of the component implements another project's extension point (an `alias::name` entry), not in
+      that casing (invalid-name) — a name another parameter of the method holds, on the component or
+      on an implementer that would follow (name-taken), and a name any parameter of the method
+      retired in its trace — its own included, so renaming back to a former name is refused as a
+      method rename refuses it, since the trace would then list the parameter's own name
+      (RENAME_TRACE_CONFLICT) and a consumer holding the old key could not tell the two apart;
+      unsetting that previousNames releases it (name-retired). With dryRun it answers what it would
+      move and respell, refusing exactly as the real rename would, and writes nothing. A lock goes
+      stale as with any edit. Inside a hosted request every spec it would write — the moving
+      contracts, every implementer's that follows and every follower's — is judged against the
+      request's write reach before the first write (SubsystemWriteDenied).
     signature: >-
       renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
       bool): ParamRename
@@ -1637,6 +1674,81 @@ methods:
         description: Answer the revision and write nothing
     guarantees:
       - idempotent
+  - name: planRenameCascade
+    description: >-
+      Find what a rename of an abstraction's method or parameter follows onto, and refuse what
+      cannot follow, before anything is written. The implementers of the component in this project,
+      directly or through a chain of abstractions (the same transitive reading as
+      rule_context.implementersOf: every local implements entry of every loaded contract,
+      cycle-safe), each with the contract that declares the method, or the Portal contract that
+      lists it in omits. A method rename (no param) refuses with name-taken or name-retired, naming
+      the implementer, when an implementer declares the new name or retired it; with follow-conflict
+      when an implementer also implements, outside the renamed abstraction's chain, an abstraction
+      or extension point that declares the old name; with invalid-name, naming the implementer, when
+      the new name is not an identifier in an implementer's own subsystem or is a word that
+      subsystem's effective targetLanguage reserves for a method (identifier.reservedIn), the
+      implementer's subsystem possibly being written in another language than the component's; and
+      with declared-above, naming the topmost abstraction to rename instead, when the component is
+      itself an implementer of an abstraction that still declares the old name — not when that
+      abstraction no longer declares it, the repair of a manual edit. A parameter rename (param set)
+      follows onto the implementers whose method holds the parameter under the old name at the same
+      position and refuses with name-taken when one holds the new name on another parameter; an
+      implementer that holds it under another name is left alone. Another project's implementers are
+      never in the answer: the consumer-impact report names them. A component no abstraction depends
+      on, or that nothing implements, answers an empty list. A read: writes nothing.
+    signature: >-
+      planRenameCascade(componentId: string, methodName: string, newName: string, param?: string):
+      list<MethodFollower>
+    returns: list<MethodFollower>
+    params:
+      - name: componentId
+        type: string
+        description: The component whose method or parameter is renamed
+      - name: methodName
+        type: string
+        description: The method as it stands
+      - name: newName
+        type: string
+        description: The new name of the method, or of the parameter when param is set
+      - name: param
+        type: string
+        description: The parameter being renamed, when the cascade is a parameter rename
+        optional: true
+    effect: read
+  - name: moveContractMethod
+    description: >-
+      Move one method name on ONE component's contracts and implementations, and nothing else: on
+      every interface of the component that declares it, the method renamed with its former key
+      `<contract>.<old name>` appended to its rename trace and its signature text re-derived (a
+      prose method has the name inside its prose renamed, a sourced method stores no text), and on
+      the implementations of those contracts the method renamed carrying narrative, sourcePath,
+      symbol, detail and intent unchanged; an implementation that named no symbol is pinned to the
+      old name when its code exists (the file realizing the method is on disk) and pinSymbol is not
+      false, or when pinSymbol is true. A Portal contract that lists the method in omits has that
+      entry renamed in place, keeping its reason. The shared move beneath renameMethod: the
+      component asked about and each implementer that follows it take the same one, so every level
+      follows by the same rule. Refreshes the loader cache after it writes.
+    signature: >-
+      moveContractMethod(componentId: string, methodName: string, newName: string, pinSymbol?:
+      bool): MethodMove
+    returns: MethodMove
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contracts and implementations move the method
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: pinSymbol
+        type: bool
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name: omitted, only
+          when its code exists; true always pins, false never does
+        optional: true
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-21T16:14:07.693Z'
+updatedAt: '2026-11-22T02:37:24.563Z'

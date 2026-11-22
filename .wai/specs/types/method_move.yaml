@@ -1,0 +1,24 @@
+kind: value-object
+id: method_move
+name: MethodMove
+description: >-
+  What moving one method name on one component's contracts and implementations wrote: the ids of the
+  specs written and, when an implementation had to be pinned to the old name so its function still
+  binds, that symbol. A rename of an abstraction's method makes one move per component, the
+  abstraction's own and each implementer that follows it.
+subsystem: sdd_core
+fields:
+  - name: renamed
+    type: list<string>
+    description: >-
+      Ids of the specs the method moved in: every interface of the component that declared it, and
+      the implementations of those contracts
+    optional: false
+  - name: pinnedSymbol
+    type: string
+    description: The code symbol an implementation now declares, when the move pinned the old name
+    optional: true
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-11-22T02:23:09.730Z'
+updatedAt: '2026-11-22T02:23:10.092Z'

@@ -119,15 +119,17 @@ methods:
       bare form of a type id); the L0 is never deleted. A container's content means nothing without
       it, so the deletion takes its subtree (spec_index.subtreeOf): a contract its implementations,
       a component its contracts and the members it owns, a subsystem its components and types. When
-      another spec still references what would go (spec_index.referencesTo), the deletion is
-      refused, naming each reference, because those are the error findings (invalid references) the
-      write itself would introduce — the same stance the gate takes on every other write; `force`
-      deletes anyway and answers the references it left dangling, for a staged teardown. Every
-      public name a consumer reaches what goes through is read before anything goes (published), so
-      the door can name the consumers the deletion breaks, exactly as a rename does. `dryRun`
-      answers the same plan — what would be removed, what references it, what it publishes, the
-      tests to revisit — and removes nothing. The tests that encode a removed method are found
-      before anything goes, while the implementations that place them still exist.
+      another spec still references what would go (spec_index.referencesTo: a dependsOn or owns, a
+      contract's local implements entry naming an abstraction, a call, register or dispatch step, a
+      type position and the rest), the deletion is refused, naming each reference, because those are
+      the error findings (invalid references) the write itself would introduce — the same stance the
+      gate takes on every other write; `force` deletes anyway and answers the references it left
+      dangling, for a staged teardown. Every public name a consumer reaches what goes through is
+      read before anything goes (published), so the door can name the consumers the deletion breaks,
+      exactly as a rename does. `dryRun` answers the same plan — what would be removed, what
+      references it, what it publishes, the tests to revisit — and removes nothing. The tests that
+      encode a removed method are found before anything goes, while the implementations that place
+      them still exist.
     signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
     returns: SpecDeletion
     params:
@@ -155,8 +157,11 @@ methods:
       implementations), each moved component is judged in its tree WITH its new subsystem
       (introducedFindings, the others moving beside it) — an edge the move turns into a
       cross-subsystem edge into a non-Portal, or a forbidden doctrine edge, refuses the move with
-      the rule's own words, and a curable boundary finding (a direct cross-subsystem edge into a
-      Portal) rides along as a notice. Then every move — a component's, a type's or a group's — is
+      the rule's own words, an implements edge between a component and its abstraction (a local
+      implements entry is a component reference like a dependsOn) included, where an abstraction
+      implemented from another subsystem must be published with role implement
+      (ABSTRACTION_UNPUBLISHED), and a curable boundary finding (a direct cross-subsystem edge into
+      a Portal) rides along as a notice. Then every move — a component's, a type's or a group's — is
       REHEARSED in a private copy of the tree, as the family migrations rehearse theirs: the move is
       written there and the copy validated before and after, so the report names every file it
       writes and every reference it re-points, and the design errors and warnings the result will
@@ -199,4 +204,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-10-23T22:25:45.466Z'
+updatedAt: '2026-11-22T02:29:56.366Z'

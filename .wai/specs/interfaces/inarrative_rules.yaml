@@ -264,7 +264,9 @@ methods:
       or L3 description) — dialing detail down never means leaving behavior unspecified. Explicit
       declarations are held to their promise as errors; stereotype-defaulted gaps surface as
       warnings. An honest lint over declarations — it never claims the narrative or the prose is
-      CORRECT.
+      CORRECT. An abstraction's implementation is never judged: it carries code linkage only, its
+      methods are realized by declaration and its behaviour lives in the implementers
+      (abstraction-shape reports behaviour written there), so it owes no narrative and no intent.
     signature: 'narrativeDetail(ctx: RuleContext): void'
     returns: void
     params:
@@ -276,12 +278,12 @@ methods:
         severity: warning
         summary: >-
           Method resolved to detail: full but has no narrative (error when the level was declared
-          explicitly)
+          explicitly); never an abstraction's method
       - code: INTENT_FLOOR
         severity: warning
         summary: >-
           Intent-level method whose intent/description prose is missing or placeholder-thin (error
-          when declared explicitly)
+          when declared explicitly); never an abstraction's method
   - name: detailSufficiency
     description: >-
       Rule detail-sufficiency. A method dialed below detail: full with no narrative may not be
@@ -292,7 +294,9 @@ methods:
       narrative is a visible, lint.allow-justifiable choice (DETAIL_BELOW_STEREOTYPE) — reported
       only where the measured finding did not already fire, since evidence outranks expectation.
       Both are honest lints over declarations: they never claim a narrative would be correct, only
-      that the dial hides something.
+      that the dial hides something. An abstraction's implementation is never judged, as
+      narrative-detail never judges it: it declares an interface and has no function body to measure
+      or narrate.
     signature: 'detailSufficiency(ctx: RuleContext): void'
     returns: void
     params:
@@ -313,4 +317,4 @@ methods:
           narrative
 status: complete
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-10-30T19:35:25.363Z'
+updatedAt: '2026-11-22T02:18:47.712Z'

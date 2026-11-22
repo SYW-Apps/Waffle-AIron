@@ -109,11 +109,12 @@ methods:
     returns: list<SpecReference>
     description: >-
       Every reference a spec OUTSIDE the targets holds to one of them, each with its position: a
-      component's subsystem, owns, dependsOn and dispatch; a contract's component and the head of a
-      signature source; an implementation's contract, a call, register or dispatch step's target and
-      a declared call; a subsystem's published interfaces, lifecycle entrypoints and trusted links;
-      the L0's export table; and every type position that names a target type by its name or id. A
-      reference from one target to another is not listed: it leaves with both.
+      component's subsystem, owns, dependsOn and dispatch; a contract's component, its local
+      implements entries (an abstraction it realizes, a single string or a list entry) and the head
+      of a signature source; an implementation's contract, a call, register or dispatch step's
+      target and a declared call; a subsystem's published interfaces, lifecycle entrypoints and
+      trusted links; the L0's export table; and every type position that names a target type by its
+      name or id. A reference from one target to another is not listed: it leaves with both.
     sourcePath: src/models/specs.ts
     symbol: specIndexReferencesTo
   - name: methodReferencesTo
@@ -136,4 +137,4 @@ methods:
     symbol: specIndexMethodReferences
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-11-21T16:08:58.767Z'
+updatedAt: '2026-11-22T02:27:35.606Z'

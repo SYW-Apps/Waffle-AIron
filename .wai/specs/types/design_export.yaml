@@ -26,7 +26,9 @@ fields:
     description: >-
       `MAJOR.MINOR`; 1.0 at first release, 2.0 with the reachability model (a MAJOR: listener mounts
       and portalType removed, transport and the Portal-level invokedBy added, invokedBy kinds
-      narrowed to entry and runtime with a scope), 2.1 adding detailStated to each method body
+      narrowed to entry and runtime with a scope), 2.1 adding detailStated to each method body, 2.2
+      adding typeGroups, 2.3 adding abstract on a component and implements and omits on a contract
+      (a MINOR: consumers ignore what they do not know)
     optional: false
   - name: generator
     type: string
@@ -69,4 +71,4 @@ fields:
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:37.463Z'
-updatedAt: '2026-10-23T22:26:12.999Z'
+updatedAt: '2026-11-22T02:32:35.304Z'

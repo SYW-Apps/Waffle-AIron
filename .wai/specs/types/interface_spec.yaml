@@ -69,20 +69,27 @@ fields:
     type: list<string>
     description: >-
       The abstractions this contract realizes. Each entry is a local abstract component id
-      (IMPLEMENTS_NOT_ABSTRACT when it names a component that is not abstract or does not exist) or
-      alias::name, another project's export entry with role implement (EXTERNAL_NOT_EXPORTED when
-      the name is not exported with that role). A single string is read as a one-element list. Every
-      method of each abstraction or extension point must be declared here with the same signature
-      (IMPLEMENTS_MISMATCH), with an effect and the implementer's dependencyClass no wider than
-      theirs (IMPLEMENTS_EFFECT_WIDER); the methods count as reached when the abstraction's are.
+      (IMPLEMENTS_NOT_ABSTRACT when it names a component that is not abstract or does not exist; a
+      concrete component is never implemented) or alias::name, another project's export entry with
+      role implement (EXTERNAL_NOT_EXPORTED when the name is not exported with that role). A single
+      string is read as a one-element list. An abstraction's own contract may list implements too,
+      so abstractions chain (Animal, Dog, GoldenRetriever): it is exploded, declaring every method
+      of each entry itself, so each abstraction is one complete contract and nothing inherits; a
+      path that returns to its start is ABSTRACTION_CYCLE. Every method of each abstraction or
+      extension point must be declared here with the same signature (IMPLEMENTS_MISMATCH, which also
+      catches a manual edit that leaves the implementer behind a renamed abstraction method), with
+      an effect and the implementer's dependencyClass no wider than theirs
+      (IMPLEMENTS_EFFECT_WIDER); the methods count as reached when the abstraction's are.
       Implementing several is legal but the exception (ABSTRACTION_MULTIPLE): role interfaces for
       one vendor client serving two roles.
     optional: true
   - name: omits
     type: list<OmittedMethod>
     description: >-
-      Only on a Portal's contract that implements a Portal abstraction: the verbs this transport
-      deliberately does not serve, each with a reason. A verb left out and not listed is
+      Only on a concrete Portal's contract that implements a Portal abstraction, directly or through
+      a chain: the verbs of any Portal abstraction it implements that this transport deliberately
+      does not serve, each with a reason. An abstract Portal never omits: its own contract is
+      complete, so each level states every verb. A verb left out and not listed is
       IMPLEMENTS_MISMATCH; anything else is OMISSION_NOT_ALLOWED.
     optional: true
 methods:
@@ -116,10 +123,13 @@ methods:
       stays, and the params, returns and signature text its source supplies are left out — they are
       the source's design, digested where the source is, so a producer read live never moves this
       contract's approval through them. Its effect stays: an effect the method states is its own
-      design. Pure: over the spec's own fields, and a stored (raw) file reads as readily as a loaded
-      spec.
+      design. Its implements is read in one canonical form, so a re-save that writes the same
+      entries differently never moves the approval: a one-entry list reads as that entry's plain
+      string and an empty list as absent, which is the form an approval recorded over a string
+      survives a save in. Pure: over the spec's own fields, and a stored (raw) file reads as readily
+      as a loaded spec.
     sourcePath: src/models/specs.ts
     symbol: interfaceDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-11-21T23:16:44.082Z'
+updatedAt: '2026-11-22T02:20:33.603Z'

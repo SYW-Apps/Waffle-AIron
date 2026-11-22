@@ -24,10 +24,10 @@ fields:
   - name: position
     type: string
     description: >-
-      Where in the spec, in AuthoredReference.position's vocabulary (dependsOn, owns, dispatch,
-      mounts, lifecycle, publicInterfaces — an L0 entry's `from` included —, trustedLinks, contract,
-      subsystem, narrative with the method and step number, calls, auth, or type with the field,
-      param or return).
+      Where in the spec, in AuthoredReference.position's vocabulary (dependsOn, owns, implements,
+      dispatch, mounts, lifecycle, publicInterfaces — an L0 entry's `from` included —, trustedLinks,
+      contract, subsystem, narrative with the method and step number, calls, auth, or type with the
+      field, param or return).
     optional: false
   - name: from
     type: string
@@ -42,4 +42,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-30T20:19:13.395Z'
-updatedAt: '2026-10-04T23:37:52.038Z'
+updatedAt: '2026-11-22T02:27:39.570Z'

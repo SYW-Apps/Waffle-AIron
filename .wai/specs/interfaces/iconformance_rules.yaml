@@ -508,11 +508,24 @@ methods:
       component the Portal calls is its downstream collaborator, so that component importing the
       Portal back runs against the declared edge — an import cycle, UNDECLARED_DEPENDENCY on the
       importer, the finding naming the edge it inverts — and such a reverse import realizes no edge
-      of a Portal that calls. An abstraction's interface file stands for it: a call or edge through
-      the abstraction's declared interface type that lands on an implementer's class is justified by
-      the caller's dependsOn on the abstraction, never UNDECLARED_DEPENDENCY on the implementer, and
-      the caller's import of that interface file, type-only included, realizes its dependsOn on the
-      abstraction.
+      of a Portal that calls. An abstraction's interface file stands for it, and a chain of
+      abstractions is read transitively through ctx.abstractionsOf and ctx.implementersOf: a call or
+      edge through the declared interface type of an abstraction the caller depends on that lands on
+      the class of any transitive implementer, abstract or concrete, is justified by the caller's
+      dependsOn on that abstraction, never UNDECLARED_DEPENDENCY on the implementer, and the
+      caller's import of that interface file, type-only included, realizes its dependsOn on the
+      abstraction. Only a landing made through the interface type is justified: a direct import of
+      an implementer's file, or a direct call on an implementer's class, is judged as any other edge
+      and is not excused by the abstraction, and a direct call on an implementer's class never
+      realizes a dependsOn on the abstraction: only the import of the interface file, or a call made
+      through the interface type that the checker lands in a file of a transitive implementer, does.
+      An implementer's own file is held to no such rule towards its abstractions: a local implements
+      entry is itself the declared relation, so a runtime import, re-export or call from an
+      implementer's file to the file of any abstraction it implements, at any depth of the chain (a
+      plain import beside `implements`, an `extends` of an abstract class declaring the abstraction,
+      a Python base class imported from the abstraction's module), is justified and never
+      UNDECLARED_DEPENDENCY. The reverse is not: an abstraction's file importing an implementer's is
+      judged as any other edge.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -841,7 +854,11 @@ methods:
       published name is used — is UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static
       factory) are no use. The finding names the files that took each name as well as the one
       publishing it: an import that no declared relation justifies is UNDECLARED_DEPENDENCY on the
-      importer besides, a different fact — who reached across, where this is what crossed.
+      importer besides, a different fact — who reached across, where this is what crossed. The
+      declaration that realizes an abstraction — the interface, trait, Protocol or member-less
+      abstract class holding its methods, the same shape param-conformance reads — is promised
+      surface of that abstraction's file: never UNDECLARED_EXPORT or UNDECLARED_PUBLIC_MEMBER,
+      whoever takes it (implementers, callers, a composition root).
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1075,11 +1092,20 @@ methods:
       — never accused. A caller whose port no longer matches the drifted class is not reported again
       on its own: its call to the drifted component that no longer resolves (CALL_ORIGIN_UNRESOLVED)
       and its declared edge to it that no longer shows (UNREALIZED_DEPENDENCY) are held under
-      RETURN_TYPE_MISMATCH and judged again once it is fixed. Python is read without a type checker
-      by the analyzer's signature reader (source_file_facts.reads): its `def` parameter names —
-      compared in the language's snake_case, so the contract's `documentId` is the code's
-      `document_id` — their annotations and return annotations, the receiver (`self`, `cls`) set
-      aside, judged like any other signature; an unannotated Python parameter is never read as
+      RETURN_TYPE_MISMATCH and judged again once it is fixed. An abstraction has no body, so its
+      method is compared where a body would be, with the declaration its file states: the signature
+      of the method-style member of its interface, trait or Protocol (type_shape_fact.signatures,
+      one candidate per overload, a function-typed property included), through the same parameter,
+      type, optionality and return comparisons and the same codes (UNREALIZED_PARAM,
+      UNDECLARED_PARAM, PARAM_NAME_MISMATCH, PARAM_OPTIONALITY, PARAM_TYPE_MISMATCH,
+      RETURN_TYPE_MISMATCH), at exact grade and, for a Protocol, by the Python reader. An
+      implementer stays compared with its own contract, which implements-contracts holds to its
+      abstraction's, so abstraction code, its contract, the implementers' contracts and their code
+      close one loop; where a grade cannot read member signatures nothing is guessed. Python is read
+      without a type checker by the analyzer's signature reader (source_file_facts.reads): its `def`
+      parameter names — compared in the language's snake_case, so the contract's `documentId` is the
+      code's `document_id` — their annotations and return annotations, the receiver (`self`, `cls`)
+      set aside, judged like any other signature; an unannotated Python parameter is never read as
       opaque.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
@@ -1311,8 +1337,12 @@ methods:
       so a contract that hides it misleads every implementer and translation built from it. Compared
       with source_file_facts.asyncFunctions for the method's realizing function (under its
       `symbol`), at exact grade only; where a name has several bodies only what they all agree on is
-      reported, as param-conformance does. A method whose file only calls the function is
-      methodRealization's finding, and a method whose conformance dial is off (its own, else its
+      reported, as param-conformance does. An abstraction's method, which has no body, is compared
+      with whether the signature its declaring interface, trait or Protocol states for the member
+      completes later (member_signature_fact.completesLater, per overload, read at exact grade and
+      by the Python reader for a Protocol), reported with the same ASYNC_MISMATCH; where the grade
+      cannot read member signatures nothing is compared. A method whose file only calls the function
+      is methodRealization's finding, and a method whose conformance dial is off (its own, else its
       implementation's) is not judged.
     signature: 'asyncConformance(ctx: RuleContext): void'
     returns: void
@@ -1457,4 +1487,4 @@ methods:
           yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-11-21T23:33:52.840Z'
+updatedAt: '2026-11-22T02:37:01.506Z'

@@ -65,7 +65,7 @@ fields:
     type: ExportRole
     description: >-
       What consumers do with the entry: call it (the default) or implement it (an extension point;
-      an Adapter may back it, EXPORT_UNCONSUMABLE otherwise)
+      an Adapter or an abstract component may back it, EXPORT_UNCONSUMABLE otherwise)
     optional: true
   - name: shared
     type: bool
@@ -91,4 +91,4 @@ methods:
     symbol: isOwnComponentEntry
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-11-21T15:57:20.077Z'
+updatedAt: '2026-11-22T02:16:44.483Z'

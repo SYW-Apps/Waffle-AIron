@@ -586,12 +586,14 @@ methods:
           Branch: is the backing component something other than a Portal? Nothing can use it: a hop
           from another subsystem enters through a published Portal, and another project consumes
           only a Portal's verbs — unless it is an Adapter the subsystem publishes as shared, which
-          every subsystem calls directly (public-surface-shared judges it), or an Adapter the entry
-          publishes with role implement, an extension point consumers realize rather than call
+          every subsystem calls directly (public-surface-shared judges it), or an extension point
+          the entry publishes with role implement, an Adapter or an abstract component consumers
+          realize rather than call
         type: branch
         condition: >-
           backing.componentType is not Portal, ctx.sharedSet for sub.id does not contain backing.id,
-          and not (pi.role is implement and backing.componentType is Adapter)
+          and not (pi.role is implement and (backing.componentType is Adapter or backing.abstract is
+          true))
         onFalseStep: 3
       - stepNumber: 15
         description: >-
@@ -870,7 +872,8 @@ methods:
         description: >-
           Report EXPORT_UNCONSUMABLE (error since stage 4), naming the public name and the target's
           stereotype: only a Portal (a gateway is a Portal variant) or an Observer can serve a
-          caller across the boundary
+          caller across the boundary, and an entry with role implement may also be an Adapter or an
+          abstract component
         type: local
       - stepNumber: 15
         description: Next problem
@@ -1230,8 +1233,10 @@ methods:
         condition: >-
           the fact's form is method and the source lives in the owning component's own project, and
           the target's component is in neither the owning component's dependsOn nor its owns
-          (ctx.componentMap). Another project's export — `alias::name.method`, whether the alias is
-          a declared external (an `export` source) or a member whose export resolves to its
+          (ctx.componentMap) and is not an abstraction of ctx.abstractionsOf the owning component
+          (an implementer takes a signature from an abstraction it implements, directly or through a
+          chain, whatever its level). Another project's export — `alias::name.method`, whether the
+          alias is a declared external (an `export` source) or a member whose export resolves to its
           component — is reached through the declared relation to that project, never a dependsOn
           edge: one reference, one verdict, whichever relation names it. (An extension point a
           consumer implements is the clearest case: the producer calls the implementer, so a
@@ -1240,7 +1245,7 @@ methods:
       - stepNumber: 13
         description: >-
           Report SIGNATURE_SOURCE_OFF_EDGE at the method, naming the target's component and the edge
-          that would license it
+          that would license it: a dependsOn or owns, or implementing it
         type: local
       - stepNumber: 14
         label: next
@@ -1910,11 +1915,13 @@ methods:
         description: >-
           Do two implemented abstractions or extension points ask one method name to be two things?
           Each entry's methods are read as implements-contracts reads them; one that does not
-          resolve is skipped
+          resolve is skipped. Params and returns are compared exactly as implements-contracts
+          compares them, every type expression in canonical form with the producer's own name and
+          the consumer's alias::name read as one type, never by a name's last segment
         type: branch
         condition: >-
           the contract implements two or more entries, and a method name occurs in more than one of
-          them with different params, returns or effect
+          them with different params (types compared semantically), returns or effect
         onFalseStep: 4
       - stepNumber: 3
         description: >-
@@ -1925,19 +1932,21 @@ methods:
       - stepNumber: 4
         label: omissions
         description: >-
-          Are the contract's omissions where only a Portal implementing a Portal abstraction may
-          state them?
+          Are the contract's omissions where only a concrete Portal implementing a Portal
+          abstraction may state them? The Portal abstractions it implements are read through
+          ctx.abstractionsOf, so a verb of any level of a chain may be named
         type: branch
         condition: >-
-          intf.omits is set, and the implementer is not a Portal implementing a Portal abstraction,
-          or an omission names a method no implemented Portal abstraction declares
+          intf.omits is set, and the implementer is not a concrete Portal implementing a Portal
+          abstraction (an abstract Portal never omits), or an omission names a method no Portal
+          abstraction of ctx.abstractionsOf the implementer declares
         onFalseStep: 6
       - stepNumber: 5
         description: >-
           Report OMISSION_NOT_ALLOWED (error, on intf.id, sited at the omission; draft context when
           intf.status is draft or design) naming the method and why: omits states the verbs one
-          transport deliberately does not serve of an abstract Portal it implements, each with its
-          reason
+          concrete transport deliberately does not serve of a Portal abstraction it implements,
+          directly or through the chain, each with its reason
         type: local
       - stepNumber: 6
         label: contractEnd
@@ -1947,4 +1956,4 @@ methods:
     exportedVia: implementsConsistencyRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-11-21T23:29:57.976Z'
+updatedAt: '2026-11-22T02:33:33.550Z'

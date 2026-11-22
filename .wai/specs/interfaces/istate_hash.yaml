@@ -23,12 +23,13 @@ methods:
       (`members/<alias>/<path inside the part>`), so moving a part leaves the identity unchanged
       when its content does not — never a project member's; each spec digested in its design view
       (an implementation, a type, a component, a subsystem and a contract through their type's
-      designView: code linkage, readiness and timestamps out; every other kind with
-      createdAt/updatedAt out), in stable order and canonical form. Algorithm marker
-      `sha256-design-2`, so it never compares equal to a content identity. The design half of the
-      approval identity: adding, moving or removing a sourcePath, symbol, exportedVia, simPath,
-      injectedParams, conformance tier or external link, or promoting or demoting a status, never
-      moves it; any change to what the design says does.
+      designView: code linkage, readiness and timestamps out, a contract's implements in its one
+      canonical form — a one-entry list as its plain string, an empty list as absent — so a re-save
+      of the same entries never moves it; every other kind with createdAt/updatedAt out), in stable
+      order and canonical form. Algorithm marker `sha256-design-2`, so it never compares equal to a
+      content identity. The design half of the approval identity: adding, moving or removing a
+      sourcePath, symbol, exportedVia, simPath, injectedParams, conformance tier or external link,
+      or promoting or demoting a status, never moves it; any change to what the design says does.
     signature: 'ownDesign(): StateId'
     returns: StateId
     params: []
@@ -36,4 +37,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-04T12:48:43.305Z'
-updatedAt: '2026-11-19T21:55:41.886Z'
+updatedAt: '2026-11-22T02:21:02.339Z'

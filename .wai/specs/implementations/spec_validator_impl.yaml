@@ -392,9 +392,12 @@ methods:
           is EXTERNAL_CHECK_UNAVAILABLE, never judged by whatever version the machine holds). The
           rules run exactly as below, except those flagged needsWholeTree (SddRule.needsWholeTree:
           their verdict needs specs the excerpt does not carry), which are skipped and named; a
-          reference into the parent the excerpt does not carry is EXTERNAL_CHECK_UNAVAILABLE (used
-          since the pin: re-pin), never a pass. Add PART_JUDGED_ALONE (notice) naming the parent,
-          the pin's digest and the skipped rules: the full verdict is always the parent's
+          reference into the parent the excerpt does not carry — a key the part names at any binding
+          position: a subsystem or trusted link, a component's dependsOn, a contract's component or
+          local implements entry, an implementation's contract, a call step's target — is
+          EXTERNAL_CHECK_UNAVAILABLE (used since the pin: re-pin), never a pass. Add
+          PART_JUDGED_ALONE (notice) naming the parent, the pin's digest and the skipped rules: the
+          full verdict is always the parent's
         type: local
       - stepNumber: 11
         description: Return the part's verdict — the same with or without its parent on disk
@@ -896,4 +899,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-21T16:08:30.962Z'
+updatedAt: '2026-11-22T02:29:16.759Z'

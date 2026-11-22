@@ -996,8 +996,9 @@ methods:
         label: componentDryRun
         description: >-
           A dry run stops here, refused exactly as the real rename above: collect without writing
-          every spec the rewrite and the lint-allow rekey WOULD change and every export entry that
-          would get an `as`
+          every spec the rewrite (every position the rewrite below names, an interface's local
+          implements entry among them) and the lint-allow rekey WOULD change and every export entry
+          that would get an `as`
         type: branch
         condition: dryRun is set
         onFalseStep: 18
@@ -1012,13 +1013,15 @@ methods:
         description: >-
           Rewrite every reference to a renamed id across the bound tree with the provisioning
           rewriter, the moved specs' own files included: a component's dependsOn, owns and dispatch
-          components; a subsystem's lifecycle components and its published interfaces' component and
-          interface; the system's published interfaces' component and interface; narrative call,
-          dispatch and register targets, and a step's auth.from component source; an interface's
-          component; an implementation's contract; and an entity's componentClass. Before an L1 or
-          L0 export entry's component or interface is respelled, an entry that states no `as` (whose
-          public name was derived from the old id) gets `as: <that public name>` written, so the
-          published name and every consumer's pin stay
+          components; an interface's local implements entry naming it (a single string or a list
+          entry; an `alias::name` entry is another project's and is never rewritten); a subsystem's
+          lifecycle components and its published interfaces' component and interface; the system's
+          published interfaces' component and interface; narrative call, dispatch and register
+          targets, and a step's auth.from component source; an interface's component; an
+          implementation's contract; and an entity's componentClass. Before an L1 or L0 export
+          entry's component or interface is respelled, an entry that states no `as` (whose public
+          name was derived from the old id) gets `as: <that public name>` written, so the published
+          name and every consumer's pin stay
         type: local
       - stepNumber: 19
         description: >-
@@ -1091,15 +1094,17 @@ methods:
           naming_rule_config.methodCasingFor(the subsystem's effective targetLanguage), the casing
           the naming-conventions rule and the define tools judge by, so define and rename accept the
           same names (snake_case in a Rust tree, camelCase in a TypeScript one). A contract of the
-          component that implements another project's extension point (`implements`) takes its
-          method names from the producer, in the producer's language, so for such a component any
-          identifier the language allows is accepted — IMPLEMENTS_MISMATCH judges the name against
-          the producer's, and the casing rule exempts it
+          component that implements another project's extension point (an `alias::name` entry of
+          `implements`) takes its method names from the producer, in the producer's language, so for
+          such a component any identifier the language allows is accepted — IMPLEMENTS_MISMATCH
+          judges the name against the producer's, and the casing rule exempts it. The exemption is
+          for `alias::name` entries only: a local abstraction's methods are this project's own and
+          follow the casing
         type: branch
         condition: >-
           newName is outside the identifier grammar (identifier.problemAs), reserved in the target
-          language (identifier.reservedIn), or — when no contract of the component declares
-          `implements` — not in that casing
+          language (identifier.reservedIn), or — when no contract of the component implements an
+          `alias::name` entry — not in that casing
         onFalseStep: 6
       - stepNumber: 5
         label: invalid-name
@@ -1142,121 +1147,128 @@ methods:
         error: 'name-taken or name-retired: that interface already declares, or retired, the new name'
       - stepNumber: 11
         description: >-
-          Load every implementation spec, for the realizations of those contracts and the narratives
-          that refer to the method
+          Find the implementers of this project the rename follows onto, directly or through a chain
+          of abstractions, each with the contract that declares the method or lists it in omits, and
+          refuse before anything is written: an implementer that already holds the new name or
+          retired it (name-taken, name-retired, naming the implementer), an implementer that also
+          implements, outside the renamed abstraction's chain, an abstraction or extension point
+          that declares the old name (follow-conflict: one method cannot follow both), and a rename
+          asked of an implementer for a method an abstraction it implements still declares
+          (declared-above, naming the topmost abstraction to rename instead); an abstraction that no
+          longer declares the old name, a manual edit, lets the implementer be renamed: that is the
+          repair
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: planRenameCascade
+      - stepNumber: 12
+        description: >-
+          Load every implementation spec, for the realizations of those contracts, those of each
+          implementer that follows, and the narratives that refer to the method
         type: call
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Describe the move as the debt register and the lint allows key findings by it
-          (identity_rename: the method on this component becomes newName, on the contracts that
-          declare it and the implementations of those contracts that realize it) and rekey the debt
-          register as a DRY RUN, before the first write: a register that cannot be rewritten without
-          disturbing its comments and formatting refuses the rename here
+          (identity_rename: the method on this component, and on each implementer that follows,
+          becomes newName, on the contracts that declare it and the implementations of those
+          contracts that realize it) and rekey the debt register as a DRY RUN, before the first
+          write: a register that cannot be rewritten without disturbing its comments and formatting
+          refuses the rename here
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 13
+      - stepNumber: 14
+        label: write-reach
+        description: >-
+          Judge every spec the rename would write against the hosted request's write reach before
+          the first write (assertSpecsInReach): the component's own contracts and implementations,
+          each follower's contract and implementations, and every spec the rewriter and the
+          lint-allow rekey would retarget among them. A spec of a subsystem the request may not
+          change refuses the whole rename (SubsystemWriteDenied, naming every such subsystem and the
+          rung that decided each), and nothing is written
+        type: local
+      - stepNumber: 15
         label: dry-run
         description: Asked for a dry run?
         type: branch
         condition: dryRun is true
-        onTrueStep: 14
-        onFalseStep: 15
-      - stepNumber: 14
-        description: >-
-          Answer what the rename WOULD do, writing nothing: the specs the method would move in (the
-          contracts that declare it and the implementations realizing it), the specs the rewriter
-          and the lint-allow rekey would retarget (both asked dry), the mentions left alone, the
-          export entries publishing it, the symbol a pin would set, and the register edits the dry
-          rekey above computed — marked dryRun
-        type: return
-        outcome: dry run
-      - stepNumber: 15
-        description: Move the method on every contract of the component that declares it
-        type: loop
-        loopKind: forEach
-        over: each contract that declares the method
-        endStep: 16
+        onTrueStep: 16
+        onFalseStep: 17
       - stepNumber: 16
         description: >-
-          Write the contract with the method under newName: its name, its former key `<contract
-          id>.<old name>` appended to its rename trace (previousNames), and, for a prose method (no
-          params and no signatureFrom), the method name inside its signature string. A method with
-          params has its text derived from the new name by the writer, and a sourced method stores
-          no text at all. Params, returns, signatureFrom, description, guarantees and findings stay
-          as they are
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveInterfaceSpec
+          Answer what the rename WOULD do, writing nothing: the specs the method would move in (the
+          contracts that declare it and the implementations realizing it, on the component and on
+          each implementer that follows, named in followed), the specs the rewriter and the
+          lint-allow rekey would retarget (both asked dry), the mentions left alone, the export
+          entries publishing it or a follower's method, the symbol a pin would set, and the register
+          edits the dry rekey above computed — marked dryRun
+        type: return
+        outcome: dry run
       - stepNumber: 17
-        description: Move it on the implementations of those contracts too
+        description: >-
+          Move the method on the component and on every implementer that follows it, the same move
+          for each
         type: loop
         loopKind: forEach
-        over: each implementation realizing one of those contracts that declares the method
-        endStep: 20
+        over: >-
+          the component itself, then each implementer of the cascade, abstract and concrete, in the
+          order planRenameCascade answered
+        endStep: 18
       - stepNumber: 18
         description: >-
-          An implementation that named no symbol needs one now when its code exists: the function it
-          binds to still carries the old name. Its code exists when the file realizing the method
-          (its own sourcePath, else the implementation's) is on disk; with no code written yet there
-          is nothing to keep binding, so no pin is set unless the caller asks for one (pinSymbol
-          true), and a caller declining it (pinSymbol false) is never pinned
-        type: branch
-        condition: the method declares no symbol and pinSymbol is not false
-        onFalseStep: 20
-      - stepNumber: 19
-        description: >-
-          Pin it: declare symbol <the old name> on the moved method, so that function keeps binding,
-          and record it as the pinned symbol
-        type: local
-      - stepNumber: 20
-        description: >-
-          Write the implementation with the method under newName, carrying its narrative,
-          sourcePath, symbol, detail and intent unchanged
+          Move the method on this component's contracts and implementations: each contract with the
+          method under newName, its former key appended to its rename trace and its signature text
+          re-derived, each implementation with the method under newName carrying its narrative,
+          sourcePath, symbol, detail and intent, a pin of the old name when no symbol is declared
+          and the code exists (pinSymbol), and an omits entry naming it renamed in place
         type: call
-        targetComponent: spec_loader
-        targetMethod: saveImplementationSpec
-      - stepNumber: 21
+        targetComponent: core_orchestrator
+        targetMethod: moveContractMethod
+      - stepNumber: 19
         description: >-
           Drop the cached spec index, so the retargeting below reads the moved names rather than the
           cached ones
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 22
+      - stepNumber: 20
         description: >-
-          Retarget every reference to the method with the provisioning rewriter, which persists what
-          it changes: narrative call, register and dispatch steps naming this component and this
-          method; dispatch-table bindings routing a capability to this component and method; and
-          lifecycle entrypoints naming it for a phase. Then rekey every lint allow in the bound tree
-          by the same move (identity_rename.rekeyAnchor): an allow at the method on a spec it moved
-          in follows to newName, and a covered <component>.<method> unit anywhere follows too.
-          Record the specs either rewrote
+          Retarget every reference to the method, for the component and for each implementer that
+          followed it, with the provisioning rewriter, which persists what it changes: narrative
+          call, register and dispatch steps naming that component and that method; dispatch-table
+          bindings routing a capability to that component and method; lifecycle entrypoints naming
+          it for a phase; and every interface method whose signatureFrom names it. Then rekey every
+          lint allow in the bound tree by the same moves (identity_rename.rekeyAnchor): an allow at
+          the method on a spec it moved in follows to newName, and a covered <component>.<method>
+          unit anywhere follows too, for each of them. Record the specs either rewrote
         type: local
-      - stepNumber: 23
+      - stepNumber: 21
         description: >-
           Collect what names the method but is left alone: the specs whose description, intent or
           narrative text still carries the old name, and the gRPC endpoint bindings whose wire
           method still carries it. A rename never edits prose, and never changes a published wire
           name. Collect too the public names of the L1 and L0 export entries whose contract carries
-          the method: a published member changed there, which is reported, never prevented
+          the method or the method of any implementer that followed it: a published member changed
+          there, which is reported for each renamed method as for the first, never prevented.
+          Another project's implementers are not written; the consumer-impact report names them
         type: local
-      - stepNumber: 24
+      - stepNumber: 22
         description: >-
           Rekey the debt register for real: every carried entry anchored at the method on a spec it
-          moved in, or naming <component>.<method> in a covered unit, rewritten in place with every
-          comment and all other formatting kept
+          moved in, or naming <component>.<method> in a covered unit, for the component and for each
+          implementer that followed, rewritten in place with every comment and all other formatting
+          kept
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 25
+      - stepNumber: 23
         description: >-
-          Return the report: the component, from and to, the specs the method moved in, the specs
-          whose references or lint allows were retargeted, the mentions left alone, the export
-          entries it is published in, the pinned symbol when one was set, and carried (each register
-          edit)
+          Return the report: the component, from and to, the specs the method moved in, on the
+          component and on every implementer that followed it, the implementer methods that followed
+          (followed), the specs whose references or lint allows were retargeted, the mentions left
+          alone, the export entries it or a follower's method is published in, the pinned symbol
+          when one was set, and carried (each register edit)
         type: return
         outcome: renamed
   - name: moveRenamedSpecs
@@ -2956,7 +2968,7 @@ methods:
           refused before anything is read further, in the one sentence every write tool answers with
         type: branch
         condition: the component exists and is not inside a chained subproject
-        onFalseStep: 20
+        onFalseStep: 21
       - stepNumber: 3
         description: >-
           Load every interface spec, and collect the contracts of the component that declare the
@@ -2994,15 +3006,24 @@ methods:
           must be an identifier (identifier.problemAs param), never a word the target language
           reserves for a parameter (identifier.reservedIn — a keyword in TypeScript, Rust or
           Python), and — when rules.naming.variables is set and no contract of the component
-          implements another project's extension point — in that casing (invalid-name); and no other
-          parameter of the method may hold it (name-taken) or list it in its previousNames
-          (name-retired)
+          implements another project's extension point (an `alias::name` entry) — in that casing
+          (invalid-name); and no other parameter of the method may hold it (name-taken) or list it
+          in its previousNames (name-retired)
         type: branch
         condition: >-
           the method and parameter are declared, the new name is acceptable, and it is neither taken
           nor retired on the method
-        onFalseStep: 20
+        onFalseStep: 21
       - stepNumber: 8
+        description: >-
+          Find the implementers of this project the parameter follows onto, directly or through a
+          chain of abstractions: those whose method holds the parameter under the old name at the
+          same position. An implementer already holding the new name on another parameter is refused
+          (name-taken, naming it) before anything is written
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: planRenameCascade
+      - stepNumber: 9
         description: >-
           Collect the followers — every contract method in the bound tree whose signatureFrom takes
           `<component>.<method>`'s signature, so it reads the renamed parameter through the loader —
@@ -3010,73 +3031,78 @@ methods:
           contract, each with the method's name, and the entries publishing each follower's
           contract, each with the follower's verb — every member with its former names
           (previousNames) and every entry with its former public names — as published, its public
-          names as publishedIn
-        type: local
-      - stepNumber: 9
-        description: >-
-          Judge every interface file the rename would write — the moving contracts and each follower
-          whose HTTP binding spells the old placeholder — against the hosted request's write reach
+          names as publishedIn. The implementers that follow are collected too, their contracts
+          among the moving ones and their entries among the publishing ones
         type: local
       - stepNumber: 10
+        description: >-
+          Judge every interface file the rename would write — the moving contracts, those of each
+          implementer that follows, and each follower whose HTTP binding spells the old placeholder
+          — against the hosted request's write reach before the first write
+        type: local
+      - stepNumber: 11
         label: paramDryRun
         description: A dry run stops here, refused exactly as the real rename above
         type: branch
         condition: dryRun is set
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
-          Answer the ParamRename the rename would produce — the interfaces it would move in, every
-          placeholder it would respell (the own bindings' and the followers') and publishedIn —
-          marked dryRun; nothing was written
+          Answer the ParamRename the rename would produce — the interfaces it would move in, the
+          implementer methods that would follow (followed), every placeholder it would respell (the
+          own bindings' and the followers') and publishedIn — marked dryRun; nothing was written
         type: return
         outcome: ParamRename (dry run)
-      - stepNumber: 12
-        label: contractLoop
-        description: Rename the parameter on each moving contract
-        type: loop
-        over: the moving contracts
-        endStep: 14
       - stepNumber: 13
+        label: contractLoop
+        description: >-
+          Rename the parameter on each moving contract, the component's own and each implementer's
+          that follows
+        type: loop
+        over: the moving contracts, and the contracts of the implementers that follow
+        endStep: 15
+      - stepNumber: 14
         description: >-
           Rename the parameter in place, appending its old name to the parameter's previousNames,
           re-derive the method's signature text from its params, and respell an HTTP endpoint path
           placeholder on the method's own binding in the form it was written — `{old}` to `{new}`,
           the Express idiom `/:old` to `/:new` — recording each
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: Save the interface
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 15
+      - stepNumber: 16
         label: followerLoop
         description: Respell the placeholder on each follower
         type: loop
         over: the followers whose HTTP binding names the old placeholder
-        endStep: 17
-      - stepNumber: 16
+        endStep: 18
+      - stepNumber: 17
         description: >-
           Respell the follower's HTTP endpoint path placeholder in the form it was written — `{old}`
           to `{new}`, `/:old` to `/:new` — recording each; its params are the source's, which the
           loader resolves
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: Save the follower's interface
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 18
+      - stepNumber: 19
         description: Drop the loader cache so the next read sees the renamed parameter
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Answer the ParamRename: component, method, from, to, the interfaces it moved in, the
-          placeholders respelled (own and followers') and publishedIn
+          implementer methods it followed onto (followed), the placeholders respelled (own and
+          followers') and publishedIn
         type: return
         outcome: ParamRename
-      - stepNumber: 20
+      - stepNumber: 21
         label: refuse
         description: >-
           Refuse with the reason that applies (spec-missing, chained-spec, method-missing,
@@ -3845,6 +3871,181 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: reviseProject
+  - name: planRenameCascade
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read every interface spec of the bound tree: the local implements entries of each, a
+          single string read as a one-element list, say which abstraction each contract realizes
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 2
+        label: followers
+        description: >-
+          Find the implementers of the component, directly and through the abstractions that
+          implement it in turn, from those entries, each component once and a path that returns to a
+          component already visited ending there, so a cyclic design cannot loop it (the reading
+          rule_context.implementersOf makes). Each follower is the implementer's contract that
+          declares methodName, or, on a Portal, the contract that lists it in omits (omitted); an
+          implementer with neither is not a follower. Another project's implementers are not read:
+          an `alias::name` entry never names a component here
+        type: local
+      - stepNumber: 3
+        description: Is this a parameter rename?
+        type: branch
+        condition: param is set
+        onTrueStep: 9
+        onFalseStep: 4
+      - stepNumber: 4
+        description: >-
+          Is the component itself an implementer of an abstraction that still declares the method?
+          Then the rename belongs on that abstraction, and the implementer follows it; an
+          abstraction that no longer declares the old name, a manual edit, is the repair and lets
+          the implementer be renamed
+        type: branch
+        condition: >-
+          an abstraction the component implements, directly or through a chain, declares methodName
+          on its contract
+        onFalseStep: 6
+      - stepNumber: 5
+        label: declared-above
+        description: >-
+          Refuse before any write, naming the topmost abstraction that declares the method: rename
+          it there and every implementer follows
+        type: throw
+        error: >-
+          declared-above: an abstraction this component implements still declares the method; rename
+          it on the topmost one
+      - stepNumber: 6
+        description: >-
+          Can every follower follow? A follower already declaring newName or retiring it in its
+          trace cannot; one that also implements, outside the renamed abstraction's chain, an
+          abstraction or extension point declaring methodName cannot follow both; and newName must
+          be acceptable in each follower's own subsystem, which may be written in another language
+          than the component's: an identifier there (identifier.problemAs) and no word its effective
+          targetLanguage reserves for a method (identifier.reservedIn)
+        type: branch
+        condition: >-
+          a follower's contract already declares newName or lists `<contract>.<newName>` in a
+          method's previousNames, or a follower implements, outside the chain, an abstraction or an
+          extension point (local or alias::name) that declares methodName, or newName is outside the
+          identifier grammar or reserved in the effective targetLanguage of a follower's subsystem
+        onFalseStep: 8
+      - stepNumber: 7
+        label: follow-blocked
+        description: >-
+          Refuse before any write, naming the implementer and the reason: name-taken, name-retired,
+          follow-conflict (one method cannot follow two abstractions), or invalid-name (the new name
+          is not acceptable in that implementer's subsystem language)
+        type: throw
+        error: name-taken, name-retired, follow-conflict or invalid-name, naming the implementer
+      - stepNumber: 8
+        description: Answer the followers, empty when nothing implements the component
+        type: return
+        outcome: >-
+          the followers: each implementer's component, the contract holding the method and whether
+          only its omits entry names it
+      - stepNumber: 9
+        label: paramFollowers
+        description: >-
+          For a parameter rename, keep each follower whose method holds the parameter under the old
+          name at the same position as the component's own method; an implementer that holds it
+          under another name, or does not declare the method, is left alone
+        type: local
+      - stepNumber: 10
+        description: Does a kept follower's method already hold newName on another parameter?
+        type: branch
+        condition: a kept follower's method has a parameter, other than the one renamed, named newName
+        onFalseStep: 12
+      - stepNumber: 11
+        label: param-name-taken
+        description: >-
+          Refuse before any write, naming the implementer and its method: the same parameter name
+          cannot be held twice
+        type: throw
+        error: 'name-taken: an implementer''s method already holds the new parameter name'
+      - stepNumber: 12
+        description: Answer the followers whose parameter follows
+        type: return
+        outcome: the kept followers
+  - name: moveContractMethod
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load every interface spec and collect the contracts of the component that declare
+          methodName, or list it in omits
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 2
+        description: Move the method on each contract
+        type: loop
+        loopKind: forEach
+        over: each contract of the component that declares the method or lists it in omits
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Write the contract with the method under newName: its name, its former key `<contract
+          id>.<old name>` appended to its rename trace (previousNames), and, for a prose method (no
+          params and no signatureFrom), the method name inside its signature string; an omits entry
+          naming the old method is renamed in place, its reason kept. A method with params has its
+          text derived from the new name by the writer, and a sourced method stores no text at all.
+          Params, returns, signatureFrom, description, guarantees and findings stay as they are
+        type: local
+      - stepNumber: 4
+        description: Save the contract
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 5
+        description: Load every implementation spec, for the realizations of those contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Move the method on each implementation
+        type: loop
+        loopKind: forEach
+        over: each implementation realizing one of those contracts that declares the method
+        endStep: 9
+      - stepNumber: 7
+        description: >-
+          An implementation that named no symbol needs one now when its code exists: the function it
+          binds to still carries the old name. Its code exists when the file realizing the method
+          (its own sourcePath, else the implementation's) is on disk; with no code written yet there
+          is nothing to keep binding, so no pin is set unless the caller asks for one (pinSymbol
+          true), and a caller declining it (pinSymbol false) is never pinned
+        type: branch
+        condition: the method declares no symbol and pinSymbol is not false
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Pin it: declare symbol <the old name> on the moved method, so that function keeps binding,
+          and record it as the pinned symbol
+        type: local
+      - stepNumber: 9
+        description: >-
+          Write the implementation with the method under newName, carrying its narrative,
+          sourcePath, symbol, detail and intent unchanged
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 10
+        description: >-
+          Drop the cached spec index, so the next read sees the moved names rather than the cached
+          ones
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 11
+        description: >-
+          Answer the MethodMove: the ids of the contracts and implementations written and the pinned
+          symbol
+        type: return
+        outcome: the specs the method moved in and the pinned symbol, when one was set
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-21T16:15:53.009Z'
+updatedAt: '2026-11-22T02:37:14.609Z'

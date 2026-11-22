@@ -24,8 +24,8 @@ fields:
   - name: position
     type: string
     description: >-
-      dependsOn | call | register | dispatch | calls | dispatch-table | mounts | lifecycle | auth |
-      reexport | type.
+      dependsOn | implements | call | register | dispatch | calls | dispatch-table | mounts |
+      lifecycle | auth | reexport | type.
     optional: false
   - name: target
     type: string
@@ -70,4 +70,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:40:27.050Z'
-updatedAt: '2026-11-21T15:57:37.002Z'
+updatedAt: '2026-11-22T02:27:40.616Z'

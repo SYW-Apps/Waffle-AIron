@@ -863,9 +863,15 @@ methods:
         over: ctx.implementations
         endStep: 12
       - stepNumber: 2
-        description: Skip an implementation whose contract does not resolve
+        description: >-
+          Skip an implementation whose contract does not resolve, and an abstraction's
+          implementation: it carries code linkage only and its methods are realized by declaration,
+          so it owes no narrative and no intent
         type: branch
-        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        condition: >-
+          ctx.interfaceMap.get(impl.contract) resolves the contract and the component of that
+          contract is not abstract (an abstract component's implementation is abstraction-shape's to
+          judge)
         onFalseStep: 1
       - stepNumber: 3
         description: >-
@@ -943,9 +949,13 @@ methods:
         over: ctx.implementations
         endStep: 7
       - stepNumber: 3
-        description: Skip an implementation whose contract does not resolve
+        description: >-
+          Skip an implementation whose contract does not resolve, and an abstraction's
+          implementation: it declares an interface and has no function body to measure or narrate
         type: branch
-        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        condition: >-
+          ctx.interfaceMap.get(impl.contract) resolves the contract and the component of that
+          contract is not abstract
         onFalseStep: 2
       - stepNumber: 4
         description: >-
@@ -1045,4 +1055,4 @@ methods:
     exportedVia: detailSufficiencyRule
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-10-30T19:35:26.896Z'
+updatedAt: '2026-11-22T02:18:48.982Z'

@@ -13,7 +13,9 @@ fields:
     optional: false
   - name: component
     type: string
-    description: The component that contract belongs to — the end the dependsOn/owns edge is read from
+    description: >-
+      The component that contract belongs to — the end the dependsOn/owns edge, or the implements
+      chain, is read from
     optional: false
   - name: method
     type: string
@@ -59,4 +61,4 @@ fields:
 methods: []
 sourcePath: src/core/signature-sources.ts
 createdAt: '2026-10-03T19:31:17.009Z'
-updatedAt: '2026-10-04T23:40:37.214Z'
+updatedAt: '2026-11-22T02:33:28.375Z'

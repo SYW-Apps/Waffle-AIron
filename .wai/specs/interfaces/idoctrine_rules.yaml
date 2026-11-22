@@ -383,8 +383,10 @@ methods:
       no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent
       store that belongs typed Store) or orphaned — unless a Supervisor maintains it through
       lifecycle-effect calls: then it is that Supervisor's directory of live handles, which holds
-      the handles itself and writes to no Store. A Query has no standalone form at all: it computes
-      reads over its own Repository's Store.
+      the handles itself and writes to no Store — or unless it is an abstraction (abstract): an
+      abstract Registry holds a contract and no state, and each implementing Registry wires its own
+      Store. A Query has no standalone form at all: it computes reads over its own Repository's
+      Store.
     signature: 'unownedBlocks(ctx: RuleContext): void'
     returns: void
     params:
@@ -573,10 +575,14 @@ methods:
       mark stands on a Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry or
       Adapter, and never on an Observer (reached by its topic), a pattern or a UI block. An abstract
       Portal states only its verbs: transport, endpoints, auth, basePath, dispatch and invokedBy
-      belong to each implementer Portal, which binds its own. An abstraction's own L4 carries code
-      linkage only, the file and symbol declaring the interface, trait or Protocol: no narrative,
+      belong to each implementer Portal, which binds its own, and an abstract Portal never omits a
+      verb: its contract is complete. An abstraction's own L4 carries code linkage only, the
+      sourcePath of the file declaring the interface, trait or Protocol and, per method, the symbol
+      naming the member (an abstraction's implementation has no symbol of its own): no narrative,
       intent, calls or technologies, because its methods are realized by declaration and its
-      behaviour lives in the implementers.
+      behaviour lives in the implementers. In a language or codebase that uses one, an abstract
+      class with only abstract members is such a declaration, and is never inheritance of behaviour:
+      it holds no behaviour for an implementer to inherit.
     signature: 'abstractionShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -598,14 +604,27 @@ methods:
   - name: abstractions
     description: >-
       Rule abstractions. Judges an abstraction against what implements it. A contract realizes an
-      abstraction by declaring it in implements. An abstraction needs implementers, unless it is
+      abstraction by declaring it in implements, and an abstraction's own contract may implement
+      abstractions in turn (Animal, Dog, GoldenRetriever): it is exploded, declaring every method of
+      what it implements (implements-contracts holds it at every level), so each abstraction is one
+      complete contract and nothing inherits, and a concrete component is never implemented
+      (IMPLEMENTS_NOT_ABSTRACT). The chain is read through ctx.abstractionsOf and
+      ctx.implementersOf, the two cycle-safe queries every rule shares; an implements path that
+      returns to its start, the component itself included, is a cycle (ABSTRACTION_CYCLE), and a
+      member of one is judged by no other check here. An abstraction needs a concrete implementer,
+      direct or through the abstractions below it, unless it, or an abstraction below it, is
       exported with role implement for other projects to implement (several L4 implementations of
       one component's contract serve one engine per deployment, and need no abstraction); each
-      implementer is the same stereotype as the abstraction and is owned by the same owner (both
-      unowned, or both owned by the same pattern). A contract implementing more than one abstraction
-      is legal and the exception, one vendor client serving two roles. What an implementing contract
-      must declare, its effects and its omissions are implements-contracts' own, and where the mark
-      may stand is abstraction-shape's.
+      implementer, abstract or concrete, is the same stereotype as the abstraction it implements and
+      is owned by the same owner (both unowned, or both owned by the same pattern), judged on each
+      direct edge and so on every edge of the chain. An abstraction implemented from another
+      subsystem must be published by its own subsystem with role implement, honouring the entry's
+      consumers (ABSTRACTION_UNPUBLISHED), since a subsystem's components are reached by others only
+      through what it publishes. A contract implementing more than one abstraction is legal and the
+      exception, one vendor client serving two roles; an entry that is an ancestor of another entry
+      of the same contract is no second role and is not counted. What an implementing contract must
+      declare, its effects and its omissions are implements-contracts' own, and where the mark may
+      stand is abstraction-shape's.
     signature: 'abstractions(ctx: RuleContext): void'
     returns: void
     params:
@@ -615,12 +634,15 @@ methods:
     findings:
       - code: ABSTRACTION_UNIMPLEMENTED
         severity: error
-        summary: An abstraction no contract implements and that is not exported with role implement
+        summary: >-
+          An abstraction with no concrete implementer, direct or through the abstractions below it,
+          when neither it nor an abstraction below it is exported with role implement
       - code: ABSTRACTION_SINGLE_IMPLEMENTER
         severity: notice
         summary: >-
-          An abstraction with exactly one implementer, unless exported with role implement: several
-          L4 implementations of one component's contract suffice for one engine behind it
+          An abstraction with exactly one concrete implementer, direct or through the abstractions
+          below it, unless it or an abstraction below it is exported with role implement: several L4
+          implementations of one component's contract suffice for one engine behind it
       - code: ABSTRACTION_STEREOTYPE_MISMATCH
         severity: error
         summary: An implementer whose stereotype differs from its abstraction's
@@ -632,17 +654,33 @@ methods:
       - code: ABSTRACTION_MULTIPLE
         severity: notice
         summary: >-
-          A contract implementing more than one abstraction: legal and the exception; keep it to one
+          A contract implementing more than one abstraction or extension point that is not an
+          ancestor of another entry of the same contract: legal and the exception; keep it to one
           responsibility serving several roles, and document it with a lint.allow and a reason
+      - code: ABSTRACTION_CYCLE
+        severity: error
+        summary: >-
+          An implements path returns to its start, a component implementing itself included:
+          abstractions form a chain, never a loop
+      - code: ABSTRACTION_UNPUBLISHED
+        severity: error
+        summary: >-
+          An abstraction implemented from another subsystem that its own subsystem does not publish
+          with role implement, or publishes only to consumers that leave the implementing subsystem
+          out
   - name: abstractionBypass
     description: >-
       Rule abstraction-bypass. Callers depend on the abstraction, so a call step, declared call or
-      dispatch binding that reaches, on an implementer directly, a method its abstraction declares
-      skips the substitution: the caller stops working when an implementer is added or replaced.
-      Calling a method only the implementer declares is its own extra and is fine, and an
-      implementer's own narrative may call its own methods. A Portal over a Portal stays refused by
-      entrypoint-dependencies, which is why a Portal abstraction is judged by parity rather than by
-      calls.
+      dispatch binding that reaches, on a concrete implementer directly, a method any abstraction it
+      implements declares, directly or through the chain (ctx.abstractionsOf), skips the
+      substitution: the caller stops working when an implementer is added or replaced. Only a
+      concrete target is judged: calling a narrower abstraction (`dog.eat` on an abstract Dog) is
+      the substitution itself, never a bypass. Calling a method only the implementer declares is its
+      own extra and is fine, and an implementer's own narrative may call its own methods. A
+      decorator, an implementer that also depends on its abstraction and calls it, is legal: its
+      call lands on the abstraction, not on a concrete implementer, and the walk terminates. A
+      Portal over a Portal stays refused by entrypoint-dependencies, which is why a Portal
+      abstraction is judged by parity rather than by calls.
     signature: 'abstractionBypass(ctx: RuleContext): void'
     returns: void
     params:
@@ -653,8 +691,9 @@ methods:
       - code: ABSTRACTION_BYPASSED
         severity: warning
         summary: >-
-          A call step, declared call or dispatch binding reaches, on an implementer directly, a
-          method its abstraction declares; calling the implementer's own extra method is fine
+          A call step, declared call or dispatch binding reaches, on a concrete implementer
+          directly, a method an abstraction it implements declares, at any level of the chain;
+          calling the implementer's own extra method, or a narrower abstraction, is fine
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-11-21T23:21:41.058Z'
+updatedAt: '2026-11-22T02:37:06.083Z'

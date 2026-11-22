@@ -1,0 +1,35 @@
+kind: value-object
+id: member_signature_fact
+name: MemberSignatureFact
+description: >-
+  One signature of a method-style member of a shape a file declares (an interface, trait or
+  Protocol, a class, a type literal): the parameters it declares, the return annotation it states
+  and whether it completes later. One entry is one overload, so a member written with several
+  overloads records one of these per overload, and a function-typed property records its function
+  type as one. What lets the signature of an abstraction, which has no body to read, be compared
+  with the contract that declares it, the way functionParams and functionReturns let a body be.
+subsystem: sdd_validator
+fields:
+  - name: params
+    type: list<ParameterFact>
+    description: >-
+      The parameters the signature declares, in order, as the code declares them (the receiver of a
+      Python method set aside); the reading-based facts a body would add (reads, members) stay
+      unset, since a declaration has no body
+    optional: false
+  - name: returns
+    type: string
+    description: >-
+      The return annotation as written and whitespace-normalized; absent when the signature states
+      none
+    optional: true
+  - name: completesLater
+    type: bool
+    description: >-
+      Whether the signature completes later: declared async, or annotated to return a Promise (an
+      `async def` in Python)
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-11-22T02:30:38.249Z'
+updatedAt: '2026-11-22T02:30:38.591Z'

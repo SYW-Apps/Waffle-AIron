@@ -295,9 +295,11 @@ methods:
         label: refused
         description: >-
           Refuse the move with the rule's own words — a forbidden doctrine edge, or a
-          cross-subsystem edge into a non-Portal the move would create — before anything is written,
-          naming the collaborators left behind (the components of the old subsystem with an edge
-          into or out of the moved set) as the `together` list that takes them along
+          cross-subsystem edge into a non-Portal the move would create, or an abstraction
+          implemented across the new subsystem boundary without a publication with role implement —
+          before anything is written, naming the collaborators left behind (the components of the
+          old subsystem with an edge into or out of the moved set, a dependsOn, a call or an
+          implements entry among them) as the `together` list that takes them along
         type: throw
         error: the move would introduce an error validate reports
       - stepNumber: 11
@@ -481,7 +483,8 @@ methods:
           adapter's loadSpec for the effective targetLanguage: a name the stored spec does not
           already hold that breaks the identifier grammar, is reserved in the target language,
           repeats one in its place, or — a contract method on a contract that implements no other
-          project's extension point — breaks the tree's method casing
+          project's extension point (an `alias::name` entry; a local abstraction's methods are this
+          project's own and are never exempt) — breaks the tree's method casing
         type: local
       - stepNumber: 11
         description: Decide whether the restatement may be written at all
@@ -659,7 +662,8 @@ methods:
       - stepNumber: 10
         description: >-
           Ask the index which references specs outside that set still hold to it
-          (spec_index.referencesTo), each with the spec holding it and its position
+          (spec_index.referencesTo), each with the spec holding it and its position: a dependsOn or
+          owns, a contract's local implements entry naming an abstraction among them
         type: local
       - stepNumber: 11
         description: >-
@@ -738,4 +742,4 @@ methods:
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-11-21T16:15:33.146Z'
+updatedAt: '2026-11-22T02:29:57.359Z'

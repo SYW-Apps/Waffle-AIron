@@ -7,7 +7,9 @@ description: >-
   old name appended to the parameter's rename trace, previousNames, which the design export shows as
   `formerly`), each signature re-derived under the new name, and the HTTP endpoint path placeholders
   that bound it by name respelled — on the method's own binding and on every follower method whose
-  signatureFrom takes this method's signature.
+  signatureFrom takes this method's signature. Renaming a parameter of an abstraction's method also
+  renames the parameter at the same position on every implementer of this project that holds it
+  under the old name, directly or through a chain of abstractions.
 subsystem: sdd_core
 fields:
   - name: component
@@ -75,7 +77,15 @@ fields:
       rename was made on the source the signature comes from — component and method name it — and
       reached the asking method through its signatureFrom.
     optional: true
+  - name: followed
+    type: list<string>
+    description: >-
+      The implementer methods the parameter rename followed onto, each `<component>.<method>`: an
+      implementer of this project, directly or through a chain, whose method held the parameter
+      under the old name at the same position. Empty when nothing implements the component. A dry
+      run names them too; another project's implementers are never written and are named by breaks
+    optional: false
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-07T06:24:46.657Z'
-updatedAt: '2026-10-08T18:59:58.996Z'
+updatedAt: '2026-11-22T02:23:17.760Z'

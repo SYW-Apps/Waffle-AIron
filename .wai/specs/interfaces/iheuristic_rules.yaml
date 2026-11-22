@@ -114,10 +114,11 @@ methods:
       effective targetLanguage: the configured methods casing when set, else the language's own
       convention, so a Rust tree is snake_case without configuring anything, and the authoring and
       rename tools accept exactly what this rule accepts. A contract that implements another
-      project's extension point (`implements`) takes the names of the methods it implements — and of
-      their parameters — from the producer, whose language they are spelled in: those methods, on
-      the contract and on its implementations, are exempt from the casing rule, and the rename tools
-      accept them.
+      project's extension point (an `alias::name` entry of `implements`) takes the names of the
+      methods it implements — and of their parameters — from the producer, whose language they are
+      spelled in: those methods, on the contract and on its implementations, are exempt from the
+      casing rule, and the rename tools accept them. The exemption is for `alias::name` entries
+      only: the methods of a local abstraction are this project's own and keep the project's casing.
     signature: 'namingConventions(ctx: RuleContext): void'
     returns: void
     params:
@@ -301,4 +302,4 @@ methods:
       - iheuristic_rules.removableForwarders
 status: complete
 createdAt: '2026-09-14T06:08:59.720Z'
-updatedAt: '2026-10-31T23:30:10.076Z'
+updatedAt: '2026-11-22T02:26:25.083Z'

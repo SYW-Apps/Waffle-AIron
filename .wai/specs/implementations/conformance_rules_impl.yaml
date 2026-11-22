@@ -141,15 +141,27 @@ methods:
       - stepNumber: 6
         label: abstractionJustification
         description: >-
-          Abstractions justify edges too. An implementer component cg of an abstraction a that cf
-          dependsOn is reached through a: a runtime edge or a call landing on an implementer class
-          through the abstraction's declared interface type (the type the caller holds, the
-          interface, trait or Protocol in the abstraction's own file) is justified by cf's dependsOn
-          on a, with no dependsOn on the implementer. A declared dependsOn on an abstraction is
-          realized by cf's import of the file its implementation names (the interface file), a
-          type-only import counting as it does for any edge, and by a call the checker lands in a
-          file of an implementer of it. The abstraction's own file is the target of that edge, never
-          the implementers' files, which no caller of it imports
+          Abstractions justify edges too, and a chain of abstractions is read through
+          ctx.abstractionsOf and ctx.implementersOf. An implementer component cg, abstract or
+          concrete, of an abstraction a that cf dependsOn, at any depth of the chain, is reached
+          through a: a runtime edge or a call landing on an implementer class through the
+          abstraction's declared interface type (the type the caller holds, the interface, trait or
+          Protocol in the abstraction's own file) is justified by cf's dependsOn on a, with no
+          dependsOn on the implementer. A declared dependsOn on an abstraction is realized by cf's
+          import of the file its implementation names (the interface file), a type-only import
+          counting as it does for any edge, and by a call made THROUGH THE INTERFACE TYPE that the
+          checker lands in a file of a transitive implementer of it; a direct call on an
+          implementer's class never realizes the edge to the abstraction. The abstraction's own file
+          is the target of that edge, never the implementers' files, which no caller of it imports.
+          Only a landing made through the interface type is justified: a direct import of an
+          implementer's file, or a direct call on an implementer's class, is judged as any other
+          edge. The other direction: when the importing component cf is an implementer of the
+          imported component cg, abstract or concrete, at any depth (cg in ctx.abstractionsOf cf),
+          the implements entry is itself the declared relation, so a runtime import, re-export or
+          call from cf's file to cg's file is justified (a plain import beside `implements`, an
+          `extends` of an abstract class declaring cg, a Python base class imported from cg's
+          module); the reverse, an abstraction's file importing an implementer's, is not justified
+          by it
         type: local
       - stepNumber: 7
         description: A justified edge continues with the next edge
@@ -1825,7 +1837,11 @@ methods:
           those type methods from the file the method is promised at publishes the same promised
           name — a method travels with its type — so the re-export counts as promised there too (a
           star re-export republishes every type method of its module); a re-exported contract method
-          of another component does not, and stays a crossing. Whether a type IS published is
+          of another component does not, and stays a crossing. Add as well the declaration realizing
+          each abstraction the file realizes (a component marked abstract): the interface, trait,
+          Protocol or member-less abstract class holding its methods, read as param-conformance
+          reads the shape, is promised surface whoever takes it, so it is never a candidate for
+          UNDECLARED_EXPORT or UNDECLARED_PUBLIC_MEMBER. Whether a type IS published is
           `typeRealization`'s question and stays there; this rule only needs to stop re-reporting
           its answers as surface nobody promised
         type: local
@@ -2057,7 +2073,17 @@ methods:
           of every function realizing it in its own file, under its `symbol` when it declares one. A
           file may hold two bodies under one name — a class member and the module-level facade that
           forwards to it — and which one the contract means is not something this reader can decide,
-          so every candidate is kept. Every name each candidate takes is noted for its
+          so every candidate is kept. An abstraction's method has no body: its candidates are the
+          signatures of the method-style member its declaration states (type_shape_fact.signatures,
+          one candidate per overload, read from the shape its file declares under the member's
+          symbol, the shape named as the component's code name when the file declares several that
+          hold it), their parameters as parameter_fact reads them, their return annotation and
+          completesLater standing where functionReturns and asyncFunctions stand for a body, so
+          every comparison below reads a declaration exactly as it reads a body, with the same
+          codes, and an implementer stays compared with its own contract, which implements-contracts
+          holds to the abstraction's: abstraction code, its contract, the implementer's contract and
+          the implementer's code close the loop. Where the grade cannot read member signatures,
+          nothing is compared and nothing guessed. Every name each candidate takes is noted for its
           implementation, read without its leading underscores, before anything is judged: once
           every method has been read, each injected name (implementation_spec.injectedParams) none
           of an implementation's read functions takes is reported as UNUSED_INJECTED_PARAM (notice;
@@ -2071,7 +2097,8 @@ methods:
         type: branch
         condition: >-
           the method's conformance dial is not off, the file was read at exact grade and at least
-          one function of that name has a body
+          one function of that name has a body, or, for an abstraction's method, the declaring shape
+          holds at least one signature of that name
         onTrueStep: 3
         onFalseStep: 9
       - stepNumber: 3
@@ -2433,7 +2460,10 @@ methods:
         label: gather
         description: >-
           For each implementation method with a contract method, find the bodies realizing it in its
-          own file under its `symbol` when it declares one, as param-conformance does
+          own file under its `symbol` when it declares one, as param-conformance does; for an
+          abstraction's method, the signatures its declaring shape states for the member
+          (type_shape_fact.signatures, one per overload), which is what its declaration says about
+          completing later
         type: local
       - stepNumber: 2
         description: Decide whether a body is there to read, and whether the method is to be judged at all
@@ -2441,12 +2471,14 @@ methods:
         condition: >-
           the method's conformance dial (its own, else its implementation's, else the component's
           default) is not off, the file was read at exact grade and at least one function of that
-          name has a body
+          name has a body, or, for an abstraction's method, the declaring shape holds at least one
+          signature of that name
         onFalseStep: 6
       - stepNumber: 3
         description: >-
           Read whether the contract's returns is `async T` from its canonical expression, and
-          whether each body completes later from source_file_facts.asyncFunctions
+          whether each body completes later from source_file_facts.asyncFunctions, or each declared
+          signature completes later from member_signature_fact.completesLater
         type: local
       - stepNumber: 4
         description: >-
@@ -2628,4 +2660,4 @@ methods:
     exportedVia: callMannerConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-11-21T23:24:04.104Z'
+updatedAt: '2026-11-22T02:37:03.036Z'

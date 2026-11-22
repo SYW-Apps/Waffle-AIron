@@ -268,9 +268,10 @@ methods:
         label: methodLoop
         description: >-
           For each method on the interface, check its name and its parameters' names — except a
-          method the extension point the interface implements (`implements`, resolved as
-          implements-contracts resolves it) declares under the same name: the producer named it and
-          its parameters, in its own language, so it is exempt.
+          method the other project's extension point the interface implements (an `alias::name`
+          entry of `implements`, resolved as implements-contracts resolves it) declares under the
+          same name: the producer named it and its parameters, in its own language, so it is exempt.
+          A local abstraction's methods are this project's own and are never exempt.
         type: loop
         loopKind: forEach
         over: intf.methods
@@ -1136,4 +1137,4 @@ methods:
     exportedVia: removableForwarderRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-11-21T23:23:49.689Z'
+updatedAt: '2026-11-22T02:26:26.068Z'

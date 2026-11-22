@@ -27,7 +27,7 @@ fields:
     description: >-
       The method-style members, kept apart from fields because a spec models them on a different
       axis and counting them as data would accuse every behavioural interface of carrying undeclared
-      state
+      state; their signatures are in `signatures`
     optional: false
   - name: inherited
     type: bool
@@ -35,7 +35,16 @@ fields:
       True when the shape extends another, so members it does not list exist but are not in this
       file to count
     optional: true
+  - name: signatures
+    type: map<string, list<MemberSignatureFact>>
+    description: >-
+      The signature of each method-style member by member name, one entry per overload,
+      function-typed properties included: the parameters, the return annotation and whether it
+      completes later. Filled by the exact reader, and by the Python reader where it already reads a
+      Protocol's members; absent where the grade cannot read member signatures, and a check then
+      compares nothing, as it guesses none
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-23T18:11:29.597Z'
-updatedAt: '2026-10-04T23:40:51.131Z'
+updatedAt: '2026-11-22T02:30:39.566Z'

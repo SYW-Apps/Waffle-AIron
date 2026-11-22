@@ -21,5 +21,7 @@ values:
     description: Code imports the module that declares it
   - name: mention
     description: Prose, a test or a comment names it
+  - name: implements
+    description: A contract names it as an abstraction it implements (a local implements entry)
 createdAt: '2026-10-25T19:06:59.884Z'
-updatedAt: '2026-10-25T19:07:00.973Z'
+updatedAt: '2026-11-22T02:27:37.631Z'

@@ -21,12 +21,14 @@ methods:
           Parse each file's spec, keep only the keys its kind's schema reads — a key the loader
           drops (UNKNOWN_SPEC_KEY) is no design, and the gate identity, which digests the loaded
           specs, never sees it either, so the per-spec digests and the gate cannot disagree over one
-          — and project it to its design view — implementation_spec.designView, type_spec.designView
-          or component_spec.designView for those kinds, every other kind with createdAt and
-          updatedAt dropped — then canonicalize it (stable key order) and digest it, keying by the
-          path relative to the project root (a part's file under `members/<alias>/…`). A file that
-          does not parse is digested in the content reading instead, so it is still recorded and any
-          edit to it still shows
+          — and project it to its design view — implementation_spec.designView,
+          type_spec.designView, component_spec.designView, subsystem_spec.designView or
+          interface_spec.designView for those kinds (a contract's implements read in its one
+          canonical form: a one-entry list as its plain string, an empty list as absent), every
+          other kind with createdAt and updatedAt dropped — then canonicalize it (stable key order)
+          and digest it, keying by the path relative to the project root (a part's file under
+          `members/<alias>/…`). A file that does not parse is digested in the content reading
+          instead, so it is still recorded and any edit to it still shows
         type: local
       - stepNumber: 3
         description: >-
@@ -178,4 +180,4 @@ methods:
     symbol: approvalVerdict
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-11-20T01:26:50.739Z'
+updatedAt: '2026-11-22T02:20:55.800Z'

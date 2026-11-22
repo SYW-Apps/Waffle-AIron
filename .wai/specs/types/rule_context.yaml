@@ -518,6 +518,39 @@ methods:
       the bound project's own types: type_ref_resolution.resolve(ref, from, types), the referrer's
       subsystem first. The one entry the integrity and wiring rules read, so no rule re-derives
       which type a bare name lands on. Pure: over the types the context already holds.
+  - name: abstractionsOf
+    signature: 'abstractionsOf(componentId: string): list<string>'
+    params:
+      - name: componentId
+        type: string
+        description: A component id of the bound project
+    returns: list<string>
+    description: >-
+      The abstractions a component implements, directly and through the abstractions those implement
+      in turn: every local abstract component id, and every alias::name extension point, that a
+      contract of the component, or of an abstraction reached on the way, names in implements.
+      Derived on first ask from the interfaces' implements entries (a single string is a one-element
+      list) and kept. Pure and cycle-safe: a path that returns to a component already visited ends
+      there instead of looping, so a cyclic design answers each member's reachable set and never
+      hangs (abstraction-shape's sibling rule reports the cycle as ABSTRACTION_CYCLE). The component
+      itself is not in its own answer unless a cycle returns to it. A caller tells abstract from
+      concrete by the component's abstract mark. One query for every rule that judges implementers,
+      so none re-derives the chain.
+  - name: implementersOf
+    signature: 'implementersOf(abstractionId: string): list<string>'
+    params:
+      - name: abstractionId
+        type: string
+        description: A local abstract component id
+    returns: list<string>
+    description: >-
+      The components that implement an abstraction, directly and through the abstractions that
+      implement it in turn: every component, abstract or concrete, whose contract names it in
+      implements, or names an abstraction that reaches it. Derived on first ask from the same
+      implements entries as abstractionsOf, the one the other inverts, and kept. Pure and cycle-safe
+      in the same way. The caller separates the concrete implementers from the abstract ones by the
+      abstract mark of each component, so the one query serves a rule that counts concrete
+      implementers and one that follows the chain downwards.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-11-21T16:08:57.967Z'
+updatedAt: '2026-11-22T02:15:52.426Z'

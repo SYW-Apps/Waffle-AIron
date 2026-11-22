@@ -13,11 +13,15 @@ methods:
       enable them, which they do by default. A reached method with no implementation contributes
       nothing; one whose narrative does not show its calls contributes the ones it DECLARES (its
       `calls` references) and nothing else, so a collaborator the method does not name is not
-      reached. Abstractions are followed too: reaching a method of a non-Portal abstraction reaches
-      the matching method of each local implementer, which no dependsOn needs to name, and reaching
-      a verb of an implementer of a Portal abstraction reaches the abstraction's matching verb,
-      since implementers are entered through their own entries. Pure: the same context, seeds and
-      options always give the same reach.
+      reached. Abstractions are followed too, transitively through a chain of abstractions (an
+      abstraction may implement abstractions): reaching a method of a non-Portal abstraction reaches
+      the matching method of every local implementer below it, abstract and concrete, which no
+      dependsOn needs to name, and reaching a verb of an implementer of a Portal abstraction reaches
+      the matching verb of every Portal abstraction above it, since implementers are entered through
+      their own entries. The counterparts are read through ctx.implementersOf and
+      ctx.abstractionsOf, which are cycle-safe, and a component already reached is never reached
+      again, so a cyclic design ends the walk too. Pure: the same context, seeds and options always
+      give the same reach.
     signature: 'walk(ctx: RuleContext, seeds: list<WalkSeed>, options?: WalkOptions): NarrativeReach'
     returns: NarrativeReach
     params:
@@ -64,4 +68,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-14T06:07:00.382Z'
-updatedAt: '2026-11-21T23:23:35.404Z'
+updatedAt: '2026-11-22T02:19:16.651Z'

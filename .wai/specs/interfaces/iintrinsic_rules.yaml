@@ -11,7 +11,7 @@ methods:
     description: >-
       Rule portal-fields. A Portal declares its transport; only an InProcess Portal may declare an
       abi. An abstract Portal declares none: it holds only the contract its implementers realize,
-      each binding its own transport (abstractions judges what it must not declare). A Custom
+      each binding its own transport (abstraction-shape judges what it must not declare). A Custom
       transport, the free-form escape hatch, is read as a network transport, and a notice on each
       Custom Portal says so, naming the local and in-process transports to state instead when its
       callers are not across a network. An Adapter may declare a transport: the one it calls its
@@ -83,4 +83,4 @@ methods:
         summary: dependencyClass declared on a component that is not an Orchestrator
 status: complete
 createdAt: '2026-09-14T06:06:25.571Z'
-updatedAt: '2026-11-21T23:17:34.609Z'
+updatedAt: '2026-11-22T02:17:13.740Z'

@@ -19,7 +19,7 @@ methods:
         description: >-
           Is the component an abstract Portal? An abstraction holds only a contract and binds no
           transport: each implementer Portal binds its own, so MISSING_PORTAL_TRANSPORT never
-          applies to it, and what it must not declare is abstractions' ABSTRACT_PORTAL_BINDS
+          applies to it, and what it must not declare is abstraction-shape's ABSTRACT_PORTAL_BINDS
         type: branch
         condition: comp.componentType is "Portal" and comp.abstract is true
         onTrueStep: 16
@@ -201,4 +201,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-11-21T23:17:31.261Z'
+updatedAt: '2026-11-22T02:17:14.745Z'
