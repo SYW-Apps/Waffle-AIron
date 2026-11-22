@@ -1,0 +1,37 @@
+kind: value-object
+id: callers_to_review
+name: CallersToReview
+description: >-
+  The callers of one contract method whose signature a write just changed: information for whoever
+  made the change, never a finding and never a gate. A parameter added as optional, or a value of
+  the right type that now means something else, is legal code the compiler and the gate both accept,
+  so the moment of the change is the only one at which anything can point at the callers to look at.
+  Capped so a widely called method stays readable: at most ten callers are listed, the total says
+  how many the lookup found, and sdd_find_references lists them all.
+fields:
+  - name: method
+    type: string
+    description: The changed contract method, as <component>.<method>.
+    optional: false
+  - name: change
+    type: string
+    description: >-
+      What changed in its signature, in one line: the parameters added, removed, retyped or made
+      optional or required, the returns changed, or whether it completes later.
+    optional: false
+  - name: callers
+    type: list<string>
+    description: >-
+      Up to ten callers, design first: each calling spec as <component>.<method> (a call, dispatch
+      or register step, or a declared call), callers of an abstraction the method's component
+      implements included, since they reach it through that abstraction; then each code site the
+      call graph resolved to it, as path:line.
+    optional: false
+  - name: total
+    type: int
+    description: How many callers the lookup found; more than callers lists when it was capped.
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-11-22T22:56:07.705Z'
+updatedAt: '2026-11-22T22:56:08.114Z'

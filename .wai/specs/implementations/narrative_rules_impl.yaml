@@ -282,9 +282,14 @@ methods:
         over: contract.methods
         endStep: 9
       - stepNumber: 8
-        description: Is the contract method left unimplemented?
+        description: >-
+          Is the contract method left unimplemented? An abstraction's implementation never is: it
+          carries code linkage only and its methods are realized by declaration, so it may list none
+          of them (a method it does list is still checked against the contract above)
         type: branch
-        condition: the contract method's name is not among the implementation's method names
+        condition: >-
+          the contract method's name is not among the implementation's method names and the
+          contract's component is not abstract
         onFalseStep: 7
       - stepNumber: 9
         label: reportMissing
@@ -1055,4 +1060,4 @@ methods:
     exportedVia: detailSufficiencyRule
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-11-22T02:18:48.982Z'
+updatedAt: '2026-11-22T22:50:14.449Z'

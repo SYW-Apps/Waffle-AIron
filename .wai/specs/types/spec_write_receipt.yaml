@@ -65,7 +65,14 @@ fields:
       dropped, as `<implementation>.<method>` (on a dry run, would remove). Absent when the
       restatement dropped no contract method.
     optional: true
+  - name: callersToReview
+    type: list<callers_to_review>
+    description: >-
+      As a change report's: for each contract method whose signature this re-authoring changed (or,
+      on a dry run, would change), the callers to review, design and code. Information only, never a
+      finding or a gate. Absent for a new spec and when no signature changed or nothing calls it.
+    optional: true
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-19T07:48:15.465Z'
-updatedAt: '2026-10-09T00:25:03.411Z'
+updatedAt: '2026-11-22T22:56:08.949Z'

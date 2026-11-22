@@ -1843,8 +1843,9 @@ methods:
           star re-export republishes every type method of its module); a re-exported contract method
           of another component does not, and stays a crossing. Add as well the declaration realizing
           each abstraction the file realizes (a component marked abstract): the interface, trait,
-          Protocol or member-less abstract class holding its methods, read as param-conformance
-          reads the shape, is promised surface whoever takes it, so it is never a candidate for
+          Protocol or abstract class holding its methods (whatever constructor, helpers or default
+          bodies the class also holds; never a concrete class), read as param-conformance reads the
+          shape, is promised surface whoever takes it, so it is never a candidate for
           UNDECLARED_EXPORT or UNDECLARED_PUBLIC_MEMBER. Whether a type IS published is
           `typeRealization`'s question and stays there; this rule only needs to stop re-reporting
           its answers as surface nobody promised
@@ -2077,17 +2078,28 @@ methods:
           of every function realizing it in its own file, under its `symbol` when it declares one. A
           file may hold two bodies under one name — a class member and the module-level facade that
           forwards to it — and which one the contract means is not something this reader can decide,
-          so every candidate is kept. An abstraction's method has no body: its candidates are the
-          signatures of the method-style member its declaration states (type_shape_fact.signatures,
-          one candidate per overload, read from the shape its file declares under the member's
-          symbol, the shape named as the component's code name when the file declares several that
-          hold it), their parameters as parameter_fact reads them, their return annotation and
-          completesLater standing where functionReturns and asyncFunctions stand for a body, so
-          every comparison below reads a declaration exactly as it reads a body, with the same
-          codes, and an implementer stays compared with its own contract, which implements-contracts
-          holds to the abstraction's: abstraction code, its contract, the implementer's contract and
-          the implementer's code close the loop. Where the grade cannot read member signatures,
-          nothing is compared and nothing guessed. Every name each candidate takes is noted for its
+          so every candidate is kept. An abstraction's method is read from its declaration, never
+          from a body: its candidates are the signatures of the method-style member its declaration
+          states (type_shape_fact.signatures, one candidate per overload, read from the DECLARING
+          shape its file declares under the member's symbol — an interface, a trait, a Protocol or
+          an abstract class, whatever constructor, helpers or default bodies the class also holds,
+          and never a concrete class (type_shape_fact.declaration) — the members of a shape it
+          extends or intersects included, the shape named as the component's code name when the file
+          declares several that hold it), their parameters as parameter_fact reads them, their
+          return annotation and completesLater standing where functionReturns and asyncFunctions
+          stand for a body, so every comparison below reads a declaration exactly as it reads a
+          body, with the same codes, and an implementer stays compared with its own contract, which
+          implements-contracts holds to the abstraction's: abstraction code, its contract, the
+          implementer's contract and the implementer's code close the loop. Where the grade cannot
+          read member signatures, nothing is compared and nothing guessed. Once every method has
+          been read, each abstraction's implementation whose file exists and was read is reported
+          once as ABSTRACTION_DECLARATION_UNCOMPARED (notice; site sourcePath; units the methods)
+          when a contract method its file holds has no declaration that answered for it, naming why
+          for each: the file's language has no reader of member signatures (Rust, Go, Java today),
+          the file was read below exact grade, or the member sits only on a concrete class, which
+          declares nothing. A member the file does not hold at all is UNREALIZED_METHOD's to report,
+          not this one's. The same notice in every language, so an uncompared declaration is never
+          silent and never fails a gate. Every name each candidate takes is noted for its
           implementation, read without its leading underscores, before anything is judged: once
           every method has been read, each injected name (implementation_spec.injectedParams) none
           of an implementation's read functions takes is reported as UNUSED_INJECTED_PARAM (notice;
@@ -2211,7 +2223,11 @@ methods:
           and a date, a datetime or a duration with the string, Date or number it is written as —
           report PARAM_TYPE_MISMATCH naming both types, the names agreeing or not (a pair already
           reported as a substitution excepted); a side read as no single scalar (a union, an unknown
-          named type, any) is not compared. Otherwise, for a pair whose names differ, report a
+          named type, any) is not compared. Two lists, or two sets, are compared by their element
+          types the same way, where the contract declares a list or a set of a scalar and the code
+          annotates a list or a set (bytes aside, which travel as a list): `ids: number[]` realizing
+          `ids: list<string>` is PARAM_TYPE_MISMATCH naming both types; an element either side does
+          not read as one scalar is not compared. Otherwise, for a pair whose names differ, report a
           rename where the declared type agrees: through the file's dialect
           (source_file_facts.dialect, then type_dialect.agrees on the code's annotation and the
           contract's canonical type, a named type matching through its code-level name), as the same
@@ -2664,4 +2680,4 @@ methods:
     exportedVia: callMannerConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-11-22T15:13:26.764Z'
+updatedAt: '2026-11-22T22:54:19.634Z'

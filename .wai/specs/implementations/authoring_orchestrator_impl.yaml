@@ -154,11 +154,33 @@ methods:
         targetComponent: authoring_validator_adapter
         targetMethod: implementsProblem
       - stepNumber: 18
+        description: >-
+          Decide whether the write changed a contract method's signature, a dry run included: a
+          parameter added, removed, retyped or made optional or required, the returns changed, or
+          whether it completes later
+        type: branch
+        condition: >-
+          the spec is a contract and the change report names a changed params or returns of one of
+          its methods
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          For each such method, look up the references to <component>.<method> without text mentions
+          and keep the callers: the calling specs (a call, dispatch or register step, a declared
+          call) and the code sites the call graph resolved to it, and for a method whose contract
+          implements an abstraction the callers of that abstraction's method too, since they reach
+          it through the abstraction. Record each method as callersToReview with what changed, at
+          most ten callers beside the total. Information only: no finding, no gate, and a failed
+          lookup records nothing
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: findReferences
+      - stepNumber: 20
         description: Decide whether this write invalidated any test
         type: branch
         condition: the change report names a changed or deleted method and the project declares test roots
-        onFalseStep: 21
-      - stepNumber: 19
+        onFalseStep: 23
+      - stepNumber: 21
         description: >-
           Place each changed method in the file realizing it: for a contract, every implementation
           realizing it with its symbol and file; for an implementation or a type, the method's entry
@@ -166,7 +188,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 20
+      - stepNumber: 22
         description: >-
           Find the tests that encode those methods, so the write that creates the collision is the
           one that reports it; the method names come from the change report's own paths, which
@@ -174,12 +196,12 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 21
+      - stepNumber: 23
         description: >-
           Return the change report: what changed, which of the delta's paths changed nothing, or
           that nothing did and nothing was written — the respellings applied, the implementation
-          entries cascaded, the public names a removed method was published under, and the tests to
-          revisit
+          entries cascaded, the public names a removed method was published under, the callers to
+          review of a changed signature, and the tests to revisit
         type: return
         outcome: reported
   - name: moveMethods
@@ -547,6 +569,17 @@ methods:
         type: throw
         error: rule violation or method-referenced
       - stepNumber: 18
+        description: >-
+          When the restatement changes the signature of a contract method the stored contract held —
+          a parameter added, removed, retyped or made optional or required, the returns changed, or
+          whether it completes later; a dry run included — look up its callers as the change report
+          does (updateSpecGated), the abstraction's callers included, and record callersToReview, at
+          most ten callers beside the total. Information only: no finding, no gate, and a failed
+          lookup records nothing
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: findReferences
+      - stepNumber: 19
         label: tests
         description: >-
           When the application names a changed or removed method and the project declares test
@@ -556,26 +589,26 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 19
+      - stepNumber: 20
         description: >-
           Find the tests that encode those methods, each searched by its stored symbol when it has
           one
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 20
+      - stepNumber: 21
         label: dry-run
         description: Decide whether the caller asked only what the write would do
         type: branch
         condition: the restatement is a dry run
-        onFalseStep: 22
-      - stepNumber: 21
+        onFalseStep: 23
+      - stepNumber: 22
         description: >-
           Answer the receipt the write would give, marked dryRun — the implementation entries it
           would cascade among it — with nothing written
         type: return
         outcome: dry run
-      - stepNumber: 22
+      - stepNumber: 23
         label: save
         description: >-
           Persist the candidate through the core client adapter, collecting the store's placement
@@ -583,20 +616,20 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: saveSpec
-      - stepNumber: 23
+      - stepNumber: 24
         description: >-
           Remove the dropped methods' implementation entries through the core adapter's update, each
           recorded as cascaded with a notice naming it
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: updateSpec
-      - stepNumber: 24
+      - stepNumber: 25
         label: receipt
         description: >-
           Return the write receipt: the kind, id and name written, whether a spec already held the
           id, the status written, the notices — the gate's warnings, the application's re-authoring
           notices and the store's placement notices — the respellings applied, the entries cascaded,
-          and the tests to revisit
+          the callers to review of a changed signature, and the tests to revisit
         type: return
         outcome: written
   - name: deleteSpec
@@ -742,4 +775,4 @@ methods:
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-11-22T02:29:57.359Z'
+updatedAt: '2026-11-22T22:56:24.936Z'

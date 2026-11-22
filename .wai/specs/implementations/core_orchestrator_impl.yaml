@@ -616,8 +616,11 @@ methods:
           parent's `alias::name` references and the moved specs' `<parent id>::name` references
           become local ids — each contract or type method whose stored signature text its respelled
           params now contradict named first in signaturesRederived, the re-save writing the derived
-          text (spec_registry.normalizeReferences compares the stored text too); then drop the spec
-          cache
+          text (spec_registry.normalizeReferences compares the stored text too); a consumers list
+          that still restricts a surface widened by the subsystems across the old boundary that use
+          it — depending on the component, or implementing the abstraction an export with role
+          implement publishes — each recorded in consumersRestored, as a demote does; then drop the
+          spec cache
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
@@ -2365,9 +2368,10 @@ methods:
           parent's `alias::name` references and the member's `<parent id>::name` references become
           local ids — an `alias::<type>` token of a type expression or an asserted invariant written
           `<subsystem>.<type>` (the bare id for a project-level type); a consumers list that still
-          restricts a surface widened by the subsystems across the old boundary that depend on it,
-          each recorded in consumersRestored; the exports and the parent external that existed only
-          for the boundary are dropped; then drop the spec cache
+          restricts a surface widened by the subsystems across the old boundary that use it —
+          depending on the component, or implementing the abstraction an export with role implement
+          publishes — each recorded in consumersRestored; the exports and the parent external that
+          existed only for the boundary are dropped; then drop the spec cache
         type: call
         targetComponent: spec_loader
         targetMethod: normalizeReferences
@@ -4076,4 +4080,4 @@ methods:
         outcome: the specs the method moved in and the pinned symbol, when one was set
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-22T15:12:34.245Z'
+updatedAt: '2026-11-22T22:51:26.043Z'

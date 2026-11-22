@@ -50,6 +50,15 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: listRules
+  - name: findReferences
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the lookup to the validator portal; a lookup that throws answers no references,
+          because naming callers must never fail a write
+        type: call
+        targetComponent: validator_portal
+        targetMethod: findReferences
 status: complete
 createdAt: '2026-09-18T21:13:03.714Z'
-updatedAt: '2026-10-09T17:09:39.031Z'
+updatedAt: '2026-11-22T22:56:10.929Z'

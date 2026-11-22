@@ -50,11 +50,12 @@ fields:
   - name: consumersRestored
     type: list<string>
     description: >-
-      Demote only (empty for internalize): one line per consumers list that still restricts a
-      surface, widened by the subsystems across the old boundary that depend on it — the use the
-      boundary's export table granted, kept as the list a part needs. A list the promote removed
-      whole is not recreated: absent reads as any subsystem of the project, and nothing durable
-      survives the promote to tell it from a list never written.
+      Demote and internalize: one line per consumers list that still restricts a surface, widened by
+      the subsystems across the old boundary that use it — depending on the component, or
+      implementing the abstraction an export with role implement publishes — the use the boundary's
+      export table granted, kept as the list a part needs. A list the promote removed whole is not
+      recreated: absent reads as any subsystem of the project, and nothing durable survives the
+      promote to tell it from a list never written.
     optional: false
   - name: signaturesRederived
     type: list<string>
@@ -67,4 +68,4 @@ fields:
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-09-30T20:21:50.730Z'
-updatedAt: '2026-10-09T00:59:03.200Z'
+updatedAt: '2026-11-22T22:51:23.773Z'

@@ -10,7 +10,9 @@ methods:
     description: >-
       Rule contract-symmetry. Implementations mirror their contract method-for-method: every method
       an implementation declares is defined on the contract it realizes, and every contract method
-      has an implementation.
+      has an implementation. An abstraction's implementation is the exception to the second half: it
+      carries code linkage only and its methods are realized by declaration, so it owes no method
+      entries; any it lists must still be on the contract.
     signature: 'contractSymmetry(ctx: RuleContext): void'
     returns: void
     params:
@@ -317,4 +319,4 @@ methods:
           narrative
 status: complete
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-11-22T02:18:47.712Z'
+updatedAt: '2026-11-22T22:50:16.841Z'

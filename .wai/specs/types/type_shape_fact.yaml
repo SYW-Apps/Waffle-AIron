@@ -41,11 +41,22 @@ fields:
       The signature of each method-style member by member name, one entry per overload,
       function-typed properties included: the parameters, the return annotation and whether it
       completes later. Filled by the exact reader, and by the Python reader where it already reads a
-      Protocol's members, an abstract base class with only abstract methods (ABC or
-      metaclass=ABCMeta, every method an @abstractmethod) being read as a Protocol is; absent where
-      the grade cannot read member signatures, and a check then compares nothing, as it guesses none
+      Protocol's members, an abstract base class (ABC or metaclass=ABCMeta, at least one
+      @abstractmethod) being read as a Protocol is, every method it defines included; at exact grade
+      an interface's or an intersection alias's signatures include the members it extends or
+      intersects; absent where the grade cannot read member signatures, and a check then compares
+      nothing, as it guesses none
+    optional: true
+  - name: declaration
+    type: bool
+    description: >-
+      True when the shape declares what a caller holds rather than implementing it: an interface, a
+      type literal, a trait, a Protocol, or an abstract class (TypeScript abstract, a Python ABC
+      with at least one @abstractmethod), whatever constructor, helpers or default bodies the class
+      also holds. A concrete class is false. Where it is true the signatures are what an abstraction
+      declares; recorded where signatures are
     optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-23T18:11:29.597Z'
-updatedAt: '2026-11-22T15:11:38.351Z'
+updatedAt: '2026-11-22T22:54:21.818Z'
