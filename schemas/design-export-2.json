@@ -337,6 +337,9 @@
               "variant": {
                 "type": "string"
               },
+              "abstract": {
+                "type": "boolean"
+              },
               "dependencyClass": {
                 "type": "string"
               },
@@ -799,6 +802,30 @@
                     "formerly"
                   ],
                   "additionalProperties": {}
+                }
+              },
+              "implements": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "omits": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "method": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "method",
+                    "reason"
+                  ]
                 }
               },
               "formerly": {

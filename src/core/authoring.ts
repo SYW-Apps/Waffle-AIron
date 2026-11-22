@@ -304,7 +304,7 @@ interface NamedMethod { name?: unknown; params?: { name?: unknown }[] }
  */
 function introducedNameProblems(kind: WritableSpecKind, candidate: unknown, stored: Spec | null): string[] {
   if ((kind !== 'interface' && kind !== 'type') || !candidate || typeof candidate !== 'object') return [];
-  const spec = candidate as { component?: string; subsystem?: string; implements?: string; methods?: NamedMethod[]; fields?: { name?: unknown }[] };
+  const spec = candidate as { component?: string; subsystem?: string; implements?: string | string[]; methods?: NamedMethod[]; fields?: { name?: unknown }[] };
   const held = stored as { methods?: NamedMethod[]; fields?: { name?: unknown }[] } | null;
   // Step 14: the effective target language and the method casing of the tree.
   const owner = kind === 'interface' ? (spec.component ? (loadSpec('component', spec.component) as ComponentSpec | null)?.subsystem : undefined) : spec.subsystem;
@@ -331,7 +331,7 @@ function introducedNameProblems(kind: WritableSpecKind, candidate: unknown, stor
   for (const m of methods) {
     const before = held?.methods?.find((h) => h?.name === m?.name);
     judge(m?.name, 'method', `method "${String(m?.name)}"`, !before);
-    if (kind === 'interface' && !before && spec.implements === undefined && typeof m?.name === 'string'
+    if (kind === 'interface' && !before && !namesExtensionPoint(spec.implements) && typeof m?.name === 'string'
       && identifierProblem(m.name, 'method') === null && !fitsMethodCasing(m.name, casing)) {
       problems.push(`method "${m.name}": not an identifier in this tree's method casing (${casing}) — sdd_rename_method refuses it the same way`);
     }
@@ -508,6 +508,11 @@ const ALWAYS_CARRIED_FIELDS = new Set(['ext']);
 
 /** The kinds whose specs keep a rename trace (previousIds). */
 const TRACED_KINDS: ReadonlySet<WritableSpecKind> = new Set(['component', 'interface', 'implementation', 'type']);
+
+/** Whether an `implements` value names another project's extension point (an alias::name entry), whose producer names its methods. */
+function namesExtensionPoint(implemented: string | string[] | undefined): boolean {
+  return (Array.isArray(implemented) ? implemented : implemented === undefined ? [] : [implemented]).some((e) => typeof e === 'string' && e.includes('::'));
+}
 
 /** The lifecycle statuses, weakest first. */
 const STATUS_ORDER: readonly SpecStatus[] = ['draft', 'design', 'complete'];
@@ -1486,9 +1491,12 @@ export function updateSpecGated(
 
   // Step 17: a contract's `implements` the delta writes — a dry run included,
   // before anything is written — says what validate will say of it.
-  if (kind === 'interface' && typeof delta?.implements === 'string') {
-    const problem = implementsProblem(delta.implements);
-    if (problem) report.notices.push(`${problem} (validate reports it once this is written)`);
+  if (kind === 'interface' && delta?.implements !== undefined) {
+    const stated: unknown[] = Array.isArray(delta.implements) ? delta.implements : [delta.implements];
+    for (const entry of stated) {
+      const problem = typeof entry === 'string' ? implementsProblem(entry) : null;
+      if (problem) report.notices.push(`${problem} (validate reports it once this is written)`);
+    }
   }
 
   // Step 18: did this write invalidate any test?

@@ -2839,18 +2839,19 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         }).strict()).optional().describe('Topics this component consumes (typical on Observers) — every subscription needs an emitter somewhere in the tree (UNSOURCED_SUBSCRIPTION).'),
         ext: z.record(z.string(), z.unknown()).optional().describe('Opaque pack/tool extension data (namespaced keys, e.g. "mypack:priority") — preserved verbatim, never validated or interpreted by the core'),
         variant: z.string().optional().describe('A declared specialization of the componentType, e.g. "gateway" on a Portal that authenticates, authorizes, validates or rate-limits before it dispatches (UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). Omitted on a re-authoring, the stored variant is carried; sdd_update_spec {"unset": ["variant"]} removes it'),
+    abstract: z.boolean().optional().describe('true marks an ABSTRACTION: a component whose contract several OTHER components implement (their contracts declare `implements` on it) and callers depend on instead of an implementer. Allowed on every block but an Observer, a pattern (Repository) and a UI block (ABSTRACT_NOT_ALLOWED). An abstract Portal states no transport, endpoints, auth, basePath, dispatch or entry (ABSTRACT_PORTAL_BINDS) and an abstract Store no durability: each implementer binds its own. Never defaulted; omitted on a re-authoring, the stored mark is carried, and sdd_update_spec {"unset": ["abstract"]} removes it'),
     status: statusInput,
   };
   const componentInputFields = Object.keys(componentInput);
 
-  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; transport?: Transport; abi?: string; invokedBy?: { kind: 'entry'; caller?: string; scope?: 'outside' | 'network' }; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown>; variant?: string; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; subsystem: string; componentType: 'Portal' | 'Orchestrator' | 'Supervisor' | 'Actor' | 'Store' | 'Index' | 'Query' | 'Registry' | 'Adapter' | 'Observer' | 'Repository'; owns?: string[]; dependsOn?: string[]; transport?: Transport; abi?: string; invokedBy?: { kind: 'entry'; caller?: string; scope?: 'outside' | 'network' }; basePath?: string; dispatch?: { capability: string; component: string; method: string; description?: string }[]; durability?: 'ram-projection' | 'durable' | 'read-through' | 'cache'; dependencyClass?: 'pure' | 'read'; emits?: { topic: string; event?: string; description?: string }[]; subscribesTo?: { topic: string; event?: string; description?: string }[]; ext?: Record<string, unknown>; variant?: string; abstract?: boolean; status?: StatedStatus }>(server,
     'sdd_add_component',
     {
       description: 'Add an L2 Component under a subsystem. A Portal states its `transport` (the retired portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess, and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its scope; the tool never defaults an entry, because a blanket entry the author did not decide would hide unreached verbs. componentType is a building block (Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer) or the pattern Repository. Specialist and Gateway are retired (STEREOTYPE_RETIRED) and cannot be authored: logic is an Orchestrator with a dependencyClass (pure | read; unset = a workflow), and a gateway is a Portal with the gateway variant (state `variant: gateway` here). Patterns set "owns" (their private member blocks); all components set "dependsOn" (collaborators — facades or standalone blocks). Held/persisted state (configs, permissions, sessions, caches): the default is one Store (read logic and workflows may depend on it directly); add a Repository (owning the Store, optional Indexes kept in memory with no IO, Queries, a backend Adapter) only when lookups or a backend are worth keeping private behind one facade. Never hold state as fields inside an Orchestrator because a Store link was refused. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced (an omitted array is CLEARED), while lint.allow, a Portal\'s auth, patterns and externalLinks — and a variant this input leaves out — are carried forward; edit those with sdd_update_spec. The stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and every gate notice the write raised, each as its own entry.',
       inputSchema: componentInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ id, name, description, subsystem, componentType, owns, dependsOn, transport, abi, invokedBy, basePath, dispatch, durability, dependencyClass, emits, subscribesTo, ext, variant, status }) => {
+    ({ id, name, description, subsystem, componentType, owns, dependsOn, transport, abi, invokedBy, basePath, dispatch, durability, dependencyClass, emits, subscribesTo, ext, variant, abstract, status }) => {
       try {
         // A scope says where a NETWORK verb's callers come from; on a local or
         // in-process transport no network is crossed, so it is refused here
@@ -2893,9 +2894,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             ...(subscribesTo ? { subscribesTo } : {}),
             ...(ext ? { ext } : {}),
             ...(variant ? { variant } : {}),
+            ...(abstract ? { abstract } : {}),
           } as unknown as ComponentSpec,
-          // A variant left out is carried, as it always was; stated, it is replaced.
-          fields: variant === undefined ? componentInputFields.filter((field) => field !== 'variant') : componentInputFields,
+          // A variant or an abstract mark left out is carried, as a variant always was; stated, it is replaced.
+          fields: componentInputFields.filter((field) => (field !== 'variant' || variant !== undefined) && (field !== 'abstract' || abstract !== undefined)),
           status,
         };
         // Step 2: the seam requires the subsystem and judges the candidate —
@@ -2962,20 +2964,24 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     name: z.string().describe('Human-readable contract name'),
     description: z.string().describe('Contract description and obligations'),
     component: z.string().describe('The L2 component ID this interface belongs to'),
-    implements: z.string().min(1).optional().describe('The exported extension point this contract realizes, as alias::name: another project\'s export entry with role implement (a trait, callback or webhook contract). Declare every method of the extension point here with the same signature (IMPLEMENTS_MISMATCH); the methods count as reached, because the producer calls them'),
+    implements: z.union([z.string().min(1), z.array(z.string().min(1))]).optional().describe('The abstractions this contract realizes: one entry or a list, each a local abstract component id (IMPLEMENTS_NOT_ABSTRACT when it names none) or alias::name, another project\'s export entry with role implement (a trait, callback or webhook contract). Declare every method of each here with the same signature (IMPLEMENTS_MISMATCH), with an effect and a dependencyClass no wider than theirs (IMPLEMENTS_EFFECT_WIDER); the methods count as reached when the abstraction\'s are. Implementing several is legal but the exception (ABSTRACTION_MULTIPLE)'),
+    omits: z.array(z.object({
+      method: z.string().min(1).describe('The name of a method the implemented Portal abstraction declares'),
+      reason: z.string().min(1).describe('Why this transport does not serve it, for example that streaming has no form on a command line'),
+    }).strict()).optional().describe('Only on a Portal contract that implements a Portal abstraction: the verbs this transport deliberately does not serve, each with a reason. A verb left out and not listed is IMPLEMENTS_MISMATCH; omits anywhere else is OMISSION_NOT_ALLOWED'),
     methods: z.array(z.object(interfaceMethodShape).strict()).optional().describe('List of method signature contracts'),
     status: statusInput,
   };
   const interfaceInputFields = Object.keys(interfaceInput);
 
-  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature?: string; returns?: string; signatureFrom?: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'none' | 'read' | 'write' | 'lifecycle' | 'io'; invokedBy?: { kind: 'entry' | 'runtime'; caller?: string; scope?: 'outside' | 'network' }; findings?: { code: string; severity: 'error' | 'warning'; summary: string }[]; ext?: Record<string, unknown> }[]; implements?: string; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; component: string; methods?: { name: string; description: string; signature?: string; returns?: string; signatureFrom?: string; params?: { name: string; type: string; description?: string; optional?: boolean }[]; guarantees?: string[]; effect?: 'none' | 'read' | 'write' | 'lifecycle' | 'io'; invokedBy?: { kind: 'entry' | 'runtime'; caller?: string; scope?: 'outside' | 'network' }; findings?: { code: string; severity: 'error' | 'warning'; summary: string }[]; ext?: Record<string, unknown> }[]; implements?: string | string[]; omits?: { method: string; reason: string }[]; status?: StatedStatus }>(server,
     'sdd_define_interface',
     {
       description: 'Define an L3 Contract / Interface with method signatures for a component. Each method states its signature ONE of three ways: structured `params` with `returns` (strongly preferred — authoritative for type checking, and the signature text is then DERIVED and written by the server; a text you pass is ignored and a notice names one that differed), a `signatureFrom` naming its source — a signature type, or `component.method` along a dependsOn/owns edge — with neither params nor returns (both together are refused, SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose `signature` with `returns`. A method declares the finding codes it reports in `findings` ({code, severity, summary}); each code must be anchored in the method\'s source file, as a string literal or a property-access name (UNREALIZED_FINDING). Re-defining an existing id REPLACES the method list: a method left out of the input is REMOVED (and reported); spec-level lint/ext and each method\'s endpoint binding are carried forward, and the stored status is kept unless this input states a higher one. The answer carries a write receipt as structured content beside the sentence — the status written, whether a spec already held the id, and the notices a restatement raised, each as its own entry.',
       inputSchema: interfaceInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ id, name, description, component, implements: implementsPoint, methods, status }) => {
+    ({ id, name, description, component, implements: implementsPoint, omits, methods, status }) => {
       try {
         // mcp_orchestrator.defineInterface step 1: the restatement. The input
         // cannot express spec-level lint/ext or a method's endpoint binding
@@ -2983,7 +2989,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // those at BOTH levels, keyed off this input's own field lists.
         const restatement: SpecRestatement = {
           kind: 'interface',
-          spec: { id, name, description, component, ...(implementsPoint ? { implements: implementsPoint } : {}), methods: methods ?? [] } as unknown as InterfaceSpec,
+          spec: { id, name, description, component, ...(implementsPoint ? { implements: typeof implementsPoint === 'string' ? [implementsPoint] : implementsPoint } : {}), ...(omits?.length ? { omits } : {}), methods: methods ?? [] } as unknown as InterfaceSpec,
           fields: interfaceInputFields,
           memberFields: interfaceMethodInputFields,
           status,

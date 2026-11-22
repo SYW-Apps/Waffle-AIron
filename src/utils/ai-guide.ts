@@ -128,6 +128,7 @@ ${HUMAN_COMMANDS}
 ### Component Vocabulary
 * **Blocks**: Portal, Orchestrator, Supervisor, Actor, Store, Index, Query, Registry, Adapter, Observer.
 * **Patterns**: Repository — the composable pattern that \`owns\` its member blocks: one Store with its Registry, Indexes and Queries, and optionally an Adapter.
+* **Abstractions**: a component marked \`abstract: true\` holds a contract several components implement; each implementer's contract lists it in \`implements\` (local abstract component ids, or \`alias::name\` extension points), and callers depend on the abstraction. Use it when several live implementations are used together (carriers, payment providers, exporters); one engine per deployment is several L4 implementations of ONE contract (\`technologies\`), a broadcast is events (\`emits\`/\`subscribesTo\`), the same code in many instances is one Actor with a Registry. An abstract Portal is a parity contract across transports and binds nothing; each implementer Portal binds its own and lists a verb it does not serve in \`omits\` with a reason. Base classes are never modelled.
 * **Variants**: \`gateway\`, a Portal that authenticates, authorizes, validates or rate-limits before it dispatches. Logic is an Orchestrator, and \`dependencyClass: pure | read\` bounds what it may depend on (unset = a workflow). Specialist and Gateway are retired stereotypes.
 * Use \`owns\` for private member containment (exactly one hop) and \`dependsOn\` for collaborators. Never use generic suffixes like "Manager", "Helper", or "Utils".`;
 

@@ -30,11 +30,12 @@ and stamps it. It also exports a tree that is not approved, stamped with its sta
 ## Compatibility promise
 
 - **`format`** is always `"wairon-design"`.
-- **`formatVersion`** is `MAJOR.MINOR` and is currently `2.2`. 2.0 is the reachability
+- **`formatVersion`** is `MAJOR.MINOR` and is currently `2.3`. 2.0 is the reachability
   model's: `portalType` became `transport`, listener `mounts` are gone, a Portal may carry
   the `invokedBy` entry its verbs inherit, and `invokedBy` kinds are `entry | runtime` with a
   `scope`. 2.1 adds `detailStated` to each method body. 2.2 adds the type group tree
-  (`typeGroups`) and each type's `group`.
+  (`typeGroups`) and each type's `group`. 2.3 adds abstractions: a component's `abstract`,
+  and an interface's `implements` and `omits`.
   - **A minor version only adds.** It adds new fields, or new members of a closed set (a
     `role`, an approval state). A consumer must **ignore fields it does not know**. A 1.x
     document validates against `design-export-2.json`.

@@ -23,6 +23,8 @@ import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js'
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { publicSurfaceSharedRule } from './integrity/public-surface-shared.js';
 import { implementsContractsRule } from './integrity/implements-contracts.js';
+import { implementsCompatibilityRule } from './integrity/implements-compatibility.js';
+import { implementsConsistencyRule } from './integrity/implements-consistency.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { exportTablesRule } from './integrity/export-tables.js';
 import { externalDeclarationsRule } from './integrity/external-declarations.js';
@@ -62,6 +64,9 @@ import { patternContainmentRule } from './doctrine/pattern-containment.js';
 import { unownedBlocksRule } from './doctrine/unowned-blocks.js';
 import { memberVisibilityRule } from './doctrine/member-visibility.js';
 import { facadeForwardingRule } from './doctrine/facade-forwarding.js';
+import { abstractionShapeRule } from './doctrine/abstraction-shape.js';
+import { abstractionsRule } from './doctrine/abstractions.js';
+import { abstractionBypassRule } from './doctrine/abstraction-bypass.js';
 import { profileRegistrationRule } from './extension/profile-registration.js';
 import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
 import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
@@ -242,6 +247,11 @@ export const SDD_RULES: SddRule[] = [
   memberVisibilityRule,
   // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
   facadeForwardingRule,
+  // Abstractions in three questions: where the mark may stand and what an
+  // abstraction holds, what implements it, and whether callers go through it.
+  abstractionShapeRule,
+  abstractionsRule,
+  abstractionBypassRule,
   // Profiles in three questions, three owners: is the name real (the
   // project's config), does the built-in family doctrine allow this
   // stereotype (wairon), does the pack's declared doctrine allow it (the pack).
@@ -267,6 +277,8 @@ export const SDD_RULES: SddRule[] = [
   publicSurfaceConsumersRule,
   publicSurfaceSharedRule,
   implementsContractsRule,
+  implementsCompatibilityRule,
+  implementsConsistencyRule,
   publicSurfaceBoundContractRule,
   // The export tables the resolver settled: what the published names bind.
   exportTablesRule,

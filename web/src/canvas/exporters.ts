@@ -10,11 +10,12 @@ export interface ExportModel {
     subsystem: string;
     componentType: string;
     transport?: string;
+    abstract?: boolean;
     public: boolean;
     owner?: string;
     owns: string[];
   }[];
-  edges: { from: string; to: string; cross: boolean }[];
+  edges: { from: string; to: string; cross: boolean; kind?: string }[];
 }
 type LayoutResult = any;
 
@@ -70,7 +71,7 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
     const parentId = nestInPattern ? 'comp_' + owner!.id : 'sub_' + comp.subsystem;
     const parentBox = nestInPattern ? L.boxes[owner!.id] : L.subs[comp.subsystem];
     const colors = COLORS[stereo(comp.componentType)];
-    const label = comp.name + '\n«' + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
+    const label = comp.name + '\n«' + (comp.abstract ? 'abstract ' : '') + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
     const style = isPattern
       ? 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';dashed=1;verticalAlign=top;fontStyle=1;container=1;collapsible=1;whiteSpace=wrap;'
       : 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';whiteSpace=wrap;fontSize=11;' + (comp.public ? 'strokeWidth=3;' : '');
@@ -80,7 +81,9 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
   let edgeN = 0;
   model.edges.forEach(function (edge) {
     if (!L.boxes[edge.from] || !L.boxes[edge.to]) return;
-    const style = edge.cross
+    const style = edge.kind === 'implements'
+      ? 'edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8d97a5;dashed=1;endArrow=block;endFill=0;'
+      : edge.cross
       ? 'edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#c26767;strokeWidth=2;endArrow=block;endFill=1;'
       : 'edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#8d97a5;endArrow=block;endFill=1;';
     cells.push(
@@ -184,7 +187,7 @@ export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): strin
     rect.strokeStyle = (isPattern || stereo(comp.componentType) === 'pattern') ? 'dashed' : 'solid';
     elements.push(rect);
     rectById[comp.id] = rect;
-    const label = comp.name + '\n«' + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
+    const label = comp.name + '\n«' + (comp.abstract ? 'abstract ' : '') + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
     elements.push(boundLabel(rect, label, 11, isPattern ? 'top' : 'middle'));
   });
 
@@ -206,7 +209,8 @@ export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): strin
     arrow.startBinding = { elementId: src.id, focus: 0, gap: 4 };
     arrow.endBinding = { elementId: tgt.id, focus: 0, gap: 4 };
     arrow.startArrowhead = null;
-    arrow.endArrowhead = 'arrow';
+    arrow.endArrowhead = edge.kind === 'implements' ? 'triangle_outline' : 'arrow';
+    if (edge.kind === 'implements') arrow.strokeStyle = 'dashed';
     src.boundElements.push({ id: id, type: 'arrow' });
     tgt.boundElements.push({ id: id, type: 'arrow' });
     elements.push(arrow);

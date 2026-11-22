@@ -1022,7 +1022,7 @@ function rawReferences(kind: ReferenceKind, spec: unknown): { position: string; 
     case 'type':
       typeSlotReferences(kind, spec).forEach((t) => add('type', t));
       // The extension point a contract realizes: another project's export.
-      if (kind === 'interface') add('implements', (spec as InterfaceSpec).implements);
+      if (kind === 'interface') for (const entry of (spec as InterfaceSpec).implements ?? []) add('implements', entry);
       break;
     case 'implementation':
       for (const m of (spec as ImplementationSpec).methods) {
@@ -1200,8 +1200,10 @@ function respellStoredReferences(kind: string, doc: Record<string, unknown>, map
       break;
     case 'interface':
       at(doc, 'component', 'contract');
-      // The extension point a contract realizes: another project's export, a raw position.
+      // What a contract realizes (a local abstraction or another project's extension point), a raw
+      // position: a list, or a single string as an older file stores it.
       at(doc, 'implements', 'implements');
+      each(doc, 'implements', 'implements');
       typedSlots('interface', doc, map);
       break;
     case 'implementation':

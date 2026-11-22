@@ -185,6 +185,7 @@ export function buildGraphModel(level: number): WebGraphModel {
 
   // Component → collaborator dependency edges.
   for (const e of model.edges) {
+    if (e.kind === 'implements') continue; // a realization is no dependency
     candidates.push({ from: e.from, to: e.to, edgeKind: 'depends_on' });
   }
 

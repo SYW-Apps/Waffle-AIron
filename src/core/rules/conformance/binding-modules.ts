@@ -170,7 +170,7 @@ function reachedSegments(ctx: RuleContext, impl: ImplementationSpec): Set<string
   const contract = ctx.interfaceMap.get(impl.contract);
   const component = contract ? ctx.componentMap.get(contract.component) : undefined;
   if (component) refs.push(...component.dependsOn, ...(component.owns ?? []));
-  if (contract?.implements) refs.push(contract.implements);
+  refs.push(...(contract?.implements ?? []));
   for (const other of ctx.implementations) {
     if (other.contract !== impl.contract) continue;
     for (const method of other.methods) {

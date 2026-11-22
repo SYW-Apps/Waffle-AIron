@@ -816,6 +816,11 @@ export const ComponentSpecSchema = z.object({
   patterns: z.array(PatternRefSchema).optional(),
   /** Optional component variant — a declared, base-anchored specialization of this component's stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH). */
   variant: z.string().optional(),
+  /**
+   * Marks an abstraction: a component that holds a contract several OTHER components implement, so
+   * callers depend on it rather than on an implementer (ABSTRACT_NOT_ALLOWED / ABSTRACT_PORTAL_BINDS).
+   */
+  abstract: z.boolean().optional(),
   /** Opaque external references (see ExternalLinkSchema) — documented URLs wairon does
    *  not fetch or validate. An `implementation` link is the external source-of-record and
    *  satisfies the source requirement for a source-less implementation (suppresses
@@ -1233,6 +1238,18 @@ export function passesIntentFloor(text: string | undefined, methodName: string):
   return true;
 }
 
+/**
+ * A verb a Portal implementer deliberately does not serve: the abstract Portal's method it leaves
+ * out, with the reason this transport has no form of it.
+ */
+export const OmittedMethodSchema = z.object({
+  /** The name of a method the implemented Portal abstraction declares. */
+  method: z.string().min(1),
+  /** Why this transport does not serve it. */
+  reason: z.string().min(1),
+});
+export type OmittedMethod = z.infer<typeof OmittedMethodSchema>;
+
 export const InterfaceSpecSchema = z.object({
   id: SpecIdSchema.regex(/^i[a-z0-9-_]+$/, 'Interface id must be prefixed with a lowercase "i"'),
   name: DisplayNameSchema,
@@ -1246,13 +1263,17 @@ export const InterfaceSpecSchema = z.object({
   /** Opaque pack/tool extension data (see ExtDataSchema) — preserved verbatim. */
   ext: ExtDataSchema.optional(),
   /**
-   * The exported extension point this contract realizes, as alias::name:
-   * another project's export entry with role implement. Every method of the
-   * extension point is declared here with the same signature
-   * (IMPLEMENTS_MISMATCH), and the methods count as reached, because the
-   * producer calls them.
+   * The abstractions this contract realizes: each entry a local abstract component id or
+   * alias::name, another project's export entry with role implement. A single string is read as
+   * a one-element list. Every method of each is declared here with the same signature
+   * (IMPLEMENTS_MISMATCH); the methods count as reached when the abstraction's are.
    */
-  implements: z.string().min(1).optional(),
+  implements: z.preprocess((v) => (typeof v === 'string' ? [v] : v), z.array(z.string().min(1))).optional(),
+  /**
+   * Only on a Portal's contract that implements a Portal abstraction: the verbs this transport
+   * deliberately does not serve, each with a reason (OMISSION_NOT_ALLOWED).
+   */
+  omits: z.array(OmittedMethodSchema).optional(),
   status: SpecStatusSchema.optional().default('complete'),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -2108,7 +2129,7 @@ export const DESIGN_VIEW_FIELDS = {
     design: [
       'id', 'name', 'description', 'subsystem', 'componentType', 'owns', 'dependsOn', 'transport', 'abi', 'invokedBy',
       'basePath', 'auth', 'dispatch', 'durability', 'dependencyClass', 'emits', 'subscribesTo', 'patterns', 'variant',
-      'previousIds', 'lint', 'ext',
+      'abstract', 'previousIds', 'lint', 'ext',
     ],
   },
   subsystem: {
@@ -2122,7 +2143,7 @@ export const DESIGN_VIEW_FIELDS = {
   interface: {
     linkage: ['createdAt', 'updatedAt'],
     readiness: ['status'],
-    design: ['id', 'name', 'description', 'component', 'methods', 'previousIds', 'lint', 'ext', 'implements'],
+    design: ['id', 'name', 'description', 'component', 'methods', 'previousIds', 'lint', 'ext', 'implements', 'omits'],
   },
 } as const;
 

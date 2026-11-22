@@ -61,14 +61,25 @@ function getBaseId(id: string): string {
 const isAllUppercase = (s: string) => /^[A-Z0-9_]+$/.test(s);
 
 /**
- * The method names of the extension point an interface implements
- * (`implements: alias::name`), read where implements-contracts reads them: a
+ * The method names of the extension points an interface implements
+ * (`implements: [alias::name]`), read where implements-contracts reads them: a
  * declared external's pin (or a foreign snapshot), else a contained member's
  * live export table. Empty when the interface implements nothing or the
  * reference does not resolve (project-boundaries reports that).
  */
-function implementedNames(ctx: RuleContext, ref: string | undefined): Set<string> {
-  if (ref === undefined) return new Set();
+function implementedNames(ctx: RuleContext, refs: string[] | undefined): Set<string> {
+  const names = new Set<string>();
+  for (const ref of refs ?? []) {
+    // A local entry (no `::`) names an abstract component of this project, whose methods follow
+    // this project's casing: never resolved through a snapshot that exports the same bare name.
+    if (!ref.includes('::')) continue;
+    for (const name of implementedNamesOf(ctx, ref)) names.add(name);
+  }
+  return names;
+}
+
+/** The method names of one `alias::name` extension point; a local abstraction names none (its methods follow this project's casing). */
+function implementedNamesOf(ctx: RuleContext, ref: string): Set<string> {
   const surface = ctx.resolveSurfaceRef(ref);
   if (surface.kind === 'resolved') {
     return surface.entry.role === 'implement' ? new Set(surface.entry.methods.map((m) => m.name)) : new Set();

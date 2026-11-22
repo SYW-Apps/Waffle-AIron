@@ -709,6 +709,11 @@ export function composeAgentBrief(agentId: string, sessionPractices?: readonly s
   const packGuidance = packBriefSections(record, config.projectType ?? null, config.practices, sessionPractices ?? []);
   if (packGuidance) instructions = `${instructions.trimEnd()}\n\n${packGuidance}\n`;
 
+  // Step abstractionBrief: what the abstractions this record's components take
+  // part in ask of its code, ahead of the project guidance.
+  const abstractions = abstractionBrief(record);
+  if (abstractions) instructions = `${instructions.trimEnd()}\n\n${abstractions.section}\n`;
+
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
   // read LIVE — an edit applies on the next call) under an attributed section,
   // so the user's delta stays legible AS a delta over the inferred brief.
@@ -731,7 +736,7 @@ export function composeAgentBrief(agentId: string, sessionPractices?: readonly s
   // where the pin records them, and the pinned snapshot — the contract the
   // consumer codes against — which joins the read list.
   const externals = externalsUsedBy(record);
-  let readPaths = record.readPaths;
+  let readPaths = abstractions ? [...new Set([...record.readPaths, ...abstractions.readPaths])] : record.readPaths;
   if (externals.length > 0) {
     const bindings = bindingModulesOf(record);
     // What the binding is compared with: a pin, a member's live export table, or either.
@@ -750,7 +755,7 @@ export function composeAgentBrief(agentId: string, sessionPractices?: readonly s
       ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as ${source} (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.${tagNote}\n`
       : `\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as \`bindings\` — code linkage, no re-lock — so \`validate\` compares it with ${comparedWith}.${tagNote}\n`;
     instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot (for a member project, its live L0 export table), never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n${bindingNote}`;
-    readPaths = [...new Set([...record.readPaths, ...externals.map((e) => e.pin)])];
+    readPaths = [...new Set([...readPaths, ...externals.map((e) => e.pin)])];
   }
 
   // The resource axis, resolved from the same live topology as the rest of the
@@ -1132,6 +1137,75 @@ function linkageSection(record: AgentRecord): string {
   return parts.join('\n');
 }
 
+/** The code name of an abstraction's declared interface: the component id in PascalCase (a symbol names a method, never the interface). */
+function abstractionTypeName(abstraction: ComponentSpec): string {
+  return abstraction.id.split(/[-_]/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+}
+
+/**
+ * What the abstractions a record's components take part in ask of its code, in
+ * an '## Abstractions' section, and the abstractions' contracts to read. An
+ * implementer is told each abstraction's contract and the interface its class
+ * declares it implements; an abstraction declares the interface, trait or
+ * Protocol only, in the one file its implementation names; a caller holds the
+ * abstraction's type, never an implementer's. Null when the record touches no
+ * abstraction.
+ */
+function abstractionBrief(record: AgentRecord): { section: string; readPaths: string[] } | null {
+  const comps = scopeComponents(record);
+  if (comps.length === 0) return null;
+  const byId = new Map(loadComponentSpecs().filter((c) => !c.id.includes('::')).map((c) => [c.id, c]));
+  const interfaces = loadInterfaceSpecs();
+  const implementations = loadImplementationSpecs();
+  const implsOf = (componentId: string): ImplementationSpec[] => {
+    const ids = new Set(interfaces.filter((i) => i.component === componentId).map((i) => i.id));
+    return implementations.filter((impl) => ids.has(impl.contract));
+  };
+  const rel = (p: string): string => path.relative(getProjectRoot(), p).replace(/\\/g, '/');
+  const lines: string[] = [];
+  const readPaths: string[] = [];
+  for (const comp of comps) {
+    // Implementer: each local abstraction a contract of this component names.
+    for (const contract of interfaces.filter((i) => i.component === comp.id)) {
+      for (const entry of contract.implements ?? []) {
+        const abstraction = entry.includes('::') ? undefined : byId.get(entry);
+        if (!abstraction || abstraction.abstract !== true) continue;
+        const abstractImpls = implsOf(abstraction.id);
+        const typeName = abstractionTypeName(abstraction);
+        const file = abstractImpls.flatMap((impl) => implementationSourceFiles(impl))[0];
+        const abstractContracts = interfaces.filter((i) => i.component === abstraction.id);
+        for (const i of abstractContracts) readPaths.push(rel(getInterfacePath(i.id, abstraction.id)));
+        const methods = abstractContracts.flatMap((i) => i.methods.map((m) => m.name));
+        const declaration = file
+          ? `the interface, trait or Protocol that \`${file}\` declares for \`${abstraction.id}\``
+          : `the interface, trait or Protocol for \`${abstraction.id}\`, which is not written yet (name it \`${typeName}\` when you write it)`;
+        let line = `- \`${comp.id}\` implements the abstraction \`${abstraction.id}\` (${methods.length > 0 ? `methods: ${methods.join(', ')}` : 'no methods yet'}). Its class declares that it implements ${declaration}, and provides every one of those methods with the same signature, with effects and a dependencyClass no wider than the abstraction's.`;
+        if (comp.componentType === 'Portal') {
+          const omits = contract.omits ?? [];
+          line += ` It binds its own transport, endpoints, auth and entry${omits.length > 0 ? `, and deliberately leaves out ${omits.map((o) => `\`${o.method}\` (${o.reason})`).join('; ')}` : ''}.`;
+        }
+        lines.push(line);
+      }
+    }
+    // The abstraction itself: the declaration only.
+    if (comp.abstract === true) {
+      const files = [...new Set(implsOf(comp.id).flatMap((impl) => implementationSourceFiles(impl)))];
+      const implementers = [...new Set(interfaces.filter((i) => (i.implements ?? []).includes(comp.id)).map((i) => i.component))];
+      lines.push(`- \`${comp.id}\` IS an abstraction. Declare the interface, trait or Protocol only${files.length > 0 ? ` in ${files.map((f) => `\`${f}\``).join(', ')}` : ''} — no behaviour, no body, no narrative, no technology: its methods are realized by that declaration, which serves every implementer${implementers.length > 0 ? ` (${implementers.map((c) => `\`${c}\``).join(', ')})` : ''}.`);
+    }
+    // Caller: a dependency that is an abstraction.
+    for (const depId of [...comp.dependsOn, ...(comp.owns ?? [])]) {
+      const dep = byId.get(depId);
+      if (!dep || dep.abstract !== true) continue;
+      const depFile = implsOf(dep.id).flatMap((impl) => implementationSourceFiles(impl))[0];
+      const depType = depFile ? `the one \`${depFile}\` declares` : `not written yet; name it \`${abstractionTypeName(dep)}\` when it is written`;
+      lines.push(`- \`${comp.id}\` depends on the abstraction \`${dep.id}\`: hold its interface type, ${depType}, never an implementer's class, so the code keeps working when an implementer is added or replaced.`);
+    }
+  }
+  if (lines.length === 0) return null;
+  return { section: `## Abstractions\n\n${lines.join('\n')}`, readPaths: [...new Set(readPaths)] };
+}
+
 /** Whether any implementation of the record's components names a code file at all. */
 function namesAnyCode(record: AgentRecord): boolean {
   const ids = new Set(scopeComponents(record).map((c) => c.id));
@@ -1257,7 +1331,7 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
   const refs: string[] = [];
   for (const c of components) refs.push(...c.dependsOn, ...(c.owns ?? []));
   const contracts = loadInterfaceSpecs().filter((i) => ids.has(i.component));
-  for (const contract of contracts) if (contract.implements) refs.push(contract.implements);
+  for (const contract of contracts) refs.push(...(contract.implements ?? []));
   // The types its contracts name: a types-only library is reached through them.
   for (const contract of contracts) for (const m of contract.methods) refs.push(...methodTypeRefs(m));
   const contractIds = new Set(contracts.map((i) => i.id));

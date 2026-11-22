@@ -4403,7 +4403,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // point, whose producer names those methods in its own language: then any
   // identifier, and IMPLEMENTS_MISMATCH judges it against the producer's.
   const casing = methodCasingOf(component);
-  const dictated = loadInterfaceSpecs().some((i) => i.component === componentId && i.implements !== undefined);
+  const dictated = loadInterfaceSpecs().some((i) => i.component === componentId && (i.implements ?? []).some((e) => e.includes('::')));
   // The identifier grammar and the target language's reserved words, whatever the casing.
   const refusal = memberNameRefusal(newName, 'method', component.subsystem, casing);
   if (refusal !== null) throw new WaironError(`invalid-name: ${refusal}.`);
@@ -5309,7 +5309,7 @@ export function renameParam(componentId: string, methodName: string, param: stri
   if (paramRefusal !== null) throw new WaironError(`invalid-name: ${paramRefusal}.`);
   // A producer names the parameters of an extension point this component implements.
   const variables = projectConfigRepository.load()?.rules?.naming?.variables;
-  const dictated = contracts.some((i) => i.implements !== undefined);
+  const dictated = contracts.some((i) => (i.implements ?? []).some((e) => e.includes('::')));
   if (variables && !dictated && !methodNameFits(newName, variables)) {
     throw new WaironError(`invalid-name: "${newName}" does not match this tree's parameter naming (rules.naming.variables: ${variables}).`);
   }

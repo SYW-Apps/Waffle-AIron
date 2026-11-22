@@ -367,11 +367,64 @@ an emitted topic nobody consumes is `UNCONSUMED_TOPIC`, a subscription with no
 source is `UNSOURCED_SUBSCRIPTION` (topics with external ends are acknowledged
 via `lint.allow`). Trees that use no events see neither check.
 
-**Ports + implementations (the Carrier rule).** When a capability has multiple
-external providers, define an **interface (a port)** and one Adapter per provider:
-`Carrier` interface ← `DhlAdapter`, `UpsAdapter`. Callers depend on the `Carrier`
-interface; the concrete Adapter is injected at bootstrap. This is composition +
-polymorphism via interfaces — **not** inheritance.
+### Abstractions: one contract, several implementers
+
+A component marked `abstract: true` is an **abstraction**: it holds a contract that
+several other components implement. Each implementer's contract lists the
+abstraction in `implements` (a list: a local abstract component id, or an
+`alias::name` extension point of another project, §9). **Callers depend on the
+abstraction**, never on an implementer; the concrete implementer is chosen at
+bootstrap. This is composition and polymorphism through a contract — **not**
+inheritance. Pick the shape by the variation you actually have:
+
+| The variation is… | Model it as |
+|---|---|
+| One engine per deployment (MySQL or Postgres behind a Store) | Several L4 implementations of **one** component's contract, each with its own `technologies` (§10) |
+| Several live implementations used together (carriers, payment providers, rule sets, exporters) | An **abstraction** with one implementer per variant: `Carrier` ← `DhlAdapter`, `UpsAdapter` |
+| A broadcast to whoever listens | **Events**: a topic and a payload, `emits` / `subscribesTo` |
+| The same code, many live instances | **One Actor** and a Registry the Supervisor keeps |
+
+Base classes are never modelled. A Portal over a Portal is a **gateway** (§7), or
+two implementations of one Portal abstraction.
+
+**What an abstraction is.** The mark stands on any block except an Observer, a
+pattern or a UI block (`ABSTRACT_NOT_ALLOWED`). Its L3 contract declares the
+methods; its L4 carries code linkage only — the file that declares the interface,
+trait or Protocol — and no narrative, intent, calls or technologies
+(`ABSTRACTION_HAS_BEHAVIOUR`). An abstraction no contract implements is
+`ABSTRACTION_UNIMPLEMENTED` unless it is exported with role `implement`; one with a
+single implementer is the notice `ABSTRACTION_SINGLE_IMPLEMENTER` — one engine
+behind a component needs several L4 implementations, not an abstraction.
+
+**What an implementer owes.** It keeps the abstraction's stereotype
+(`ABSTRACTION_STEREOTYPE_MISMATCH`) and owner (`ABSTRACTION_CONTAINMENT`), declares
+every method of the abstraction with the same signature (`IMPLEMENTS_MISMATCH`), and
+is no wider in effect or dependency class (`IMPLEMENTS_EFFECT_WIDER`), since callers
+rely on the abstraction's. A local `implements` entry must name an abstract
+component (`IMPLEMENTS_NOT_ABSTRACT`). A call that reaches, on an implementer
+directly, a method its abstraction declares bypasses the abstraction
+(`ABSTRACTION_BYPASSED`); the implementer's own extra methods are fine to call.
+
+**One contract, several abstractions** is legal but the exception — one vendor
+client serving two roles. It raises the notice `ABSTRACTION_MULTIPLE`; keep it to
+one responsibility serving several roles and document it with a `lint.allow` and a
+reason. Two abstractions whose same-named methods differ in params, returns or
+effect cannot both be served (`IMPLEMENTS_CONFLICT`).
+
+**Portal parity.** An abstract Portal is a parity contract across transports: it
+binds nothing — no transport, endpoints, auth or entry (`ABSTRACT_PORTAL_BINDS`).
+Each implementer Portal binds its own transport and endpoints, and serves every
+verb of the abstraction, or lists the ones it leaves out in `omits` with a reason.
+`omits` stands only on a Portal implementing a Portal abstraction and names only
+verbs that abstraction declares (`OMISSION_NOT_ALLOWED`); any other missing verb is
+`IMPLEMENTS_MISMATCH`. So an HTTP Portal and a CLI Portal can be held to one verb
+set, the gaps stated rather than silent.
+
+On the canvas an abstraction wears an «abstract» mark and each implementer draws a
+dashed `implements` line with a hollow head to it, like a UML realization — a
+relation of the design, never a dependency. Reachability flows from an
+abstraction's methods to its implementers', and from Portal implementers to the
+verbs of a Portal abstraction.
 
 ---
 
@@ -385,7 +438,7 @@ The test: **can the object do this autonomously, using only its own state?**
   invariants, self-contained state transitions).
 - **No (it needs an external actor or system) → a method on the acting *block*,
   taking the entity as an argument.** An order cannot ship itself → a `Carrier`
-  (interface) with `DhlAdapter.ship(order)`. A dog cannot take itself out → a
+  (an abstraction, §4) with `DhlAdapter.ship(order)`. A dog cannot take itself out → a
   `Caretaker` (an Orchestrator) with `take_out(dog)`.
 
 This is the rich-vs-anemic balance, and it maps onto the blocks: **the Store holds
@@ -401,8 +454,7 @@ together (§10), with the ids generated in the workflow and the dependent
 referencing its owner.
 
 **Composition over inheritance.** The model has no class hierarchies. Variation is
-expressed by **interfaces (ports) with multiple implementations** (the Carrier
-example) and by **composition** (a pattern owns blocks). Inheritance is avoided;
+expressed by **abstractions with several implementers** (see *Abstractions*, §4) and by **composition** (a pattern owns blocks). Inheritance is avoided;
 "is-a" relationships that tempt a hierarchy are almost always "implements-an-
 interface" or "is-composed-of."
 

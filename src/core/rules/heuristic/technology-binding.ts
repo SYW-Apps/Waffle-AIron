@@ -40,7 +40,7 @@ export const technologyBindingRule: SddRule = {
     for (const impl of ctx.implementations) {
       const comp = componentOf(impl.contract);
       // A dangling contract is the hierarchy rule's finding, not this one's.
-      if (!impl.technologies?.length || !comp || DATA_LAYER.has(comp.componentType)) continue;
+      if (!impl.technologies?.length || !comp || comp.abstract === true || DATA_LAYER.has(comp.componentType)) continue; // an abstraction's technologies are abstraction-shape's finding
       if (comp.componentType === 'Portal') {
         const reached = impl.technologies.map(technologyName).filter(name => dataLayer.has(name.toLowerCase()));
         if (reached.length === 0) continue;

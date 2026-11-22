@@ -441,6 +441,10 @@ export function mountCanvas(host, model, opts = {}) {
       // declaration thin, grey and dotted (after health, so the weight wins).
       { selector: 'edge.k-uses', style: { width: 1.1, 'arrow-scale': 0.7, 'line-color': t.weakEdge, 'target-arrow-color': t.weakEdge } },
       { selector: 'edge.k-declared', style: { width: 1, 'arrow-scale': 0.65, 'line-color': t.weakEdge, 'target-arrow-color': t.weakEdge, 'line-style': 'dotted' } },
+      // An implements edge is a UML realization: dashed, and the hollow head is drawn by the line overlay.
+      { selector: 'edge.k-implements', style: { width: 1.4, 'line-style': 'dashed', 'line-color': t.pageEdge, 'target-arrow-color': t.pageEdge } },
+      // An abstraction: an italic name and an «abstract» tag (the label), the box otherwise unchanged.
+      { selector: '.abstractNode', style: { 'font-style': 'italic' } },
       { selector: '.extProject', style: { 'border-style': 'dashed' } },
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
@@ -499,6 +503,7 @@ export function mountCanvas(host, model, opts = {}) {
   var HEALTH_GLYPH = { ok: '\u2713', drifted: '\u0394', incompatible: '\u2715', unavailable: '?' };
   var HAS_CONSUMPTION = MODEL.edges.some(function (e) { return !!e.consumption; });
   var HAS_WEAK = MODEL.edges.some(function (e) { return e.kind === 'uses' || e.kind === 'declared'; });
+  var HAS_IMPLEMENTS = MODEL.edges.some(function (e) { return e.kind === 'implements'; });
   function edgeHealth(edge) {
     var r = edge.relation ? REL_BY_ID[edge.relation] : null;
     return r ? r.health : (HAS_RELATIONS ? 'unavailable' : null);
@@ -579,6 +584,7 @@ export function mountCanvas(host, model, opts = {}) {
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
       'on select: <span style="color:' + t.selGlow + '">\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\u2190 used by</span>' +
       (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '') +
+      (HAS_IMPLEMENTS ? '<br><span style="color:' + t.pageEdge + '">- - ▷ dashed, hollow head</span> = implements an abstraction' : '') +
       (HAS_WEAK ? '<br><span style="color:' + t.weakEdge + '">thin grey</span> = uses a type of that project · <span style="color:' + t.weakEdge + '">··· dotted</span> = declared, nothing used yet' : '') +
       relationLegend(t);
   }
@@ -652,6 +658,7 @@ export function mountCanvas(host, model, opts = {}) {
       var b = childOfScopeContaining(edge.to, scope);
       if (!a || !b) return;
       var ak = a.kind + ':' + a.id, bk = b.kind + ':' + b.id;
+      if (edge.kind === 'implements') return; // a relation of the design: never moves a box
       if (!size[ak] || !size[bk] || ak === bk) return;
       intra[ak + '=>' + bk] = 1;
     });
@@ -822,6 +829,7 @@ export function mountCanvas(host, model, opts = {}) {
     var direct = {}, directTopCount = {}, ports = {};
     function portRec(aid) { return ports[aid] = ports[aid] || { extIn: {}, extOut: {}, stubs: {} }; }
     MODEL.edges.forEach(function (edge) {
+      if (edge.kind === 'implements') return; // drawn between the boxes of a view, never as a deep leaf line
       var a = directEnd(edge.from), b = directEnd(edge.to);
       if (a && b && (a.deep || b.deep) && a.node !== b.node) {
         // Drawn as ONE direct line — never ALSO as ports/stubs (dedupe rule).
@@ -1043,7 +1051,8 @@ export function mountCanvas(host, model, opts = {}) {
       } else {
         return;
       }
-      var key = src + '=>' + tgt;
+      // An implements edge is kept apart from any dependency between the same two boxes.
+      var key = src + '=>' + tgt + (edge.kind === 'implements' ? '#implements' : '');
       if (!agg[key]) agg[key] = { src: src, tgt: tgt, n: 0, cross: false, ghost: ghost };
       agg[key].n++;
       // Folded edges keep their strongest kind.
@@ -1062,7 +1071,7 @@ export function mountCanvas(host, model, opts = {}) {
     return { agg: agg, ghosts: ghosts };
   }
 
-  var KIND_RANK = { depends: 3, calls: 2, uses: 1, declared: 0 };
+  var KIND_RANK = { depends: 3, calls: 2, uses: 1, declared: 0, implements: -1 };
   function externalAnchorFor(compId, scope) {
     var c = compById[compId];
     // An edge landing on a project node: outside a system view it is a ghost of that node.
@@ -1616,7 +1625,7 @@ export function mountCanvas(host, model, opts = {}) {
       }
       Object.keys(ve.agg).forEach(function (k) {
         var edge = ve.agg[k];
-        if (edge.tgt !== key) return;
+        if (edge.tgt !== key || edge.kind === 'implements') return;
         var srcEntry = entries.filter(function (x) { return anchorNodeId(x) === edge.src; })[0];
         if (srcEntry) l = Math.max(l, calcLayer(srcEntry, stack) + 1);
       });
@@ -1629,6 +1638,7 @@ export function mountCanvas(host, model, opts = {}) {
     entries.forEach(function (e) { var aid = anchorNodeId(e); sizeByAnchor[aid] = sizeOf(e, inners[aid]); degByAnchor[aid] = 0; });
     Object.keys(ve.agg).forEach(function (k) {
       var edge = ve.agg[k];
+      if (edge.kind === 'implements') return;
       if (degByAnchor[edge.src] !== undefined) degByAnchor[edge.src]++;
       if (degByAnchor[edge.tgt] !== undefined) degByAnchor[edge.tgt]++;
     });
@@ -1700,7 +1710,7 @@ export function mountCanvas(host, model, opts = {}) {
         classes = stereoClass(c.componentType);
         label = c.name + '\n\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
       }
-      classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
+      classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '') + (e.kind === 'component' && compById[e.id] && compById[e.id].abstract ? ' abstractNode' : '')
         + (dim ? ' dimmed' : '')
         + issueMark(e.id)
         + (state.selectedKind === e.kind && state.selected === e.id ? ' sel' : '');
@@ -1720,7 +1730,7 @@ export function mountCanvas(host, model, opts = {}) {
                 label: nameOf(tile.kid), w: INNER_W, h: INNER_H, tw: INNER_W - 10,
               },
               position: { x: p.x - p.w / 2 + tile.x, y: p.y - p.h / 2 + tile.y },
-              classes: 'inner' + (dim ? ' dimmed' : ''),
+              classes: 'inner' + (tile.kid.kind === 'component' && compById[tile.kid.id] && compById[tile.kid.id].abstract ? ' abstractNode' : '') + (dim ? ' dimmed' : ''),
             });
           });
         }
@@ -1906,7 +1916,7 @@ export function mountCanvas(host, model, opts = {}) {
       // declaration uses nothing yet, so it carries no glyph.
       var glyph = e.health && e.kind !== 'declared' ? HEALTH_GLYPH[e.health] : '';
       var relCls = e.consumption ? 'rel rel-' + (e.health || 'unchecked') + ' ' : '';
-      if (e.kind === 'uses' || e.kind === 'declared') relCls += 'k-' + e.kind + ' ';
+      if (e.kind === 'uses' || e.kind === 'declared' || e.kind === 'implements') relCls += 'k-' + e.kind + ' ';
       eles.push({
         data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: (bundle ? e.n + ' links' : '') + (glyph ? (bundle ? ' ' : '') + glyph : ''), rels: (e.rels || []).join('|'), cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
         classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + relCls + (dim ? 'dimmed' : ''),
@@ -2237,7 +2247,8 @@ export function mountCanvas(host, model, opts = {}) {
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      if (z >= 0.3) {
+      var realization = e.hasClass('k-implements');
+      if (z >= 0.3 && !realization) {
         ctx.strokeStyle = rgba(l.color, l.op * 0.95);
         ctx.lineWidth = Math.max(1.2, l.w * 0.8);
         ctx.beginPath();
@@ -2250,13 +2261,19 @@ export function mountCanvas(host, model, opts = {}) {
         var ax = tip.x - end.x, ay = tip.y - end.y, al = Math.sqrt(ax * ax + ay * ay);
         if (al > 0.5) {
           var hw = Math.max(al * 0.55, l.tube * 0.55), nx = -ay / al, ny = ax / al;
-          ctx.fillStyle = rgba(l.arrow, l.op * 0.9);
+          ctx.fillStyle = realization ? theme.bgLabel : rgba(l.arrow, l.op * 0.9);
           ctx.beginPath();
           ctx.moveTo(tip.x, tip.y);
           ctx.lineTo(end.x + nx * hw, end.y + ny * hw);
           ctx.lineTo(end.x - nx * hw, end.y - ny * hw);
           ctx.closePath();
           ctx.fill();
+          if (realization) {
+            // UML realization: a hollow triangle, outlined solid.
+            ctx.strokeStyle = rgba(l.arrow, l.op * 0.95);
+            ctx.lineWidth = Math.max(1.2, l.w * 0.9);
+            ctx.stroke();
+          }
         }
       }
       if (l.stubTo && z >= 0.3) {
@@ -5012,7 +5029,7 @@ export function mountCanvas(host, model, opts = {}) {
     if (focusKind === 'component' && compById[focusId]) {
       var c = compById[focusId];
       head = '<h2>' + esc(c.name) + '</h2>'
-        + staticChip('\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB')
+        + staticChip('\u00AB' + (c.abstract ? 'abstract ' : '') + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB')
         + (c.public ? staticChip('published') : '')
         + (c.status ? staticChip(c.status) : '')
         + (scopeFocus ? staticChip('current view') : '')

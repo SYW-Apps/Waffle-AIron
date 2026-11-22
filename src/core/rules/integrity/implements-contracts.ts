@@ -1,54 +1,71 @@
 import { SddRule, type RuleContext } from '../types.js';
-import { canonicalTypeText, isTypeVocabulary, parseTypeExpression, type MethodSignature, type TypeExpression } from '../../../models/index.js';
+import { canonicalTypeText, isTypeVocabulary, parseTypeExpression, type ComponentSpec, type MethodSignature, type TypeExpression } from '../../../models/index.js';
 
 /**
- * An interface that declares `implements: alias::name` realizes another
- * project's extension point (a trait, callback or webhook contract): it must
- * declare every method of that contract with the same params and returns, read
- * from the export the reference resolves to. Whether the reference resolves,
- * and names an entry exported with role implement, is project-boundaries'
- * finding; this rule judges the shape once it does.
+ * A contract's `implements` lists what it realizes: a local abstract component,
+ * or another project's extension point (`alias::name`: a trait, callback or
+ * webhook contract). It must declare every method of each with the same params
+ * and returns, read from the abstract component's contract or from the export
+ * the reference resolves to. A Portal implementing a Portal abstraction may
+ * leave a verb out by listing it in `omits` with a reason. Whether an
+ * `alias::name` reference resolves, and names an entry exported with role
+ * implement, is project-boundaries' finding; this rule judges the shape once it
+ * does. Effects and dependency class are implements-compatibility's; conflicts
+ * between entries and where omits may stand are implements-consistency's.
  */
 export const implementsContractsRule: SddRule = {
   name: 'implements-contracts',
   judges: 'design',
   description:
-    "An interface that declares `implements: alias::name` realizes another project's extension point, so it must declare every method of that contract with the same params and returns, read from the export the reference resolves to (a contained member's live table, or a declared external's pin). Types are compared semantically, never by spelling: the producer's own bare name and the consumer's `alias::name` (or the bare name its `use` imports) are one type. Whether the reference resolves and names an entry exported with role implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape once it resolves. Extra methods are the implementer's own and are not reported.",
+    "A contract's `implements` lists what it realizes, each entry either a local abstract component or another project's extension point (`alias::name`). A local entry resolves to that abstract component's contract; an `alias::name` entry resolves to the export it names (a contained member's live table, or a declared external's pin). The contract must declare every method of each with the same params and returns, types compared semantically, never by spelling: the producer's own bare name and the consumer's `alias::name` (or the bare name its `use` imports) are one type. A Portal that implements a Portal abstraction may leave a verb out by listing it in `omits` with a reason; any other missing verb is the mismatch. Whether an `alias::name` reference resolves and names an entry exported with role implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape once it resolves. Extra methods are the implementer's own and are not reported. Effects and dependency class are implements-compatibility's; conflicts between entries and where omits may stand are implements-consistency's.",
   codes: [
-    { code: 'IMPLEMENTS_MISMATCH', defaultSeverity: 'error', summary: 'An interface implementing an extension point lacks one of its methods, or declares one with different params or returns' },
+    { code: 'IMPLEMENTS_MISMATCH', defaultSeverity: 'error', summary: 'An interface implementing an abstraction or extension point lacks one of its methods (and does not list it in omits, where a Portal may), or declares one with different params or returns' },
   ],
   check(ctx) {
-    // Step 1: each in-scope interface that declares `implements`.
+    // Step 1: each in-scope contract that implements an abstraction or extension point.
     for (const intf of ctx.interfaces) {
       if (intf.implements === undefined || !ctx.isSpecInScope(intf.id)) continue;
-      // Steps 2-3: the extension point's methods; an unresolved or unexported
-      // reference is project-boundaries' finding.
-      const point = extensionPoint(ctx, intf.id, intf.implements);
-      if (!point) continue;
-      const { methods: contract, publicNames } = point;
-      // Types compare semantically: the producer's bare name and the
-      // implementer's `alias::name` (or the bare name its `use` imports) are one type.
-      const alias = intf.implements.split('::')[0];
-      const expectedType = (t: string): string => respelled(t, (n) => publicNames.get(lastName(n)) ?? lastName(n));
-      const ownType = (t: string): string => respelled(t, (n) => (n.startsWith(`${alias}::`) ? lastName(n.slice(alias.length + 2)) : n));
+      // Step 2: the entries (a single string loads as a one-element list) and the implementer.
+      const implementer = ctx.componentMap.get(intf.component);
       const draft = intf.status === 'draft' || intf.status === 'design' || ctx.isComponentDraft(intf.component);
-      // Steps 4-6: each method of the extension point, declared alike.
-      for (const expected of contract) {
-        const own = intf.methods.find((m) => m.name === expected.name);
-        const differs = own ? difference(expected, own, expectedType, ownType) : 'is not declared';
-        if (!differs) continue;
-        // The producer's rename trace: a former name this interface still declares is a rename to follow.
-        const former = own ? undefined : (expected.formerly ?? []).find((f) => intf.methods.some((m) => m.name === f));
-        const renamedFrom = former ? ` It was renamed from "${former}" (the producer's rename trace), which this interface still declares — rename it to "${expected.name}".` : '';
-        ctx.addIssue(
-          'error',
-          'IMPLEMENTS_MISMATCH',
-          `Interface "${intf.id}" implements "${intf.implements}", whose method "${expected.name}" ${differs === 'is not declared' ? 'it does not declare' : `it declares with ${differs}`}.${renamedFrom} An implementation of an extension point declares every method of it with the same signature: ${expected.name}(${(expected.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${expected.returns}.`,
-          intf.id,
-          draft,
-          undefined,
-          { at: expected.name },
-        );
+      for (const entry of intf.implements) {
+        // Steps 4-5: the methods the entry asks for; an unresolved or unexported
+        // reference is project-boundaries' finding, a local entry that is no
+        // abstraction implements-compatibility's.
+        const point = implementedEntry(ctx, intf.id, entry);
+        if (!point) continue;
+        const { methods: contract, publicNames } = point;
+        // Types compare semantically: the producer's bare name and the
+        // implementer's `alias::name` (or the bare name its `use` imports) are one type.
+        const alias = entry.split('::')[0];
+        const expectedType = (t: string): string => respelled(t, (n) => publicNames.get(lastName(n)) ?? lastName(n));
+        const ownType = entry.includes('::')
+          ? (t: string): string => respelled(t, (n) => (n.startsWith(`${alias}::`) ? lastName(n.slice(alias.length + 2)) : n))
+          : expectedType;
+        // Steps 6-10: each method of the abstraction or extension point, declared alike.
+        for (const expected of contract) {
+          const own = intf.methods.find((m) => m.name === expected.name);
+          const differs = own ? difference(expected, own, expectedType, ownType) : 'is not declared';
+          if (!differs) continue;
+          // Step 8: a verb this transport deliberately does not serve, between two Portals.
+          const betweenPortals = point.abstraction?.componentType === 'Portal' && implementer?.componentType === 'Portal';
+          if (!own && betweenPortals && (intf.omits ?? []).some((o) => o.method === expected.name)) continue;
+          // The producer's rename trace: a former name this interface still declares is a rename to follow.
+          const former = own ? undefined : (expected.formerly ?? []).find((f) => intf.methods.some((m) => m.name === f));
+          const renamedFrom = former ? ` It was renamed from "${former}" (the producer's rename trace), which this interface still declares — rename it to "${expected.name}".` : '';
+          const portalHint = !own && betweenPortals
+            ? ' A Portal serves every verb of the Portal abstraction it implements, or lists the ones its transport deliberately does not serve in omits, each with a reason.'
+            : '';
+          ctx.addIssue(
+            'error',
+            'IMPLEMENTS_MISMATCH',
+            `Interface "${intf.id}" implements "${entry}", whose method "${expected.name}" ${differs === 'is not declared' ? 'it does not declare' : `it declares with ${differs}`}.${renamedFrom}${portalHint} An implementation of ${entry.includes('::') ? 'an extension point' : 'an abstraction'} declares every method of it with the same signature: ${expected.name}(${(expected.params ?? []).map((p) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${expected.returns}.`,
+            intf.id,
+            draft,
+            undefined,
+            { at: expected.name },
+          );
+        }
       }
     }
   },
@@ -92,12 +109,28 @@ function difference(
   return undefined;
 }
 
-/** An extension point's methods, and how its producer's own type names read as its public names. */
-interface ExtensionPoint {
+/** What an `implements` entry asks for: its methods, and how its producer's own type names read as its public names. */
+export interface ExtensionPoint {
   /** Each method with the former names the producer's rename trace records for it. */
-  methods: (Pick<MethodSignature, 'name' | 'params' | 'returns'> & { formerly?: string[] })[];
+  methods: (Pick<MethodSignature, 'name' | 'params' | 'returns'> & { effect?: string; formerly?: string[] })[];
   /** The producer's type name (last segment) → the public name it exports it by, where they differ. */
   publicNames: Map<string, string>;
+  /** The local abstract component a local entry names; absent for another project's extension point. */
+  abstraction?: ComponentSpec;
+}
+
+/**
+ * The methods an `implements` entry asks for. A local entry (no `::`) names an
+ * abstract component and answers its contract; an `alias::name` entry
+ * resolves to the export it names (extensionPoint). Answers none for a local
+ * entry that is no abstract component, and for a reference that does not
+ * resolve with role implement: those are other rules' findings.
+ */
+export function implementedEntry(ctx: RuleContext, specId: string, entry: string): ExtensionPoint | undefined {
+  if (entry.includes('::')) return extensionPoint(ctx, specId, entry);
+  const abstraction = ctx.componentMap.get(entry);
+  if (!abstraction || abstraction.abstract !== true) return undefined;
+  return { methods: ctx.interfaceMethodsOf(entry), publicNames: new Map(), abstraction };
 }
 
 /**
