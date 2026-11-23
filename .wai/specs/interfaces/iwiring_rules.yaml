@@ -128,12 +128,14 @@ methods:
       counts as reached when the matching method of an abstraction it implements is reached, so an
       implementer no dependsOn names is never unused merely for that; and an abstract Portal's verb
       counts as reached when any implementer's matching verb is, implementers being entered through
-      their own entries, while an abstraction method nobody reaches stays unused. A network-scoped
-      entry counts as declared here; the family run proves it. A runtime declaration the INTERNAL
-      walk (without the declared roots) already reaches is stale and is reported: a method's when
-      the walk reaches that method, a component's when it reaches every method that inherits it. An
-      entry never is, because it also states the verb's scope for the network rules and the flow
-      matrix.
+      their own entries; an abstraction's method counts as reached when the matching method of an
+      abstraction implementing it is (callers depending on the narrower abstraction use the same
+      contract), never a sibling branch's; while an abstraction method nobody reaches stays unused.
+      A network-scoped entry counts as declared here; the family run proves it. A runtime
+      declaration the INTERNAL walk (without the declared roots) already reaches is stale and is
+      reported: a method's when the walk reaches that method, a component's when it reaches every
+      method that inherits it. An entry never is, because it also states the verb's scope for the
+      network rules and the flow matrix.
     signature: 'unusedDetection(ctx: RuleContext): void'
     returns: void
     params:
@@ -410,4 +412,4 @@ methods:
         summary: An Adapter states a transport other than the transport of a Portal it calls
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-11-23T00:54:35.265Z'
+updatedAt: '2026-11-23T07:01:05.575Z'

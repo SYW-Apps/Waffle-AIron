@@ -51,8 +51,10 @@ methods:
         targetMethod: ensureProjectInitialized
       - stepNumber: 6
         description: >-
-          Write it through the authoring client adapter, which re-authors an existing L0 in place
-          and carries what this input cannot express (databases, the project gateway
+          Write it through the authoring client adapter, which re-authors an existing L0 in place —
+          one the root held before this call (step 1); an L0 the bootstrap of step 5 has just
+          written is this call's own, and the receipt says the system spec was written, never
+          re-authored — and carries what this input cannot express (databases, the project gateway
           publicInterfaces, diagram defaults)
         type: call
         targetComponent: mcp_authoring_adapter
@@ -1186,4 +1188,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-23T00:54:44.107Z'
+updatedAt: '2026-11-23T07:01:22.321Z'

@@ -11,12 +11,16 @@ methods:
       abstraction), call steps, type positions — and the export usage of every project in reach that
       uses it), the code's (calls the code model resolved to the element's realizing symbol, with
       their lines; imports of its realizing file; calls left unresolved that name it), the tests
-      that import or name it, and, unless asked not to, text mentions. Join each declared edge with
-      the code: confirmed when both have it, declared-only or observed-only when one does, unjudged
-      for text or code read below exact grade. Mark a reference linked when it names the element's
-      id rather than a bare name. List the waivers that cover the element (an unclaimed declaration,
-      a carried finding, a lint.allow), and judge the impact as the widest place any reference sits,
-      public when the element is exported beyond the project.
+      that import or name it, and, unless asked not to, text mentions. A method of an abstraction is
+      reached through every local abstraction that implements it, at any depth, since each restates
+      it: the references to the same-named method of each such abstraction are its references too,
+      each saying which abstraction it came through, and each contract restating the method below it
+      is a reference of kind implements, the code that must change with it. Join each declared edge
+      with the code: confirmed when both have it, declared-only or observed-only when one does,
+      unjudged for text or code read below exact grade. Mark a reference linked when it names the
+      element's id rather than a bare name. List the waivers that cover the element (an unclaimed
+      declaration, a carried finding, a lint.allow), and judge the impact as the widest place any
+      reference sits, public when the element is exported beyond the project.
     signature: 'collect(target: string, includeText?: bool): LookupReferencesResult'
     returns: LookupReferencesResult
     params:
@@ -31,4 +35,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-10-25T19:08:24.429Z'
-updatedAt: '2026-11-22T02:27:45.320Z'
+updatedAt: '2026-11-23T07:00:58.421Z'

@@ -24,14 +24,23 @@ fields:
     description: >-
       Up to ten callers, design first: each calling spec as <component>.<method> (a call, dispatch
       or register step, or a declared call), callers of an abstraction the method's component
-      implements included, since they reach it through that abstraction; then each code site the
-      call graph resolved to it, as path:line.
+      implements included, since they reach it through that abstraction, and, for a method of an
+      abstraction, the callers of every abstraction below it that restates it, since they reach the
+      same contract; then each code site the call graph resolved to it, as path:line.
     optional: false
   - name: total
     type: int
     description: How many callers the lookup found; more than callers lists when it was capped.
     optional: false
+  - name: implementers
+    type: list<string>
+    description: >-
+      For a method of an abstraction: each contract implementing it, at any depth, that restates the
+      method with the signature it had before this write, as <contract>.<method>. Each will report
+      IMPLEMENTS_MISMATCH until it restates the new signature (a hand edit follows nothing; renames
+      do). Absent when there are none.
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-11-22T22:56:07.705Z'
-updatedAt: '2026-11-22T22:56:08.114Z'
+updatedAt: '2026-11-23T07:01:00.459Z'

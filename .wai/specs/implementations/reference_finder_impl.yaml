@@ -36,7 +36,12 @@ methods:
           Take the design's references through the index's own walk (referencesTo for a spec,
           methodReferencesTo for a method): each dependsOn or owns, each implements entry of a
           contract naming it as an abstraction (kind implements), each call, dispatch or register
-          step, each type position, at evidence declared, with the referring spec's place
+          step, each type position, at evidence declared, with the referring spec's place. For a
+          method of an abstraction, add the references to the same-named method of every local
+          abstraction implementing its component, at any depth (each restates the method, so its
+          callers reach this one), each saying the abstraction it came through, and each contract
+          restating the method below it, abstract or concrete, as a reference of kind implements;
+          the code references below are taken for each of those methods too
         type: local
       - stepNumber: 6
         description: >-
@@ -120,4 +125,4 @@ methods:
         outcome: references
 status: complete
 createdAt: '2026-10-25T19:16:15.020Z'
-updatedAt: '2026-11-22T02:27:49.038Z'
+updatedAt: '2026-11-23T07:00:59.469Z'

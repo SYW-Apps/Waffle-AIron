@@ -1294,29 +1294,31 @@ methods:
       made on that source and reaches the asked method through its signatureFrom; the report says so
       (routedFrom). The report names the export entries publishing the method and every follower's
       verb (publishedIn), method-granular with their former names (published), so a consumer calling
-      a published Portal verb that forwards the method is named among the breaks. Prose is never
-      rewritten. Refuses, writing nothing: a component no project in reach holds (spec-missing), one
-      another project holds (chained-spec — named through its alias, or a bare id only a member
-      holds: the sentence every write tool answers with, naming that project and how it is changed
-      there), a method no contract of the component declares (method-missing), a parameter the
-      method does not declare, or one it takes from another project's method or a signature type —
-      the refusal names the source and says a rename made there reaches this method (param-missing),
-      a new name that is not an identifier — or, when rules.naming.variables is set and no contract
-      of the component implements another project's extension point (an `alias::name` entry), not in
-      that casing (invalid-name) — or that an implementer that would follow cannot take in its own
-      subsystem's language, a word reserved for a parameter there (invalid-name, naming the
-      implementer), a name another parameter of the method holds, on the component or on an
-      implementer that would follow (name-taken), a spec it would write that lives in a read-only
-      git part (PartReadOnly, before the first write), and a name any parameter of the method
-      retired in its trace, on the component or on an implementer that would follow — its own
-      included, so renaming back to a former name is refused as a method rename refuses it, since
-      the trace would then list the parameter's own name (RENAME_TRACE_CONFLICT) and a consumer
-      holding the old key could not tell the two apart; unsetting that previousNames releases it
-      (name-retired). With dryRun it answers what it would move and respell, refusing exactly as the
-      real rename would, and writes nothing. A lock goes stale as with any edit. Inside a hosted
-      request every spec it would write — the moving contracts, every implementer's that follows and
-      every follower's — is judged against the request's write reach before the first write
-      (SubsystemWriteDenied).
+      a published Portal verb that forwards the method is named among the breaks. The code is never
+      read or written: the report lists the realizing functions the implementations name whose
+      parameter keeps the old name until edited (codeToRename), which the next validate would report
+      as PARAM_NAME_MISMATCH. Prose is never rewritten. Refuses, writing nothing: a component no
+      project in reach holds (spec-missing), one another project holds (chained-spec — named through
+      its alias, or a bare id only a member holds: the sentence every write tool answers with,
+      naming that project and how it is changed there), a method no contract of the component
+      declares (method-missing), a parameter the method does not declare, or one it takes from
+      another project's method or a signature type — the refusal names the source and says a rename
+      made there reaches this method (param-missing), a new name that is not an identifier — or,
+      when rules.naming.variables is set and no contract of the component implements another
+      project's extension point (an `alias::name` entry), not in that casing (invalid-name) — or
+      that an implementer that would follow cannot take in its own subsystem's language, a word
+      reserved for a parameter there (invalid-name, naming the implementer), a name another
+      parameter of the method holds, on the component or on an implementer that would follow
+      (name-taken), a spec it would write that lives in a read-only git part (PartReadOnly, before
+      the first write), and a name any parameter of the method retired in its trace, on the
+      component or on an implementer that would follow — its own included, so renaming back to a
+      former name is refused as a method rename refuses it, since the trace would then list the
+      parameter's own name (RENAME_TRACE_CONFLICT) and a consumer holding the old key could not tell
+      the two apart; unsetting that previousNames releases it (name-retired). With dryRun it answers
+      what it would move and respell, refusing exactly as the real rename would, and writes nothing.
+      A lock goes stale as with any edit. Inside a hosted request every spec it would write — the
+      moving contracts, every implementer's that follows and every follower's — is judged against
+      the request's write reach before the first write (SubsystemWriteDenied).
     signature: >-
       renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
       bool): ParamRename
@@ -1758,4 +1760,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-23T01:52:36.574Z'
+updatedAt: '2026-11-23T07:01:12.692Z'

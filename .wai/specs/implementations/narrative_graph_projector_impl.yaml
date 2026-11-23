@@ -24,9 +24,12 @@ methods:
           its abstraction); for a Portal implementer, the matching verb of each Portal of
           ctx.abstractionsOf its component (implementers are entered through their own entries, and
           an abstraction's verb counts as reached when any implementer's, at any depth, is; an
-          abstraction verb nobody's implementer reaches stays unreached). A counterpart is a method
-          of the same name, and a counterpart already reached is not enqueued again, which also ends
-          the walk on a cyclic design
+          abstraction verb nobody's implementer reaches stays unreached); and for an abstraction of
+          any type, the matching method of each abstraction of ctx.abstractionsOf its component,
+          marked reached (component and method) but never enqueued, so the lift up a chain does not
+          come down another branch to a sibling's implementers. A counterpart is a method of the
+          same name, and a counterpart already reached is not enqueued again, which also ends the
+          walk on a cyclic design
         type: local
       - stepNumber: 2
         label: seedLoop
@@ -219,4 +222,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:13:09.851Z'
-updatedAt: '2026-11-22T02:19:18.925Z'
+updatedAt: '2026-11-23T07:01:03.855Z'

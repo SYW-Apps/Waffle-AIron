@@ -71,8 +71,9 @@ methods:
   - name: ensureProjectInitialized
     description: >-
       Write path for completing a project's bootstrap non-destructively (wairon init, the generate
-      cascade): the default configuration and the L0 system spec, each only when absent. A
-      configuration it writes declares the given id, else the chosen name slugified.
+      cascade): the default configuration, the L0 system spec and the .wai/.gitignore line keeping
+      the spec write lock out of git, each only when absent. A configuration it writes declares the
+      given id, else the chosen name slugified.
     signature: 'ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): ProjectBootstrap'
     returns: ProjectBootstrap
     params:
@@ -322,4 +323,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-11-21T16:11:20.115Z'
+updatedAt: '2026-11-23T07:01:21.315Z'

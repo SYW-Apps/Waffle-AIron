@@ -597,8 +597,9 @@ methods:
       - stepNumber: 6
         description: >-
           Refuse, writing nothing, naming the request, the branch it was made on and the branch
-          checked out: switch back to that branch to approve what was asked, or pass --force to
-          approve this checkout's design anyway
+          checked out: switch back to that branch to approve what was asked, withdraw the request
+          with `wairon review withdraw <id>` when it is no longer wanted, or pass --force to approve
+          this checkout's design anyway
         type: throw
         error: the pending lock request was made on another branch
       - stepNumber: 7
@@ -661,4 +662,4 @@ lint:
         surfaces word-identical, which a second copy in the runner would not.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-11-23T00:54:39.688Z'
+updatedAt: '2026-11-23T07:01:18.535Z'

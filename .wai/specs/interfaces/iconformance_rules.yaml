@@ -863,7 +863,10 @@ methods:
       holding its methods, whatever constructor, helpers or default bodies the class also holds, the
       same shape param-conformance reads — is promised surface of that abstraction's file: never
       UNDECLARED_EXPORT or UNDECLARED_PUBLIC_MEMBER, whoever takes it (implementers, callers, a
-      composition root).
+      composition root); but a member of it every implementer owes (an interface, trait or Protocol
+      member, an abstract method) that no contract method of the abstraction names is
+      UNDECLARED_PUBLIC_MEMBER, used or not: surface every implementer must realize and no design
+      names.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1518,4 +1521,4 @@ methods:
           yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-11-23T00:54:31.268Z'
+updatedAt: '2026-11-23T07:01:08.544Z'

@@ -18,10 +18,13 @@ methods:
       the matching method of every local implementer below it, abstract and concrete, which no
       dependsOn needs to name, and reaching a verb of an implementer of a Portal abstraction reaches
       the matching verb of every Portal abstraction above it, since implementers are entered through
-      their own entries. The counterparts are read through ctx.implementersOf and
-      ctx.abstractionsOf, which are cycle-safe, and a component already reached is never reached
-      again, so a cyclic design ends the walk too. Pure: the same context, seeds and options always
-      give the same reach.
+      their own entries; and reaching a method of an abstraction reaches the matching method of
+      every abstraction above it, of any type, since each level restates the same contract — that
+      lift marks the method reached without following it down again, so reaching one branch of a
+      chain never reaches a sibling branch's implementers. The counterparts are read through
+      ctx.implementersOf and ctx.abstractionsOf, which are cycle-safe, and a component already
+      reached is never reached again, so a cyclic design ends the walk too. Pure: the same context,
+      seeds and options always give the same reach.
     signature: 'walk(ctx: RuleContext, seeds: list<WalkSeed>, options?: WalkOptions): NarrativeReach'
     returns: NarrativeReach
     params:
@@ -68,4 +71,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-14T06:07:00.382Z'
-updatedAt: '2026-11-22T02:19:16.651Z'
+updatedAt: '2026-11-23T07:01:02.847Z'

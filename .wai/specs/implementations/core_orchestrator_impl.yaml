@@ -804,11 +804,17 @@ methods:
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
       - stepNumber: 9
+        description: >-
+          Make sure .wai/.gitignore keeps the spec write lock out of git — the one helper every .wai
+          uses (created when absent, the line added when the file lacks it, anything else in it
+          kept), so a project started without `wairon init` commits no lock files
+        type: local
+      - stepNumber: 10
         description: Drop the spec loader cache when anything was written
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 10
+      - stepNumber: 11
         description: Report which files were written
         type: return
         outcome: ProjectBootstrap
@@ -2981,7 +2987,7 @@ methods:
           refused before anything is read further, in the one sentence every write tool answers with
         type: branch
         condition: the component exists and is not inside a chained subproject
-        onFalseStep: 21
+        onFalseStep: 22
       - stepNumber: 3
         description: >-
           Load every interface spec, and collect the contracts of the component that declare the
@@ -3026,7 +3032,7 @@ methods:
         condition: >-
           the method and parameter are declared, the new name is acceptable, and it is neither taken
           nor retired on the method
-        onFalseStep: 21
+        onFalseStep: 22
       - stepNumber: 8
         description: >-
           Find the implementers of this project the parameter follows onto, directly or through a
@@ -3049,74 +3055,86 @@ methods:
         type: local
       - stepNumber: 10
         description: >-
+          Read the implementations and collect codeToRename: for each method the parameter moves on
+          (the component's and each implementer's that follows), the realizing function each
+          implementation of its contract names (the method's sourcePath, else the implementation's,
+          with its symbol, else the method's name), an abstraction's declaration included, as
+          <file>: <symbol>. The code keeps the old name until edited, and the next validate reports
+          PARAM_NAME_MISMATCH there; nothing reads or writes the code
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 11
+        description: >-
           Judge every interface file the rename would write — the moving contracts, those of each
           implementer that follows, and each follower whose HTTP binding spells the old placeholder
           — against the hosted request's write reach before the first write, and refuse one that
           lives in a read-only git part (PartReadOnly) there too, dry run included
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         label: paramDryRun
         description: A dry run stops here, refused exactly as the real rename above
         type: branch
         condition: dryRun is set
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 14
+      - stepNumber: 13
         description: >-
           Answer the ParamRename the rename would produce — the interfaces it would move in, the
           implementer methods that would follow (followed), every placeholder it would respell (the
-          own bindings' and the followers') and publishedIn — marked dryRun; nothing was written
+          own bindings' and the followers') publishedIn and codeToRename — marked dryRun; nothing
+          was written
         type: return
         outcome: ParamRename (dry run)
-      - stepNumber: 13
+      - stepNumber: 14
         label: contractLoop
         description: >-
           Rename the parameter on each moving contract, the component's own and each implementer's
           that follows
         type: loop
         over: the moving contracts, and the contracts of the implementers that follow
-        endStep: 15
-      - stepNumber: 14
+        endStep: 16
+      - stepNumber: 15
         description: >-
           Rename the parameter in place, appending its old name to the parameter's previousNames,
           re-derive the method's signature text from its params, and respell an HTTP endpoint path
           placeholder on the method's own binding in the form it was written — `{old}` to `{new}`,
           the Express idiom `/:old` to `/:new` — recording each
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Save the interface
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 16
+      - stepNumber: 17
         label: followerLoop
         description: Respell the placeholder on each follower
         type: loop
         over: the followers whose HTTP binding names the old placeholder
-        endStep: 18
-      - stepNumber: 17
+        endStep: 19
+      - stepNumber: 18
         description: >-
           Respell the follower's HTTP endpoint path placeholder in the form it was written — `{old}`
           to `{new}`, `/:old` to `/:new` — recording each; its params are the source's, which the
           loader resolves
         type: local
-      - stepNumber: 18
+      - stepNumber: 19
         description: Save the follower's interface
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 19
+      - stepNumber: 20
         description: Drop the loader cache so the next read sees the renamed parameter
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 20
+      - stepNumber: 21
         description: >-
           Answer the ParamRename: component, method, from, to, the interfaces it moved in, the
           implementer methods it followed onto (followed), the placeholders respelled (own and
-          followers') and publishedIn
+          followers') publishedIn and codeToRename
         type: return
         outcome: ParamRename
-      - stepNumber: 21
+      - stepNumber: 22
         label: refuse
         description: >-
           Refuse with the reason that applies (spec-missing, chained-spec, method-missing,
@@ -4096,4 +4114,4 @@ methods:
         outcome: the specs the method moved in and the pinned symbol, when one was set
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-23T01:52:40.726Z'
+updatedAt: '2026-11-23T07:02:16.455Z'
