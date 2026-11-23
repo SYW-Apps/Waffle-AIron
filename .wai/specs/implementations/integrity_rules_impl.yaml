@@ -1954,6 +1954,47 @@ methods:
         type: local
     symbol: check
     exportedVia: implementsConsistencyRule
+  - name: projectUseCycles
+    sourcePath: src/core/rules/integrity/project-use-cycles.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        description: >-
+          Build the use graph: an edge from consumer to producer for each cross-project reference of
+          the graph (project_family.references) whose consumer and producer are different projects,
+          keeping the first reference of each edge as its witness. Membership and parts add no edge:
+          containment is no use
+        type: local
+      - stepNumber: 5
+        description: Is the bound project on a loop of that graph?
+        type: branch
+        condition: a path of edges leads from the bound project back to itself
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report PROJECT_USE_CYCLE (error; no spec: the uses are the projects') once, naming the
+          projects around the shortest loop in order, each edge with its witness (the referring spec
+          and the name it writes), and the fix: move what both sides use into a project of its own
+          that each uses, or make the member a part again (member demote)
+        type: local
+      - stepNumber: 7
+        description: Every loop through the bound project is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: projectUseCyclesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-11-22T02:33:33.550Z'
+updatedAt: '2026-11-23T19:16:58.578Z'

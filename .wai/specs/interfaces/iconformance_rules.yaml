@@ -282,10 +282,10 @@ methods:
       as in TypeScript, and is UNDECLARED_COLOCATED_CALL when the method claims it nowhere; a
       landing only a shared name suggests (a method of an undeclared field, a local or parameter
       shadowing the module's function) is never one. A claim on a component whose own code drifted
-      from its contract's return (RETURN_TYPE_MISMATCH) is not reported as CALL_ORIGIN_UNRESOLVED: a
-      port typed after the contract no longer matches the class, so the call no longer resolves for
-      that reason — the drift's consequence, held under that one finding and judged again once it is
-      fixed.
+      from its contract's signature (RETURN_TYPE_MISMATCH, or a parameter's: PARAM_TYPE_MISMATCH,
+      UNDECLARED_PARAM, UNREALIZED_PARAM) is not reported as CALL_ORIGIN_UNRESOLVED: a port typed
+      after the contract no longer matches the class, so the call no longer resolves for that reason
+      — the drift's consequence, held under that one finding and judged again once it is fixed.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -502,34 +502,35 @@ methods:
       name, of a method the target's contract declares (its code name: the verb in snake_case, or
       the method's symbol), which is all a collaborator injected through a Protocol writes down; an
       edge between a component read in one language and one read in the other is not judged. And a
-      declared edge whose target's own code drifted from its contract (RETURN_TYPE_MISMATCH) is not
-      reported as UNREALIZED_DEPENDENCY: a port typed after the contract no longer matches the
-      class, so the edge only looks stale — the drift's consequence, held under that one finding and
-      judged again once it is fixed. The one reverse import a declared edge justifies is a MOUNT: a
-      Portal or Observer that depends on a component of its own subsystem without calling it — no
-      narrative call or dispatch step, declared call or dispatch-table binding of the Portal names
-      it — whose file imports the Portal's to dispatch inward (a server mounting its Portals). A
-      component the Portal calls is its downstream collaborator, so that component importing the
-      Portal back runs against the declared edge — an import cycle, UNDECLARED_DEPENDENCY on the
-      importer, the finding naming the edge it inverts — and such a reverse import realizes no edge
-      of a Portal that calls. An abstraction's interface file stands for it, and a chain of
-      abstractions is read transitively through ctx.abstractionsOf and ctx.implementersOf: a call or
-      edge through the declared interface type of an abstraction the caller depends on that lands on
-      the class of any transitive implementer, abstract or concrete, is justified by the caller's
-      dependsOn on that abstraction, never UNDECLARED_DEPENDENCY on the implementer, and the
-      caller's import of that interface file, type-only included, realizes its dependsOn on the
-      abstraction. Only a landing made through the interface type is justified: a direct import of
-      an implementer's file, or a direct call on an implementer's class, is judged as any other edge
-      and is not excused by the abstraction, and a direct call on an implementer's class never
-      realizes a dependsOn on the abstraction: only the import of the interface file, or a call made
-      through the interface type that the checker lands in a file of a transitive implementer, does.
-      An implementer's own file is held to no such rule towards its abstractions: a local implements
-      entry is itself the declared relation, so a runtime import, re-export or call from an
-      implementer's file to the file of any abstraction it implements, at any depth of the chain (a
-      plain import beside `implements`, an `extends` of an abstract class declaring the abstraction,
-      a Python base class imported from the abstraction's module), is justified and never
-      UNDECLARED_DEPENDENCY. The reverse is not: an abstraction's file importing an implementer's is
-      judged as any other edge.
+      declared edge whose target's own code drifted from its contract's signature
+      (RETURN_TYPE_MISMATCH, or a parameter's: PARAM_TYPE_MISMATCH, UNDECLARED_PARAM,
+      UNREALIZED_PARAM) is not reported as UNREALIZED_DEPENDENCY: a port typed after the contract no
+      longer matches the class, so the edge only looks stale — the drift's consequence, held under
+      that one finding and judged again once it is fixed. The one reverse import a declared edge
+      justifies is a MOUNT: a Portal or Observer that depends on a component of its own subsystem
+      without calling it — no narrative call or dispatch step, declared call or dispatch-table
+      binding of the Portal names it — whose file imports the Portal's to dispatch inward (a server
+      mounting its Portals). A component the Portal calls is its downstream collaborator, so that
+      component importing the Portal back runs against the declared edge — an import cycle,
+      UNDECLARED_DEPENDENCY on the importer, the finding naming the edge it inverts — and such a
+      reverse import realizes no edge of a Portal that calls. An abstraction's interface file stands
+      for it, and a chain of abstractions is read transitively through ctx.abstractionsOf and
+      ctx.implementersOf: a call or edge through the declared interface type of an abstraction the
+      caller depends on that lands on the class of any transitive implementer, abstract or concrete,
+      is justified by the caller's dependsOn on that abstraction, never UNDECLARED_DEPENDENCY on the
+      implementer, and the caller's import of that interface file, type-only included, realizes its
+      dependsOn on the abstraction. Only a landing made through the interface type is justified: a
+      direct import of an implementer's file, or a direct call on an implementer's class, is judged
+      as any other edge and is not excused by the abstraction, and a direct call on an implementer's
+      class never realizes a dependsOn on the abstraction: only the import of the interface file, or
+      a call made through the interface type that the checker lands in a file of a transitive
+      implementer, does. An implementer's own file is held to no such rule towards its abstractions:
+      a local implements entry is itself the declared relation, so a runtime import, re-export or
+      call from an implementer's file to the file of any abstraction it implements, at any depth of
+      the chain (a plain import beside `implements`, an `extends` of an abstract class declaring the
+      abstraction, a Python base class imported from the abstraction's module), is justified and
+      never UNDECLARED_DEPENDENCY. The reverse is not: an abstraction's file importing an
+      implementer's is judged as any other edge.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1107,30 +1108,32 @@ methods:
       function handed a response handle (`injectedParams`: res, response, reply, ctx, context),
       which writes its result through the handle, an unannotated body, and a type either side does
       not read or the design does not know — never accused. A caller whose port no longer matches
-      the drifted class is not reported again on its own: its call to the drifted component that no
-      longer resolves (CALL_ORIGIN_UNRESOLVED) and its declared edge to it that no longer shows
-      (UNREALIZED_DEPENDENCY) are held under RETURN_TYPE_MISMATCH and judged again once it is fixed.
-      An abstraction's method is compared where a body would be, with the declaration its file
-      states, never with a body: the signature of the method-style member of its interface, trait,
-      Protocol or abstract class (type_shape_fact.signatures, one candidate per overload, a
-      function-typed property included, and the members of a shape it extends or intersects read as
-      the one shape it is: `interface Dog extends Animal`, `type Dog = Animal & Walker`), whatever
-      constructor, helpers or default bodies an abstract class also holds, which are never judged
-      and never modelled; through the same parameter, type, optionality and return comparisons and
-      the same codes (UNREALIZED_PARAM, UNDECLARED_PARAM, PARAM_NAME_MISMATCH, PARAM_OPTIONALITY,
-      PARAM_TYPE_MISMATCH, RETURN_TYPE_MISMATCH), at exact grade and, for a Protocol, by the Python
-      reader. An implementer stays compared with its own contract, which implements-contracts holds
-      to its abstraction's, so abstraction code, its contract, the implementers' contracts and their
-      code close one loop; where a grade cannot read member signatures nothing is guessed, and the
-      abstraction says so once: ABSTRACTION_DECLARATION_UNCOMPARED, a notice on its implementation,
-      names each contract method whose declaration nothing compared and why — the file's language
-      has no reader of member signatures (Rust, Go, Java today), it was read below exact grade, or
-      the member sits only on a concrete class, which declares nothing — the same in every language,
-      so a declaration left uncompared is never silent. Python is read without a type checker by the
-      analyzer's signature reader (source_file_facts.reads): its `def` parameter names — compared in
-      the language's snake_case, so the contract's `documentId` is the code's `document_id` — their
-      annotations and return annotations, the receiver (`self`, `cls`) set aside, judged like any
-      other signature; an unannotated Python parameter is never read as opaque.
+      the drifted class — a return or a parameter drifted — is not reported again on its own: its
+      call to the drifted component that no longer resolves (CALL_ORIGIN_UNRESOLVED) and its
+      declared edge to it that no longer shows (UNREALIZED_DEPENDENCY) are held under the drift's
+      own finding (RETURN_TYPE_MISMATCH, PARAM_TYPE_MISMATCH, UNDECLARED_PARAM or UNREALIZED_PARAM)
+      and judged again once it is fixed. An abstraction's method is compared where a body would be,
+      with the declaration its file states, never with a body: the signature of the method-style
+      member of its interface, trait, Protocol or abstract class (type_shape_fact.signatures, one
+      candidate per overload, a function-typed property included, and the members of a shape it
+      extends or intersects read as the one shape it is: `interface Dog extends Animal`, `type Dog =
+      Animal & Walker`), whatever constructor, helpers or default bodies an abstract class also
+      holds, which are never judged and never modelled; through the same parameter, type,
+      optionality and return comparisons and the same codes (UNREALIZED_PARAM, UNDECLARED_PARAM,
+      PARAM_NAME_MISMATCH, PARAM_OPTIONALITY, PARAM_TYPE_MISMATCH, RETURN_TYPE_MISMATCH), at exact
+      grade and, for a Protocol, by the Python reader. An implementer stays compared with its own
+      contract, which implements-contracts holds to its abstraction's, so abstraction code, its
+      contract, the implementers' contracts and their code close one loop; where a grade cannot read
+      member signatures nothing is guessed, and the abstraction says so once:
+      ABSTRACTION_DECLARATION_UNCOMPARED, a notice on its implementation, names each contract method
+      whose declaration nothing compared and why — the file's language has no reader of member
+      signatures (Rust, Go, Java today), it was read below exact grade, or the member sits only on a
+      concrete class, which declares nothing — the same in every language, so a declaration left
+      uncompared is never silent. Python is read without a type checker by the analyzer's signature
+      reader (source_file_facts.reads): its `def` parameter names — compared in the language's
+      snake_case, so the contract's `documentId` is the code's `document_id` — their annotations and
+      return annotations, the receiver (`self`, `cls`) set aside, judged like any other signature;
+      an unannotated Python parameter is never read as opaque.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1521,4 +1524,4 @@ methods:
           yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-11-23T07:01:08.544Z'
+updatedAt: '2026-11-23T19:17:05.098Z'

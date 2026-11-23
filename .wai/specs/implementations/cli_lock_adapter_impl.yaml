@@ -564,37 +564,56 @@ methods:
   - name: assertApprovable
     narrative:
       - stepNumber: 1
+        description: Read the loader's diagnostics for the bound tree
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: getLoaderIssues
+      - stepNumber: 2
+        description: Did the loader skip part of the tree it was asked to read?
+        type: branch
+        condition: >-
+          a loader issue at error severity (an escaping or circular member path, an unreadable
+          document)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse, writing nothing, naming each loader error with its member or file: the approval
+          records one digest per spec read, so a tree read in part would be approved as if the rest
+          did not exist. --force does not override it: fix the declaration, then lock
+        type: throw
+        error: the tree could not be read whole
+      - stepNumber: 4
         description: 'Read the project configuration: its composition block (requireApprovedMembers)'
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-      - stepNumber: 2
+      - stepNumber: 5
         description: >-
           Does the project require approved members, and is a PROJECT member not approved? (A part
           has no approval of its own: this lock is its approval)
         type: branch
         condition: composition.requireApprovedMembers and a direct project member is not approved
-        onFalseStep: 4
-      - stepNumber: 3
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Refuse, writing nothing, naming each drifted or never-approved direct member with its
           state and the remedy: lock each at its own root first. A parent never approves below
           itself
         type: throw
         error: composition.requireApprovedMembers
-      - stepNumber: 4
+      - stepNumber: 7
         description: Read the newest pending lock request made on another branch than the checkout has now
         type: call
         targetComponent: approval_portal
         targetMethod: reviewBranchConflict
-      - stepNumber: 5
+      - stepNumber: 8
         description: >-
           Would this lock approve another branch's design than the one an agent asked to have
           approved, and was --force not given?
         type: branch
         condition: a conflict was answered and force is not set
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 10
+      - stepNumber: 9
         description: >-
           Refuse, writing nothing, naming the request, the branch it was made on and the branch
           checked out: switch back to that branch to approve what was asked, withdraw the request
@@ -602,7 +621,7 @@ methods:
           this checkout's design anyway
         type: throw
         error: the pending lock request was made on another branch
-      - stepNumber: 7
+      - stepNumber: 10
         description: Approvable
         type: return
         outcome: ok
@@ -662,4 +681,4 @@ lint:
         surfaces word-identical, which a second copy in the runner would not.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-11-23T07:01:18.535Z'
+updatedAt: '2026-11-23T19:17:00.253Z'
