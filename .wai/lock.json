@@ -2,9 +2,9 @@
   "format": 4,
   "stateId": {
     "algorithm": "sha256+design+policy",
-    "digest": "fa2464d6f3b44fe948ee1cc5ba6964efe7ce5c3eac2a4f7fecf11cec8bd82407"
+    "digest": "2a87ec8d064f8ee691b8f7b9654bc875c4a0fe8b788fb47fd83d1a82e2ca875f"
   },
-  "lockedAt": "2026-11-23T07:29:29.115Z",
+  "lockedAt": "2026-11-23T17:36:20.024Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -426,7 +426,7 @@
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "4f9617c76a4449425f61e59014f5bcb071d95400260d676ad238adbda55353f0",
     ".wai/specs/implementations/code_model_cache_impl.yaml": "318dba2d81b2c4dc8d6ea7cf6ed7998a0fd6cc705446be0e3133b966267f8163",
     ".wai/specs/implementations/code_model_loader_impl.yaml": "0fd5310de08645b3918f12fe64388aa6ce1f141420f3e875821f2435932f314a",
-    ".wai/specs/implementations/conformance_rules_impl.yaml": "d16a1e93cf393799a0152f94e6b7053ce4a88713ae46e6d506aeb4f391670c8a",
+    ".wai/specs/implementations/conformance_rules_impl.yaml": "ae90878314a0752476de9a53ea9ffb45a5634ae20c7beb04369210d48ac843d1",
     ".wai/specs/implementations/content_fingerprint_impl.yaml": "79ac129cc58d3885908274143ec5dcfdf5bd86f32b4e8c20a3653ac42af1b26d",
     ".wai/specs/implementations/context_composer_impl.yaml": "f839aa8f55e33ebe754bf4cf7c3a391cd3ca9e76c9a5867fc4c559d9278a0d59",
     ".wai/specs/implementations/context_store_impl.yaml": "b8de786be17e816b1c1e2fd070f56ca7a85df41a87d389d5efbba5b2a7f9b252",
@@ -1423,7 +1423,7 @@
     ".wai/specs/types/lookup_impact.yaml": "41c3bafb3d93ea87b84d37e5214b025b90ffaea79045f0651d7099e7b1434fd7",
     ".wai/specs/types/lookup_match.yaml": "917a31d7558f74a453b735e56dfa5b56acb54c85ef464519f467410d02303992",
     ".wai/specs/types/lookup_place.yaml": "997d9fa8eb1b3b8692e3f3e2c558c94904d4486c8f866d607a04b046ce5504bd",
-    ".wai/specs/types/lookup_reference.yaml": "579da891ac15c8c6a0b9adb0ad72a63d983122bd0f6c88da239ae0fae776eab4",
+    ".wai/specs/types/lookup_reference.yaml": "6d7219ed8dfcd0bce0c778f29df6312f3536c676652f808f18192abda3fdbd76",
     ".wai/specs/types/lookup_reference_kind.yaml": "84ef63ad5e13f17048261ced1d36595f57d14f9ccb881a6f93a345e0966ed901",
     ".wai/specs/types/lookup_references_result.yaml": "f07124c5dca93cc08e42fdc56be38d38e259ae9f79b6f63034b450bca50b5c2d",
     ".wai/specs/types/lookup_search_result.yaml": "cf7f9702309d87b1e701024893fc2cf1ebe4d655483f307f0687d93ad9e1a4b0",
@@ -1448,7 +1448,7 @@
     ".wai/specs/types/member_reconciliation.yaml": "898b393b095e3b457dd80259459db5c1301719d38031768e6b78ac78878e69da",
     ".wai/specs/types/member_relocation.yaml": "5dbe528ffa27690f8ab9436e944273b16d4cc9c9245239150d4d1ac43de0d937",
     ".wai/specs/types/member_revision.yaml": "89d7abe46e98c6eb6db3bfcdfd5c5a8e2c3877506fdbc9d903b804e703f38086",
-    ".wai/specs/types/member_signature_fact.yaml": "ff297d93f781288402237eec9132a644b9abb5d9e4a3d9f57e338611bfd5c202",
+    ".wai/specs/types/member_signature_fact.yaml": "4cc9655d2bc690c45a2ea4d683b19ce06b402fb92e35e43f641c5c1f20fca980",
     ".wai/specs/types/member_source.yaml": "59df095022695e7cc4c310e5ffaae28c1373d8f414380b2a201ef23d34cc0ba5",
     ".wai/specs/types/member_storage.yaml": "dfbd37c89d6edbbee8118764477417a74d1adc83c27db19d754bb4cfa580035d",
     ".wai/specs/types/member_upgrade_plan.yaml": "86d3d94a806b6ccc22fe4d3160e87ebff2da16753466e832fd1100dbb374f454",
@@ -1669,7 +1669,7 @@
     ".wai/specs/types/role_permission.yaml": "f5523dd7f8abdbeb33c2218e48ae03496e5c8ea5afff41e2117458018c177538",
     ".wai/specs/types/route_fact.yaml": "d83911b977f915f1df27ca5236068f6cf2c4d73aa2c032477b4e8c7dbb7abd44",
     ".wai/specs/types/rule_code.yaml": "5d34eace33b361a449ee8e6020821aa959dbe634bdb71a04e02fee375546a9e5",
-    ".wai/specs/types/rule_context.yaml": "a6c5ad71aed254aca122a69be11b4cca51b59022991c32d2d1297f056992417f",
+    ".wai/specs/types/rule_context.yaml": "1e06a4d848c4b68e69ce7359bb71fc168ef03ddf0f8dec6f2e7b45d6596a807e",
     ".wai/specs/types/rule_ext.yaml": "43abcaea5ca3d20d0f4f3b94091d9b9d25672a6abd97e29a8885a7d474e5c189",
     ".wai/specs/types/rule_judgement.yaml": "0f992360e4e978e45769d575f2220fc47dd4f433ed625228b146677bd56c336f",
     ".wai/specs/types/rule_lowering.yaml": "6f109477a7743d06a97db15bc0b5995544918bc44ed8eeb02867774fca86023d",
@@ -1865,7 +1865,7 @@
   },
   "parts": {
     "composition": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-    "design": "c77b0e988a1d153b21bbaa744b3a8bfb01beadfa8e447be8a479267cbf879386",
+    "design": "ff57813659793ea4b8998361a331286a8f0eb19fa47004bad16c1411d6d845f5",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "selections": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
@@ -1876,7 +1876,7 @@
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 6,
+    "warnings": 2,
     "notices": 95
   }
 }
