@@ -1840,7 +1840,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     if (!signature.completesLater && fn.type) signaturePositions.set(signature, fn.pos);
     return signature;
   };
-  const addSignature = (into: Map<string, MemberSignatureFact[]>, name: string, signature: MemberSignatureFact): void => {
+  // Whether every implementer must realize a member: an interface member and an `abstract` class member are
+  // owed; any other class member has a body an implementer inherits.
+  const isOwed = (node: import('typescript').ClassElement | import('typescript').TypeElement): boolean =>
+    ts.isMethodSignature(node) || ts.isPropertySignature(node)
+    || (ts.canHaveModifiers(node) && !!ts.getModifiers(node)?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword));
+  const addSignature = (into: Map<string, MemberSignatureFact[]>, name: string, signature: MemberSignatureFact, owner?: import('typescript').ClassElement | import('typescript').TypeElement): void => {
+    if (owner) signature.owed = isOwed(owner);
     into.set(name, [...(into.get(name) ?? []), signature]);
   };
   // The signatures a property states by its type: one function type, or the
@@ -1922,12 +1928,12 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
           const overloaded = ts.isMethodDeclaration(member) && !!member.body
             && members.some(other => other !== member && ts.isMethodDeclaration(other) && !other.body
               && !!other.name && propertyNameText(other.name) === memberName);
-          if (!overloaded) addSignature(signatures, memberName, memberSignature(member));
+          if (!overloaded) addSignature(signatures, memberName, memberSignature(member), member);
         }
       } else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {
         if (isBacking(member, memberName)) continue;
         // A property typed by a function type IS a method as far as any caller can tell.
-        if (!isPrivate(member)) for (const signature of functionTypeSignatures(member)) addSignature(signatures, memberName, signature);
+        if (!isPrivate(member)) for (const signature of functionTypeSignatures(member)) addSignature(signatures, memberName, signature, member);
         fields.push({ name: memberName, optional: !!member.questionToken, ...(member.type ? { type: member.type.getText(sf).replace(/\s+/g, ' ').trim() } : {}) });
       }
     }
@@ -4595,7 +4601,9 @@ function resolveCalls(
       const returned = fn.type;
       const later = !!mods?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword)
         || (!!returned && ts.isTypeReferenceNode(returned) && lateType(returned));
-      return { params, ...(returned ? { returns: returned.getText().replace(/\s+/g, ' ').trim() } : {}), completesLater: later };
+      const owed = ts.isMethodSignature(fn) || ts.isFunctionTypeNode(fn) || ts.isCallSignatureDeclaration(fn)
+        || (ts.isMethodDeclaration(fn) && !!mods?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword));
+      return { params, ...(returned ? { returns: returned.getText().replace(/\s+/g, ' ').trim() } : {}), completesLater: later, owed };
     };
     const declared = (declaration: import('typescript').Declaration): MemberSignatureFact[] => {
       if (isPrivate(declaration)) return [];
@@ -7039,7 +7047,7 @@ function readPython(text: string): PythonFacts {
       if (methodOf !== undefined && innermost?.protocol && !isAccessor && !name.startsWith('_')) {
         const shape = innermost.protocol;
         if (!shape.methods.includes(name)) shape.methods.push(name);
-        const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: completes };
+        const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: completes, owed: true };
         const held = shape.signatures ?? (shape.signatures = {});
         // Own-name keyed: a method called `constructor` is its own entry.
         Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
@@ -7052,7 +7060,7 @@ function readPython(text: string): PythonFacts {
         if (!isAccessor && !name.startsWith('_') && !isAbstractProperty) {
           const shape = innermost.abc.shape;
           if (!shape.methods.includes(name)) shape.methods.push(name);
-          const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: completes };
+          const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: completes, owed: isAbstract };
           const held = shape.signatures ?? (shape.signatures = {});
           Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
         }

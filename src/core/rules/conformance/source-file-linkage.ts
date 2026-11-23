@@ -1,3 +1,5 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   implementationSourceFiles,
   pathKey,
@@ -48,6 +50,19 @@ export function plannedCode(ctx: RuleContext): { severity: Severity; note: strin
   return ctx.rules?.conformance?.requireCode === true
     ? { severity: 'error', note: ' — an error because rules.conformance.requireCode asks every designed implementation to have code' }
     : { severity: 'notice', note: '' };
+}
+
+/**
+ * The spelling from the bound root of a planned file that is on disk under the folder of the part holding the
+ * spec — a path written as if relative to the part is the likely slip. Absent when the spec is not a part's,
+ * or the file is not there either. (The one disk probe of this rule, made only for a file already missing.)
+ */
+function partSpelling(ctx: RuleContext, specId: string, file: string): string | undefined {
+  const folder = ctx.partFolderOf(specId);
+  if (folder === undefined) return undefined;
+  const spelled = pathKey(path.posix.join(folder, pathKey(file)));
+  if (ctx.codeIndex().factsAt(spelled)?.status === 'analyzed') return spelled;
+  return fs.existsSync(path.resolve(ctx.codeModel.projectRoot, spelled)) ? spelled : undefined;
 }
 
 export const sourceFileLinkageRule: SddRule = {
@@ -176,7 +191,9 @@ export const sourceFileLinkageRule: SddRule = {
           // a design names the file a method will live in before the method is
           // written. A method nothing realizes once code exists is reported by
           // method-realization and METHOD_SOURCE_PATH_MISSING, not here.
-          plannedFiles.push(users.length === 0 ? `"${file}"` : `"${file}" (${users.length === 1 ? 'method' : 'methods'} ${quoteList(users)})`);
+          const slip = partSpelling(ctx, impl.id, file);
+          const spelled = slip ? `"${file}" (on disk at "${slip}" — written relative to its part?)` : `"${file}"`;
+          plannedFiles.push(users.length === 0 ? spelled : `${spelled} (${users.length === 1 ? 'method' : 'methods'} ${quoteList(users)})`);
         } else {
           ctx.addIssue(
             'warning',

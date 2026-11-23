@@ -679,8 +679,8 @@ export const exportConformanceRule: SddRule = {
       // A declaration realizing an abstraction is read for what it owes as well: each member every
       // implementer must realize (an interface member, an abstract method) that no contract method of the
       // abstraction names is surface no design names, used or not. A member with a body keeps the use-based
-      // rule above. Python's reader keeps neither a Protocol apart from an ABC nor an abstract method apart
-      // from a defaulted one, so only a declaration whose members the reader marks as bodiless is read here.
+      // rule above. The reader marks each signature as owed (an interface, Protocol or abstract member, in
+      // TypeScript and Python alike), so only a member it marks owed is read here.
       for (const component of components) {
         if (component.abstract !== true) continue;
         const impls = realization.implementationsOf(component.id).filter(impl => (impl.conformance ?? defaultConformanceTier(component)) !== 'off');
@@ -690,12 +690,10 @@ export const exportConformanceRule: SddRule = {
         for (const shapeName of [...declaringShapeNames(facts, named, component)].sort()) {
           const shape = facts.typeShapes[shapeName];
           if (!shape?.signatures) continue;
-          const isClass = facts.classMembers !== undefined && Object.prototype.hasOwnProperty.call(facts.classMembers, shapeName);
           for (const member of Object.keys(shape.signatures)) {
             if (named.has(member) || member.startsWith('_') || IMPOSED_MEMBERS.has(member)) continue;
-            // A class's member owes the contract only where it has no body: an abstract method.
-            if (isClass && bodiesOf(member).some(body => body.container === shapeName)) continue;
-            if (isClass && facts.language === 'python') continue;
+            // Only a member the reader marks as owed (interface, Protocol, abstract) is read here.
+            if (!shape.signatures[member].some(signature => signature.owed === true)) continue;
             const label = `${shapeName}.${member}`;
             if (!undeclared.includes(label)) undeclared.push(label);
           }

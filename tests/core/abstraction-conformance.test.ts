@@ -41,7 +41,7 @@ describe('member signatures: the exact TypeScript reader', () => {
     expect(signatures.send).toEqual([{
       params: [{ name: 'recipient', type: 'string', optional: false }, { name: 'retries', type: 'number', optional: true }],
       returns: 'void',
-      completesLater: false,
+      completesLater: false, owed: true,
     }]);
     expect(signatures.fetch[0].returns).toBe('Promise<string>');
     expect(signatures.fetch[0].completesLater).toBe(true);
@@ -103,7 +103,7 @@ describe('member signatures: the exact TypeScript reader', () => {
     expect(signatures.ship[0]).toEqual({
       params: [{ name: 'weight', type: 'number', optional: false }, { name: 'express', type: 'boolean', optional: true }],
       returns: 'string',
-      completesLater: false,
+      completesLater: false, owed: true,
     });
     expect(signatures.poll[0].completesLater).toBe(true);
   });
@@ -151,7 +151,7 @@ describe('member signatures: the Python reader', () => {
     expect(signatures.send).toEqual([{
       params: [{ name: 'recipient', type: 'str', optional: false }, { name: 'retries', type: 'int', optional: true }],
       returns: 'None',
-      completesLater: false,
+      completesLater: false, owed: true,
     }]);
     expect(signatures.fetch[0].completesLater).toBe(true);
     expect(signatures.fetch[0].returns).toBe('str');
@@ -160,7 +160,7 @@ describe('member signatures: the Python reader', () => {
 
   it('keeps a parameter unannotated and a return absent when the Protocol states none', () => {
     const facts = read('src/sender.py', 'from typing import Protocol\n\n\nclass Sender(Protocol):\n    def send(self, recipient): ...\n');
-    expect(facts.typeShapes!.Sender.signatures!.send[0]).toEqual({ params: [{ name: 'recipient', optional: false }], completesLater: false });
+    expect(facts.typeShapes!.Sender.signatures!.send[0]).toEqual({ params: [{ name: 'recipient', optional: false }], completesLater: false, owed: true });
   });
 
   it('records a Protocol written with a typing prefix or a subscript, and a staticmethod keeps its first parameter', () => {
@@ -394,6 +394,32 @@ describe('an abstraction declaration is promised surface: export-conformance', (
     const messages = found(tree, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl').map((i) => i.message).join('\n');
     expect(messages).toContain('NoticeSender.flush');
     expect(messages).not.toContain('NoticeSender.trim');
+  });
+  it('Python: reports an extra @abstractmethod of an ABC, but not an extra method with a body', () => {
+    const impl = 'from .notice_sender import NoticeSender\n\n\nclass EmailSender(NoticeSender):\n    def send_notice(self, recipient: str) -> None:\n        print(recipient)\n\n    def flush(self) -> None:\n        pass\n';
+    const withAbstract = flat({
+      language: 'python',
+      declaration: 'from abc import ABC, abstractmethod\n\n\nclass NoticeSender(ABC):\n    @abstractmethod\n    def send_notice(self, recipient: str) -> None: ...\n\n    @abstractmethod\n    def flush(self) -> None: ...\n',
+      implementer: impl,
+    });
+    const messages = found(withAbstract, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl').map((i) => i.message).join('\n');
+    expect(messages).toContain('NoticeSender.flush');
+    expect(messages).not.toContain('NoticeSender.send_notice');
+    const withBody = flat({
+      language: 'python',
+      declaration: 'from abc import ABC, abstractmethod\n\n\nclass NoticeSender(ABC):\n    @abstractmethod\n    def send_notice(self, recipient: str) -> None: ...\n\n    def flush(self) -> None:\n        return None\n',
+      implementer: impl,
+    });
+    expect(found(withBody, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl')).toEqual([]);
+  });
+  it('Python: reports an extra member of a Protocol', () => {
+    const tree = flat({
+      language: 'python',
+      declaration: 'from typing import Protocol\n\n\nclass NoticeSender(Protocol):\n    def send_notice(self, recipient: str) -> None: ...\n    def flush(self) -> None: ...\n',
+    });
+    const messages = found(tree, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl').map((i) => i.message).join('\n');
+    expect(messages).toContain('NoticeSender.flush');
+    expect(messages).not.toContain('NoticeSender.send_notice');
   });
   it('promises only the declaration: a name beside it that another component takes still crosses', () => {
     const tree = flat({
