@@ -293,6 +293,36 @@ describe('an abstraction chain', () => {
     expect(found.impact).not.toBe('none');
   });
 
+  it('confirms a code call through a narrower declaration on abstractions whose implementations list no methods', async () => {
+    seedChain();
+    const proj = projects[projects.length - 1];
+    write(proj, 'src/carrier.ts', 'export interface Carrier { quote(weight: string): void; book(order: string): void; }\n');
+    write(proj, 'src/parcel.ts', "import { Carrier } from './carrier';\nexport interface ParcelCarrier extends Carrier { }\n");
+    write(proj, 'src/hall.ts', "import { ParcelCarrier } from './parcel';\nexport class Hall {\n  constructor(private readonly parcel: ParcelCarrier) {}\n  run(): void { this.parcel.book('o'); this.parcel.quote('1'); }\n}\n");
+    // Code linkage only: the abstractions' implementations name their file and list no methods.
+    saveImplementationSpec({ id: 'carrier_impl', name: 'CarrierImpl', description: 'c', contract: 'icarrier', sourcePath: 'src/carrier.ts', methods: [], status: 'complete', createdAt: now, updatedAt: now } as never);
+    saveImplementationSpec({ id: 'parcel_carrier_impl', name: 'ParcelImpl', description: 'p', contract: 'iparcel_carrier', sourcePath: 'src/parcel.ts', methods: [], status: 'complete', createdAt: now, updatedAt: now } as never);
+    saveImplementationSpec({
+      id: 'hall_impl', name: 'HallImpl', description: 'hall', contract: 'ihall', sourcePath: 'src/hall.ts',
+      methods: [{
+        name: 'run',
+        narrative: [
+          { stepNumber: 1, description: 'book', type: 'call', targetComponent: 'parcel_carrier', targetMethod: 'book' },
+          { stepNumber: 2, description: 'quote', type: 'call', targetComponent: 'parcel_carrier', targetMethod: 'quote' },
+        ],
+      } as never],
+      status: 'complete', createdAt: now, updatedAt: now,
+    });
+    invalidateSpecCache();
+    const { findReferences } = await import('../../src/core/validation.js');
+    for (const target of ['parcel_carrier.book', 'carrier.book']) {
+      const found = findReferences(target, false);
+      const step = found.references.find((r) => r.kind === 'call-step' && r.fromSpec === 'hall_impl');
+      expect(step?.agreement, target).toBe('confirmed');
+      expect(found.references.some((r) => r.kind === 'code-call' && r.file === 'src/hall.ts' && r.agreement === 'confirmed'), target).toBe(true);
+    }
+  });
+
   it('names the callers and the implementers when a signature of the topmost abstraction changes', () => {
     seedChain();
     const report = updateSpecGated('interface', 'icarrier', {

@@ -49,6 +49,14 @@ describe('lookup tools', () => {
     expect(expand.items.enum).toEqual([...REFERENCE_GROUPS]);
   });
 
+  it('declares every field a reference carries in its output schema, through included', async () => {
+    // A field the result carries but the schema leaves out makes the client refuse the whole answer.
+    await start();
+    const tool = (await client.listTools()).tools.find((x) => x.name === 'sdd_find_references')!;
+    const result = (tool.outputSchema!.properties as Record<string, { properties: Record<string, { items: { properties: Record<string, unknown> } }> }>).result;
+    expect(Object.keys(result.properties.references.items.properties)).toContain('through');
+  });
+
   it('search answers one line per match, and the whole result as structured content', async () => {
     await start();
     const a = await ask(client, 'sdd_search_specs', { query: 'src/ledger.ts' });

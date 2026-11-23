@@ -827,6 +827,9 @@ export function annotationAgreement(ctx: RuleContext): (language: string | undef
       // list where one value is, is another argument whatever the element;
       // bytes travel as a list too.
       const many = (e: TypeExpression): boolean => e.form === 'list' || e.form === 'set';
+      // A record is an object: where the design declares one, a parameter the code
+      // annotates as one scalar (a string, a number, a boolean) cannot hold it.
+      if (listsToo && c && !d && spec.form === 'named' && (typeOf(spec.name as string)?.fields ?? []).length > 0 && !holdsOf(spec.name as string)) return false;
       if (listsToo && ((c && many(spec) && c.name !== 'bytes') || (d && many(code) && d.name !== 'bytes'))) return false;
       // Collections are compared by kind and then by elements, nested collections
       // included, where both sides read; an element either side does not read as a type
@@ -1245,7 +1248,7 @@ export const paramConformanceRule: SddRule = {
           'PARAM_TYPE_MISMATCH',
           `Method "${method.name}" of contract "${implementation.contract}" declares ${mismatched.length} `
           + `parameter(s) ${subject} annotates as another type — ${mismatched.map(found => found.told).join('; ')}. `
-          + 'A caller built from the contract hands over a different value than the code takes (one value for a list, or a number for a string). '
+          + 'A caller built from the contract hands over a different value than the code takes (one value for a list, a number for a string, or a scalar for a record). '
           + 'Type the parameter as the contract declares it, or change the contract if the code is right.',
           implementation.id,
           draftContext,

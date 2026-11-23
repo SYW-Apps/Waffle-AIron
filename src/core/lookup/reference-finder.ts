@@ -150,11 +150,19 @@ function subjectFor(index: Index, target: LookupMatch): Subject {
         };
       }
       const contracts = index.interfaces.filter((i) => i.component === owner && i.methods.some((m) => m.name === name));
-      const impls = index.implementations.filter((impl) => contracts.some((c) => c.id === impl.contract) && impl.methods.some((m) => m.name === name));
+      // An implementation realizes the method in its own sourcePath unless a method entry names another
+      // file: an abstraction's implementation often lists no methods at all (code linkage only).
+      const realizes = (impl: Index['implementations'][number]): boolean => impl.methods.some((m) => m.name === name) || !!impl.sourcePath;
+      const impls = index.implementations.filter((impl) => contracts.some((c) => c.id === impl.contract) && realizes(impl));
       // The same-named method of every abstraction below it is this one's too: its code is searched with it.
       const below = implementersBelow(index, owner, name);
-      const belowImpls = index.implementations.filter((impl) => below.abstractions.some((a) => index.interfaces.some((i) => i.id === impl.contract && i.component === a)) && impl.methods.some((m) => m.name === name));
-      const realized = [...impls, ...belowImpls].flatMap((impl) => impl.methods.filter((m) => m.name === name).map((m) => ({ m, file: m.sourcePath ?? impl.sourcePath })));
+      const belowImpls = index.implementations.filter((impl) => below.abstractions.some((a) => index.interfaces.some((i) => i.id === impl.contract && i.component === a)) && realizes(impl));
+      const realized = [...impls, ...belowImpls].flatMap((impl) => {
+        const entries = impl.methods.filter((m) => m.name === name);
+        return entries.length > 0
+          ? entries.map((m) => ({ m: m as { symbol?: string }, file: m.sourcePath ?? impl.sourcePath }))
+          : [{ m: {} as { symbol?: string }, file: impl.sourcePath }];
+      });
       return {
         ...empty, refs: [], method: { component: owner, name }, below,
         files: [...new Set(realized.map((r) => r.file).filter((f): f is string => !!f).map(pathKey))],

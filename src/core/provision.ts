@@ -5828,10 +5828,13 @@ function renameParamCode(contracts: InterfaceSpec[], method: string): string[] {
   const out = new Set<string>();
   for (const impl of loadImplementationSpecs()) {
     if (!contracts.some((c) => c.id === impl.contract)) continue;
-    for (const m of impl.methods.filter((x) => x.name === method)) {
+    const entries = impl.methods.filter((x) => x.name === method);
+    for (const m of entries) {
       const file = m.sourcePath ?? impl.sourcePath;
       if (file) out.add(`${file}: ${m.symbol ?? m.name}`);
     }
+    // An implementation listing no entry for the method (an abstraction's, code linkage only) realizes it in its own file.
+    if (entries.length === 0 && impl.sourcePath) out.add(`${impl.sourcePath}: ${method}`);
   }
   return [...out];
 }

@@ -1188,6 +1188,7 @@ const findReferencesOutput = {
       agreement: z.enum(['confirmed', 'declared-only', 'observed-only', 'unjudged']),
       fromSpec: z.string().optional(), fromMember: z.string().optional(), file: z.string().optional(), line: z.number().optional(),
       place: lookupPlaceOutput, inTest: z.boolean(), linked: z.boolean(),
+      through: z.string().optional().describe('For a reference found on the same-named method of an abstraction below the target: that abstraction\'s component id. Absent for a direct reference.'),
     })),
     waivers: z.array(z.object({ kind: z.enum(['unclaimed', 'carried', 'lint-allow']), subject: z.string(), reason: z.string() })),
     impact: z.enum(['none', 'component', 'subsystem', 'project', 'family', 'public']),

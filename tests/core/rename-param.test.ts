@@ -138,6 +138,13 @@ describe('renameParam codeToRename', () => {
     expect(done.codeToRename).toEqual(expected);
   });
 
+  it('names the file of an implementation that lists no methods (code linkage only)', () => {
+    chain();
+    saveImplementationSpec({ id: 'base_impl', name: 'base impl', description: 'd', contract: 'ibase', sourcePath: 'src/base.ts', methods: [], createdAt: now, updatedAt: now } as never);
+    invalidateSpecCache();
+    expect(renameParam('base', 'run', 'item', 'entry', true).codeToRename).toEqual(['src/base.ts: run', 'src/child-run.ts: run']);
+  });
+
   it('is absent when no implementation names a file', () => {
     project();
     expect(renameParam('habit-api', 'create', 'frequency', 'cadence').codeToRename).toBeUndefined();
