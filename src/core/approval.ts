@@ -193,9 +193,20 @@ function ownSpecFiles(root: string): Array<{ key: string; kind: LinkedKind | und
   // Every member the scan read, in either declaration form (stage 3: a member is
   // a project of its own, never a subsystem of this one).
   const nodes = graph().nodes;
-  const mountDirs = nodes
-    .filter((n) => n.namespace !== '')
-    .map((n) => `${path.resolve(n.directory).split(path.sep).join('/')}/`);
+  // A file is the project's whose folder holds it most closely: a project read
+  // above the bound root (a parent reached through a path external, which a
+  // member using its parent declares) holds the bound root's files too, and
+  // they stay the bound root's own.
+  const dirOf = (n: { directory: string }): string => `${path.resolve(n.directory).split(path.sep).join('/')}/`;
+  const nodeDirs = nodes.map((n) => ({ dir: dirOf(n), own: n.namespace === '' }));
+  /** Whether the node folder holding a file most closely is another project's. */
+  const othersFile = (file: string): boolean => {
+    let closest: { dir: string; own: boolean } | undefined;
+    for (const node of nodeDirs) {
+      if (file.startsWith(node.dir) && (!closest || node.dir.length > closest.dir.length)) closest = node;
+    }
+    return closest !== undefined && !closest.own;
+  };
   // A part's files ARE this project's own (stage 8), keyed `members/<alias>/…`.
   const parts = nodes.find((n) => n.namespace === '')?.parts ?? [];
 
@@ -203,7 +214,7 @@ function ownSpecFiles(root: string): Array<{ key: string; kind: LinkedKind | und
   const out: Array<{ key: string; kind: LinkedKind | undefined; content: string }> = [];
   for (const [abs, content] of snapshotSpecFiles()) {
     const normalized = path.resolve(abs).split(path.sep).join('/');
-    if (mountDirs.some((dir) => normalized.startsWith(dir))) continue;
+    if (othersFile(normalized)) continue;
     out.push({ key: approvalKeyIn(abs, root, parts), kind: kinds.get(path.resolve(abs)), content });
   }
   return out;

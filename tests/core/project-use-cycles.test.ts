@@ -8,6 +8,7 @@ import { invalidateSpecCache, getLoaderIssues, scanAllSpecs } from '../../src/co
 import { projectFamilyGraph as projectFamily } from '../../src/core/project-family.js';
 import { validateProject } from '../../src/core/validation.js';
 import { assertApprovable } from '../../src/commands/lock.js';
+import { currentSpecDigests } from '../../src/core/approval.js';
 import * as migrations from '../../src/migrations/index.js';
 import { plan as planAt } from '../helpers/family-verbs.js';
 import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
@@ -100,6 +101,14 @@ describe('a contained plugin using its host (one way)', () => {
     const codes = validateProject({}).issues.map((i) => i.code);
     expect(codes).not.toContain('CIRCULAR_SUBPROJECT_REFERENCE');
     expect(codes).not.toContain('PROJECT_USE_CYCLE');
+  });
+
+  it('bound at the plugin root, its own specs are what a lock approves (the host folder holding it takes none)', () => {
+    const p = pair(false);
+    bind(p.plugin);
+    const keys = Object.keys(currentSpecDigests());
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.every((k) => !k.startsWith('..'))).toBe(true);
   });
 });
 
