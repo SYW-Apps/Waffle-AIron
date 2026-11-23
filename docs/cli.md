@@ -1643,6 +1643,10 @@ limits `maxProjectsPerUser`, `maxMcpRequestsPerMinute`, `maxProjectBytes` and
 ### `wairon host …` — control plane
 Runs **in-process** (no running server needed), so it works over SSH /
 `docker exec`. Reads the master credential from `WAIRON_ADMIN_TOKEN`.
+It works on a **data directory**, not on the running server: point each command at
+the server's data with `--data-dir <path>` or `WAIRON_DATA_DIR`, as for `wairon
+serve`. With neither it works on `~/.wairon/data`, which a server started with
+another data directory never reads.
 
 Every project lives in an **organization unit**, and access is a grid of
 **permission assignments** (subject × scope × capability). An API key acts as its

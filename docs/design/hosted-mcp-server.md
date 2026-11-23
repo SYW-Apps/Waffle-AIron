@@ -42,6 +42,14 @@ The control plane owns **project & key lifecycle plus the state-scoped
 lock**, and is reachable two ways that hit the *same* logic: the HTTP
 admin API, and the `wairon host …` CLI (in-process — no server needed).
 
+> **`wairon host …` works on a data directory, not on a running server.** It
+> reads and writes the directory named by `--data-dir` (or `WAIRON_DATA_DIR`),
+> and `~/.wairon/data` when neither is given. A server started with another
+> `--data-dir` never sees what a command wrote to the default one, and the
+> command still reports success. Give the command the same `--data-dir` (or
+> export the same `WAIRON_DATA_DIR`) the server was started with. Inside the
+> container the variable is already the server's.
+
 ### Request flow (data plane)
 
 ```
@@ -302,7 +310,9 @@ docker compose pull
 docker compose up -d
 curl -fsS http://localhost:8080/healthz          # → {"ok":true}
 
-# 3. an organization unit, a project in it, and who may use it — via docker exec (safest path)
+# 3. an organization unit, a project in it, and who may use it — via docker exec (safest path;
+#    the container's WAIRON_DATA_DIR is the server's. Outside the container, pass the
+#    server's --data-dir or export WAIRON_DATA_DIR)
 docker compose exec wairon wairon host unit create --slug acme --kind business_entity
 docker compose exec wairon wairon host project create --id shop --unit acme
 docker compose exec wairon wairon host permission set --user alice --capability project:read  --project shop

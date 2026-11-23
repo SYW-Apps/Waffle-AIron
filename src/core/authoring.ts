@@ -1448,6 +1448,15 @@ export function updateSpecGated(
   dryRun?: boolean,
   tool = 'sdd_update_spec',
 ): SpecChangeReport {
+  // A list-valued field a delta states as another shape is refused before any
+  // read, naming the shape it takes: nothing is written.
+  if (delta && typeof delta === 'object' && delta.methods !== undefined && delta.methods !== null && !Array.isArray(delta.methods)) {
+    throw new Error(
+      'delta.methods must be a list of methods, each { name, ... } (a method named there merges into the stored one by name), not '
+      + (typeof delta.methods === 'object' ? 'an object' : 'a ' + typeof delta.methods) + '. Nothing was written. '
+      + 'Restate it as [{ "name": "<method>", ... }], and remove one with { "name": "<method>", "action": "delete" }.',
+    );
+  }
   // Step 1: the bound project's configuration — the severities and project
   // type the judgement uses, and the test roots the report searches. A project
   // that has none is judged on the defaults and searches nothing.

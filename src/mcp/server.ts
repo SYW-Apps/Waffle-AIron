@@ -82,6 +82,7 @@ import {
   getLoaderIssues,
   readProjectSystem,
   publishedUsesOf,
+  ensureProjectInitialized,
 } from './adapters/core.js';
 import { unparsedSpecSentence } from '../models/unparsed-spec.js';
 import { standing as treeStanding } from './adapters/upgrade.js';
@@ -106,7 +107,7 @@ import { relationHealth, type ExternalAddition, type ExternalRequest, type Exter
 import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork, listRules } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
-import { declaredExternals, declaredMembers } from '../models/project.js';
+import { declaredExternals, declaredMembers, effectiveProjectId } from '../models/project.js';
 import { narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
 import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
@@ -2274,9 +2275,21 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           } as unknown as SystemSpec,
           fields: systemInputFields,
         };
-        // Step 2: through the authoring seam. Step 3: the receipt — the L0 is a
+        // Step 5 (mcp_orchestrator.initializeSystem): a project started over MCP
+        // alone has no configuration; create the default one as `wairon init`
+        // would, and say so. A configuration that exists is left as it is. The L0
+        // the helper may bootstrap is the one step 6 then writes over, so it does
+        // not count as an existing system.
+        // The id as `wairon init` picks it: the name slugified, else `<slug>-project`
+        // when the id grammar refuses the slug (a device name, a reserved word).
+        const nameSlug = name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/[^a-z0-9]+$/, '').slice(0, 48);
+        const projectId = effectiveProjectId({ name }) ?? effectiveProjectId({ name: nameSlug ? `${nameSlug}-project` : 'project' }) ?? 'project';
+        const bootstrapped = ensureProjectInitialized(name, projectId, vision);
+        // Step 6: through the authoring seam. Step 7: the receipt — the L0 is a
         // singleton, read back by the id "system", the handle sdd_get_spec takes.
         const receipt = writeSpec(restatement);
+        if (bootstrapped.wroteSystem) receipt.replacedExisting = false;
+        if (bootstrapped.wroteConfig) receipt.notices.push('Created the default project configuration .wai/project.yaml (this folder had none), as `wairon init --yes` would; its id is ' + JSON.stringify(projectId) + '. Edit it with sdd_configure_project.');
         return writeReceipt(
           `Successfully ${receipt.replacedExisting ? 're-authored' : 'initialized'} L0 System Spec for "${name}".`,
           receipt,
