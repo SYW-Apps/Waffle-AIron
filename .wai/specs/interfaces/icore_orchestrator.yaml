@@ -834,7 +834,7 @@ methods:
       registry; null when the component declares no variant or one that does not resolve.
     signature: >-
       resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
-      variantsById: list<VariantDef>): VariantGuidance?
+      variantsById: map<string, VariantDef>): VariantGuidance?
     returns: VariantGuidance?
     params:
       - name: component
@@ -842,7 +842,7 @@ methods:
       - name: allComponents
         type: list<ComponentSpec>
       - name: variantsById
-        type: list<VariantDef>
+        type: map<string, VariantDef>
   - name: setProjectId
     description: >-
       Declare the bound project's id through the project config Repository: refused for a malformed
@@ -1758,4 +1758,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-22T15:12:03.875Z'
+updatedAt: '2026-11-23T01:52:36.574Z'

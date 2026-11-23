@@ -4044,12 +4044,22 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
       - stepNumber: 6
+        description: >-
+          Read the component, to tell whether it is an abstraction: an abstraction's implementation
+          that lists no entry for the method (code linkage only) is moved too, getting an entry that
+          names just the pinned symbol
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 7
         description: Move the method on each implementation
         type: loop
         loopKind: forEach
-        over: each implementation realizing one of those contracts that declares the method
-        endStep: 9
-      - stepNumber: 7
+        over: >-
+          each implementation realizing one of those contracts that declares the method, or, for an
+          abstraction, lists no entry for it
+        endStep: 10
+      - stepNumber: 8
         description: >-
           An implementation that named no symbol needs one now when its code exists: the function it
           binds to still carries the old name. Its code exists when the file realizing the method
@@ -4058,27 +4068,27 @@ methods:
           true), and a caller declining it (pinSymbol false) is never pinned
         type: branch
         condition: the method declares no symbol and pinSymbol is not false
-        onFalseStep: 9
-      - stepNumber: 8
+        onFalseStep: 10
+      - stepNumber: 9
         description: >-
           Pin it: declare symbol <the old name> on the moved method, so that function keeps binding,
           and record it as the pinned symbol
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Write the implementation with the method under newName, carrying its narrative,
           sourcePath, symbol, detail and intent unchanged
         type: call
         targetComponent: spec_loader
         targetMethod: saveImplementationSpec
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Drop the cached spec index, so the next read sees the moved names rather than the cached
           ones
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Answer the MethodMove: the ids of the contracts and implementations written and the pinned
           symbol
@@ -4086,4 +4096,4 @@ methods:
         outcome: the specs the method moved in and the pinned symbol, when one was set
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-23T00:54:37.940Z'
+updatedAt: '2026-11-23T01:52:40.726Z'
