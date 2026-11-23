@@ -1367,7 +1367,7 @@ interface ExternalUse {
   /** The producer Portal's transport and abi per used name, where the pin records them. */
   bindings: Map<string, { transport?: string; abi?: string }>;
   /** A contained member project, read live and never pinned: its id and its L0 spec, project-relative. */
-  member?: { id: string; system: string };
+  member?: { id: string; system: string; pathExternal?: { root: string } };
 }
 
 /** The components a record implements: those whose implementations name a file it owns, or the one its id names. */
@@ -1416,12 +1416,15 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
   const local = new Set(loadSubsystemSpecs().filter((s) => !s.id.includes('::')).map((s) => s.id));
   const members = graph().nodes.filter((n) => n.parent === '' && n.namespace !== '');
   const memberOf = (segment: string) => members.find((n) => n.mountAlias === segment || n.namespace === segment);
+  // A path external (a `../` source) is read live like a member, though it is declared under `externals`.
+  const pathExternalOf = (segment: string) => members.find((n) => n.pathExternal !== undefined && n.mountAlias === segment);
+  const liveNodeOf = (segment: string) => pathExternalOf(segment) ?? (externals.has(segment) ? undefined : memberOf(segment));
   const byAlias = new Map<string, Set<string>>();
   for (const ref of refs) {
     const cut = ref.indexOf('::');
     if (cut <= 0) continue;
     const segment = ref.slice(0, cut);
-    const node = externals.has(segment) ? undefined : memberOf(segment);
+    const node = liveNodeOf(segment);
     if (!externals.has(segment) && !node && local.has(segment)) continue;
     const alias = node?.mountAlias ?? segment;
     const names = byAlias.get(alias) ?? new Set<string>();
@@ -1430,7 +1433,7 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
   }
   const out: ExternalUse[] = [];
   for (const [alias, names] of [...byAlias].sort(([a], [b]) => a.localeCompare(b))) {
-    const node = externals.has(alias) ? undefined : memberOf(alias);
+    const node = liveNodeOf(alias);
     if (node) {
       // A contained member is read live: its L0 export table is the contract, never a pin.
       const system = path.relative(root, path.join(node.directory, '.wai', 'specs', '.index.yaml')).replace(/\\/g, '/');
@@ -1438,7 +1441,7 @@ function externalsUsedBy(record: AgentRecord): ExternalUse[] {
       // `geo::distance` to the internal id it names, which the brief maps back.
       const publicName = memberPublicNames(path.join(node.directory, '.wai', 'specs', '.index.yaml'));
       const spelled = [...new Set([...names].map((n) => publicName.get(n) ?? n))].sort();
-      out.push({ alias, names: spelled, pin: system, pinned: true, bindings: new Map(), member: { id: node.id ?? node.namespace, system } });
+      out.push({ alias, names: spelled, pin: system, pinned: true, bindings: new Map(), member: { id: node.id ?? node.namespace, system, ...(node.pathExternal ? { pathExternal: { root: path.relative(root, node.directory).replace(/\\/g, '/') || '.' } } : {}) } });
       continue;
     }
     const pin = `.wai/externals/${alias}.yaml`;
@@ -1488,6 +1491,9 @@ function describeExternal(use: ExternalUse): string {
     const how = [binding?.transport ? `transport ${binding.transport}` : '', binding?.abi ? `abi ${binding.abi}` : ''].filter(Boolean).join(', ');
     return `\`${use.alias}::${name}\`${how ? ` (${how})` : ''}`;
   });
+  if (use.member?.pathExternal) {
+    return `- **${use.alias}** — uses ${names.join(', ')}; a path external (\`${use.member.id}\`, root \`${use.member.pathExternal.root}\`), read live and never pinned: code against what its L0 export table (\`${use.member.system}\`) exports now`;
+  }
   if (use.member) {
     return `- **${use.alias}** — uses ${names.join(', ')}; a member project (\`${use.member.id}\`), read live and never pinned: code against what its L0 export table (\`${use.member.system}\`) exports now`;
   }

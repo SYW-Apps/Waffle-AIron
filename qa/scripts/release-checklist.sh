@@ -73,12 +73,12 @@ check_smoke() {
   cd "$REPO" || true
 }
 
-# (c) The upgrade journey (tests/e2e/upgrade-from-v5.1.0.test.ts) against the PACKED CLI.
+# (c) The upgrade journeys (tests/e2e/upgrade-journeys.test.ts) against the PACKED CLI.
 check_upgrade() {
   local cli="$TC/node_modules/@wairon/cli/dist/cli/index.js"
   [ -f "$cli" ] || { fail "c upgrade test" "no packed CLI in $TC"; return; }
-  if (cd "$REPO" && WAIRON_E2E_CLI="$(native "$cli")" npx vitest run --config vitest.e2e.config.ts tests/e2e/upgrade-from-v5.1.0.test.ts > "$WORK/upgrade.log" 2>&1); then
-    pass "c v5.1.0 upgrade test (packed RC CLI)"
+  if (cd "$REPO" && WAIRON_E2E_CLI="$(native "$cli")" npx vitest run --config vitest.e2e.config.ts tests/e2e/upgrade-journeys.test.ts > "$WORK/upgrade.log" 2>&1); then
+    pass "c upgrade journeys test (packed RC CLI)"
   else
     fail "c v5.1.0 upgrade test" "$(tail -15 "$WORK/upgrade.log")"
   fi

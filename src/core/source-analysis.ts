@@ -1863,6 +1863,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     name: string,
     members: readonly (import('typescript').ClassElement | import('typescript').TypeElement)[],
     inherited: boolean,
+    declaration: boolean,
   ): void => {
     const fields: ShapeMemberFact[] = [];
     const methods: string[] = [];
@@ -1924,6 +1925,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     const shape: TypeShapeFact = { origin: 'declared', fields, methods };
     if (inherited) shape.inherited = true;
     if (signatures.size > 0) shape.signatures = Object.fromEntries(signatures);
+    if (declaration) shape.declaration = true;
     typeShapes.set(name, shape);
   };
 
@@ -2510,7 +2512,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     // resolved after the walk. Read outside the chain below, which is an
     // else-if over these same node kinds.
     if (ts.isInterfaceDeclaration(node)) {
-      recordDeclaredShape(node.name.text, node.members, (node.heritageClauses?.length ?? 0) > 0);
+      recordDeclaredShape(node.name.text, node.members, (node.heritageClauses?.length ?? 0) > 0, true);
     } else if (ts.isClassDeclaration(node) && node.name) {
       // Only an `extends` clause brings members with it. A class that
       // `implements` an interface still lists its whole shape, so reading that
@@ -2518,7 +2520,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
       const extendsOther = (node.heritageClauses ?? []).some(
         (clause) => clause.token === ts.SyntaxKind.ExtendsKeyword,
       );
-      recordDeclaredShape(node.name.text, node.members, extendsOther);
+      // An abstract class DECLARES, whatever constructor, helpers or default bodies it holds; a concrete one does not.
+      const isAbstractClass = !!ts.getModifiers(node)?.some((m) => m.kind === ts.SyntaxKind.AbstractKeyword);
+      recordDeclaredShape(node.name.text, node.members, extendsOther, isAbstractClass);
       // The class's members as its public surface reads them — top-level
       // named classes only, the ones a component's realization can name.
       if (node.parent && ts.isSourceFile(node.parent) && !classMembers.has(node.name.text)) {
@@ -2559,7 +2563,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
         .filter((name): name is string => name !== undefined);
       if (implemented.length > 0 && !implementsClauses.has(node.name.text)) implementsClauses.set(node.name.text, implemented);
     } else if (ts.isTypeAliasDeclaration(node)) {
-      if (ts.isTypeLiteralNode(node.type)) recordDeclaredShape(node.name.text, node.type.members, false);
+      if (ts.isTypeLiteralNode(node.type)) recordDeclaredShape(node.name.text, node.type.members, false, true);
       else {
         // The alias's right side as written: a named scalar's realization
         // (`type PackPath = string`) is judged on it through the dialect.
@@ -3555,7 +3559,7 @@ function resolveCalls(
   wiring: readonly string[] = [],
 ): CheckerReading {
   const out = new Map<string, ResolvedCallFact[]>();
-  if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map() };
+  if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), shapeSignatures: new Map() };
   const options = checkerOptions(ts, projectRoot);
   const settings = JSON.stringify(options);
   const host = ts.createCompilerHost(options, true);
@@ -3575,7 +3579,7 @@ function resolveCalls(
   try {
     program = ts.createProgram({ rootNames: [...files.keys(), ...wiring], options, host });
   } catch {
-    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), unbuilt: true };
+    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), shapeSignatures: new Map(), unbuilt: true };
   }
   const checker = program.getTypeChecker();
   const assignable = (checker as unknown as {
@@ -4351,6 +4355,7 @@ function resolveCalls(
   const routes = new Map<string, Map<string, RouteFact[]>>();
   const prefixes = new Map<string, Map<string, string>>();
   const crossProjectImports = new Map<string, CrossProjectImportFact[]>();
+  const shapeSignatures = new Map<string, Map<string, Record<string, MemberSignatureFact[]>>>();
   const literalOf: LiteralOf = (node) => {
     const type = checker.getTypeAtLocation(node);
     return type.isStringLiteral() ? type.value : undefined;
@@ -4459,6 +4464,8 @@ function resolveCalls(
     };
     visit(sf);
     kinds.set(key, fileKinds);
+    const shaped = inheritedShapeSignatures(sf);
+    if (shaped.size > 0) shapeSignatures.set(key, shaped);
     routes.set(key, new Map([...fileRoutes].map(([name, read]) => [name, [...read.values()]])));
     if (filePrefixes.size > 0) prefixes.set(key, filePrefixes);
 
@@ -4519,7 +4526,65 @@ function resolveCalls(
     }
     if (broken.length > 0) crossProjectImports.set(key, broken);
   }
-  return { calls: out, imports, kinds, routes, prefixes, crossProjectImports };
+  return { calls: out, imports, kinds, routes, prefixes, crossProjectImports, shapeSignatures };
+
+  /**
+   * The member signatures of each interface of a file that extends another and
+   * each type alias of an intersection, read through the checker as the one
+   * shape they are: what a caller holding the type may call, the inherited
+   * members included, one entry per overload.
+   */
+  function inheritedShapeSignatures(sf: import('typescript').SourceFile): Map<string, Record<string, MemberSignatureFact[]>> {
+    const shapes = new Map<string, Record<string, MemberSignatureFact[]>>();
+    const isPrivate = (node: import('typescript').Node): boolean =>
+      ts.canHaveModifiers(node) && !!ts.getModifiers(node)?.some(m => m.kind === ts.SyntaxKind.PrivateKeyword);
+    const signatureOf = (fn: import('typescript').SignatureDeclarationBase): MemberSignatureFact => {
+      const params: ParameterFact[] = fn.parameters.map((parameter) => {
+        const fact: ParameterFact = { optional: !!parameter.questionToken || !!parameter.initializer || !!parameter.dotDotDotToken };
+        if (ts.isIdentifier(parameter.name)) fact.name = parameter.name.text;
+        if (parameter.type) fact.type = parameter.type.getText().replace(/\s+/g, ' ').trim();
+        return fact;
+      });
+      const mods = ts.canHaveModifiers(fn) ? ts.getModifiers(fn) : undefined;
+      const returned = fn.type;
+      const later = !!mods?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword)
+        || (!!returned && ts.isTypeReferenceNode(returned) && ts.isIdentifier(returned.typeName) && returned.typeName.text === 'Promise');
+      return { params, ...(returned ? { returns: returned.getText().replace(/\s+/g, ' ').trim() } : {}), completesLater: later };
+    };
+    const declared = (declaration: import('typescript').Declaration): MemberSignatureFact[] => {
+      if (isPrivate(declaration)) return [];
+      if (ts.isMethodSignature(declaration) || ts.isMethodDeclaration(declaration)) return [signatureOf(declaration)];
+      if (ts.isPropertySignature(declaration) || ts.isPropertyDeclaration(declaration)) {
+        let type: import('typescript').TypeNode | undefined = declaration.type;
+        while (type && ts.isParenthesizedTypeNode(type)) type = type.type;
+        if (type && ts.isFunctionTypeNode(type)) return [signatureOf(type)];
+        if (type && ts.isTypeLiteralNode(type)) {
+          const calls = type.members.filter(ts.isCallSignatureDeclaration);
+          return calls.length > 0 && calls.length === type.members.length ? calls.map(signatureOf) : [];
+        }
+      }
+      return [];
+    };
+    for (const statement of sf.statements) {
+      const extendsOther = ts.isInterfaceDeclaration(statement)
+        && (statement.heritageClauses ?? []).some(clause => clause.token === ts.SyntaxKind.ExtendsKeyword);
+      const intersection = ts.isTypeAliasDeclaration(statement) && ts.isIntersectionTypeNode(statement.type);
+      if (!extendsOther && !intersection) continue;
+      try {
+        const symbol = symbolOf((statement as import('typescript').InterfaceDeclaration | import('typescript').TypeAliasDeclaration).name);
+        if (!symbol) continue;
+        const members: Record<string, MemberSignatureFact[]> = {};
+        for (const property of checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol))) {
+          const signatures = (property.declarations ?? []).flatMap(declared);
+          if (signatures.length > 0) Object.defineProperty(members, property.getName(), { value: signatures, enumerable: true, writable: true, configurable: true });
+        }
+        if (Object.keys(members).length > 0) shapes.set((statement as import('typescript').InterfaceDeclaration).name.text, members);
+      } catch {
+        // a shape the checker cannot settle keeps the members its own file lists
+      }
+    }
+    return shapes;
+  }
 
   /**
    * Whether a parameter's type admits any value, nullability set aside: any,
@@ -4639,6 +4704,8 @@ interface CheckerReading {
   prefixes: Map<string, Map<string, string>>;
   /** Per root file, its imports from another project's source that resolve to nothing. */
   crossProjectImports: Map<string, CrossProjectImportFact[]>;
+  /** Per root file, the member signatures of each interface that extends another and each intersection alias, the inherited members included. */
+  shapeSignatures: Map<string, Map<string, Record<string, MemberSignatureFact[]>>>;
   /** Set when the compiler could not build the program: nothing was read. */
   unbuilt?: true;
 }
@@ -4744,7 +4811,9 @@ export function sourceFiles(
   exclude: readonly string[] = [],
 ): SourceFileSet {
   const { declaredPaths, claimed } = sourceFileSet(implementations, types, projectRoot, sourceRoots, exclude);
-  return { files: [...new Set(declaredPaths.map(pathKey))], claimed: [...new Set(claimed.map(pathKey))] };
+  const named = new Set(declaredPaths.map(pathKey));
+  // Then the other project source files the bounded outside walk reads, within its own limits.
+  return { files: [...named, ...outsideFiles(projectRoot, named)], claimed: [...new Set(claimed.map(pathKey))] };
 }
 
 /** The source files the code model reads, and the ones the implementations claim. */
@@ -4968,6 +5037,7 @@ export function buildCodeModel(
       if (stripped && stripped.size > 0) facts.routePrefixes = { ...(facts.routePrefixes ?? {}), ...Object.fromEntries(stripped) };
       const broken = reading.crossProjectImports.get(facts.path);
       if (broken) facts.crossProjectImports = broken;
+      mergeInheritedSignatures(facts, reading.shapeSignatures.get(facts.path));
     }
     const reached: Record<string, ResolvedCallFact[]> = {};
     for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;
@@ -4979,6 +5049,25 @@ export function buildCodeModel(
   }
 
   return { files, projectRoot, rootFiles, packages, ...outsideFields(outside, false) };
+}
+
+/**
+ * Join the members an interface inherits, or an intersection alias holds, onto
+ * the file's shapes: a member the shape lists itself keeps its own reading, and
+ * an intersection alias, which lists nothing, becomes a declaration of its own.
+ */
+function mergeInheritedSignatures(facts: SourceFileFacts, read: Map<string, Record<string, MemberSignatureFact[]>> | undefined): void {
+  if (!read || read.size === 0) return;
+  const shapes = facts.typeShapes ?? (facts.typeShapes = {});
+  for (const [name, inherited] of read) {
+    const own = Object.prototype.hasOwnProperty.call(shapes, name) ? shapes[name] : undefined;
+    const merged: Record<string, MemberSignatureFact[]> = {};
+    for (const [member, signatures] of Object.entries({ ...inherited, ...(own?.signatures ?? {}) })) {
+      Object.defineProperty(merged, member, { value: signatures, enumerable: true, writable: true, configurable: true });
+    }
+    if (own) own.signatures = merged;
+    else shapes[name] = { origin: 'declared', fields: [], methods: Object.keys(merged), inherited: true, signatures: merged, declaration: true };
+  }
 }
 
 /**
@@ -5011,28 +5100,20 @@ const REEXPORT_RE = /\bexport\s+(?:type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\
 const SPECIFIER_RE = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"\n]+)['"]/g;
 
 /**
- * The project's source files the run did not analyze, read in a bounded walk
- * of the project root, comments stripped: the identifiers they write
- * (CodeModel.outsideNames), those of the files in a language no checker reads
- * (uncheckedOutsideNames, once the checker read the script ones), and the
- * TypeScript and JavaScript ones that reach an analyzed file by their imports,
- * directly or through other walked files — a composition root, a test, a test
- * importing an unanalyzed barrel — whose wiring the type checker reads beside
- * the analyzed files. Never throws; an unreadable folder or file adds nothing.
+ * The bounded walk of the project root every reader of its other source files
+ * shares: the files in a language the analyzer knows that the run did not
+ * analyze, in walk order, within OUTSIDE_MAX_FILES and OUTSIDE_MAX_BYTES, never
+ * descending into a hidden or skipped folder. With `content` each file's bytes
+ * are read and a binary one is passed over (outsideOf); without, only its size
+ * is looked at, so naming the set reads no content (outsideFiles). A file the
+ * visitor throws on adds nothing. Never throws.
  */
-function outsideOf(
+function walkOutside(
   projectRoot: string,
   analyzed: ReadonlySet<string>,
-  packages: Readonly<Record<string, string>>,
-): { names: string[]; unchecked: string[]; wiring: string[] } {
-  if (!projectRoot) return { names: [], unchecked: [], wiring: [] };
-  const names = new Set<string>();
-  const unchecked = new Set<string>();
-  const wiring: string[] = [];
-  /** Each walked script file and the module specifiers it writes. */
-  const scripts: Array<{ key: string; child: string; specifiers: string[] }> = [];
-  /** Each renamed re-export of an unanalyzed barrel: the name it takes, and the name it publishes. */
-  const aliases: Array<[string, string]> = [];
+  content: boolean,
+  visit: (file: { key: string; child: string; language: string; buffer?: Buffer }) => void,
+): void {
   let read = 0;
   const descend = (dir: string): void => {
     if (read >= OUTSIDE_MAX_FILES) return;
@@ -5056,32 +5137,78 @@ function outsideOf(
       if (!language || analyzed.has(key)) continue;
       try {
         if (ioFiles.stat(child).size > OUTSIDE_MAX_BYTES) continue;
+        if (!content) {
+          read++;
+          visit({ key, child, language });
+          continue;
+        }
         const buffer = ioFiles.readBytes(child);
         if (looksBinary(buffer)) continue;
         read++;
-        const patterns = LANGUAGE_PATTERNS[language];
-        const text = patterns ? stripComments(buffer.toString('utf8'), patterns) : buffer.toString('utf8');
-        // A re-export publishes a name and never uses it: an unanalyzed
-        // barrel's `export … from` statements exempt nothing.
-        // Renamed on the way, it is used when what the barrel publishes is.
-        const script = language === 'typescript' || language === 'javascript';
-        if (script) {
-          for (const statement of text.matchAll(REEXPORT_RE)) {
-            for (const m of statement[0].matchAll(/([\w$]+)\s+as\s+([\w$]+)/g)) aliases.push([m[1], m[2]]);
-          }
-        }
-        const used = script ? text.replace(REEXPORT_RE, ' ') : text;
-        for (const m of used.matchAll(IDENTIFIER_RE)) {
-          names.add(m[0]);
-          if (!script) unchecked.add(m[0]);
-        }
-        if (script && !key.endsWith('.d.ts')) scripts.push({ key, child, specifiers: [...text.matchAll(SPECIFIER_RE)].map(m => m[1]) });
+        visit({ key, child, language, buffer });
       } catch {
         // an unreadable file adds nothing
       }
     }
   };
   descend(projectRoot);
+}
+
+/**
+ * The project source files the bounded outside walk reads beyond the analyzed
+ * ones (a composition root, a test, a file no spec names): what the validation
+ * memo's fingerprint must cover, since what the model reads there changes what
+ * the rules answer. No content is read.
+ */
+function outsideFiles(projectRoot: string, analyzed: ReadonlySet<string>): string[] {
+  if (!projectRoot) return [];
+  const found: string[] = [];
+  walkOutside(projectRoot, analyzed, false, file => { found.push(file.key); });
+  return found;
+}
+
+/**
+ * The project's source files the run did not analyze, read in a bounded walk
+ * of the project root, comments stripped: the identifiers they write
+ * (CodeModel.outsideNames), those of the files in a language no checker reads
+ * (uncheckedOutsideNames, once the checker read the script ones), and the
+ * TypeScript and JavaScript ones that reach an analyzed file by their imports,
+ * directly or through other walked files — a composition root, a test, a test
+ * importing an unanalyzed barrel — whose wiring the type checker reads beside
+ * the analyzed files. Never throws; an unreadable folder or file adds nothing.
+ */
+function outsideOf(
+  projectRoot: string,
+  analyzed: ReadonlySet<string>,
+  packages: Readonly<Record<string, string>>,
+): { names: string[]; unchecked: string[]; wiring: string[] } {
+  if (!projectRoot) return { names: [], unchecked: [], wiring: [] };
+  const names = new Set<string>();
+  const unchecked = new Set<string>();
+  const wiring: string[] = [];
+  /** Each walked script file and the module specifiers it writes. */
+  const scripts: Array<{ key: string; child: string; specifiers: string[] }> = [];
+  /** Each renamed re-export of an unanalyzed barrel: the name it takes, and the name it publishes. */
+  const aliases: Array<[string, string]> = [];
+  walkOutside(projectRoot, analyzed, true, ({ key, child, language, buffer }) => {
+    const patterns = LANGUAGE_PATTERNS[language];
+    const text = patterns ? stripComments((buffer as Buffer).toString('utf8'), patterns) : (buffer as Buffer).toString('utf8');
+    // A re-export publishes a name and never uses it: an unanalyzed
+    // barrel's `export … from` statements exempt nothing.
+    // Renamed on the way, it is used when what the barrel publishes is.
+    const script = language === 'typescript' || language === 'javascript';
+    if (script) {
+      for (const statement of text.matchAll(REEXPORT_RE)) {
+        for (const m of statement[0].matchAll(/([\w$]+)\s+as\s+([\w$]+)/g)) aliases.push([m[1], m[2]]);
+      }
+    }
+    const used = script ? text.replace(REEXPORT_RE, ' ') : text;
+    for (const m of used.matchAll(IDENTIFIER_RE)) {
+      names.add(m[0]);
+      if (!script) unchecked.add(m[0]);
+    }
+    if (script && !key.endsWith('.d.ts')) scripts.push({ key, child, specifiers: [...text.matchAll(SPECIFIER_RE)].map(m => m[1]) });
+  });
   // A script file reaches the run when one of its imports resolves to an
   // analyzed file or to a walked file that reaches it, followed to a fixpoint.
   const candidates = new Set([...analyzed, ...scripts.map(s => s.key)]);
@@ -6634,7 +6761,7 @@ interface Block {
    * For a class: the shape it declares when it is an abstract base class (ABC or ABCMeta),
    * and whether a member of it holds behaviour, which makes it no declaration at all.
    */
-  abc?: { shape: TypeShapeFact; behaviour: boolean };
+  abc?: { shape: TypeShapeFact; abstract: boolean };
 }
 
 /** One `try` the walk is inside: its indent, whether the walk is in its body, and whether it has an `except`. */
@@ -6676,8 +6803,8 @@ function readPython(text: string): PythonFacts {
   let decorators: string[] = [];
   /** The shape each Protocol class declares, by class name: its methods with their signatures, and its annotated attributes. */
   const protocolShapes = new Map<string, TypeShapeFact>();
-  /** The abstract base classes met, by class name: read as a Protocol is once every method of one proved abstract. */
-  const abcClasses = new Map<string, { shape: TypeShapeFact; behaviour: boolean }>();
+  /** The abstract base classes met, by class name: read as a Protocol is once one method of one proved abstract. */
+  const abcClasses = new Map<string, { shape: TypeShapeFact; abstract: boolean }>();
   // How each call site was written: one record per writing, by site.
   const writingsOf = new Map<CallSiteFact, { awaited: boolean; guarded: boolean }[]>();
   const allTries: PythonTry[] = [];
@@ -6757,18 +6884,18 @@ function readPython(text: string): PythonFacts {
       let protocol: TypeShapeFact | undefined;
       if (isProtocol) {
         const roots = new Set(['Protocol', 'Generic', 'object']);
-        protocol = { origin: 'declared', fields: [], methods: [], ...(baseNames.some(base => !roots.has(base.split('.').pop() ?? '')) ? { inherited: true } : {}) };
+        protocol = { origin: 'declared', fields: [], methods: [], declaration: true, ...(baseNames.some(base => !roots.has(base.split('.').pop() ?? '')) ? { inherited: true } : {}) };
         protocolShapes.set(name, protocol);
       }
       // An abstract base class (ABC or ABCMeta) is read the same way, but is a declaration only
-      // when every method it defines is an @abstractmethod: the shape is kept at the end.
+      // when at least one method it defines is an @abstractmethod: the shape is kept at the end.
       const metaclass = bases.map(part => (part[0]?.text === 'metaclass' && part[1]?.text === '=' ? dottedName(part, 2).name : '')).find(Boolean);
       const isAbc = stack.length === 0 && !isProtocol
         && (baseNames.some(base => base.split('.').pop() === 'ABC') || metaclass?.split('.').pop() === 'ABCMeta');
       let abc: Block['abc'];
       if (isAbc) {
         const roots = new Set(['ABC', 'metaclass', 'Generic', 'object']);
-        abc = { shape: { origin: 'declared', fields: [], methods: [], ...(baseNames.some(base => !roots.has(base.split('.').pop() ?? '')) ? { inherited: true } : {}) }, behaviour: false };
+        abc = { shape: { origin: 'declared', fields: [], methods: [], declaration: true, ...(baseNames.some(base => !roots.has(base.split('.').pop() ?? '')) ? { inherited: true } : {}) }, abstract: false };
         abcClasses.set(name, abc);
       }
       stack.push({ kind: 'class', name, indent: line.indent, ...(protocol ? { protocol } : {}), ...(abc ? { abc } : {}) });
@@ -6838,12 +6965,12 @@ function readPython(text: string): PythonFacts {
         // Own-name keyed: a method called `constructor` is its own entry.
         Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
       }
-      // A method of an abstract base class: a signature when abstract, and otherwise behaviour that
-      // makes the class no declaration (an abstract property is no method with a signature).
+      // A method of an abstract base class: one @abstractmethod makes the class a declaration, and
+      // each method it defines records its signature, whatever constructor, helpers or default
+      // bodies it also holds (an abstract property is no method with a signature).
       if (methodOf !== undefined && innermost?.abc) {
-        if (!isAbstract) {
-          innermost.abc.behaviour = true;
-        } else if (!isAccessor && !name.startsWith('_') && !isAbstractProperty) {
+        if (isAbstract) innermost.abc.abstract = true;
+        if (!isAccessor && !name.startsWith('_') && !isAbstractProperty) {
           const shape = innermost.abc.shape;
           if (!shape.methods.includes(name)) shape.methods.push(name);
           const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: isAsync };
@@ -6921,7 +7048,7 @@ function readPython(text: string): PythonFacts {
   const declarative = readPythonDeclarative(lines, importBindings);
   const protocolSignatured = [
     ...protocolShapes,
-    ...[...abcClasses].filter(([, abc]) => !abc.behaviour).map(([name, abc]) => [name, abc.shape] as const),
+    ...[...abcClasses].filter(([, abc]) => abc.abstract).map(([name, abc]) => [name, abc.shape] as const),
   ].filter(([, shape]) => shape.signatures !== undefined);
 
   // The top-level classes the module names outside their own `class` block:

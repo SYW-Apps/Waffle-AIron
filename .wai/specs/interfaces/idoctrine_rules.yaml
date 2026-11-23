@@ -581,8 +581,10 @@ methods:
       naming the member (an abstraction's implementation has no symbol of its own): no narrative,
       intent, calls or technologies, because its methods are realized by declaration and its
       behaviour lives in the implementers. In a language or codebase that uses one, an abstract
-      class with only abstract members is such a declaration, and is never inheritance of behaviour:
-      it holds no behaviour for an implementer to inherit.
+      class is such a declaration too, whatever constructor, helpers or default bodies it also
+      holds: the design reads only the signatures it declares for the contract's methods, and never
+      models a body there or lets an implementer inherit one, since each implementer realizes every
+      method of its contract in its own code (UNREALIZED_METHOD otherwise).
     signature: 'abstractionShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -721,4 +723,4 @@ methods:
           code only an implementer declares is its own and is never reported
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-11-22T15:13:13.614Z'
+updatedAt: '2026-11-22T22:54:22.974Z'

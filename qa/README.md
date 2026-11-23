@@ -51,7 +51,7 @@ qa/scripts/release-checklist.sh "$QA_FINDINGS_ROOT/toolchain-rc"      # exits no
 ```
 
 The checklist covers the package contents, a fresh-home smoke (`--version`, `init`, `validate --ci`,
-`mcp install`, an MCP `initialize` over stdio) and the v5.1.0 upgrade test, run against the packed RC.
+`mcp install`, an MCP `initialize` over stdio) and the upgrade journeys test, run against the packed RC.
 The upgrade test also runs in CI on every pull request. Any FAIL stops the gate: fix it, make a new
 RC, start again from stage 1.
 

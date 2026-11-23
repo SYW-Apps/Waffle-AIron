@@ -34,7 +34,7 @@ import {
 import { EndpointSchema, transportKind, transportRequiresEndpoint, type Endpoint, type EndpointTransport, type Transport, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type GroupSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
 import type { ComponentSpec, Technology } from '../models/specs.js';
 import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
-import type { ProjectSystemRead, SpecChange, SpecChangeReport } from '../core/specs.js';
+import type { CallersToReview, ProjectSystemRead, SpecChange, SpecChangeReport } from '../core/specs.js';
 import * as pathsModule from '../config/paths.js';
 import { summarize } from '../models/execution.js';
 import type { AgentBrief } from '../models/agent.js';
@@ -245,26 +245,33 @@ function publicInterfacesReplacement(
       + 'but only an Adapter may be published as shared (PUBLIC_INTERFACE_SHARED_NOT_ADAPTER). Publish a Portal for anything else, '
       + 'or drop shared. Nothing was written.';
   }
+  const deleteMarker = (pi: PublicInterface): Record<string, unknown> => (pi.from || pi.typeDef
+    ? { from: pi.from, component: pi.component, interface: pi.interface, typeDef: pi.typeDef, as: pi.as, action: 'delete' }
+    : pi.component
+      ? { component: pi.component, interface: pi.interface, action: 'delete' }
+      : { type: pi.type, details: pi.details, action: 'delete' });
   const seen = new Map<string, number>();
   const deletes: Record<string, unknown>[] = [];
   for (const pi of stored) {
     const key = identity(pi);
     seen.set(key, (seen.get(key) ?? 0) + 1);
     if (seen.get(key)! > (restated.get(key) ?? 0)) {
-      deletes.push(pi.from || pi.typeDef
-        ? { from: pi.from, component: pi.component, interface: pi.interface, typeDef: pi.typeDef, as: pi.as, action: 'delete' }
-        : pi.component
-          ? { component: pi.component, interface: pi.interface, action: 'delete' }
-          : { type: pi.type, details: pi.details, action: 'delete' });
+      deletes.push(deleteMarker(pi));
     }
   }
   // A restated entry merges INTO the stored one by identity, so a field the
   // stored entry holds and the list no longer states (consumers above all)
   // would survive the "replacement" — each is unset explicitly instead.
-  const restatedEntries = list.map((pi) => {
+  // A list the entry restates (consumers above all) is merged by upsert too, so a
+  // shorter list would keep what it dropped: an entry whose stored twin holds a
+  // different list is deleted and written afresh, which REPLACES every list.
+  const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+  const restatedEntries = list.flatMap((pi) => {
     const prev = stored.find((s) => identity(s) === identity(pi));
     const dropped = prev ? Object.keys(prev).filter((f) => (prev as Record<string, unknown>)[f] !== undefined && (pi as Record<string, unknown>)[f] === undefined) : [];
-    return dropped.length ? { ...pi, unset: dropped } : pi;
+    const listChanged = prev !== undefined && Object.entries(pi).some(([f, v]) => Array.isArray(v) && !sameValue((prev as Record<string, unknown>)[f], v));
+    if (listChanged) return [deleteMarker(prev!), pi as Record<string, unknown>];
+    return [dropped.length ? { ...pi, unset: dropped } : pi] as Record<string, unknown>[];
   });
   return { publicInterfaces: [...deletes, ...restatedEntries] };
 }
@@ -449,6 +456,12 @@ const staleServerOutput = {
     + 'fields only the new build knows. The human has to reconnect the server (/mcp reconnect wairon).',
   ),
 };
+
+/** The version skew as a FIELD (markOlderServer): the wairon this server runs, when a newer one last wrote the project. */
+const olderServerOutput = z.string().optional().describe(
+  'Present when this server is OLDER than the wairon that last wrote the bound project: the version this server runs. '
+  + 'The structured twin of the text answer\'s OLDER SERVER banner.',
+);
 
 /** sdd_pin_externals' structured answer: one outcome per alias. */
 const externalPinsOutput = {
@@ -664,6 +677,7 @@ function renderChangeReport(report: SpecChangeReport): string {
   // creates the collision is the one that says so.
   lines.push(...renderRespellings(report.respellings));
   lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun, report.rerouted === true));
+  lines.push(...renderCallersToReview(report.callersToReview));
   lines.push(...renderTestsToRevisit(report.testsToRevisit));
   return lines.join('\n');
 }
@@ -772,6 +786,32 @@ function renderTestsToRevisit(entries: TestsToRevisit[]): string[] {
   return lines;
 }
 
+/**
+ * The callers of a method whose signature a write changed: information for
+ * whoever made the change, never a finding. Rendered after a delta, a
+ * restatement and a dry run alike.
+ */
+function renderCallersToReview(entries: CallersToReview[] | undefined): string[] {
+  if (!entries?.length) return [];
+  const lines = ['', 'CALLERS TO REVIEW:'];
+  for (const entry of entries) {
+    const capped = entry.total > entry.callers.length ? ` (${entry.callers.length} of ${entry.total}; sdd_find_references lists all)` : '';
+    lines.push(`- ${entry.method} (${entry.change}): ${entry.callers.join(', ')}${capped}`);
+  }
+  return lines;
+}
+
+/** callers_to_review as data: the same entries the text lists. */
+const callersToReviewOutput = z.array(z.object({
+  method: z.string().describe('The changed contract method, as <component>.<method>.'),
+  change: z.string().describe('What changed in its signature, in one line.'),
+  callers: z.array(z.string()).describe('Up to ten callers: calling specs as <component>.<method>, then code sites as path:line.'),
+  total: z.number().describe('How many callers the lookup found; more than callers lists when it was capped.'),
+})).optional().describe(
+  'For each contract method whose signature this write changed (or, on a dry run, would change), the callers to review. '
+  + 'Information only: never a finding, never a gate. Absent when no signature changed or nothing calls it.',
+);
+
 /** One type position a write respelled, field for field as the authoring seam reports it. */
 const typeRespellingOutput = z.object({
   specId: z.string().describe('The interface or type holding the position.'),
@@ -838,6 +878,7 @@ const specWriteReceiptOutput = {
   cascaded: z.array(z.string()).optional().describe(
     'Each implementation method entry a contract restatement removed with a method it dropped, as `<implementation>.<method>`.',
   ),
+  callersToReview: callersToReviewOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecWriteReceipt | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -850,8 +891,9 @@ const specWriteReceiptOutput = {
 function writeReceipt(sentence: string, receipt: SpecWriteReceipt): CallToolResult {
   const noticeBlock = receipt.notices.length ? `\n\nNOTICE:\n- ${receipt.notices.join('\n- ')}` : '';
   const respelledBlock = renderRespellings(receipt.respellings).join('\n');
+  const callersBlock = renderCallersToReview(receipt.callersToReview).join('\n');
   const testsBlock = renderTestsToRevisit(receipt.testsToRevisit).join('\n');
-  return structured(`${sentence}${noticeBlock}${respelledBlock ? `\n${respelledBlock}` : ''}${testsBlock ? `\n${testsBlock}` : ''}`, receipt);
+  return structured(`${sentence}${noticeBlock}${respelledBlock ? `\n${respelledBlock}` : ''}${callersBlock ? `\n${callersBlock}` : ''}${testsBlock ? `\n${testsBlock}` : ''}`, receipt);
 }
 
 /** What sdd_delete_spec answers with as data. */
@@ -923,6 +965,7 @@ const specChangeReportOutput = {
   rerouted: z.boolean().optional().describe(
     'True on sdd_set_endpoints when published names the methods whose route moved, not methods removed.',
   ),
+  callersToReview: callersToReviewOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -1154,6 +1197,7 @@ const getStatusOutput = {
   validatorVersion: z.string().describe('The wairon release of the running server process (StatusReport.validatorVersion), so a reading can be dated and a stale server told from a current one.'),
   detail: z.enum(['summary', 'full']).optional().describe('Which cut this answer is: summary (the default) or full'),
   report: z.string().describe('The status answer of the detail asked for, exactly the text block: for full the tree with its completeness, the approval verdict, any banner and the Externals section; for summary the verdict, counts and findings by code. A client that reads only the structured content would otherwise see nothing but the release.'),
+  olderServer: olderServerOutput,
   ...staleServerOutput,
 };
 
@@ -1180,9 +1224,12 @@ const validateTreeOutput = {
     errors: z.number().describe("Its own gate's error count."),
     warnings: z.number().describe("Its own gate's warning count."),
     notices: z.number().describe("Its own gate's notice count."),
+    codeReading: z.string().optional().describe('How its own gate read its code: the weakest grade any file was read at, or that no source file the design names exists yet. Never a finding.'),
+    codeCompact: z.string().optional().describe('The same reading in a few words, per language.'),
   })).optional().describe(
     "A family run only: one line per selected project (the root first) with its own gate's totals. Absent on the owner's gate.",
   ),
+  olderServer: olderServerOutput,
   ...staleServerOutput,
 };
 

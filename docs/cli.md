@@ -462,8 +462,10 @@ realizes it, in order. A framework handler is green without any design change:
   type the design does not know and `any` are not compared. One value where the
   contract declares a list or a set (`ingredients: string` for
   `list<ingredient>`), or a list where it declares one value, is
-  `PARAM_TYPE_MISMATCH` too; `bytes` may be written as a list. The element types
-  of two lists are not compared.
+  `PARAM_TYPE_MISMATCH` too; `bytes` may be written as a list. Two lists, or two
+  sets, compare their element types the same way where both read as one scalar
+  (`ids: number[]` for `ids: list<string>`, naming both); an element that is a
+  named type, a union or `any` is not compared.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the

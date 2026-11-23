@@ -25,8 +25,9 @@ verdict" job unless a passing verdict covers the code being merged (stage 5).
      and unfinished design notes are not), the **fresh-install smoke** (`--version`, `init`,
      `validate --ci`, `mcp install`, an MCP `initialize` over stdio, in a fresh home), and the
      **upgrade test** (below).
-   - The **v5.1.0 upgrade test** (`tests/e2e/upgrade-from-v5.1.0.test.ts`) replays the CHANGELOG's
-     upgrade steps on a project the published v5.1.0 wrote and locked, with no LLM. It also runs in CI
+   - The **upgrade journeys test** (`tests/e2e/upgrade-journeys.test.ts`) replays the CHANGELOG's
+     upgrade steps with no LLM: a wairon 6 project upgraded to wairon 7 with its approval carried,
+     and a wairon 5 tree refused with the way forward. It also runs in CI
      on every pull request, so a CHANGELOG step that stops working is found when the code changes,
      not at release time. The checklist runs it against the packed RC, which is what users get.
 3. **The QA panel run.** The fixed seats below, in parallel, each in a new folder.

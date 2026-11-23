@@ -444,6 +444,11 @@ function siblingProblem(relPath: string, root: string, memberDir: string): strin
  */
 function assertDeclarable(alias: string, declaration: { source: string; description?: string }): void {
   const config = projectConfigRepository.load();
+  // The declaration is written into the project's own `.wai/project.yaml`: without one the write would
+  // fail after the member's folders were made, so it is refused here, before anything is.
+  if (config === null) {
+    throw new WaironError(`Refusing to create the member "${alias}": this project has no .wai/project.yaml to declare it in. Create the project's configuration first (wairon init, or wairon doctor --fix). Nothing was written.`);
+  }
   if (ownGet(config?.externals, alias) !== undefined) {
     throw new WaironError(`Refusing to create the member "${alias}": \`externals\` already declares "${alias}", and one alias names one project. Nothing was written.`);
   }
@@ -525,6 +530,8 @@ function createGitMember(alias: string, source: ExternalSource, description: str
   const url = source.git!;
   // Step 7: the commit — given, else the default branch head now.
   const commit = source.commit ?? gitSource.resolve(url, source.ref);
+  // The declaration needs this project's configuration: refused before anything is fetched or written.
+  assertDeclarable(alias, { source: `${url}#${commit}` });
   // Step 8: fetched; the repository must already hold the member.
   const dir = gitSource.fetch(url, commit, source.dir);
   const kind = holdsProjectContent(dir) ? 'project' : 'part';
@@ -2159,6 +2166,9 @@ export function internalizeMember(alias: string, destination: InternalizeDestina
   rederiveSignatures(new Set(rewritten.map((s) => s.id)), result.signaturesRederived ??= []);
   for (const spec of rewritten) if (spec.kind !== 'system') normalizeSpecReferences(spec.kind, spec.id);
   invalidateSpecCache();
+  // A consumers list still restricting a surface names the subsystems that came across the old boundary and use it.
+  restoreMovedConsumers(scan.subsystems, result);
+  invalidateSpecCache();
   // Step 23.
   return result;
 }
@@ -2782,8 +2792,12 @@ function respellQualifiedBack(
  * the L0 export table governs who may use a name; a part has no export table,
  * so a list that still restricts a surface must name every subsystem across
  * the old boundary that depends on it, or the demote leaves
- * CROSS_SUBSYSTEM_UNLISTED_CONSUMER behind. The subsystems added are exactly
- * the dependents the boundary's exports admitted. A list promote removed
+ * CROSS_SUBSYSTEM_UNLISTED_CONSUMER behind. A surface an export publishes with
+ * role implement is used by its IMPLEMENTERS too: a subsystem whose contract
+ * lists the abstraction in `implements` is as much its consumer as one that
+ * depends on it, and without it the implementer is left
+ * ABSTRACTION_UNPUBLISHED. The subsystems added are exactly the dependents and
+ * implementers the boundary's exports admitted. A list promote removed
  * whole is not recreated: absent is what it reads as (any subsystem of the
  * project may depend), and no durable record survives the promote to tell it
  * from a list that was never written — the promote's plan named its removal.
@@ -2792,12 +2806,20 @@ function restoreCrossingConsumers(memberSide: RawSpec[], parentSide: RawSpec[], 
   const sides: [RawSpec[], RawSpec[]][] = [[memberSide, parentSide], [parentSide, memberSide]];
   for (const [providers, consumers] of sides) {
     const dependents = consumers.filter((c) => c.kind === 'component' && typeof c.raw?.subsystem === 'string' && Array.isArray(c.raw?.dependsOn));
+    // The implementers: each contract's `implements`, held by the subsystem of the contract's component.
+    const subsystemOf = new Map(consumers.filter((c) => c.kind === 'component' && typeof c.raw?.subsystem === 'string').map((c) => [c.id, c.raw.subsystem as string]));
+    const implementers = consumers
+      .filter((c) => c.kind === 'interface' && Array.isArray(c.raw?.implements) && subsystemOf.has(c.raw?.component))
+      .map((c) => ({ subsystem: subsystemOf.get(c.raw.component)!, implements: c.raw.implements as unknown[] }));
     for (const spec of providers.filter((x) => x.kind === 'subsystem')) {
       patchKeepingStamp(spec.file, (raw) => {
         let changed = false;
         for (const entry of raw.publicInterfaces ?? []) {
           if (!Array.isArray(entry?.consumers) || entry.consumers.length === 0 || typeof entry.component !== 'string') continue;
-          const users = [...new Set(dependents.filter((c) => (c.raw.dependsOn as unknown[]).includes(entry.component)).map((c) => c.raw.subsystem as string))]
+          const users = [...new Set([
+            ...dependents.filter((c) => (c.raw.dependsOn as unknown[]).includes(entry.component)).map((c) => c.raw.subsystem as string),
+            ...(entry.role === 'implement' ? implementers.filter((i) => i.implements.includes(entry.component)).map((i) => i.subsystem) : []),
+          ])]
             .filter((sub) => sub !== spec.id && !entry.consumers.includes(sub));
           if (users.length === 0) continue;
           entry.consumers = [...entry.consumers, ...users];
@@ -2808,6 +2830,23 @@ function restoreCrossingConsumers(memberSide: RawSpec[], parentSide: RawSpec[], 
       });
     }
   }
+}
+
+/**
+ * internalizeMember's twin of the demote's restoration: the member's subsystems
+ * (`moved`) now live in this project's tree, so every specs side is read from
+ * the one tree and told apart by the subsystem each spec belongs to.
+ */
+function restoreMovedConsumers(moved: readonly string[], result: InternalizeResult): void {
+  const root = getProjectRoot();
+  const l0 = path.resolve(aiPathsAt(root).specsSystem());
+  const all = rawSpecs(ownSpecFiles(graph(), path.join(aiPathsAt(root).root(), '.none')).filter((f) => path.resolve(f) !== l0));
+  const subsystemOf = new Map(all.filter((c) => c.kind === 'component' && typeof c.raw?.subsystem === 'string').map((c) => [c.id, c.raw.subsystem as string]));
+  const inMoved = (spec: RawSpec): boolean => {
+    const sub = spec.kind === 'subsystem' ? spec.id : spec.kind === 'component' ? spec.raw?.subsystem : spec.kind === 'interface' ? subsystemOf.get(spec.raw?.component) : undefined;
+    return typeof sub === 'string' && moved.includes(sub);
+  };
+  restoreCrossingConsumers(all.filter(inMoved), all.filter((s) => !inMoved(s)), result);
 }
 
 /**

@@ -2232,6 +2232,21 @@ export interface ProjectSystemRead {
   problem?: string;
 }
 
+/**
+ * sdd_core::CallersToReview — the callers of one contract method whose
+ * signature a write changed. Information only: never a finding, never a gate.
+ */
+export interface CallersToReview {
+  /** The changed contract method, as `<component>.<method>`. */
+  method: string;
+  /** What changed in its signature, in one line. */
+  change: string;
+  /** Up to ten callers: calling specs as `<component>.<method>`, then code sites as `path:line`. */
+  callers: string[];
+  /** How many callers the lookup found; more than `callers` lists when it was capped. */
+  total: number;
+}
+
 export interface SpecChangeReport {
   kind: WritableSpecKind;
   id: string;
@@ -2301,6 +2316,12 @@ export interface SpecChangeReport {
    * old route breaks until it follows. Filled by the door that read them.
    */
   rerouted?: boolean;
+  /**
+   * For each contract method whose signature this write changed (or, on a dry
+   * run, would change), the callers to review. Information only. Absent when no
+   * signature changed or nothing calls it.
+   */
+  callersToReview?: CallersToReview[];
 }
 
 /**

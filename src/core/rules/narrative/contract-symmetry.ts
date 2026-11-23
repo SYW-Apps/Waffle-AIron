@@ -12,7 +12,7 @@ export const contractSymmetryRule: SddRule = {
   name: 'contract-symmetry',
   judges: 'design',
   description:
-    'Implementations mirror their contract method-for-method: every method an implementation declares is defined on the contract it realizes, and every contract method has an implementation.',
+    "Implementations mirror their contract method-for-method: every method an implementation declares is defined on the contract it realizes, and every contract method has an implementation. An abstraction's implementation is the exception to the second half: it carries code linkage only and its methods are realized by declaration, so it owes no method entries; any it lists must still be on the contract.",
   codes: [
     { code: 'UNEXPECTED_IMPLEMENTATION_METHOD', defaultSeverity: 'error', summary: 'Implementation method not present on the contract' },
     { code: 'MISSING_IMPLEMENTATION_METHOD', defaultSeverity: 'error', summary: 'Contract method missing from the implementation' },
@@ -40,9 +40,11 @@ export const contractSymmetryRule: SddRule = {
         }
       }
 
-      // Check implementation is missing methods defined in interface
+      // Check implementation is missing methods defined in interface. An abstraction's
+      // implementation owes none: its methods are realized by declaration, in code.
+      const owesEntries = ctx.componentMap.get(contract.component)?.abstract !== true;
       for (const contractMethod of contract.methods) {
-        if (!implMethodNames.has(contractMethod.name)) {
+        if (owesEntries && !implMethodNames.has(contractMethod.name)) {
           ctx.addIssue(
             'error',
             'MISSING_IMPLEMENTATION_METHOD',

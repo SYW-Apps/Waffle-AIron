@@ -1,9 +1,10 @@
 id: iauthoring_validator_adapter
 name: Core Validator Client Adapter Interface
 description: >-
-  Client adapter to sdd_validator: the component candidate gate, forwarded 1:1 to the validator
-  portal. Nothing else of the validator's surface is needed on this side of the boundary — sdd_core
-  runs no tree validation of its own.
+  Client adapter to sdd_validator: the component candidate gate, the test search, the reference
+  lookup a gated write names a changed method's callers with, and the findings a write would
+  introduce, each forwarded 1:1 to the validator portal. sdd_core runs no tree validation of its
+  own.
 component: authoring_validator_adapter
 methods:
   - name: validateComponentCandidate
@@ -99,6 +100,13 @@ methods:
     returns: list<SddRule>
     params: []
     effect: read
+  - name: findReferences
+    description: >-
+      Forward a reference lookup to the validator portal, so a gated write that changes a contract
+      method's signature can name the callers to review. A lookup that fails answers no references:
+      naming callers must never be the thing that fails a write.
+    signatureFrom: validator_portal.findReferences
+    effect: read
 status: complete
 createdAt: '2026-09-18T21:11:59.866Z'
-updatedAt: '2026-10-09T17:09:38.077Z'
+updatedAt: '2026-11-22T22:56:10.151Z'

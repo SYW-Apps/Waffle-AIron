@@ -298,19 +298,20 @@ methods:
           the producer Portal where the pin records them, the pinned snapshot
           `.wai/externals/<alias>.yaml`, which also joins readPaths (the pin is the contract the
           consumer codes against) — or, for a contained member project (named by its alias or its
-          project id), that member's L0 export table read live, its root named and never a pin to
-          take, each used name spelled by its PUBLIC name in that table (the internal id the loader
-          resolved a reference to is mapped back through the table's entries) — and the binding
-          modules its implementations name, which spell the producer's names exactly as the pin does
-          (for a member, as its live export table names them), each declaration in them that mirrors
-          a producer name tagged with a doc comment naming it (`/** alias::name */` above an
-          interface, a class or a type, `/** alias::name.method */` above a free function), so
-          validate compares it with that export alone and names a verb the producer no longer holds,
-          where an untagged declaration nothing matches by name reads as the binding's own plumbing
-          and is never judged. The code linkage the implementer owns: a record whose components
-          include a Portal gets a '## Handler shape' section — each verb's function takes the
-          contract's own parameters in order under the contract's names; the handles its framework
-          hands it (a request, a response, a context, next) are wiring, named in the
+          project id) or a path external (a `../` source, read live like a member and never pinned),
+          that project's L0 export table read live, its root named and never a pin to take, each
+          used name spelled by its PUBLIC name in that table (the internal id the loader resolved a
+          reference to is mapped back through the table's entries) — and the binding modules its
+          implementations name, which spell the producer's names exactly as the pin does (for a
+          member or a path external, as its live export table names them), each declaration in them
+          that mirrors a producer name tagged with a doc comment naming it (`/** alias::name */`
+          above an interface, a class or a type, `/** alias::name.method */` above a free function),
+          so validate compares it with that export alone and names a verb the producer no longer
+          holds, where an untagged declaration nothing matches by name reads as the binding's own
+          plumbing and is never judged. The code linkage the implementer owns: a record whose
+          components include a Portal gets a '## Handler shape' section — each verb's function takes
+          the contract's own parameters in order under the contract's names; the handles its
+          framework hands it (a request, a response, a context, next) are wiring, named in the
           implementation's injectedParams at the start or the end of the list; where the framework
           hands the function the request alone, each contract parameter is read off it by its own
           name (the request's params, query or body, or a URL's searchParams); the router linkage
@@ -387,4 +388,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-22T15:12:30.594Z'
+updatedAt: '2026-11-22T22:49:52.627Z'

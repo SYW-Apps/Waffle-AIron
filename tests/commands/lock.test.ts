@@ -8,6 +8,7 @@ import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
   saveSpec,
+  deleteSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   loadComponentSpec,
@@ -216,6 +217,35 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(approved.some((p) => p.includes('aux-orchestrator'))).toBe(true);
     invalidateSpecCache();
     expect(diffAgainstApproval()!.changed).toEqual([]);
+  });
+
+  it('--subsystem tells a spec DELETED inside its scope from one deleted outside it', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
+    buildLockableProject(rootDir);
+    saveComponentSpec(component('core-helper', 'core-sub'));
+    saveSpec('subsystem', subsystem('aux-sub'));
+    saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
+
+    // A spec removed OUTSIDE the scope: still refused.
+    deleteSpec('component', 'aux-orchestrator');
+    invalidateSpecCache();
+    await expect(runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, computeApprovalId()))
+      .rejects.toThrow(/outside it moved/);
+    saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
+
+    // A spec removed INSIDE the scope, and another spec of the scope updated: re-approved.
+    deleteSpec('component', 'core-helper');
+    saveComponentSpec({ ...loadComponentSpec('gateway-portal')!, description: 'moved inside the scope' });
+    invalidateSpecCache();
+    const captured = computeApprovalId();
+    const record = (await runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, captured))!;
+    expect(record.stateId.digest).toBe(captured.digest);
+    expect(Object.keys(readLockRecordAt(rootDir)!.specs!).some((p) => p.includes('core-helper'))).toBe(false);
+    invalidateSpecCache();
+    expect(diffAgainstApproval()!.removed).toEqual([]);
   });
 
   it('a declined confirmation returns null and changes nothing', async () => {

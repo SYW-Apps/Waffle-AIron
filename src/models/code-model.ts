@@ -432,6 +432,15 @@ export interface TypeShapeFact {
    * `constructor` or `toString`.
    */
   signatures?: Record<string, MemberSignatureFact[]>;
+  /**
+   * True when the shape DECLARES what a caller holds rather than implementing
+   * it: an interface, a type literal, a trait, a Protocol, or an abstract class
+   * (TypeScript abstract, a Python ABC with at least one @abstractmethod),
+   * whatever constructor, helpers or default bodies the class also holds. A
+   * concrete class is false. Where it is true the signatures are what an
+   * abstraction declares; recorded where signatures are.
+   */
+  declaration?: boolean;
 }
 
 /**

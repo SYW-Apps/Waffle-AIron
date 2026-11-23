@@ -10,8 +10,8 @@ import { defineRuleFixture, runRuleFixture, type FixtureTree } from '../rules-ma
 // ---------------------------------------------------------------------------
 // A Python abstract base class whose every method is an @abstractmethod is a
 // declaration, read as a Protocol is: its signatures, its promised surface, the
-// param, return and async comparison. One method with a body, __init__ included,
-// makes it behaviour and records no shape.
+// param, return and async comparison, whatever __init__, helpers or default bodies
+// it also holds. A class with no @abstractmethod is concrete and records no shape.
 // ---------------------------------------------------------------------------
 
 const temps: string[] = [];
@@ -71,16 +71,20 @@ describe('reading an abstract base class as a Protocol is read', () => {
     expect(signatures.make[0].params).toEqual([{ name: 'kind', type: 'str', optional: false }]);
   });
 
-  it('records no shape when one method has behaviour, whatever its name or order', () => {
+  it('still declares when one method has behaviour, whatever its name or order, and records it too', () => {
     const helper = 'from abc import ABC, abstractmethod\n\n\nclass NoticeSender(ABC):\n' + SEND + '\n    def helper(self) -> int:\n        return 1\n';
-    expect(read('src/sender.py', helper).typeShapes?.NoticeSender).toBeUndefined();
+    const after = read('src/sender.py', helper).typeShapes!.NoticeSender;
+    expect(after.declaration).toBe(true);
+    expect(Object.keys(after.signatures!).sort()).toEqual(['helper', 'send_notice']);
     const first = 'from abc import ABC, abstractmethod\n\n\nclass NoticeSender(ABC):\n    def helper(self) -> int:\n        return 1\n\n' + SEND;
-    expect(read('src/sender.py', first).typeShapes?.NoticeSender).toBeUndefined();
+    expect(read('src/sender.py', first).typeShapes!.NoticeSender.declaration).toBe(true);
   });
 
-  it('records no shape for a class with an __init__, which is behaviour', () => {
+  it('still declares for a class with an __init__, which is no signature of the shape', () => {
     const init = 'from abc import ABC, abstractmethod\n\n\nclass NoticeSender(ABC):\n    def __init__(self, name: str) -> None:\n        self.name = name\n\n' + SEND;
-    expect(read('src/sender.py', init).typeShapes?.NoticeSender).toBeUndefined();
+    const shape = read('src/sender.py', init).typeShapes!.NoticeSender;
+    expect(shape.declaration).toBe(true);
+    expect(Object.keys(shape.signatures!)).toEqual(['send_notice']);
   });
 
   it('records no shape for a class that is no abstract base class', () => {
@@ -175,9 +179,9 @@ describe('an abstract base class as the declaration of an abstraction', () => {
     expect(issues).toEqual([]);
   });
 
-  it('is no declaration with one method that has a body: it is compared with nothing', () => {
+  it('is a declaration with one method that has a body too: it is compared all the same', () => {
     const behaving = ABC_DECLARATION.replace('recipient: str)', 'recipient: int)') + '\n    def helper(self) -> int:\n        return 1\n';
-    expect(found(notices(behaving), 'PARAM_TYPE_MISMATCH').filter((i) => i.specId === 'notice_sender_impl')).toEqual([]);
+    expect(found(notices(behaving), 'PARAM_TYPE_MISMATCH').filter((i) => i.specId === 'notice_sender_impl')).toHaveLength(1);
   });
 });
 

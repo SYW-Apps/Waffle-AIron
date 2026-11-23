@@ -100,7 +100,17 @@ fields:
       not methods it removed: a client spelling the old route breaks until it follows. Filled by the
       door that read the consumers
     optional: true
+  - name: callersToReview
+    type: list<callers_to_review>
+    description: >-
+      For each contract method whose signature this write changed (or, on a dry run, would change) —
+      a parameter added, removed, retyped or made optional or required, the returns changed, or
+      whether it completes later — the callers to review, design and code. Information only: it
+      raises no finding and gates nothing, and a lookup that fails names no callers rather than
+      failing the write. Absent when the write changed no contract method's signature or nothing
+      calls it.
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-10-09T16:51:12.048Z'
+updatedAt: '2026-11-22T22:56:08.547Z'

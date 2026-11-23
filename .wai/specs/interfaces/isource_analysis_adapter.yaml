@@ -121,8 +121,9 @@ methods:
     effect: io
   - name: sourceFiles
     description: >-
-      The source files the code model reads for these specs, as buildCodeModel walks them, and the
-      ones the implementations claim, without reading any file's content.
+      The source files the code model reads for these specs, as buildCodeModel walks them, the other
+      project source files its bounded walk of the project root reads included, and the ones the
+      implementations claim, without reading any file's content.
     signature: >-
       sourceFiles(implementations: list<ImplementationSpec>, types: list<TypeSpec>, projectRoot:
       string, sourceRoots?: list<string>, exclude?: list<string>): source_file_set
@@ -143,4 +144,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-11-10T19:07:25.980Z'
+updatedAt: '2026-11-22T22:48:47.722Z'

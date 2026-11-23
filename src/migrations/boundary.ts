@@ -660,10 +660,9 @@ export function write(plan: MigrationPlan, rehearsal: Rehearsal): void {
     // Step 18.
     return;
   }
-  // Step 19: the core's demote — a core refusal propagates; a consumers list it widened is named in the plan.
+  // Step 19: the core's demote — a core refusal propagates; a consumers list it widened is named in the plan (recordFolded).
   for (const e of planned.filter((x) => x.write.call === 'demoteMember')) {
     const demoted = writeOne(rehearsal, e.write) as InternalizeResult | undefined;
-    for (const line of demoted?.consumersRestored ?? []) plan.edits.push({ project: e.project, kind: 'reference', detail: `consumers across the old boundary restored: ${line}` });
     recordFolded(plan, e.project, demoted);
   }
   // Step 19: the caller's binding is back.
@@ -744,6 +743,8 @@ function recordCrossing(plan: MigrationPlan, bound: string, member: string, resu
 function recordFolded(plan: MigrationPlan, project: string, result: unknown): void {
   const folded = result as InternalizeResult | undefined;
   if (!folded) return;
+  // A consumers list it widened by the subsystems across the old boundary that use the surface (demote and internalize alike).
+  for (const line of folded.consumersRestored ?? []) plan.edits.push({ project, kind: 'reference', detail: `consumers across the old boundary restored: ${line}` });
   for (const line of folded.signaturesRederived ?? []) plan.edits.push({ project, kind: 'reference', detail: `signature text re-derived — ${line}` });
   for (const line of folded.notCarried) if (!plan.notes.includes(`not carried: ${line}`)) plan.notes.push(`not carried: ${line}`);
 }

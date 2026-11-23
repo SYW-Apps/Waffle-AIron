@@ -180,4 +180,36 @@ describe('live briefs, round 9', () => {
     expect(brief.instructions).toContain('Tag each declaration in a binding that mirrors a producer name with a doc comment naming it — `/** geo::<public name> */` above an interface, a class or a type, `/** geo::<public name>.<method> */` above a free function');
     expect(brief.instructions).toContain("one nothing matches is read as the binding's own plumbing and never judged");
   });
+
+  it('a path external is read live like a member: its export table and root, public names, never a pin to take', () => {
+    const base = tempRoot('wairon-brief9-pathext-');
+    const app = path.join(base, 'route-planner');
+    const sdk = path.join(base, 'geo-sdk');
+    const producer = project(sdk, 'geo-sdk', { id: 'geo-sdk' });
+    producer.writeSpec('system', 'system', [
+      'schemaVersion: 1.0.0', 'name: geo-sdk', 'vision: maths', 'publicInterfaces:',
+      '  - component: geocoding_portal', '    interface: igeocoding_portal', '    from: geocoding', '    as: geocoding', '    audience: external',
+    ].join('\n'));
+    producer.writeSpec('subsystem', 'geocoding', 'schemaVersion: 1.0.0\nid: geocoding\nname: Geocoding\ndescription: d\nparentSystem: geo-sdk\npublicInterfaces:\n  - component: geocoding_portal\n    interface: igeocoding_portal');
+    producer.writeSpec('component', 'geocoding_portal', 'id: geocoding_portal\nname: g\ndescription: d\nsubsystem: geocoding\ncomponentType: Portal\ntransport: InProcess');
+    producer.writeSpec('interface', 'igeocoding_portal', 'id: igeocoding_portal\nname: I\ndescription: d\ncomponent: geocoding_portal\nmethods: []');
+    const consumer = project(app, 'route-planner', { id: 'route-planner', externals: { geo: { source: '../geo-sdk', use: ['geocoding'] } } });
+    consumer.writeSpec('system', 'system', 'schemaVersion: 1.0.0\nname: route-planner\nvision: routes');
+    consumer.writeSpec('subsystem', 'routing', 'schemaVersion: 1.0.0\nid: routing\nname: Routing\ndescription: d\nparentSystem: route-planner');
+    consumer.writeSpec('component', 'route_planning', 'id: route_planning\nname: r\ndescription: d\nsubsystem: routing\ncomponentType: Orchestrator\ndependsOn: [geo::geocoding]');
+    consumer.writeSpec('interface', 'iroute_planning', 'id: iroute_planning\nname: I\ndescription: d\ncomponent: route_planning\nmethods: []');
+    consumer.writeSpec('implementation', 'route_planning_impl', 'id: route_planning_impl\nname: r\ndescription: d\ncontract: iroute_planning\nsourcePath: src/route-planning.ts\nbindings: [src/geo-binding.ts]\nmethods: []');
+    vi.spyOn(process, 'cwd').mockReturnValue(app);
+    const brief = composeAgentBrief('route_planning');
+    expect(brief.instructions).toContain('## Externals used');
+    expect(brief.instructions).toContain('`geo::geocoding`');
+    expect(brief.instructions).not.toContain('geo::geocoding_portal');
+    expect(brief.instructions).toContain('read live and never pinned');
+    expect(brief.instructions).toContain('../geo-sdk');
+    expect(brief.instructions).not.toContain('not pinned yet');
+    expect(brief.instructions).not.toContain('wairon externals pin');
+    expect(brief.instructions).not.toContain('as the pin has them');
+    expect(brief.readPaths).not.toContain('.wai/externals/geo.yaml');
+    expect(brief.readPaths.some((p) => p.replace(/\\/g, '/').endsWith('geo-sdk/.wai/specs/.index.yaml'))).toBe(true);
+  });
 });
