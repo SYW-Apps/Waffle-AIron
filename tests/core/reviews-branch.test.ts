@@ -125,6 +125,7 @@ describe('review requests and branches', () => {
     checkout(root, 'main', ['feat/a', 'main']);
     changeDesign();
     expect(() => assertApprovable([])).toThrow(/the pending lock request was made on another branch[\s\S]*feat\/a[\s\S]*main/);
+    expect(() => assertApprovable([])).toThrow(/wairon review withdraw \S+ when it is no longer wanted/);
     expect(() => assertApprovable([], true)).not.toThrow();
   });
   it('a lock marks the request it answered locked in the store, with no status read in between', async () => {

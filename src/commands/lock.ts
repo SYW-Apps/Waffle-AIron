@@ -801,7 +801,7 @@ export function assertApprovable(members: ProjectApproval[], force?: boolean): v
     const here = conflict.checkedOut ? `"${conflict.checkedOut}"` : 'a detached HEAD';
     throw new LockRefusedError(
       `the pending lock request was made on another branch: request ${conflict.requestId} was made on "${conflict.requestedOn}", and this checkout is on ${here}, `
-        + "so this lock would approve a design the request did not ask for. Switch to the request's branch, or pass --force to approve this checkout's design anyway. Nothing was written.",
+        + "so this lock would approve a design the request did not ask for. Switch to the request's branch, withdraw the request with `wairon review withdraw " + conflict.requestId + "` when it is no longer wanted, or pass --force to approve this checkout's design anyway. Nothing was written.",
     );
   }
 }

@@ -92,6 +92,28 @@ describe('sdd_initialize_system in a folder with no project configuration', () =
     expect((r.structuredContent?.notices ?? []).join('\n')).not.toMatch(/project\.yaml/);
   });
 
+  it('keeps the spec write lock out of git: .wai/.gitignore holds the line', async () => {
+    const dir = emptyDir();
+    const client = await connectAt(dir);
+    const r = await call(client, 'sdd_initialize_system', L0);
+    expect(r.isError, r.text).toBeFalsy();
+    const lines = fs.readFileSync(path.join(dir, '.wai', '.gitignore'), 'utf8').split(/\r?\n/).map((l) => l.trim());
+    expect(lines).toContain('.spec-write.lock*');
+  });
+
+  it('a fresh folder says the system spec was written, never re-authored or carried forward', async () => {
+    const dir = emptyDir();
+    const client = await connectAt(dir);
+    const r = await call(client, 'sdd_initialize_system', L0);
+    expect(r.isError, r.text).toBeFalsy();
+    expect(r.text).toContain('Successfully initialized');
+    const notices = (r.structuredContent?.notices ?? []).join('\n');
+    expect(notices).not.toMatch(/already existed|re-authored|Carried forward/);
+    // Re-running it on the L0 now there does re-author.
+    const again = await call(client, 'sdd_initialize_system', L0);
+    expect((again.structuredContent?.notices ?? []).join('\n')).toMatch(/already existed — re-authored in place/);
+  });
+
   it('a second run does not announce the configuration again', async () => {
     const dir = emptyDir();
     const client = await connectAt(dir);

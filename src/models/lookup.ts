@@ -93,6 +93,8 @@ export interface LookupReference {
   inTest: boolean;
   /** The reference names the element's id; false for a bare-name mention. */
   linked: boolean;
+  /** For a method of an abstraction: the abstraction below it the reference came through. */
+  through?: string;
 }
 
 /** A declared exception that covers the looked-up element. */

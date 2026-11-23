@@ -2,7 +2,7 @@ import { z } from 'zod';
 // The zod 3 wording of refused values, set before any parse (models/zod-messages.ts).
 import './zod-messages';
 import { INVISIBLE_CHARACTERS, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
-import { fieldTypeRefs, methodTypeRefs, signatureTypeRefs, typeMatchesRef } from './type-references.js';
+import { fieldTypeRefs, methodTypeRefs, qualifiedTypeId, resolveTypeRef, signatureTypeRefs } from './type-references.js';
 
 // ---------------------------------------------------------------------------
 // Common Identifier Schema
@@ -3166,16 +3166,21 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
   const targetTypes = index.types.filter((t) => inTargets('type', t.id));
   const out: SpecReference[] = [];
   const holder = (kind: SpecRef['kind'], id: string): ReferenceNote => (position, target) => { out.push({ kind, id, position, target }); };
-  const types = (note: ReferenceNote, position: string, refs: string[]): void => {
+  // A reference counts when it RESOLVES to a target — the referrer's subsystem first, as the loader and
+  // the validator read it — never because it shares a display name with one the reference binds past.
+  const types = (note: ReferenceNote, position: string, refs: string[], from?: string): void => {
+    if (targetTypes.length === 0) return;
     for (const ref of new Set(refs)) {
-      const hit = targetTypes.find((t) => t.name === ref || typeMatchesRef(t, ref));
+      const resolution = resolveTypeRef(ref, from, index.types);
+      if (resolution.outcome !== 'resolved') continue;
+      const hit = targetTypes.find((t) => t.id === resolution.type && resolution.candidates.includes(qualifiedTypeId(t)));
       if (hit) note(position, { kind: 'type', id: hit.id });
     }
   };
   const component = (note: ReferenceNote, position: string, ref: string | undefined): void => {
     if (ref !== undefined && components.has(ref)) note(position, { kind: 'component', id: ref });
   };
-  const published = (note: ReferenceNote, entries: ReadonlyArray<Record<string, unknown>> | undefined): void => {
+  const published = (note: ReferenceNote, entries: ReadonlyArray<Record<string, unknown>> | undefined, owner?: string): void => {
     for (const entry of entries ?? []) {
       const text = (key: string): string | undefined => (typeof entry[key] === 'string' ? entry[key] as string : undefined);
       const from = text('from');
@@ -3184,7 +3189,7 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
       const intf = text('interface');
       if (intf !== undefined && interfaces.has(intf)) note('publicInterfaces', { kind: 'interface', id: intf });
       const typeDef = text('typeDef');
-      if (typeDef !== undefined) types(note, 'publicInterfaces.typeDef', [typeDef]);
+      if (typeDef !== undefined) types(note, 'publicInterfaces.typeDef', [typeDef], owner);
     }
   };
 
@@ -3192,7 +3197,7 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
   for (const sub of index.subsystems) {
     if (inTargets('subsystem', sub.id)) continue;
     const note = holder('subsystem', sub.id);
-    published(note, sub.publicInterfaces as unknown as ReadonlyArray<Record<string, unknown>>);
+    published(note, sub.publicInterfaces as unknown as ReadonlyArray<Record<string, unknown>>, sub.id);
     for (const entry of sub.lifecycle ?? []) component(note, 'lifecycle', entry.component);
     for (const link of sub.trustedLinks ?? []) if (subsystems.has(link.subsystem)) note('trustedLinks', { kind: 'subsystem', id: link.subsystem });
   }
@@ -3214,7 +3219,7 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
       const source = method.signatureFrom;
       const cut = source?.lastIndexOf('.') ?? -1;
       if (source !== undefined && cut > 0) component(note, `methods.${method.name}.signatureFrom`, source.slice(0, cut));
-      types(note, `methods.${method.name}`, methodTypeRefs(method));
+      types(note, `methods.${method.name}`, methodTypeRefs(method), index.components.find((c) => c.id === intf.component)?.subsystem);
     }
   }
   for (const impl of index.implementations) {
@@ -3237,9 +3242,9 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
     const note = holder('type', type.id);
     if (type.group !== undefined && groups.has(type.group)) note('group', { kind: 'group', id: type.group });
     if (type.subsystem !== undefined && subsystems.has(type.subsystem)) note('subsystem', { kind: 'subsystem', id: type.subsystem });
-    for (const field of type.fields ?? []) types(note, `fields.${field.name}`, fieldTypeRefs(type, field.type));
-    types(note, 'signature', signatureTypeRefs(type));
-    for (const method of type.methods ?? []) types(note, `methods.${method.name}`, methodTypeRefs(method));
+    for (const field of type.fields ?? []) types(note, `fields.${field.name}`, fieldTypeRefs(type, field.type), type.subsystem);
+    types(note, 'signature', signatureTypeRefs(type), type.subsystem);
+    for (const method of type.methods ?? []) types(note, `methods.${method.name}`, methodTypeRefs(method), type.subsystem);
   }
   return out;
 }

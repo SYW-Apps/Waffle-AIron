@@ -1589,16 +1589,28 @@ function callersToReviewOf(before: InterfaceSpec | null, after: InterfaceSpec): 
     if (!was) continue;
     const change = signatureChange(signatureView(was), signatureView(method));
     if (change === null) continue;
-    const callers = callersOf(before.component, method.name, [...(before.implements ?? []), ...(after.implements ?? [])]);
-    if (callers.length === 0) continue;
-    out.push({ method: `${before.component}.${method.name}`, change, callers: callers.slice(0, CALLERS_LISTED), total: callers.length });
+    const { callers, restating } = callersOf(before.component, method.name, [...(before.implements ?? []), ...(after.implements ?? [])]);
+    // Each contract below restating the method with the signature the stored contract held will report IMPLEMENTS_MISMATCH.
+    const implementers = restating
+      .filter((id) => id !== before.id)
+      .filter((id) => {
+        const held = (loadSpec('interface', id) as InterfaceSpec | null)?.methods?.find((m) => m.name === method.name);
+        return held !== undefined && signatureChange(signatureView(was), signatureView(held)) === null;
+      })
+      .map((id) => `${id}.${method.name}`);
+    if (callers.length === 0 && implementers.length === 0) continue;
+    out.push({
+      method: `${before.component}.${method.name}`, change, callers: callers.slice(0, CALLERS_LISTED), total: callers.length,
+      ...(implementers.length > 0 ? { implementers } : {}),
+    });
   }
   return out;
 }
 
 /** The callers of <component>.<method> and of the same method on each abstraction it implements: specs first, then code sites. */
-function callersOf(component: string, method: string, abstractions: string[]): string[] {
+function callersOf(component: string, method: string, abstractions: string[]): { callers: string[]; restating: string[] } {
   const specs = new Set<string>();
+  const restating = new Set<string>();
   const sites = new Set<string>();
   const impls = loadImplementationSpecs();
   const contracts = new Map<string, string>();
@@ -1614,9 +1626,10 @@ function callersOf(component: string, method: string, abstractions: string[]): s
     for (const ref of found.references) {
       if (ref.kind === 'call-step' && ref.fromSpec) specs.add(ref.fromMember ? `${componentOf(ref.fromSpec)}.${ref.fromMember}` : componentOf(ref.fromSpec));
       else if (ref.kind === 'code-call' && ref.file) sites.add(ref.line !== undefined ? `${ref.file}:${ref.line}` : ref.file);
+      else if (ref.kind === 'implements' && ref.fromSpec && owner === component) restating.add(ref.fromSpec);
     }
   }
-  return [...specs, ...sites];
+  return { callers: [...specs, ...sites], restating: [...restating] };
 }
 
 /**

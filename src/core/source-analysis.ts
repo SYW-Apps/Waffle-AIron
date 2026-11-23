@@ -3926,6 +3926,27 @@ function resolveCalls(
     for (const decl of symbol?.declarations ?? []) if (MEMBER_KINDS.has(decl.kind)) decls.add(decl);
 
     const targets = targetsOf(decls);
+    // A member the receiver's declared type INHERITS from a base declaration lands on the receiver's own
+    // declaration: each abstraction restates every method of what it implements, so a call typed by the
+    // narrower one is a call of it, never of the base the member is written in. A call typed by the base
+    // itself keeps its landing.
+    if (receiver && !viaFunctionMethod && ts.isPropertyAccessExpression(callee)) {
+      const typeSymbol = checker.getTypeAtLocation(receiver).getSymbol();
+      const typeDecls = typeSymbol?.declarations ?? [];
+      const own = typeDecls.length === 1 ? typeDecls[0] : undefined;
+      const ownFile = own ? ownKey(own.getSourceFile()) : undefined;
+      const isAbstractClass = !!own && ts.isClassDeclaration(own) && !!ts.getModifiers(own)?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword);
+      if (own && ownFile && typeSymbol && (ts.isInterfaceDeclaration(own) || isAbstractClass)) {
+        for (let i = 0; i < targets.length; i++) {
+          const target = targets[i];
+          if (target.via !== 'declaration' || target.container === undefined || target.container === typeSymbol.name) continue;
+          if (!own.heritageClauses?.length || target.path === ownFile) continue;
+          if ((own as import('typescript').InterfaceDeclaration).members.some(m => m.name && nameText(m.name) === target.member)) continue;
+          if (targets.some(t => t.path === ownFile && t.container === typeSymbol.name && t.member === target.member)) continue;
+          targets[i] = { ...target, path: ownFile, container: typeSymbol.name };
+        }
+      }
+    }
     // A computed key that names no single member — a template, a
     // concatenation, a string-typed variable, a `keyof T` union — and a member
     // read off a type the code CAST to an index signature both leave the call

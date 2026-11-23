@@ -37,7 +37,7 @@ import {
   lockAttached,
   storedCredentialFor,
 } from '../commands/remote.js';
-import { composeAgentBrief, loadProjectConfig, resolveAgentTopology, setNetwork } from '../commands/adapters/core.js';
+import { composeAgentBrief, loadProjectConfig, resolveAgentTopology, setNetwork, withdrawReview } from '../commands/adapters/core.js';
 import { summarize } from '../models/execution.js';
 import { NetworkOptionsError } from '../utils/errors.js';
 import type { NetworkCommandOptions } from '../commands/network.js';
@@ -655,6 +655,21 @@ export async function runNetworkDeclare(options: NetworkCommandOptions): Promise
   }
   logger.success(`Declared this project's network in .wai/project.yaml${description ? ` ("${description}")` : ''}: it and every member below it form one isolated network boundary.`);
   logger.info('The network rules now judge the design (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...): run `wairon validate`. The declaration is part of the gate identity — re-lock (`wairon lock`) once it validates.');
+}
+
+/** cli_runner.runReviewWithdraw — `wairon review withdraw <id>`: take a pending review request back. */
+export async function runReviewWithdraw(id: string): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: through the core adapter; a refusal (unknown id, no longer pending) is one error line, exit non-zero.
+  let request;
+  try {
+    request = withdrawReview(id);
+  } catch (err) {
+    throw new WaironError(err instanceof Error ? err.message : String(err));
+  }
+  // Step 2.
+  const branch = request.branch ? `branch "${request.branch}"` : 'no recorded branch';
+  logger.success(`Withdrew the ${request.kind} request ${request.id}, made on ${branch}.`);
 }
 
 /** cli_runner.runNetworkUndeclare — `wairon network undeclare`: remove this project's network declaration. */

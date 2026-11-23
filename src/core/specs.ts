@@ -2245,6 +2245,8 @@ export interface CallersToReview {
   callers: string[];
   /** How many callers the lookup found; more than `callers` lists when it was capped. */
   total: number;
+  /** For a method of an abstraction: each contract implementing it, at any depth, that restates the old signature, as `<contract>.<method>`. */
+  implementers?: string[];
 }
 
 export interface SpecChangeReport {

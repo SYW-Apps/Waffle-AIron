@@ -231,3 +231,86 @@ describe('callersToReview on a write receipt', () => {
     expect(receipt.callersToReview?.[0]?.callers).toContain('desk.dispatch');
   });
 });
+
+/** carrier <- parcel_carrier <- dhl, each restating quote(weight) and book(order); `hall` calls parcel_carrier.book and .quote. */
+function seedChain(): void {
+  invalidateSpecCache();
+  const proj = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-chain-')));
+  projects.push(proj);
+  fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+  fs.writeFileSync(path.join(proj, '.wai', 'project.yaml'), JSON.stringify({
+    schemaVersion: '1.0.0', name: 'chain-project',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    createdAt: now, updatedAt: now,
+  }));
+  setProjectRoot(proj);
+  saveSpec('subsystem', {
+    schemaVersion: '1.0.0', id: 'shipping', name: 'Shipping', description: 'Shipping',
+    parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
+  });
+  const component = (id: string, extra: Record<string, unknown>) => saveComponentSpec({
+    id, name: id, description: id, subsystem: 'shipping', componentType: 'Orchestrator', owns: [], dependsOn: [],
+    status: 'complete', createdAt: now, updatedAt: now, ...extra,
+  } as never);
+  component('carrier', { abstract: true });
+  component('parcel_carrier', { abstract: true });
+  component('dhl', {});
+  component('hall', { dependsOn: ['parcel_carrier'] });
+  const methods = [
+    { name: 'quote', description: 'quotes', signature: 'quote(weight: string)', returns: 'void', params: [{ name: 'weight', type: 'string', description: 'w' }] },
+    { name: 'book', description: 'books', signature: 'book(order: string)', returns: 'void', params: [{ name: 'order', type: 'string', description: 'o' }] },
+  ];
+  saveInterfaceSpec({ id: 'icarrier', name: 'ICarrier', description: 'c', component: 'carrier', methods, status: 'complete', createdAt: now, updatedAt: now } as never);
+  saveInterfaceSpec({ id: 'iparcel_carrier', name: 'IParcel', description: 'c', component: 'parcel_carrier', implements: ['carrier'], methods, status: 'complete', createdAt: now, updatedAt: now } as never);
+  saveInterfaceSpec({ id: 'idhl', name: 'IDhl', description: 'c', component: 'dhl', implements: ['parcel_carrier'], methods, status: 'complete', createdAt: now, updatedAt: now } as never);
+  saveInterfaceSpec({
+    id: 'ihall', name: 'IHall', description: 'h', component: 'hall', status: 'complete', createdAt: now, updatedAt: now,
+    methods: [{ name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' }],
+  } as never);
+  saveImplementationSpec({
+    id: 'hall_impl', name: 'HallImpl', description: 'hall', contract: 'ihall',
+    methods: [{
+      name: 'run',
+      narrative: [
+        { stepNumber: 1, description: 'book', type: 'call', targetComponent: 'parcel_carrier', targetMethod: 'book' },
+        { stepNumber: 2, description: 'quote', type: 'call', targetComponent: 'parcel_carrier', targetMethod: 'quote' },
+      ],
+    } as never],
+    status: 'complete', createdAt: now, updatedAt: now,
+  });
+  invalidateSpecCache();
+}
+
+describe('an abstraction chain', () => {
+  it('lists the callers through a narrower abstraction and the contracts restating the method', async () => {
+    seedChain();
+    const { findReferences } = await import('../../src/core/validation.js');
+    const found = findReferences('carrier.book', false);
+    expect(found.target?.id).toBe('carrier.book');
+    const callers = found.references.filter((r) => r.kind === 'call-step');
+    expect(callers).toEqual([expect.objectContaining({ fromSpec: 'hall_impl', fromMember: 'run', through: 'parcel_carrier' })]);
+    expect(found.references.filter((r) => r.kind === 'implements').map((r) => r.fromSpec).sort()).toEqual(['idhl', 'iparcel_carrier']);
+    expect(found.impact).not.toBe('none');
+  });
+
+  it('names the callers and the implementers when a signature of the topmost abstraction changes', () => {
+    seedChain();
+    const report = updateSpecGated('interface', 'icarrier', {
+      methods: [{ name: 'quote', params: [{ name: 'weight', type: 'string', description: 'w' }, { name: 'zone', type: 'string', description: 'z', optional: true }] }],
+    }, true);
+    const [entry] = report.callersToReview!;
+    expect(entry.method).toBe('carrier.quote');
+    expect(entry.callers).toContain('hall.run');
+    expect(entry.implementers?.sort()).toEqual(['idhl.quote', 'iparcel_carrier.quote']);
+  });
+
+  it('leaves out an implementer that already restates the new signature', () => {
+    seedChain();
+    updateSpecGated('interface', 'idhl', { methods: [{ name: 'quote', params: [{ name: 'weight', type: 'string', description: 'w' }, { name: 'zone', type: 'string', description: 'z', optional: true }] }] });
+    invalidateSpecCache();
+    const report = updateSpecGated('interface', 'icarrier', {
+      methods: [{ name: 'quote', params: [{ name: 'weight', type: 'string', description: 'w' }, { name: 'zone', type: 'string', description: 'z', optional: true }] }],
+    }, true);
+    expect(report.callersToReview?.[0]?.implementers).toEqual(['iparcel_carrier.quote']);
+  });
+});

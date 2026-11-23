@@ -219,6 +219,8 @@ export function ensureProjectInitialized(fallbackName: string, id?: string, visi
     saveSystemSpec(bootstrapSystemSpec(name, now, vision));
     wroteSystem = true;
   }
+  // Step 9: .wai/.gitignore keeps the spec write lock out of git, for a project started without `wairon init` too.
+  ignoreWriteLock(paths.root());
   if (wroteConfig || wroteSystem) invalidateSpecCache();
   return { wroteConfig, wroteSystem };
 }
@@ -5687,6 +5689,13 @@ export interface ParamRename {
    * named by breaks.
    */
   followed: string[];
+  /**
+   * The code that keeps the old name until someone edits it (the next validate reports
+   * PARAM_NAME_MISMATCH there), `<file>: <symbol>` for each realizing function of each method the
+   * parameter moved on, an abstraction's declaration included. Read from the implementations' recorded
+   * sourcePath and symbol; the code is never read or written. Absent when none names a file.
+   */
+  codeToRename?: string[];
 }
 
 /**
@@ -5797,9 +5806,12 @@ export function renameParam(componentId: string, methodName: string, param: stri
   assertContractsWritable([...moves, ...followerEdits.map((e) => e.contract)].map((i) => ({ kind: 'interface' as const, id: i.id })));
   const ownEdits = moves.map((i) => ({ contract: i, ...respelled(i, false) }));
   const rewritten = [...ownEdits, ...followerEdits].flatMap((e) => e.rewritten);
+  // Step 10: the code that keeps the old name, from the implementations' recorded linkage.
+  const codeToRename = renameParamCode(moves, methodName);
+  const code = codeToRename.length > 0 ? { codeToRename } : {};
   // Steps 10-12: a dry run stops here, refused exactly as the real rename above.
   if (dryRun) {
-    return { component: componentId, method: methodName, from: param, to: newName, movedIn: moves.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), followed, dryRun: true };
+    return { component: componentId, method: methodName, from: param, to: newName, movedIn: moves.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), followed, ...code, dryRun: true };
   }
   // Steps 13-15: the parameter moves on each contract, the component's own and each implementer's; the writer derives the signature.
   for (const edit of ownEdits) saveInterfaceSpec({ ...edit.contract, methods: edit.methods });
@@ -5808,7 +5820,20 @@ export function renameParam(componentId: string, methodName: string, param: stri
   // Step 19.
   invalidateSpecCache();
   // Step 20.
-  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moves.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), followed };
+  return { component: componentId, method: methodName, from: param, to: newName, movedIn: moves.map((i) => i.id), rewritten, publishedIn, ...(published.length ? { published } : {}), followed, ...code };
+}
+
+/** `<file>: <symbol>` for each function realizing `method` on one of `contracts`, from the implementations' recorded sourcePath and symbol. */
+function renameParamCode(contracts: InterfaceSpec[], method: string): string[] {
+  const out = new Set<string>();
+  for (const impl of loadImplementationSpecs()) {
+    if (!contracts.some((c) => c.id === impl.contract)) continue;
+    for (const m of impl.methods.filter((x) => x.name === method)) {
+      const file = m.sourcePath ?? impl.sourcePath;
+      if (file) out.add(`${file}: ${m.symbol ?? m.name}`);
+    }
+  }
+  return [...out];
 }
 
 /**

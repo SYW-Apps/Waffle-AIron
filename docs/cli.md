@@ -212,8 +212,8 @@ warnings as errors (notices are printed and counted, never fatal).
   and attrs classes, compared with the type's by name in either casing (and,
   in either language, by a field's scalar type: `amount: str` where the spec
   declares `float` is the warning `TYPE_FIELD_TYPE_MISMATCH`, naming both
-  types; an annotation that is a union, a list, a record or a named type the
-  design does not know is not compared): a field
+  types; a collection is compared by kind and by element, a union or a named
+  type the design does not know is not): a field
   may be absent when it has a default or a default factory, is `NotRequired`,
   or sits in a `total=False` TypedDict, and `Optional[T]` alone is nullable but
   required, as in Pydantic v2. `Field(...)` and `Field(default=...)` are required;
@@ -459,13 +459,19 @@ realizes it, in order. A framework handler is green without any design change:
   written as agree: TypeScript's `number` for an int or a float, a date, a
   datetime or a duration as a string, a `Date` or a number, an enum as a string,
   a named scalar as what it holds, and optionality set aside. A union, a named
-  type the design does not know and `any` are not compared. One value where the
+  type the design does not know and `any` are not compared as a scalar. One value where the
   contract declares a list or a set (`ingredients: string` for
   `list<ingredient>`), or a list where it declares one value, is
-  `PARAM_TYPE_MISMATCH` too; `bytes` may be written as a list. Two lists, or two
-  sets, compare their element types the same way where both read as one scalar
-  (`ids: number[]` for `ids: list<string>`, naming both); an element that is a
-  named type, a union or `any` is not compared.
+  `PARAM_TYPE_MISMATCH` too; `bytes` may be written as a list. Collections are
+  compared by kind and by element. Where the contract declares a list, a set or a
+  map and the code annotates a collection of another kind (a set, a map, a dict or
+  a record, or a tuple where a list is declared), it is `PARAM_TYPE_MISMATCH`
+  naming both types; a read-only or abstract sequence (`readonly T[]`,
+  `ReadonlyArray<T>`, a Python `Sequence[T]`) reads as a list. Where both are of
+  one kind their elements (a map's keys and values) are compared the same way,
+  nested collections and named types the design knows included (`ids: number[]`
+  for `ids: list<string>`, naming both). An element that is a union, `any` or
+  `unknown`, or a named type the design does not know, is not compared.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the
@@ -592,6 +598,13 @@ strictness, no draft-status relaxation) and — only if the **design** passes �
 records the current tree as approved and refreshes this project's generated
 outputs (agent files only when `rules.materializeAgentFiles` is on).
 
+**A pending lock request made on another branch.** When an agent asked for the
+lock (`sdd_request_review`) on one branch and this checkout is on another with
+another design, `wairon lock` refuses, nothing written, naming the request, the
+branch it was made on and the branch checked out. Switch to that branch, take the
+request back with `wairon review withdraw <id>` when it is no longer wanted, or
+pass `--force` to approve this checkout's design anyway.
+
 **It approves; it does not change statuses.** No spec's `status` is rewritten:
 approval lives in `.wai/lock.json`. Implementation gates on that approval —
 `wairon lock-check` in CI, `sdd_get_status` for an AI tool — not on
@@ -716,6 +729,13 @@ the tuning you approve is shown, not only digested.
 **In a family, each project locks at its own root.** A project's approval covers its own design and its own policy only: a parent's record names no member, and a member re-locking never moves its parent. A member that is not approved is no reason to lock it first, unless the parent sets `composition.requireApprovedMembers`, which makes it a debt the parent reports (see *Inputs* below). `wairon lock` reads each member's own committed lock and writes nothing below the project it runs in.
 Another approver locking an unchanged design records their own approval. A shell
 with no terminal and no `--yes` writes nothing.
+
+### `wairon review withdraw <id>`
+Take a pending review request back (one an agent made with `sdd_request_review`),
+so a lock request made on another branch, or one nobody will answer, stops
+blocking `wairon lock` without `--force`. It prints the request withdrawn, its
+kind and the branch it was made on. An unknown id, or a request that is no longer
+pending, is refused as an error naming its status, and the exit code is non-zero.
 
 ### `wairon lock-check [--strict]`
 The **merge gate**. One question, one exit code: *is the design in this working
@@ -1337,6 +1357,12 @@ content — `as:` only asserts it (a contradiction is `MEMBER_KIND_MISMATCH`):
   generated and briefed with this project's agents. It holds only a specs folder
   — plus, when it is not contained, a `project.yaml` holding just
   `partOf: { project: <parent id>, path: <parent root> }`.
+  A path written while authoring from this project's root (`sourcePath`, a
+  method's, `simPath`, `bindings`) is read from that root, as every path,
+  finding and brief here shows it, and is stored in the part's own files
+  relative to the part's folder, so the part opened on its own resolves the
+  same file. When a planned file is missing from this root but exists under the
+  part's folder, `SOURCE_FILE_PLANNED` names the path to write instead.
 - A **project** is an independent boundary: its tree declares an id, holds an L0
   or carries a lock. It is reached only as `alias::name` through its L0 exports,
   judged by its own gate and locked at its own root. A project contained in this

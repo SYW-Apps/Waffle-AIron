@@ -25,6 +25,7 @@ import {
   runNetworkWhy,
   runNetworkDeclare,
   runNetworkUndeclare,
+  runReviewWithdraw,
 } from './runner.js';
 import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
 import { runInit } from '../commands/init.js';
@@ -1265,6 +1266,17 @@ export function buildProgram(): Command {
     .description("Remove this project's network declaration from .wai/project.yaml")
     .action(async (opts) => {
       await runNetworkUndeclare(opts);
+    });
+
+  const reviewCmd = program
+    .command('review')
+    .description('Review requests an agent made for the human');
+
+  reviewCmd
+    .command('withdraw <id>')
+    .description('Take a pending review request back, so one made on another branch (or one nobody will answer) stops blocking `wairon lock` without --force')
+    .action(async (id: string) => {
+      await runReviewWithdraw(id);
     });
 
   return program;
