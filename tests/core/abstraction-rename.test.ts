@@ -295,6 +295,29 @@ describe('renaming a method of an abstraction follows onto its implementers', ()
     renameMethod('animal', 'speak', 'bark', false);
     expect(['animal_impl', 'dog_impl', 'retriever_impl'].map((id) => storedSpec(never, id).methods[0].symbol)).toEqual([undefined, undefined, undefined]);
   });
+
+  it('gives the linkage-only implementation of an abstraction an entry pinning the old name, by the same pin rules', () => {
+    const tree = zoo();
+    tree.files = { 'src/animal.ts': 'export interface Animal { speak(volume: number): void }\n' };
+    tree.implementations = tree.implementations!.map((i) => (i.id === 'animal_impl' ? { ...i, sourcePath: 'src/animal.ts', methods: [] } : i));
+    const dir = project(tree);
+    const dry = renameMethod('animal', 'speak', 'bark', undefined, true);
+    expect(dry.pinnedSymbol).toBe('speak');
+    expect(dry.renamed).toContain('animal_impl');
+    expect(storedSpec(dir, 'animal_impl').methods).toEqual([]);
+    const report = renameMethod('animal', 'speak', 'bark');
+    expect(report.renamed).toContain('animal_impl');
+    expect(storedSpec(dir, 'animal_impl').methods).toEqual([expect.objectContaining({ name: 'bark', symbol: 'speak' })]);
+    // No code written: nothing to pin; declined: never.
+    const bare = zoo();
+    bare.implementations = bare.implementations!.map((i) => (i.id === 'animal_impl' ? { ...i, sourcePath: 'src/animal.ts', methods: [] } : i));
+    const none = project(bare);
+    renameMethod('animal', 'speak', 'bark');
+    expect(storedSpec(none, 'animal_impl').methods).toEqual([]);
+    const declined = project(tree);
+    renameMethod('animal', 'speak', 'bark', false);
+    expect(storedSpec(declined, 'animal_impl').methods).toEqual([]);
+  });
 });
 
 describe('a rename that cannot follow refuses before the first write, leaving every byte', () => {

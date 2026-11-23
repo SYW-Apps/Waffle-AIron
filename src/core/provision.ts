@@ -1237,6 +1237,11 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   exportCrossings([...crossing.in, ...qualified.in], dir, alias, parentId, 'in', result);
   exportReExported(inside, dir, alias, result);
   invalidateSpecCache();
+  // Step 21: each implements entry that crosses names the public name the producer exports the abstraction under.
+  nameImplementedAbstractions(crossing, dir, alias, parentId);
+  // Step 21 (every other reference): dependsOn, call/dispatch/register targets, declared calls, type expressions.
+  namePublicReferences([...crossing.out, ...qualified.out], [...crossing.in, ...qualified.in], dir, alias, parentId, result);
+  invalidateSpecCache();
   const memberKey = graph().nodes.find((n) => n.parent === '' && n.mountAlias === alias)?.namespace;
   // Step 18 (named before the re-saves below write them): every signature text
   // the respelling left stale, re-derived on either side.
@@ -1270,6 +1275,98 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
   rebaseEscapingPaths(dir, getProjectRoot(), result);
   // Step 19: promoted; nothing locked — answered with what crossed.
   return result;
+}
+
+/**
+ * Step 21 of promoteMember: a contract's `implements` entry the respelling made
+ * `<project>::<id>` is respelled to the public name the producer's L0 table
+ * exports the abstraction under (its `as`, else the item's name) — never an
+ * internal id the table does not list.
+ */
+function nameImplementedAbstractions(crossing: { out: Crossing[]; in: Crossing[] }, memberDir: string, alias: string, parentId: string): void {
+  const publicNameOf = (target: string): string | undefined => resolveProjectExports().entries
+    .find((e) => e.kind === 'component' && e.component === target && e.role === 'implement')?.publicName;
+  const respell = (spec: RawSpec, from: string, to: string): void => {
+    if (from === to) return;
+    patchKeepingStamp(spec.file, (raw) => {
+      const list: unknown = raw.implements;
+      if (Array.isArray(list) && list.includes(from)) raw.implements = list.map((e) => (e === from ? to : e));
+      else if (list === from) raw.implements = to;
+      else return false;
+      return true;
+    });
+  };
+  // A member's contract implementing an abstraction of the parent: named by the parent's table.
+  for (const c of crossing.out.filter((x) => x.viaImplements)) {
+    const name = publicNameOf(c.target);
+    if (name !== undefined) respell(c.spec, `${parentId}::${c.target}`, `${parentId}::${name}`);
+  }
+  // A parent's contract implementing an abstraction that moved: named by the member's table.
+  for (const c of crossing.in.filter((x) => x.viaImplements)) {
+    const name = runWithProjectRoot(memberDir, () => { invalidateSpecCache(); return publicNameOf(c.target); });
+    if (name !== undefined) respell(c.spec, `${alias}::${c.target}`, `${alias}::${name}`);
+  }
+}
+
+/** The public name the bound project's L0 table exports an item under (its `as`, else the item's name); the id itself where the table lists none. */
+function publicNameIn(kind: 'component' | 'interface' | 'type', id: string): string {
+  invalidateSpecCache();
+  const entries = resolveProjectExports().entries;
+  const hit = kind === 'type'
+    ? entries.find((e) => e.kind === 'type' && e.typeDef === id)
+    : kind === 'interface'
+      ? entries.find((e) => e.interface === id)
+      : entries.find((e) => e.kind === 'component' && e.component === id);
+  return hit?.publicName ?? id;
+}
+
+/**
+ * Step 21 of promoteMember, for every reference the respelling wrote across the
+ * boundary: a whole-value reference (dependsOn, a call, dispatch or register
+ * target, a declared call, an interface or type position) or a qualified token
+ * of a type expression naming `<producer>::<id>` is respelled to the public
+ * name the producer's L0 table exports the item under, and a bare type name a
+ * member imports is respelled to the name it imports it by. Each respelling
+ * already recorded is brought to the same name.
+ */
+function namePublicReferences(out: Crossing[], into: Crossing[], memberDir: string, alias: string, parentId: string, result: PromoteResult): void {
+  type Kind = 'component' | 'interface' | 'type';
+  const asKind = (position: string): Kind | undefined => (position === 'component' || position === 'interface' || position === 'type' ? position : undefined);
+  const sides = [
+    { crossings: out, prefix: `${parentId}::`, publicOf: (k: Kind, id: string) => publicNameIn(k, id), recorded: result.memberRespelled },
+    { crossings: into, prefix: `${alias}::`, publicOf: (k: Kind, id: string) => runWithProjectRoot(memberDir, () => publicNameIn(k, id)), recorded: result.respelled },
+  ];
+  for (const side of sides) {
+    const specs = side.crossings.map((c) => c.spec).filter(unique);
+    for (const spec of specs) {
+      const bare = side.crossings.filter((c) => c.spec === spec && c.position === 'bare-type').map((c) => c.target);
+      patchKeepingStamp(spec.file, (raw) => {
+        let changed = rewriteSpecRefs(raw, (ref, position) => {
+          const kind = asKind(position);
+          if (kind === undefined || !ref.startsWith(side.prefix)) return ref;
+          return side.prefix + side.publicOf(kind, ref.slice(side.prefix.length));
+        });
+        for (const slot of typeExpressionSlots(spec.kind, raw)) {
+          const before = slot.holder[slot.key] as string;
+          let after = respellTypeNames(before, (token) => (token.startsWith(side.prefix) ? side.prefix + side.publicOf('type', token.slice(side.prefix.length)) : token));
+          for (const id of bare) {
+            const name = side.publicOf('type', id);
+            if (name !== id) after = after.replace(new RegExp(`(^|[^A-Za-z0-9_:.-])${id.replace(/[.*+?^${}()|[]\]/g, '\$&')}(?![A-Za-z0-9_:.-])`, 'g'), (_m, lead: string) => `${lead}${name}`);
+          }
+          if (after !== before) {
+            slot.holder[slot.key] = after;
+            changed = true;
+          }
+        }
+        return changed;
+      });
+    }
+    // The respellings already recorded name the same public name.
+    for (const edit of side.recorded) {
+      const kind = asKind(edit.position);
+      if (kind !== undefined && edit.to.startsWith(side.prefix)) edit.to = side.prefix + side.publicOf(kind, edit.to.slice(side.prefix.length));
+    }
+  }
 }
 
 /**
@@ -1887,17 +1984,21 @@ function unique<T>(value: T, index: number, all: T[]): boolean {
 function exportCrossings(crossings: Crossing[], memberDir: string, alias: string, parentId: string, direction: 'out' | 'in', result: PromoteResult): void {
   const targets = [...new Set(crossings.map((c) => c.target))];
   const bare = [...new Set(crossings.filter((c) => c.position === 'bare-type').map((c) => c.target))];
+  // An abstraction a contract on the other side implements is exported with role implement.
+  const implemented = new Set(crossings.filter((c) => c.viaImplements).map((c) => c.target));
   if (direction === 'out') {
-    for (const name of exportItems(targets)) result.exported.push(`${parentId} L0: ${name}`);
+    for (const name of exportItems(targets, implemented)) result.exported.push(`${parentId} L0: ${name}`);
     if (bare.length > 0) {
-      projectConfigRepositoryAt(memberDir).importNames(parentId, bare);
-      result.imported.push(`${alias}: externals.${parentId}.use gains ${bare.join(', ')}`);
+      const names = bare.map((t) => publicNameIn('type', t));
+      projectConfigRepositoryAt(memberDir).importNames(parentId, names);
+      result.imported.push(`${alias}: externals.${parentId}.use gains ${names.join(', ')}`);
     }
   } else {
-    for (const name of runWithProjectRoot(memberDir, () => exportItems(targets))) result.exported.push(`${alias} L0: ${name}`);
+    for (const name of runWithProjectRoot(memberDir, () => exportItems(targets, implemented))) result.exported.push(`${alias} L0: ${name}`);
     if (bare.length > 0) {
-      projectConfigRepository.importNames(alias, bare);
-      result.imported.push(`${parentId}: members.${alias}.use gains ${bare.join(', ')}`);
+      const names = bare.map((t) => runWithProjectRoot(memberDir, () => publicNameIn('type', t)));
+      projectConfigRepository.importNames(alias, names);
+      result.imported.push(`${parentId}: members.${alias}.use gains ${names.join(', ')}`);
     }
   }
 }
@@ -1913,12 +2014,12 @@ function localIn(key: string, project: string): string {
  * already exports through the L0. Each entry is added only when missing, at
  * the audience a family sees (`project`).
  */
-function exportItems(ids: string[]): string[] {
+function exportItems(ids: string[], implemented: ReadonlySet<string> = new Set()): string[] {
   if (ids.length === 0) return [];
   invalidateSpecCache();
   const system = loadSystemSpec();
   if (!system) return [];
-  const entries = [...(system.publicInterfaces ?? [])] as { from?: string; component?: string; typeDef?: string; audience?: string }[];
+  const entries = [...(system.publicInterfaces ?? [])] as { from?: string; component?: string; typeDef?: string; audience?: string; role?: string }[];
   const types = loadTypeSpecs();
   const added: string[] = [];
   for (const id of ids) {
@@ -1937,8 +2038,8 @@ function exportItems(ids: string[]): string[] {
     if (!component) continue;
     const exported = resolveSubsystemExports(component.subsystem).entries.some((e) => e.kind === 'component' && e.component === id);
     if (exported && !entries.some((e) => e.component === id)) {
-      entries.push({ from: component.subsystem, component: id, audience: 'project' });
-      added.push(`${id} (from ${component.subsystem})`);
+      entries.push({ from: component.subsystem, component: id, ...(implemented.has(id) ? { role: 'implement' } : {}), audience: 'project' });
+      added.push(`${id} (from ${component.subsystem})${implemented.has(id) ? ' with role implement' : ''}`);
     }
   }
   if (entries.length !== (system.publicInterfaces ?? []).length) {
@@ -4473,6 +4574,19 @@ function shouldPinSymbol(implementation: ImplementationSpec, methodName: string,
 }
 
 /**
+ * Whether an abstraction's implementation that lists no entry for a renamed
+ * method (code linkage only: a sourcePath, no per-method rows) gets one pinning
+ * the old name (renameMethod step 18): the same pinSymbol rules as shouldPinSymbol —
+ * never when declined, always when asked, else only when its code exists.
+ */
+function pinsLinkageOnly(implementation: ImplementationSpec, abstraction: boolean, methodName: string, pinSymbol: boolean | undefined): boolean {
+  if (!abstraction || implementation.methods.some((m) => m.name === methodName) || pinSymbol === false) return false;
+  if (pinSymbol === true) return true;
+  const file = implementation.sourcePath;
+  return file !== undefined && file !== '' && ioFiles.exists(path.resolve(getProjectRoot(), file));
+}
+
+/**
  * Whether a contract's `implements` entry names a component of this project: a
  * bare id, or the key the loader bound a contained member's own entry to. Any
  * other entry is another project's `alias::name` extension point.
@@ -4669,9 +4783,17 @@ export function moveContractMethod(componentId: string, methodName: string, newN
   // Steps 5-9: and on the implementations of those contracts that realize it,
   // carrying narrative, sourcePath, symbol, detail and intent unchanged.
   const movingContracts = new Set(owning.map((i) => i.id));
+  const abstraction = loadComponentSpec(componentId)?.abstract === true;
   let pinnedSymbol: string | undefined;
   for (const implementation of loadImplementationSpecs()) {
     if (!movingContracts.has(implementation.contract)) continue;
+    // An abstraction's linkage-only implementation lists no entry: it gets one naming just the pinned symbol.
+    if (pinsLinkageOnly(implementation, abstraction, methodName, pinSymbol)) {
+      pinnedSymbol = methodName;
+      saveImplementationSpec({ ...implementation, methods: [...implementation.methods, { name: newName, symbol: methodName, narrative: [] }] });
+      renamed.push(implementation.id);
+      continue;
+    }
     if (!implementation.methods.some((m) => m.name === methodName)) continue;
     // An implementation that named no symbol needs one now — the function it
     // binds to still carries the old name — unless the caller declined the pin.
@@ -4761,7 +4883,9 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   const declaring = (id: string): InterfaceSpec[] => everyContract.filter((i) => i.component === id && i.methods.some((m) => m.name === methodName));
   const realizing = (id: string): ImplementationSpec[] => {
     const ids = new Set(declaring(id).map((i) => i.id));
-    return implementations.filter((impl) => ids.has(impl.contract) && impl.methods.some((m) => m.name === methodName));
+    const abstraction = loadComponentSpec(id)?.abstract === true;
+    return implementations.filter((impl) => ids.has(impl.contract)
+      && (impl.methods.some((m) => m.name === methodName) || pinsLinkageOnly(impl, abstraction, methodName, pinSymbol)));
   };
   // The contracts a move writes: the declaring ones and a Portal's that only lists the verb in omits.
   const written = (id: string): InterfaceSpec[] => everyContract.filter((i) => i.component === id
@@ -4816,7 +4940,8 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // Steps 15-16: a dry run answers what the rename WOULD do — refused exactly
   // as the real one above — and writes nothing.
   if (dryRun) {
-    const wouldPin = movers.some((id) => realizing(id).some((impl) => shouldPinSymbol(impl, methodName, pinSymbol)));
+    const wouldPin = movers.some((id) => realizing(id).some((impl) => shouldPinSymbol(impl, methodName, pinSymbol)
+      || pinsLinkageOnly(impl, loadComponentSpec(id)?.abstract === true, methodName, pinSymbol)));
     const wouldRewrite = [...rewriteRefFields(reachDir, methodRemap, undefined, true), ...rekeyLintAllows(reachDir, rename, true)];
     return {
       component: componentId,

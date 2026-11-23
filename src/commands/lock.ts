@@ -23,6 +23,7 @@ import {
   readLockRecord,
   loadProjectConfig,
   reviewBranchConflict,
+  pendingReviews,
   projectFamily,
   type LockRecord,
   type StateId,
@@ -920,11 +921,22 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     const refreshed = evidenceRefresh(onFile, gate, captured);
     if (!refreshed) return onFile;
     writeLockRecord(refreshed.record);
+    bringReviewsUpToDate();
     return refreshed.record;
   }
   // Step 26: the only file this lock writes.
   writeLockRecord(record);
+  // Step 21: the pending review requests, brought up to date by the approval just written.
+  bringReviewsUpToDate();
   return record;
+}
+
+/**
+ * Refresh the pending review requests so a lock request this approval answered is marked locked and
+ * one whose design moved is superseded (another branch's is left alone). Never fails the lock.
+ */
+function bringReviewsUpToDate(): void {
+  try { pendingReviews(); } catch { /* the lock stands whatever the refresh does */ }
 }
 
 /**

@@ -6,7 +6,8 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSpec, saveComponentSpec, updateSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import * as portal from '../../src/core/index.js';
 import { ReviewStore } from '../../src/core/review-store.js';
-import { assertApprovable } from '../../src/commands/lock.js';
+import { assertApprovable, runLock } from '../../src/commands/lock.js';
+import { computeApprovalId } from '../../src/core/validation.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
 
 // A request records the branch it was made on; a checkout switched to another branch with another
@@ -125,5 +126,33 @@ describe('review requests and branches', () => {
     changeDesign();
     expect(() => assertApprovable([])).toThrow(/the pending lock request was made on another branch[\s\S]*feat\/a[\s\S]*main/);
     expect(() => assertApprovable([], true)).not.toThrow();
+  });
+  it('a lock marks the request it answered locked in the store, with no status read in between', async () => {
+    root = project();
+    checkout(root, 'feat/a', ['feat/a', 'main']);
+    const { request } = portal.requestReview('lock', 'x');
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
+    expect(new ReviewStore().load(request.id)?.status).toBe('locked');
+  });
+
+  it('a lock on branch B leaves a request of branch A alone, and a locked request on A no longer blocks B', async () => {
+    root = project();
+    checkout(root, 'feat/a', ['feat/a', 'main']);
+    const { request } = portal.requestReview('lock', 'x');
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
+    expect(new ReviewStore().load(request.id)?.status).toBe('locked');
+    checkout(root, 'main', ['feat/a', 'main']);
+    changeDesign();
+    expect(portal.reviewBranchConflict()).toBeUndefined();
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
+  });
+
+  it('a lock supersedes a request whose design moved on the same branch', async () => {
+    root = project();
+    checkout(root, 'feat/a', ['feat/a', 'main']);
+    const { request } = portal.requestReview('lock', 'x');
+    changeDesign();
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeApprovalId());
+    expect(new ReviewStore().load(request.id)?.status).toBe('superseded');
   });
 });

@@ -6,7 +6,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { validateFamily } from '../../src/core/validation.js';
 import { at, migrate, plan, waiState } from '../helpers/family-verbs.js';
-import { tempDir, isolateGlobals, specs, component, contract, subsystem, system, projectYaml, writeClinic } from '../helpers/stage8-family.js';
+import { tempDir, isolateGlobals, specs, component, contract, implementation, type as typeSpec, subsystem, system, projectYaml, writeClinic } from '../helpers/stage8-family.js';
 
 // ---------------------------------------------------------------------------
 // A contract's local `implements` entry is a component reference across a
@@ -41,7 +41,7 @@ function edit(file: string, change: (doc: any) => void): void {
 
 /**
  * The clinic whose part `scheduling` holds the abstraction `slot-source`
- * (an abstract Adapter, published by the part's subsystem with `role`), and
+ * (an abstract Adapter, published by the part subsystem with `role`), and
  * whose frontdesk `checkin-client` realizes it: its contract `implements` the
  * abstraction by its local id, across the line a promote draws.
  */
@@ -80,6 +80,114 @@ describe('promote: an implements entry crosses the new boundary', () => {
     const planned = plan(root, { verb: 'promote', alias: 'scheduling' });
     expect(planned.refusals.map((r) => r.detail).join(' ')).toMatch(/checkin-client.*implements.*slot-source.*role implement/s);
     expect(waiState(root)).toEqual(before);
+  });
+});
+
+describe('promote: the abstraction stays in the parent under a public name', () => {
+  /** clinic whose frontdesk holds the abstraction `slot-source`, exported by the L0 under `slot-source-impl` when `exported`; the part booking-client implements it. */
+  function parentAbstraction(exported: boolean): { root: string; part: string } {
+    const made = writeClinic(path.join(tempDir(cleanups, 'wairon-implements-parent-'), 'clinic'));
+    const { root, part } = made;
+    subsystem(root, 'Clinic', 'frontdesk', {
+      publicInterfaces: [
+        { details: 'Patients', component: 'patient-portal' },
+        { details: 'Where slots come from', component: 'slot-source', role: 'implement' },
+      ],
+    });
+    component(root, 'frontdesk', 'slot-source', 'Adapter', [], { abstract: true });
+    contract(root, 'frontdesk', 'slot-source', SPEAK);
+    system(root, 'Clinic', exported
+      ? [{ from: 'frontdesk', component: 'slot-source', as: 'slot-source-impl', role: 'implement', audience: 'project' }]
+      : []);
+    contract(part, 'scheduling', 'booking-client', SPEAK);
+    edit(specs(part, 'scheduling', 'booking-client', '.interface.yaml'), (doc) => { doc.implements = ['slot-source']; });
+    return made;
+  }
+  const partImplements = (part: string): unknown => (yaml.load(fs.readFileSync(specs(part, 'scheduling', 'booking-client', '.interface.yaml'), 'utf-8')) as any).implements;
+  const exportErrors = (root: string): string[] =>
+    at(root, () => validateFamily({ family: true })).issues.filter((i) => ['EXTERNAL_NOT_EXPORTED', 'EXTERNAL_INCOMPATIBLE'].includes(i.code)).map((i) => i.code);
+
+  it('names the public name the parent L0 exports it under, and the family validates', () => {
+    const { root, part } = parentAbstraction(true);
+    expect(plan(root, { verb: 'promote', alias: 'scheduling' }).refusals).toEqual([]);
+    migrate(root, { verb: 'promote', alias: 'scheduling' });
+    expect(partImplements(part)).toEqual(['clinic::slot-source-impl']);
+    expect(exportErrors(root)).toEqual([]);
+  });
+
+  it('exports the abstraction with role implement where the L0 does not, and names it by its item name', () => {
+    const { root, part } = parentAbstraction(false);
+    migrate(root, { verb: 'promote', alias: 'scheduling' });
+    const l0 = yaml.load(fs.readFileSync(specs(root, '.index.yaml'), 'utf-8')) as any;
+    expect(l0.publicInterfaces).toEqual(expect.arrayContaining([expect.objectContaining({ component: 'slot-source', role: 'implement' })]));
+    expect(partImplements(part)).toEqual(['clinic::slot-source']);
+    expect(exportErrors(root)).toEqual([]);
+  });
+
+  it('the dry run predicts what the real run leaves', () => {
+    const { root } = parentAbstraction(true);
+    const planned = plan(root, { verb: 'promote', alias: 'scheduling' });
+    expect(planned.notes.join(' ')).not.toMatch(/EXTERNAL_NOT_EXPORTED/);
+  });
+});
+
+describe('promote: every reference across the boundary names the public name', () => {
+  const REGISTER = [{ name: 'register', description: 'Register', signature: 'register(): void', returns: 'void' }];
+  const CALL = (target: string): Record<string, unknown>[] => [{
+    name: 'run', narrative: [{ stepNumber: 1, type: 'call', description: 'Call across', targetComponent: target, targetMethod: 'register' }],
+  }];
+  const doc = (file: string): any => yaml.load(fs.readFileSync(file, 'utf-8'));
+  const codes = (root: string): string[] =>
+    at(root, () => validateFamily({ family: true })).issues.filter((i) => ['EXTERNAL_NOT_EXPORTED', 'EXTERNAL_INCOMPATIBLE', 'EXTERNAL_UNDECLARED'].includes(i.code)).map((i) => i.code);
+
+  it('a parent component exported under an as name: the part dependsOn and call step name it', () => {
+    const { root, part } = writeClinic(path.join(tempDir(cleanups, 'wairon-pubname-out-'), 'clinic'));
+    contract(root, 'frontdesk', 'patient-portal', REGISTER);
+    system(root, 'Clinic', [{ from: 'frontdesk', component: 'patient-portal', as: 'patients', audience: 'project' }]);
+    contract(part, 'scheduling', 'booking-client', [{ name: 'run', description: 'Run', signature: 'run(): void', returns: 'void' }]);
+    implementation(part, 'scheduling', 'booking-client', 'ibooking-client', CALL('patient-portal'));
+    migrate(root, { verb: 'promote', alias: 'scheduling' });
+    expect(doc(specs(part, 'scheduling', 'booking-client', '.index.yaml')).dependsOn).toEqual(['clinic::patients']);
+    expect(doc(specs(part, 'scheduling', 'booking-client', '.implementation.yaml')).methods[0].narrative[0].targetComponent).toBe('clinic::patients');
+    expect(codes(root)).toEqual([]);
+  });
+
+  it('a part component the parent re-exports under another name: its references name the part own public name, which the validated family resolves', () => {
+    const { root, part } = writeClinic(path.join(tempDir(cleanups, 'wairon-pubname-in-'), 'clinic'));
+    contract(part, 'scheduling', 'schedule-portal', REGISTER);
+    subsystem(part, 'Clinic', 'scheduling', { publicInterfaces: [{ details: 'Schedules', component: 'schedule-portal' }] });
+    system(root, 'Clinic', [{ from: 'scheduling', component: 'schedule-portal', as: 'schedules', audience: 'project' }]);
+    contract(root, 'frontdesk', 'checkin-client', [{ name: 'run', description: 'Run', signature: 'run(): void', returns: 'void' }]);
+    implementation(root, 'frontdesk', 'checkin-client', 'icheckin-client', CALL('schedule-portal'));
+    migrate(root, { verb: 'promote', alias: 'scheduling' });
+    expect(doc(specs(root, 'frontdesk', 'checkin-client', '.index.yaml')).dependsOn).toEqual(['scheduling::schedule-portal']);
+    expect(doc(specs(root, 'frontdesk', 'checkin-client', '.implementation.yaml')).methods[0].narrative[0].targetComponent).toBe('scheduling::schedule-portal');
+    expect(codes(root)).toEqual([]);
+  });
+
+  it('a parent type exported under an as name: the part param type names it', () => {
+    const { root, part } = writeClinic(path.join(tempDir(cleanups, 'wairon-pubname-type-'), 'clinic'));
+    subsystem(root, 'Clinic', 'frontdesk', { publicInterfaces: [{ details: 'Patients', component: 'patient-portal' }, { typeDef: 'patient' }] });
+    system(root, 'Clinic', [{ from: 'frontdesk', typeDef: 'patient', as: 'person', audience: 'project' }]);
+    migrate(root, { verb: 'promote', alias: 'scheduling' });
+    const method = doc(specs(part, 'scheduling', 'booking-client', '.interface.yaml')).methods[0];
+    expect(method.params[0].type).toBe('person');
+    expect(codes(root)).toEqual([]);
+  });
+
+  it('a part type the parent re-exports under another name: its param type names the part own public name', () => {
+    const { root, part } = writeClinic(path.join(tempDir(cleanups, 'wairon-pubname-type-in-'), 'clinic'));
+    typeSpec(specs(part, 'types', 'slot.yaml'), 'slot', [{ name: 'at', type: 'string' }], { subsystem: 'scheduling' });
+    subsystem(part, 'Clinic', 'scheduling', { publicInterfaces: [{ details: 'Schedules', component: 'schedule-portal' }, { typeDef: 'slot' }] });
+    system(root, 'Clinic', [{ from: 'scheduling', typeDef: 'slot', as: 'slot-time', audience: 'project' }]);
+    contract(root, 'frontdesk', 'checkin-client', [{
+      name: 'pick', description: 'Pick', signature: 'pick(s: slot): void', returns: 'void',
+      params: [{ name: 's', type: 'slot', description: 'The slot' }],
+    }]);
+    migrate(root, { verb: 'promote', alias: 'scheduling' });
+    const method = doc(specs(root, 'frontdesk', 'checkin-client', '.interface.yaml')).methods[0];
+    expect(method.params[0].type).toBe('scheduling::slot');
+    expect(codes(root)).toEqual([]);
   });
 });
 
