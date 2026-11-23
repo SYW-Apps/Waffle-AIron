@@ -25,6 +25,7 @@ import {
   reviewBranchConflict,
   pendingReviews,
   projectFamily,
+  getLoaderIssues,
   type LockRecord,
   type StateId,
 } from '../core/index.js';
@@ -781,11 +782,21 @@ export function refreshInputs(): InputsRefresh {
 
 /**
  * cli_lock_adapter.assertApprovable — refuse, writing nothing, what no lock
- * may approve: a project requiring approved members with a member project not
+ * may approve: a tree the loader could not read whole (no --force overrides
+ * it), a project requiring approved members with a member project not
  * approved, or a pending lock request made on another branch (unless forced).
  * Inputs are not refused here: the lock refreshes the owed ones first.
  */
 export function assertApprovable(members: ProjectApproval[], force?: boolean): void {
+  // Steps 1-3: the approval records one digest per spec read, so a tree read
+  // in part would be approved as if the rest did not exist.
+  const loaderErrors = getLoaderIssues().filter((issue) => issue.severity === 'error');
+  if (loaderErrors.length > 0) {
+    throw new LockRefusedError(
+      `the tree could not be read whole — ${loaderErrors.map((issue) => `[${issue.specId ?? 'tree'}] ${issue.code}: ${issue.message}`).join(' ')} `
+        + 'Fix the declaration, then lock; --force does not override this. Nothing was written.',
+    );
+  }
   const config = loadProjectConfig();
   // A PROJECT member only: a part has no approval of its own — this lock is its approval.
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');

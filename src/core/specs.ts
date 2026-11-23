@@ -3481,7 +3481,7 @@ export class SpecWorkspace {
       if (decl.kind === 'part' || !followsLive(decl)) continue;
       // One the scan could not open (a hosted instance never reads a `../` source) stays referenced, unavailable.
       if (raw.record.referenced.some((r) => r.alias === decl.alias)) continue;
-      const childDir = this.followableMember(raw, decl, ancestors);
+      const childDir = this.followableMember(raw, decl, ancestors, raws);
       if (!childDir) continue;
       const before = raws.length;
       this.readRoot(childDir, raw, decl, new Set([...ancestors, chainDirKey(childDir)]), maxDepth, depth + 1, raws, taken);
@@ -3510,6 +3510,16 @@ export class SpecWorkspace {
         raw.memberKeys.set(decl.alias, raws[before].record.namespace);
       }
     }
+  }
+
+  /** Whether a path external lies on the walk from the bound root to this root. */
+  private reachedThroughPathExternal(raw: RawRoot, raws: readonly RawRoot[]): boolean {
+    for (let at: RawRoot | undefined = raw; at; ) {
+      if (at.record.pathExternal) return true;
+      const parent: string | undefined = at.record.parent;
+      at = parent === undefined ? undefined : raws.find((r) => r.record.namespace === parent);
+    }
+    return false;
   }
 
   /** How many roots lie between this one and the bound root. */
@@ -3556,9 +3566,13 @@ export class SpecWorkspace {
   /**
    * Whether a member can be followed, recording why not: a declaration with a
    * problem, an escaping path, a directory already on the walk, a missing one.
-   * Every loader issue carries the member's key.
+   * Every loader issue carries the member's key. A directory already on the
+   * walk is a containment loop only when member declarations alone led here:
+   * when a path external led the walk to this root (a member using its own
+   * parent), the member is a project the walk already holds, met again through
+   * this root's containment of it — no issue, read once, its alias keyed to it.
    */
-  private followableMember(raw: RawRoot, decl: MemberDeclarationRead, ancestors: ReadonlySet<string>): string | null {
+  private followableMember(raw: RawRoot, decl: MemberDeclarationRead, ancestors: ReadonlySet<string>, raws: readonly RawRoot[]): string | null {
     const memberKey = keyIn(raw.record.namespace, decl.alias);
     const absolute = path.isAbsolute(decl.path) || path.win32.isAbsolute(decl.path);
     if (decl.problem && !absolute) {
@@ -3579,6 +3593,11 @@ export class SpecWorkspace {
       return null;
     }
     if (ancestors.has(chainDirKey(childDir))) {
+      const held = this.reachedThroughPathExternal(raw, raws) ? raws.find((r) => chainDirKey(r.dir) === chainDirKey(childDir)) : undefined;
+      if (held) {
+        raw.memberKeys.set(decl.alias, held.record.namespace);
+        return null;
+      }
       this.loaderIssues.push({
         severity: 'error',
         code: 'CIRCULAR_SUBPROJECT_REFERENCE',
