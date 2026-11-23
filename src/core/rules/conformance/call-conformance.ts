@@ -158,9 +158,10 @@ const UNOWNED_DEPTH = 8;
  * finding reports at the original call site naming the hops. A call landing
  * on a modelled method stops there: what that method calls is its own
  * narrative's. A landing in `origin` itself is left to the caller, whose own
- * body walk already covers its file.
+ * body walk already covers its file. A landing in `claimed` (`path#member` pairs a
+ * claim names or forwards to by identity) stops there too: it IS the claimed method.
  */
-export function unownedReach(ctx: RuleContext): (calls: readonly ResolvedCallFact[], origin: string) => ReachedCall[] {
+export function unownedReach(ctx: RuleContext): (calls: readonly ResolvedCallFact[], origin: string, claimed?: ReadonlySet<string>) => ReachedCall[] {
   const realization = ctx.realizationIndex();
   const model = ctx.codeModel;
   const callsAt = new Map<string, ResolvedCallFact[]>();
@@ -201,7 +202,7 @@ export function unownedReach(ctx: RuleContext): (calls: readonly ResolvedCallFac
     }
     return undefined;
   };
-  return (calls, origin) => {
+  return (calls, origin, claimed) => {
     const out: ReachedCall[] = [];
     const visited = new Set<string>();
     const queue: ReachedCall[] = calls.map(call => ({ call, through: [] }));
@@ -210,7 +211,9 @@ export function unownedReach(ctx: RuleContext): (calls: readonly ResolvedCallFac
       out.push(reached);
       if (reached.through.length >= UNOWNED_DEPTH) continue;
       for (const target of reached.call.targets) {
-        if (target.path === origin || owned(target)) continue;
+        // A landing a claim names (`path#member`, its identity forwards included) IS that claimed
+        // method: what it calls is the claimed method's narrative, never this caller's.
+        if (target.path === origin || owned(target) || claimed?.has(`${target.path}#${target.member}`)) continue;
         const owner = classOwner(target);
         if (owner && !realization.componentsAt(origin).some(c => c.id === owner.id)) {
           reached.into ??= { component: owner.id, member: target.member };
@@ -1392,7 +1395,7 @@ export const callConformanceRule: SddRule = {
         /** Portal calls to members of a workflow component's class that its contract does not declare. */
         const undeclaredMembers = new Map<string, string>();
         const own = resolvedCalls.filter(call => call.enclosing !== undefined && bodies.has(call.enclosing));
-        const reachedCalls = reach(own, here);
+        const reachedCalls = reach(own, here, claimed);
         // Every call into another component's contract that no claim names is
         // collected at any detail; how much the method states decides what it
         // is (reportUnnarrated): binding, or a route the design leaves open.

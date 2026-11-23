@@ -2282,8 +2282,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // not count as an existing system.
         // The id as `wairon init` picks it: the name slugified, else `<slug>-project`
         // when the id grammar refuses the slug (a device name, a reserved word).
-        const nameSlug = name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/[^a-z0-9]+$/, '').slice(0, 48);
-        const projectId = effectiveProjectId({ name }) ?? effectiveProjectId({ name: nameSlug ? `${nameSlug}-project` : 'project' }) ?? 'project';
+        const projectId = effectiveProjectId({ name }) ?? effectiveProjectId({ name: name + ' project' }) ?? 'project';
         const bootstrapped = ensureProjectInitialized(name, projectId, vision);
         // Step 6: through the authoring seam. Step 7: the receipt — the L0 is a
         // singleton, read back by the id "system", the handle sdd_get_spec takes.
