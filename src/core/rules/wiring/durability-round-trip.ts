@@ -14,7 +14,7 @@ export const durabilityRule: SddRule = {
   needsWholeTree: true,
   judges: 'design',
   description:
-    'A durable Store (persisted RAM projection) must carry effect-tagged contract methods, and its mutations — write-effect methods, and lifecycle-effect methods, which change what exists — require a hydration read-back reachable from a lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is opt-out by declaration, never silently absent — the declaration itself is enforced by durability-declaration.',
+    'A durable Store (persisted RAM projection) must carry effect-tagged contract methods, and its mutations — write-effect methods, and lifecycle-effect methods, which change what exists — require a hydration read-back reachable from a lifecycle init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is opt-out by declaration, never silently absent — the declaration itself is enforced by durability-declaration. An abstract Store is not judged: an abstraction holds no state, and each implementer is judged by its own durability.',
   codes: [
     { code: 'MISSING_EFFECT_TAG', defaultSeverity: 'warning', summary: 'Durable Store contract method lacks an effect: read | write | lifecycle tag' },
     { code: 'MISSING_HYDRATION', defaultSeverity: 'error', summary: 'Durable Store is written but no read-back is reachable from any lifecycle init entrypoint' },
@@ -46,6 +46,8 @@ export const durabilityRule: SddRule = {
       // cache loss is behavior-preserving.
       if (comp.componentType !== 'Store') continue;
       if (comp.durability !== 'durable') continue;
+      // An abstraction holds no state: each implementer is judged by its own durability.
+      if (comp.abstract === true) continue;
 
       const methods = ctx.interfaceMethodsOf(comp.id);
       const untagged = methods.filter(method => !method.effect);

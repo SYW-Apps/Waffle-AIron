@@ -1449,6 +1449,9 @@ function directMembers(ts: TsModule, body: TsNode, names: ReadonlySet<string>): 
 }
 
 /** One parameter list as the walk read it, at the position of the function declaring it. */
+/** Where each member signature the walk read as completing now was written, for the checker to settle again. */
+const signaturePositions = new WeakMap<MemberSignatureFact, number>();
+
 interface ParameterSite {
   pos: number;
   params: ParameterFact[];
@@ -1575,6 +1578,8 @@ interface ExactFacts {
    * tell every body of a name from some of them.
    */
   asyncFunctions: string[];
+  /** The bodies annotated to return something that is no Promise by name (an alias, a PromiseLike), by name and position, for the checker to settle. */
+  lateBodies: { name: string; pos: number }[];
   /** The return annotation each body writes, by name, one entry per body (see SourceFileFacts.functionReturns). */
   functionReturns: Map<string, (string | null)[]>;
   /** The members of each top-level named class (see SourceFileFacts.classMembers). */
@@ -1645,6 +1650,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
   const routeBodies: { name: string; node: import('typescript').Node }[] = [];
   const paramSites: ParameterSite[] = [];
   const asyncFunctions: string[] = [];
+  const lateBodies: { name: string; pos: number }[] = [];
   const functionReturns = new Map<string, (string | null)[]>();
   const classMembers = new Map<string, ClassMemberFact[]>();
   const enumValues = new Map<string, string[]>();
@@ -1825,11 +1831,14 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
   // written, and whether it completes later.
   const memberSignature = (fn: import('typescript').SignatureDeclarationBase): MemberSignatureFact => {
     const params = declaredParameters(fn).map(({ unused: _unused, reads: _reads, members: _members, handedWhole: _whole, ...rest }) => rest);
-    return {
+    const signature: MemberSignatureFact = {
       params,
       ...(fn.type ? { returns: fn.type.getText(sf).replace(/\s+/g, ' ').trim() } : {}),
       completesLater: completesLater(fn),
     };
+    // Where the checker may settle it later: a return annotated as an alias of a Promise.
+    if (!signature.completesLater && fn.type) signaturePositions.set(signature, fn.pos);
+    return signature;
   };
   const addSignature = (into: Map<string, MemberSignatureFact[]>, name: string, signature: MemberSignatureFact): void => {
     into.set(name, [...(into.get(name) ?? []), signature]);
@@ -2392,7 +2401,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     if (mods?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) return true;
     const returned = (fn as import('typescript').SignatureDeclarationBase).type;
     return !!returned && ts.isTypeReferenceNode(returned) && ts.isIdentifier(returned.typeName)
-      && returned.typeName.text === 'Promise';
+      && (returned.typeName.text === 'Promise' || returned.typeName.text === 'PromiseLike');
   };
 
   // The values of a union of string literals, in written order; undefined
@@ -2470,6 +2479,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
       // return a Promise. One entry per body, beside the one signature per
       // body above, so a name's bodies are judged on what they all say.
       if (completesLater(node)) asyncFunctions.push(fnName);
+      else if ((node as unknown as import('typescript').SignatureDeclarationBase).type) lateBodies.push({ name: fnName, pos: node.pos });
       // The return annotation THIS body writes, as written, one entry per body
       // beside its signature: what a contract's `returns` is compared with.
       const annotatedReturn = (node as unknown as import('typescript').SignatureDeclarationBase).type;
@@ -2954,7 +2964,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     visitReference(sf);
   }
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, namespaceReexports, typeOnlyStars, runtimeStars, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, typePositionOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, namespaceReexports, typeOnlyStars, runtimeStars, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, typePositionOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, lateBodies, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -3559,7 +3569,7 @@ function resolveCalls(
   wiring: readonly string[] = [],
 ): CheckerReading {
   const out = new Map<string, ResolvedCallFact[]>();
-  if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), shapeSignatures: new Map() };
+  if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), shapeSignatures: new Map(), lateReturns: new Map() };
   const options = checkerOptions(ts, projectRoot);
   const settings = JSON.stringify(options);
   const host = ts.createCompilerHost(options, true);
@@ -3579,7 +3589,7 @@ function resolveCalls(
   try {
     program = ts.createProgram({ rootNames: [...files.keys(), ...wiring], options, host });
   } catch {
-    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), shapeSignatures: new Map(), unbuilt: true };
+    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), shapeSignatures: new Map(), lateReturns: new Map(), unbuilt: true };
   }
   const checker = program.getTypeChecker();
   const assignable = (checker as unknown as {
@@ -4356,6 +4366,7 @@ function resolveCalls(
   const prefixes = new Map<string, Map<string, string>>();
   const crossProjectImports = new Map<string, CrossProjectImportFact[]>();
   const shapeSignatures = new Map<string, Map<string, Record<string, MemberSignatureFact[]>>>();
+  const lateReturns = new Map<string, Set<number>>();
   const literalOf: LiteralOf = (node) => {
     const type = checker.getTypeAtLocation(node);
     return type.isStringLiteral() ? type.value : undefined;
@@ -4388,7 +4399,9 @@ function resolveCalls(
     const fileKinds: Array<Array<ParameterReading>> = [];
     const fileRoutes = new Map<string, Map<string, RouteFact>>();
     const filePrefixes = new Map<string, string>();
+    const fileLate = new Set<number>();
     const visit = (node: import('typescript').Node): void => {
+      if (ts.isFunctionLike(node) && node.type && ts.isTypeReferenceNode(node.type) && lateType(node.type)) fileLate.add(node.pos);
       const name = namedFunctionNameOf(ts, node);
       const body = (node as { body?: import('typescript').Node }).body;
       if (name !== undefined && body) {
@@ -4466,6 +4479,7 @@ function resolveCalls(
     kinds.set(key, fileKinds);
     const shaped = inheritedShapeSignatures(sf);
     if (shaped.size > 0) shapeSignatures.set(key, shaped);
+    if (fileLate.size > 0) lateReturns.set(key, fileLate);
     routes.set(key, new Map([...fileRoutes].map(([name, read]) => [name, [...read.values()]])));
     if (filePrefixes.size > 0) prefixes.set(key, filePrefixes);
 
@@ -4526,7 +4540,18 @@ function resolveCalls(
     }
     if (broken.length > 0) crossProjectImports.set(key, broken);
   }
-  return { calls: out, imports, kinds, routes, prefixes, crossProjectImports, shapeSignatures };
+  return { calls: out, imports, kinds, routes, prefixes, crossProjectImports, shapeSignatures, lateReturns };
+
+  /** Whether a return annotation names a Promise or a PromiseLike, or an alias of either, as the checker settles it. */
+  function lateType(annotation: import('typescript').TypeNode): boolean {
+    try {
+      const type = checker.getTypeFromTypeNode(annotation);
+      const name = (type.getSymbol() ?? type.aliasSymbol)?.getName();
+      return name === 'Promise' || name === 'PromiseLike';
+    } catch {
+      return false;
+    }
+  }
 
   /**
    * The member signatures of each interface of a file that extends another and
@@ -4548,7 +4573,7 @@ function resolveCalls(
       const mods = ts.canHaveModifiers(fn) ? ts.getModifiers(fn) : undefined;
       const returned = fn.type;
       const later = !!mods?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword)
-        || (!!returned && ts.isTypeReferenceNode(returned) && ts.isIdentifier(returned.typeName) && returned.typeName.text === 'Promise');
+        || (!!returned && ts.isTypeReferenceNode(returned) && lateType(returned));
       return { params, ...(returned ? { returns: returned.getText().replace(/\s+/g, ' ').trim() } : {}), completesLater: later };
     };
     const declared = (declaration: import('typescript').Declaration): MemberSignatureFact[] => {
@@ -4706,6 +4731,8 @@ interface CheckerReading {
   crossProjectImports: Map<string, CrossProjectImportFact[]>;
   /** Per root file, the member signatures of each interface that extends another and each intersection alias, the inherited members included. */
   shapeSignatures: Map<string, Map<string, Record<string, MemberSignatureFact[]>>>;
+  /** Per root file, the positions of the function-likes whose return annotation the checker settles as a Promise or a PromiseLike (through an alias, say). */
+  lateReturns: Map<string, Set<number>>;
   /** Set when the compiler could not build the program: nothing was read. */
   unbuilt?: true;
 }
@@ -4850,6 +4877,7 @@ export function buildCodeModel(
   const checkerRoots = new Map<string, string>();
   /** Each exact-grade file's parameter lists in walk order: what the checker's kinds are joined onto. */
   const paramSitesAt = new Map<string, ParameterSite[]>();
+  const lateBodiesAt = new Map<string, { name: string; pos: number }[]>();
   // The repository's own packages, read once: what lets a package specifier
   // naming one of them resolve like a relative import.
   const localPackages = readLocalPackages(projectRoot);
@@ -4958,6 +4986,7 @@ export function buildCodeModel(
           };
           checkerRoots.set(absolute, sourcePath);
           paramSitesAt.set(sourcePath, facts.paramSites);
+          lateBodiesAt.set(sourcePath, facts.lateBodies);
         } catch {
           analyzed = analyzeGeneric(text);
         }
@@ -5038,6 +5067,7 @@ export function buildCodeModel(
       const broken = reading.crossProjectImports.get(facts.path);
       if (broken) facts.crossProjectImports = broken;
       mergeInheritedSignatures(facts, reading.shapeSignatures.get(facts.path));
+      mergeLateReturns(facts, lateBodiesAt.get(facts.path), reading.lateReturns.get(facts.path));
     }
     const reached: Record<string, ResolvedCallFact[]> = {};
     for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;
@@ -5049,6 +5079,20 @@ export function buildCodeModel(
   }
 
   return { files, projectRoot, rootFiles, packages, ...outsideFields(outside, false) };
+}
+
+/** The return annotations the checker settled as a Promise (an alias, a PromiseLike), joined onto the bodies and signatures the walk could not read so. */
+function mergeLateReturns(facts: SourceFileFacts, bodies: { name: string; pos: number }[] | undefined, late: Set<number> | undefined): void {
+  if (!late || late.size === 0) return;
+  for (const body of bodies ?? []) if (late.has(body.pos)) facts.asyncFunctions = [...(facts.asyncFunctions ?? []), body.name];
+  for (const shape of Object.values(facts.typeShapes ?? {})) {
+    for (const signatures of Object.values(shape.signatures ?? {})) {
+      for (const signature of signatures) {
+        const at = signaturePositions.get(signature);
+        if (at !== undefined && late.has(at)) signature.completesLater = true;
+      }
+    }
+  }
 }
 
 /**
@@ -5067,6 +5111,11 @@ function mergeInheritedSignatures(facts: SourceFileFacts, read: Map<string, Reco
     }
     if (own) own.signatures = merged;
     else shapes[name] = { origin: 'declared', fields: [], methods: Object.keys(merged), inherited: true, signatures: merged, declaration: true };
+    // An inherited member is declared by this shape too, whichever file its base lives in.
+    for (const member of Object.keys(merged)) {
+      if (!facts.declaredNames.includes(member)) facts.declaredNames.push(member);
+      if (!facts.anchoredNames.includes(member)) facts.anchoredNames.push(member);
+    }
   }
 }
 
@@ -6776,6 +6825,13 @@ interface PythonTry {
 /** Words a call-shaped `word(` can be that are no call. */
 const PYTHON_KEYWORDS = new Set(['if', 'elif', 'while', 'for', 'return', 'not', 'and', 'or', 'in', 'is', 'await', 'lambda', 'yield', 'with', 'assert', 'del', 'raise', 'except', 'else', 'async', 'from', 'import', 'as', 'global', 'nonlocal', 'pass', 'break', 'continue', 'try', 'finally', 'match', 'case']);
 
+/** Whether a Python return annotation names something awaited — an Awaitable or a Coroutine, bare or subscripted, from typing or collections.abc. */
+function awaitedAnnotation(annotation: string | null | undefined): boolean {
+  if (!annotation) return false;
+  const text = annotation.trim().replace(/^["']|["']$/g, '');
+  return /^(?:(?:typing|collections\.abc|t|abc)\.)?(?:Awaitable|Coroutine)(?:\[.*\])?$/s.test(text);
+}
+
 /** The decorators that make a method of an abstract base class abstract (abc.abstractmethod and its legacy forms). */
 const ABSTRACT_DECORATORS = new Set(['abstractmethod', 'abstractproperty', 'abstractclassmethod', 'abstractstaticmethod']);
 
@@ -6952,7 +7008,9 @@ function readPython(text: string): PythonFacts {
       const returns = functionReturns.get(name) ?? [];
       returns.push(returned);
       functionReturns.set(name, returns);
-      if (isAsync) asyncFunctions.push(name);
+      // A def completes later when it is `async def`, or annotated to return something awaited.
+      const completes = isAsync || awaitedAnnotation(returned);
+      if (completes) asyncFunctions.push(name);
       const bodies = functionBodies.get(name) ?? [];
       bodies.push(body);
       functionBodies.set(name, bodies);
@@ -6960,7 +7018,7 @@ function readPython(text: string): PythonFacts {
       if (methodOf !== undefined && innermost?.protocol && !isAccessor && !name.startsWith('_')) {
         const shape = innermost.protocol;
         if (!shape.methods.includes(name)) shape.methods.push(name);
-        const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: isAsync };
+        const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: completes };
         const held = shape.signatures ?? (shape.signatures = {});
         // Own-name keyed: a method called `constructor` is its own entry.
         Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
@@ -6973,7 +7031,7 @@ function readPython(text: string): PythonFacts {
         if (!isAccessor && !name.startsWith('_') && !isAbstractProperty) {
           const shape = innermost.abc.shape;
           if (!shape.methods.includes(name)) shape.methods.push(name);
-          const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: isAsync };
+          const signature: MemberSignatureFact = { params: params.map(p => ({ ...p })), ...(returned ? { returns: returned } : {}), completesLater: completes };
           const held = shape.signatures ?? (shape.signatures = {});
           Object.defineProperty(held, name, { value: [...(Object.prototype.hasOwnProperty.call(held, name) ? held[name] : []), signature], enumerable: true, writable: true, configurable: true });
         }
