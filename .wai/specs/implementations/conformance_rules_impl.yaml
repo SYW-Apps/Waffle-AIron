@@ -597,10 +597,10 @@ methods:
           rules.conformance.requireCode when strict; spec impl.id; draft context from draft; covers
           the planned files) naming every planned file with its owner: planned, not written yet; a
           path read from the bound root, as every path authored here is, that is not on disk there
-          but is under the folder of the part holding the spec, is named with the spelling that
-          reaches it from the bound root (the part's folder before it), since a path written as if
-          relative to the part is the likely slip; method-realization judges the methods in each
-          once it exists
+          but is under the folder of the part holding the spec (ctx.partFolderOf(impl.id)), is named
+          with the spelling that reaches it from the bound root (the part's folder before it), since
+          a path written as if relative to the part is the likely slip; method-realization judges
+          the methods in each once it exists
         type: local
     symbol: check
     exportedVia: sourceFileLinkageRule
@@ -1931,9 +1931,10 @@ methods:
           outside its own declaration and that nothing else uses — its own methods naming it, a
           static factory, are no use — is one of those members, said as an exported class. A
           declaration realizing an abstraction is read for what it owes as well: each member every
-          implementer must realize — an interface, trait or Protocol member, an abstract method —
-          that no contract method of the abstraction names is UNDECLARED_PUBLIC_MEMBER on the
-          abstraction's implementation whether or not anything uses it (warning; site the file;
+          implementer must realize — an interface, trait or Protocol member, an abstract method: a
+          signature the reader marks owed (member_signature_fact.owed), in TypeScript and in Python
+          alike — that no contract method of the abstraction names is UNDECLARED_PUBLIC_MEMBER on
+          the abstraction's implementation whether or not anything uses it (warning; site the file;
           units the members), since it is contract surface no design names; its constructor and its
           members with a body are read as any class's are, above. Exempt: constructors, accessors,
           fields, static, private, protected, #private, underscore-prefixed, override, computed
@@ -2699,4 +2700,4 @@ methods:
     exportedVia: callMannerConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-11-23T07:01:06.588Z'
+updatedAt: '2026-11-23T07:41:29.917Z'

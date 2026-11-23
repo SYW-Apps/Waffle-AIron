@@ -29,7 +29,15 @@ fields:
       Whether the signature completes later: declared async, or annotated to return a Promise (an
       `async def` in Python)
     optional: false
+  - name: owed
+    type: bool
+    description: >-
+      Whether every implementer must realize the member: an interface, trait or Protocol member, or
+      an abstract method (a TypeScript `abstract` member, a Python method marked @abstractmethod).
+      False for a member with a body an implementer inherits. Absent where the reader cannot tell,
+      which the rules read as not owed.
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-11-22T02:30:38.249Z'
-updatedAt: '2026-11-22T02:30:38.591Z'
+updatedAt: '2026-11-23T07:41:26.067Z'
