@@ -184,7 +184,8 @@ methods:
       init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection
       (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is
       opt-out by declaration, never silently absent — the declaration itself is enforced by
-      durability-declaration.
+      durability-declaration. An abstract Store is not judged: an abstraction holds no state, and
+      each implementer is judged by its own durability.
     signature: 'durabilityRoundTrip(ctx: RuleContext): void'
     returns: void
     params:
@@ -409,4 +410,4 @@ methods:
         summary: An Adapter states a transport other than the transport of a Portal it calls
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-11-22T15:11:30.638Z'
+updatedAt: '2026-11-23T00:54:35.265Z'

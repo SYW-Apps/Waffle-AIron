@@ -453,6 +453,12 @@ methods:
     signatureFrom: project_config_portal.reviseProject
     guarantees:
       - idempotent
+  - name: ensureProjectInitialized
+    description: >-
+      Complete the bound project's bootstrap without overwriting anything: the default configuration
+      and the L0, each only when absent. Forwarded to the core portal; sdd_initialize_system calls
+      it so a project started over MCP alone has the configuration every other tool reads.
+    signatureFrom: spec_maintenance_portal.ensureProjectInitialized
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-21T15:56:09.885Z'
+updatedAt: '2026-11-23T00:54:41.972Z'

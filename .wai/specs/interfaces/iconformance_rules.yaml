@@ -1049,10 +1049,17 @@ methods:
       string`), whether the names agree or not. So is one value annotated where the contract
       declares a list or a set, or a list or a set annotated where it declares one value —
       `ingredients: string` realizing `ingredients: list<ingredient>`, `tag: string[]` realizing
-      `tag: string` — bytes aside, which travel as a list. Two lists, or two sets, compare their
-      element types the same way where both read as one scalar: `ids: number[]` realizing `ids:
-      list<string>` is PARAM_TYPE_MISMATCH, naming both; an element either side does not read as one
-      scalar (a named type, a union, any) is not compared. An annotation either side does not read
+      `tag: string` — bytes aside, which travel as a list. Collections are compared by kind and by
+      elements. Where the contract declares a list, a set or a map and the code annotates a
+      collection of another kind — a set, a map, a dict or a record, or a tuple, where a list is
+      declared — it is PARAM_TYPE_MISMATCH naming both types (`ids: Set<string>` or a Python `ids:
+      dict[str, str]` realizing `ids: list<string>`); a read-only or abstract sequence (`readonly
+      T[]`, `ReadonlyArray<T>`, a Python `Sequence[T]`) reads as a list. Where both are of one kind
+      their elements (a map's keys and values) are compared the same way, nested collections
+      included: `ids: number[]` and `ids: list[list[str]]` realizing `ids: list<string>` are
+      PARAM_TYPE_MISMATCH. An element either side does not read as a type the design knows (a union,
+      any, unknown) is not compared, and an annotation that is no collection at all (any, unknown,
+      object) is left to the opaque-parameter rules above. An annotation either side does not read
       as one scalar — a union, a named type the design does not know, any — is not compared. Where
       nothing decides between a rename and another argument (the types cannot be compared, no kind
       or field speaks, and no handle name does), the name still differs from the contract's either
@@ -1355,16 +1362,19 @@ methods:
       completes now — every caller in every language with async/await is shaped by the difference,
       so a contract that hides it misleads every implementer and translation built from it. Compared
       with source_file_facts.asyncFunctions for the method's realizing function (under its
-      `symbol`), at exact grade only; where a name has several bodies only what they all agree on is
-      reported, as param-conformance does. An abstraction's method is compared with its declaration,
-      never a body: whether the signature its declaring interface, trait, Protocol or abstract class
-      states for the member completes later (member_signature_fact.completesLater, per overload,
-      read at exact grade and by the Python reader for a Protocol or an abstract base class),
-      whatever constructor, helpers or default bodies the class also holds, reported with the same
-      ASYNC_MISMATCH; where the grade cannot read member signatures nothing is compared, and
-      param-conformance's ABSTRACTION_DECLARATION_UNCOMPARED says so. A method whose file only calls
-      the function is methodRealization's finding, and a method whose conformance dial is off (its
-      own, else its implementation's) is not judged.
+      `symbol`), at exact grade, and in Python by the signature reader; a body completes later when
+      it is declared async (`async def` in Python), or when its return is annotated as something
+      awaited — in TypeScript a Promise, a PromiseLike or an alias of either, resolved through the
+      checker; in Python an Awaitable or a Coroutine; where a name has several bodies only what they
+      all agree on is reported, as param-conformance does. An abstraction's method is compared with
+      its declaration, never a body: whether the signature its declaring interface, trait, Protocol
+      or abstract class states for the member completes later (member_signature_fact.completesLater,
+      per overload, read at exact grade and by the Python reader for a Protocol or an abstract base
+      class), whatever constructor, helpers or default bodies the class also holds, reported with
+      the same ASYNC_MISMATCH; where the grade cannot read member signatures nothing is compared,
+      and param-conformance's ABSTRACTION_DECLARATION_UNCOMPARED says so. A method whose file only
+      calls the function is methodRealization's finding, and a method whose conformance dial is off
+      (its own, else its implementation's) is not judged.
     signature: 'asyncConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1508,4 +1518,4 @@ methods:
           yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-11-22T22:54:44.803Z'
+updatedAt: '2026-11-23T00:54:31.268Z'

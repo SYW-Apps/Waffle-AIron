@@ -201,6 +201,15 @@ methods:
         targetComponent: approval_portal
         targetMethod: writeLockRecord
       - stepNumber: 21
+        description: >-
+          Bring the pending review requests up to date now the record is written, so a lock request
+          this lock answered (made on this branch, for the design just approved) is marked locked by
+          this approval and one whose design moved since is superseded; a request made on another
+          branch is left as it is. A failure here never undoes the lock
+        type: call
+        targetComponent: approval_portal
+        targetMethod: pendingReviews
+      - stepNumber: 22
         description: Return the written lock record
         type: return
         outcome: LockRecord
@@ -652,4 +661,4 @@ lint:
         surfaces word-identical, which a second copy in the runner would not.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-11-20T00:20:48.650Z'
+updatedAt: '2026-11-23T00:54:39.688Z'

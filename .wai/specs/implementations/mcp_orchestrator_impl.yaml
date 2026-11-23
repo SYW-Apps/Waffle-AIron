@@ -42,13 +42,22 @@ methods:
         type: local
       - stepNumber: 5
         description: >-
+          When the bound root holds no project configuration (a project started over MCP alone, with
+          no `wairon init`), create the default one, as `wairon init` would, declaring the L0 name
+          slugified as its id, and add a notice to the receipt naming the file written; a
+          configuration that exists is left exactly as it is
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: ensureProjectInitialized
+      - stepNumber: 6
+        description: >-
           Write it through the authoring client adapter, which re-authors an existing L0 in place
           and carries what this input cannot express (databases, the project gateway
           publicInterfaces, diagram defaults)
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: writeSpec
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Answer with the receipt: the sentence and its notices as text, the receipt itself as
           structured content
@@ -1177,4 +1186,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-22T02:26:08.803Z'
+updatedAt: '2026-11-23T00:54:44.107Z'

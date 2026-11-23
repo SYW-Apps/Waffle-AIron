@@ -1227,7 +1227,9 @@ methods:
           method under newName, its former key appended to its rename trace and its signature text
           re-derived, each implementation with the method under newName carrying its narrative,
           sourcePath, symbol, detail and intent, a pin of the old name when no symbol is declared
-          and the code exists (pinSymbol), and an omits entry naming it renamed in place
+          and the code exists (pinSymbol) — an abstraction's implementation that lists no entry for
+          the method (code linkage only) gets one naming just that pinned symbol, so its declaration
+          keeps binding too — and an omits entry naming it renamed in place
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveContractMethod
@@ -2200,7 +2202,11 @@ methods:
           audience. Then re-point each such parent entry at the public name the new project now
           exports it under (`from: <alias>`, the item named by that public name, its `as`, audience
           and details kept), so no re-export names an item the member does not export and none is
-          wider than its source. Record each entry written or re-pointed
+          wider than its source. An abstraction a contract on the other side implements is exported
+          with role implement where it is not yet, and every reference the respelling wrote across
+          the boundary names the public name the producer's L0 table exports the item under (its
+          `as`, else the item's name), never an internal id the table does not list. Record each
+          entry written or re-pointed
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
@@ -4080,4 +4086,4 @@ methods:
         outcome: the specs the method moved in and the pinned symbol, when one was set
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-22T22:51:26.043Z'
+updatedAt: '2026-11-23T00:54:37.940Z'

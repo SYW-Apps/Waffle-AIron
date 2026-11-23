@@ -86,9 +86,10 @@ methods:
         type: loop
         loopKind: forEach
         over: >-
-          the Stores comp of ctx.components whose durability is durable (read-through,
-          ram-projection and cache need no read-back; a misplaced or absent declaration is
-          durability-declaration's finding)
+          the Stores comp of ctx.components whose durability is durable and that are not abstract
+          (read-through, ram-projection and cache need no read-back; an abstraction holds no state,
+          its implementers being each judged by their own durability; a misplaced or absent
+          declaration is durability-declaration's finding)
         endStep: 9
       - stepNumber: 5
         description: Writes can only be paired with read-backs over tagged methods
@@ -1073,4 +1074,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-11-22T15:11:32.582Z'
+updatedAt: '2026-11-23T00:54:36.611Z'
