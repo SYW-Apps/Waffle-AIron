@@ -213,6 +213,12 @@ export interface SpecWriteReceipt {
   cascaded?: string[];
   /** For each contract method whose signature the restatement changed, the callers to review. Information only. */
   callersToReview?: CallersToReview[];
+  /**
+   * The design findings a write touching an abstraction brings, read off a
+   * rehearsal on a copy of the tree, as `<severity> <CODE> [spec] message`.
+   * Information only: never refusing. Absent when the write touches no abstraction.
+   */
+  findings?: string[];
 }
 
 /**
@@ -1060,7 +1066,12 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
       cascade = removal.cascade;
     }
   }
-  // Step 18: the callers of a contract method whose signature the restatement changes.
+  // Steps 18-25: a write touching an abstraction lands findings on specs it does
+  // not name; rehearsed on a copy, they are reported, never refusing.
+  const findingsField = touchesAbstraction(restatement.kind, existing, application.spec)
+    ? { findings: rehearseWrite(['error', 'warning'], () => persistCandidate(restatement.kind, application.spec)).added.map((f) => f.text) }
+    : {};
+  // Step 26: the callers of a contract method whose signature the restatement changes.
   const callers = restatement.kind === 'interface' && existing
     ? callersToReviewOf(existing as InterfaceSpec, application.spec as InterfaceSpec)
     : [];
@@ -1075,7 +1086,7 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
     return {
       kind: restatement.kind, id, name, replacedExisting: application.replacedExisting, ...status,
       notices: [...gateNotices, ...application.notices, ...cascadeNotices(cascade, true)],
-      respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), ...callersField, dryRun: true,
+      respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), ...callersField, ...findingsField, dryRun: true,
     };
   }
   // Step 22: to disk.
@@ -1088,7 +1099,7 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   return {
     kind: restatement.kind, id, name, replacedExisting: application.replacedExisting, ...status,
     notices: [...gateNotices, ...persisted.notices, ...application.notices, ...cascadeNotices(cascade, false)],
-    respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), ...callersField,
+    respellings: application.respellings, testsToRevisit, ...(cascaded.length > 0 ? { cascaded } : {}), ...callersField, ...findingsField,
   };
 }
 
@@ -1492,9 +1503,15 @@ export function updateSpecGated(
   // The merged spec the judgement sees, kept for the signature comparison below (a dry run included).
   let merged: Spec | null = null;
   const gate: SpecWriteHooks = { ...judged, gate: (k, m) => { merged = m as Spec; return judged.gate?.(k, m); } };
-  // Step 13: apply the delta with the hook injected, so the judgement runs on
+  // Steps 13-20: a write touching an abstraction lands findings on specs it does
+  // not name; rehearsed on a copy, they are reported, never refusing.
+  const findings = touchesAbstraction(kind, stored, delta)
+    ? rehearseWrite(['error', 'warning'], () => updateSpec(kind, id, delta, { ...judged }, false)).added.map((f) => f.text)
+    : undefined;
+  // Step 21: apply the delta with the hook injected, so the judgement runs on
   // the merged spec at the last point before anything reaches disk.
   const report = updateSpec(kind, id, delta, gate, dryRun);
+  if (findings !== undefined) report.findings = findings;
 
   // Steps 14-15: the removed methods' implementation entries go in the same
   // write — a dry run says which would.
@@ -1879,6 +1896,21 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
   const notices = noticesFrom(verdict);
   // Steps 13-25: rehearsed, then (unless a dry run) written, with the gate's notices.
   return rehearsedMove(kind, id, owners, subsystem, dryRun === true, notices, parent);
+}
+
+/**
+ * Whether a write touches an abstraction, whose findings land on specs the
+ * write does not name: a contract that implements one or belongs to an
+ * abstract component, or a component that is, was or becomes abstract — read
+ * off the stored spec and what the write states.
+ */
+function touchesAbstraction(kind: string, stored: unknown, written: unknown): boolean {
+  const views = [stored, written].filter((v): v is Record<string, unknown> => v !== null && typeof v === 'object');
+  if (kind === 'component') return views.some((v) => v.abstract === true);
+  if (kind !== 'interface') return false;
+  if (views.some((v) => (Array.isArray(v.implements) ? v.implements.length > 0 : typeof v.implements === 'string' && v.implements !== ''))) return true;
+  const owner = views.map((v) => v.component).find((c): c is string => typeof c === 'string' && c !== '');
+  return owner !== undefined && (loadSpec('component', owner) as ComponentSpec | null)?.abstract === true;
 }
 
 /** A finding of the rehearsal: its severity, code and spec, and its message with the copy's folder read as the project's. */

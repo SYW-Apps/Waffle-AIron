@@ -111,10 +111,10 @@ describe('sdd_get_status answers with the lock verdict', () => {
     try { fs.rmSync(proj.tempDir, { recursive: true, force: true }); } catch { /* win file locks */ }
   });
 
-  const status = async (): Promise<string> => {
+  const status = async (detail?: 'full'): Promise<string> => {
     const client = await connect(createMcpServer());
     clients.push(client);
-    const result = await client.callTool({ name: 'sdd_get_status', arguments: {} });
+    const result = await client.callTool({ name: 'sdd_get_status', arguments: detail ? { detail } : {} });
     expect(result.isError ?? false, JSON.stringify(result.content)).toBe(false);
     return (result.content as { type: string; text: string }[])[0].text;
   };
@@ -171,8 +171,10 @@ describe('sdd_get_status answers with the lock verdict', () => {
     expect(report).not.toMatch(/since approval/);
     expect(report).toContain('alpha');
 
-    const text = await status();
+    // The whole report is the full cut; the default summary carries the verdict without the tree.
+    const text = await status('full');
     expect(text).toContain(report);
+    expect(await status()).toMatch(/1 spec changed since approval/);
     expect(text).toMatch(/1 spec changed since approval/);
   }, 30_000);
 

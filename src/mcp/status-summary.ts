@@ -25,6 +25,8 @@ export interface StatusPieces {
   network: string;
   /** The wairon release of the running server. */
   version: string;
+  /** True when the report is an explanation (the tree will not load, no project binds), never a tree. */
+  failed: boolean;
 }
 
 /** The whole answer: what `detail: full` returns, and what the tool always answered before. */
@@ -46,9 +48,9 @@ const TREE_CHARS = /^[│├└─\s]*/;
 /** The cut: leads, verdict, counts per subsystem, findings by code, Externals, Network, a pointer. */
 export function summarizeStatus(p: StatusPieces): string {
   const lines = p.report.split('\n');
-  const isTree = lines.some((l) => l.startsWith('Architecture Status Dashboard'));
   // A report that failed (the tree will not load, no project binds) is the explanation: never cut.
-  if (!isTree) return fullStatus(p);
+  // Read from the report's own fact: the core report carries no heading to recognise it by.
+  if (p.failed) return fullStatus(p);
 
   const head: string[] = [];
   const keep: string[] = [];
@@ -106,7 +108,8 @@ export function summarizeStatus(p: StatusPieces): string {
     }
     const parts = [`${t.components} components`, `${t.interfaces} interfaces`, `${t.implementations} implementations`];
     if (t.types > 0) parts.push(`${t.types} types`);
-    counts.push(`${project ? '  ' : ''}${t.label === '(shared types)' ? t.label : `[Subsystem] ${t.label}`}: ${parts.join(', ')}`);
+    const shared = t.label === '(shared types)';
+    counts.push(`${project ? '  ' : ''}${shared ? t.label : `[Subsystem] ${t.label}`}: ${shared ? `${t.types} types` : parts.join(', ')}`);
   }
   for (const pr of projects) if (pr.subsystems === 0 && !counts.includes(pr.label)) counts.push(pr.label);
 

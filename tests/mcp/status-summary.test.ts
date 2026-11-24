@@ -2,11 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { summarizeStatus, statusAnswer, fullStatus, type StatusPieces } from '../../src/mcp/status-summary.js';
 
 const tree = [
-  'project demo at /x',
-  '',
-  'Architecture Status Dashboard',
-  '─────────────────────────────',
-  '',
+  // The core report as the MCP handler gets it: no CLI heading above the tree.
   '● System: Demo (90% Complete)',
   '├── [Subsystem] core (100%)',
   '│   ├── [Component: Store] a_store (100%)',
@@ -32,6 +28,7 @@ const pieces = (over: Partial<StatusPieces> = {}): StatusPieces => ({
   verdict: 'ℹ  Approved: yesterday\n',
   externals: '\nExternals (compared live):\n- [EXTERNAL_DRIFTED] moved\n',
   version: '9.9.9',
+  failed: false,
   ...over,
 });
 
@@ -69,7 +66,7 @@ describe('sdd_get_status summary', () => {
   });
 
   it('never cuts a report that failed to load', () => {
-    const failed = pieces({ report: 'Failed to parse specification files:\n[X] bad\n' });
+    const failed = pieces({ report: 'Failed to parse specification files:\n[X] bad\n', failed: true });
     expect(summarizeStatus(failed)).toBe(fullStatus(failed));
   });
 

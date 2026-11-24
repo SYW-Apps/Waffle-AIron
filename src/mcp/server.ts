@@ -713,6 +713,7 @@ function renderChangeReport(report: SpecChangeReport): string {
   lines.push(...renderRespellings(report.respellings));
   lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun, report.rerouted === true));
   lines.push(...renderCallersToReview(report.callersToReview));
+  lines.push(...renderAbstractionFindings(report.findings, report.dryRun));
   lines.push(...renderTestsToRevisit(report.testsToRevisit));
   return lines.join('\n');
 }
@@ -909,6 +910,17 @@ function renderRespellings(entries: ReadonlyArray<{ path: string; written: strin
   return ['', 'RESPELLED (stored canonical):', ...entries.map((r) => `- ${r.path}: "${r.written}" → "${r.stored}"`)];
 }
 
+/** The findings a write touching an abstraction brings, on a change report or a write receipt. */
+const abstractionFindingsOutput = z.array(z.string()).optional().describe(
+  'The design findings a write touching an abstraction brings, read off a rehearsal on a copy of the tree, as `<severity> <CODE> [spec] message` (an IMPLEMENTS_MISMATCH on an implementer, say). Information only: such a write is never refused for them. Absent when the write touches no abstraction.',
+);
+
+/** The findings a write touching an abstraction brings: information, never a refusal. */
+function renderAbstractionFindings(findings: string[] | undefined, dryRun: boolean): string[] {
+  if (!findings?.length) return [];
+  return ['', `FINDINGS this write ${dryRun ? 'would bring' : 'brought'} on specs it does not name (an abstraction edit leaves its implementers to restate; validate reports them until they are):`, ...findings.map((f) => `- ${f}`)];
+}
+
 /** One public name a removal takes something away from: a delete's or a method removal's published list. */
 const exportUseOutput = z.object({
   publicName: z.string(),
@@ -959,6 +971,7 @@ const specWriteReceiptOutput = {
     'Each implementation method entry a contract restatement removed with a method it dropped, as `<implementation>.<method>`.',
   ),
   callersToReview: callersToReviewOutput,
+  findings: abstractionFindingsOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecWriteReceipt | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -971,7 +984,7 @@ const specWriteReceiptOutput = {
 function writeReceipt(sentence: string, receipt: SpecWriteReceipt): CallToolResult {
   const noticeBlock = receipt.notices.length ? `\n\nNOTICE:\n- ${receipt.notices.join('\n- ')}` : '';
   const respelledBlock = renderRespellings(receipt.respellings).join('\n');
-  const callersBlock = renderCallersToReview(receipt.callersToReview).join('\n');
+  const callersBlock = [...renderCallersToReview(receipt.callersToReview), ...renderAbstractionFindings(receipt.findings, receipt.dryRun === true)].join('\n');
   const testsBlock = renderTestsToRevisit(receipt.testsToRevisit).join('\n');
   return structured(`${sentence}${noticeBlock}${respelledBlock ? `\n${respelledBlock}` : ''}${callersBlock ? `\n${callersBlock}` : ''}${testsBlock ? `\n${testsBlock}` : ''}`, receipt);
 }
@@ -1049,6 +1062,7 @@ const specChangeReportOutput = {
     'True on sdd_set_endpoints when published names the methods whose route moved, not methods removed.',
   ),
   callersToReview: callersToReviewOutput,
+  findings: abstractionFindingsOutput,
   ...staleServerOutput,
 } satisfies Record<keyof SpecChangeReport | keyof typeof staleServerOutput, z.ZodTypeAny>;
 
@@ -3942,7 +3956,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // and advisory — an Externals section only when one moved, drifted or
         // could not be compared; the pin still gates.
         // Step 7: the cut, unless the whole report was asked for.
-        const text = statusAnswer(asked, { banner, family, network, report: report.text, verdict: verdict.text, externals: externalsSection(adviseExternals()), version: report.validatorVersion });
+        const text = statusAnswer(asked, { banner, family, network, report: report.text, verdict: verdict.text, externals: externalsSection(adviseExternals()), version: report.validatorVersion, failed: report.failed === true });
         return structured(text, { validatorVersion: report.validatorVersion, report: text, detail: asked });
       } catch (e) {
         return errText(`${banner}${String(e)}`);
