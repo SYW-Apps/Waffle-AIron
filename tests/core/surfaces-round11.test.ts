@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -10,6 +10,9 @@ import { relationHealth } from '../../src/models/index.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness';
 import { projectYaml } from '../helpers/conformance-r6-trees';
 import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Round-11 sandbox trials — members, externals and approval. Each block

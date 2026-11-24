@@ -83,7 +83,7 @@ export function summarizeStatus(p: StatusPieces): string {
     }
     if (stripped.startsWith('[Component')) { if (current) current.components += 1; continue; }
     if (/^Interface: (?!Missing)/.test(stripped)) { if (current) current.interfaces += 1; continue; }
-    if (/^Implementation: (?!Missing)/.test(stripped)) { if (current) current.implementations += 1; continue; }
+    if (/^Implementation: (?!Missing|none of its own)/.test(stripped)) { if (current) current.implementations += 1; continue; }
     const types = /^\[Types\] (\d+) type/.exec(stripped);
     if (types) {
       if (current && depth > current.depth) current.types += Number(types[1]);

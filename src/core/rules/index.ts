@@ -688,7 +688,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         }
         return {
           ...base, outcome: 'forbidden', canonicalTarget: r.authored,
-          reason: `the first segment of "${r.authored}" is none of this project's subsystems, aliases or foreign providers`,
+          reason: `the first segment of "${r.authored}" is none of this project's subsystems, aliases or foreign providers${r.form === 'alias' ? ` — declare "${r.authored.split('::')[0]}" as an external (sdd_add_external) or a member to reach it` : ''}`,
         };
       }
       case 'outside': {

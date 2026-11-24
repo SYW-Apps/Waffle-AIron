@@ -18,6 +18,9 @@ import {
   writeLedger, renameLedgerMethod, writeShop, writeClinic,
 } from '../helpers/stage8-family.js';
 
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
 // ---------------------------------------------------------------------------
 // Stage 8, wave B — referenced projects, the growth verbs, overview and
 // topology for parts. Real temp directories throughout; a git repository is

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -13,6 +13,9 @@ import { canonicalTypeRef, carriedFactChanges, relationHealth, surfaceChanges, S
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness';
 import { projectYaml } from '../helpers/conformance-r6-trees';
 import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Round-9 sandbox trials — surfaces, externals, members and the OpenAPI
@@ -231,7 +234,7 @@ describe('1. a used verb\'s route moving reaches the consumer', () => {
     expect(pin.detail).toContain('moved since the last pin: endpoint of stats_portal.getStats (GET /stats/{shortCode} → GET /v2/stats/{shortCode})');
     bind(consumer);
     expect(relationHealth(getExternalsStatus()[0])).toBe('ok');
-  });
+  }, 120_000); // several git round-trips: slow under a loaded full suite
 
   it('a verb stating a new status moves the route too', () => {
     const { producer, consumer, release } = pinnedPair();

@@ -282,9 +282,10 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          When the delta removes contract methods, read the projects that consume the bound project
-          before anything moves — the family in reach and the searched folders — each with what its
-          specs use
+          When the delta removes contract methods, or writes the methods of a contract that belongs
+          to an abstract component (an extension point a consumer may implement), read the projects
+          that consume the bound project before anything moves — the family in reach and the
+          searched folders — each with what its specs use
         type: call
         targetComponent: mcp_surfaces_adapter
         targetMethod: listConsumers
@@ -298,11 +299,21 @@ methods:
         targetMethod: updateSpecGated
       - stepNumber: 3
         description: >-
+          When the write changed the methods of an abstraction's contract — a method added, removed
+          or its signature changed — read every public name a consumer reaches that contract through
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: publishedUsesOf
+      - stepNumber: 4
+        description: >-
           When the write removed published methods, name the consumers it breaks: each consumer read
           above narrowed to the published names and members it reaches
-          (external_consumer.narrowedToUses)
+          (external_consumer.narrowedToUses). When it changed the methods of an abstraction
+          published under a public name, name too each consumer whose specs implement that public
+          name (export_use.implementedMembers): each reports IMPLEMENTS_MISMATCH until it restates
+          the methods, which this project never writes
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Render the change report as the text answer and carry that same report as the structured
           twin, so the sentence and the data are two renderings of one object and can never disagree
@@ -420,6 +431,20 @@ methods:
           entry)
         type: local
       - stepNumber: 6
+        description: >-
+          Read the L0 export table: an entry re-exporting from this subsystem a component the
+          replacement no longer publishes (by component, or every one with `from` alone when none is
+          left) is left naming nothing, which validate reports as EXPORT_INVALID
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 7
+        description: >-
+          Name each such L0 entry with its public name and the fix (restore the subsystem entry, or
+          drop the L0 entry with sdd_update_spec on the system), and say that consumers outside the
+          family were not searched: sdd_list_consumers with search names them
+        type: local
+      - stepNumber: 8
         description: >-
           Answer with the change report: every entry added, changed or removed, marked dry run when
           nothing was written, and what it breaks
@@ -1209,4 +1234,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-24T19:50:50.467Z'
+updatedAt: '2026-11-24T21:59:05.725Z'

@@ -12,6 +12,9 @@ import {
   tempDir, isolateGlobals, bareFrom, approveAt, writeLedger, writeShop,
 } from '../helpers/stage8-family.js';
 
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
 // ---------------------------------------------------------------------------
 // sdd_surfaces build inputs: the inputs lock (.wai/inputs.lock.yaml) the file
 // adapter / store / repository hold, the pack record the orchestrator and

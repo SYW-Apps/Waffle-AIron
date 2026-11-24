@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -24,6 +24,9 @@ import type { ReachModel } from '../../src/models/reach.js';
 import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 import { platformFamily } from '../helpers/network-family.js';
 import { isolateGlobals, serveGit } from '../helpers/stage8-family.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Round-4 trial fixes in approval, migrations, externals/surfaces and

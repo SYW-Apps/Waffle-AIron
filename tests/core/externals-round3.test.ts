@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -19,7 +19,11 @@ import { remove } from '../../src/core/external-declarations.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { updateSpecGated } from '../../src/core/authoring.js';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Round-3 trial fixes in the externals / surfaces area, against real projects
@@ -392,6 +396,75 @@ describe('R3-34 / R3-3 — the producer sees a sibling-checkout consumer and its
     const found = listConsumers([p.root]);
     expect(found).toEqual([expect.objectContaining({ project: 'studio', alias: 'geo', section: 'externals', found: 'search', names: ['tile-library', 'tile-source'] })]);
   });
+
+  /** An MCP client over the bound project. */
+  const connected = async (): Promise<{ call(name: string, args: Record<string, unknown>): Promise<{ isError?: boolean; text: string; structured: any }>; close(): Promise<void> }> => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'round7', version: '0.0.1' });
+    await Promise.all([createMcpServer().connect(serverTransport), client.connect(clientTransport)]);
+    return {
+      async call(name, args) {
+        const r = (await client.callTool({ name, arguments: args })) as { isError?: boolean; content?: { text?: string }[]; structuredContent?: unknown };
+        return { isError: r.isError, text: r.content?.[0]?.text ?? '', structured: r.structuredContent };
+      },
+      close: () => client.close(),
+    };
+  };
+
+  it('round 7: adding a method to an abstraction a sibling implements names that consumer (with search), never writing it', async () => {
+    const p = pair();
+    bind(p.geo);
+    updateSpecGated('component', 'tile-source-port', { abstract: true });
+    const mcp = await connected();
+    try {
+      const added = { methods: [{ name: 'evict_tile', description: 'Drop a cached tile.', params: [{ name: 'key', type: 'tile-key' }], returns: 'void' }] };
+      const searched = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: added, dryRun: true, search: [p.root] });
+      expect(searched.isError ?? false, searched.text).toBe(false);
+      expect(searched.text).toContain('BREAKS 1 consumer(s) implementing this abstraction');
+      expect(searched.text).toMatch(/- studio \(externals\.geo\).*tile-source \(changed: evict_tile\), implemented in itile_cache \(today: load_tile\)/);
+      expect(searched.structured.breaks[0]).toMatchObject({ project: 'studio', alias: 'geo' });
+      const unsearched = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: added, dryRun: true });
+      expect(unsearched.text).toContain('outside this family were not searched');
+      // A description edit changes no method: nothing is named.
+      const prose = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: { description: 'Where tiles load from, precisely.' }, dryRun: true });
+      expect(prose.text).not.toContain('BREAKS');
+      // ...nor does a method's own description: only a method added, removed or re-signed breaks an implementer.
+      const methodProse = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: { methods: [{ name: 'load_tile', description: 'Load one tile, precisely.' }] }, dryRun: true, search: [p.root] });
+      expect(methodProse.isError ?? false, methodProse.text).toBe(false);
+      expect(methodProse.text).not.toContain('BREAKS');
+      // A retyped return does.
+      const retyped = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: { methods: [{ name: 'load_tile', returns: 'string' }] }, dryRun: true, search: [p.root] });
+      expect(retyped.text).toMatch(/tile-source \(changed: load_tile\)/);
+    } finally {
+      await mcp.close();
+    }
+  }, 120_000);
+
+  it('round 7: emptying a subsystem table names the L0 re-exports it leaves naming nothing', async () => {
+    const p = pair();
+    bind(p.geo);
+    const mcp = await connected();
+    try {
+      const r = await mcp.call('sdd_set_public_interfaces', { subsystem: 'tiling', publicInterfaces: [], dryRun: true });
+      expect(r.isError ?? false, r.text).toBe(false);
+      expect(r.text).toContain('L0 export "tile-library" re-exports "tile-library" from subsystem "tiling", which no longer publishes it: will report EXPORT_INVALID');
+      expect(r.text).toContain('L0 export "tile-source"');
+      expect(r.text).toContain('L0 export "tile-key"');
+      expect(r.text).toContain('sdd_list_consumers with search names them');
+      // Keeping the entries names nothing.
+      const kept = await mcp.call('sdd_set_public_interfaces', {
+        subsystem: 'tiling', dryRun: true,
+        publicInterfaces: [
+          { component: 'tile-library', details: 'The crate\'s tile API.' },
+          { component: 'tile-source-port', details: 'Where tiles load from.', role: 'implement' },
+          { typeDef: 'tile-key', details: 'A tile key.' },
+        ],
+      });
+      expect(kept.text).not.toContain('EXPORT_INVALID');
+    } finally {
+      await mcp.close();
+    }
+  }, 120_000);
 
   it('sdd_list_consumers answers within its output schema when a consumer implements an extension point', async () => {
     const p = pair();

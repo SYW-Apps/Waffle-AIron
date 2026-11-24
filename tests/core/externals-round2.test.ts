@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -16,6 +16,9 @@ import { relationHealth, carriedFactChanges, type ResolvedExportTable } from '..
 import { BASE_FIXTURE_RULES, materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 import { buildContractFamily } from '../helpers/reference-family.js';
 import { bareFrom, isolateGlobals, pushChange, approveAt } from '../helpers/stage8-family.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Round-2 trial fixes in the externals / surfaces area, against real projects

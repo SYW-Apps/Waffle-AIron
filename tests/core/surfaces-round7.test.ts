@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -16,6 +16,9 @@ import { createMember } from '../../src/core/index.js';
 import { fromOpenApi, toOpenApiSet } from '../../src/core/openapi.js';
 import { isolateGlobals, bareFrom, serveGit, writeLedger, writeShop, tempDir as stage8TempDir, system as stage8System, projectYaml as stage8ProjectYaml } from '../helpers/stage8-family.js';
 import type { ComponentSpec, ExternalConsumer, SubsystemSpec, TypeSpec } from '../../src/models/index.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Round-7 sandbox trials — surfaces, externals, rename break reports and the

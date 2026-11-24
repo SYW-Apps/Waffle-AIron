@@ -165,6 +165,14 @@ describe('moveMethods writes the trace', () => {
     expect(total?.previousNames).toEqual(['icart.total']);
   });
 
+  it('a method moved away and back carries no trace naming its own key', () => {
+    shop();
+    moveMethods('cart', 'pricing', ['total']);
+    moveMethods('pricing', 'cart', ['total']);
+    const total = loadInterfaceSpec('icart')!.methods.find((m) => m.name === 'total');
+    expect(total?.previousNames).toEqual(['ipricing.total']);
+  });
+
   it('a gated dry run marks every edit unwritten and says nothing was written', () => {
     shop();
     const dry = gatedMoveMethods('cart', 'pricing', ['total'], true);

@@ -470,6 +470,9 @@ export function landReference(projects: ReadableProject[], reference: string, fr
     return target ? { kind: 'project', form: 'alias', project: target.namespace, name: segments[1] } : { kind: 'unresolved', form: 'alias' };
   }
   if (origin.subsystems.has(first)) return { kind: 'project', project: from, name: segments[segments.length - 1] };
+  // `name::item` whose first segment is no alias of this project is the alias
+  // form with an alias it does not declare, never a wairon 5 member path.
+  if (segments.length === 2) return { kind: 'unresolved', form: 'alias' };
   return { kind: 'unresolved', form: 'path' };
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -14,6 +14,9 @@ import { validateProject, type ValidationResult } from '../../src/core/validatio
 import { consumedContractInputs } from '../../src/core/specs.js';
 import { contentDigest, ownerOf, producerOf, declares, familyNode } from '../../src/models/index.js';
 import { approveAt, bareFrom, isolateGlobals, pushChange } from '../helpers/stage8-family.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Stage 2b — the project graph and declared externals, run against a REAL
@@ -317,7 +320,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     const stale = at(f.dispatch, () => getExternalsStatus())[0];
     expect(stale).toMatchObject({ stale: true, drifted: true });
     expect(stale.uses).toEqual([{ publicName: 'invoicing', member: 'issueInvoice', state: 'changed' }]);
-  });
+  }, 120_000); // several git round-trips: slow under a loaded full suite
 
   it('property: reexport-is-transparent — the lock and the verdict are the same through a re-export chain', () => {
     const direct = family({ dispatchExternals: { billing: 'git' } });

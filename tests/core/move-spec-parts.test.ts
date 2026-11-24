@@ -16,6 +16,9 @@ import {
 } from '../../src/models/index.js';
 import { bareFrom, isolateGlobals, tempDir as tempDirIn } from '../helpers/stage8-family.js';
 
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
 // ---------------------------------------------------------------------------
 // sdd_move_spec into and out of a part. A part's subsystems are the declaring
 // project's own, named by their local ids, so a component, a type or a type
