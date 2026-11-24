@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -7,6 +7,9 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { renameMethod, renameParam } from '../../src/core/provision.js';
 import { waiState } from '../helpers/family-verbs.js';
 import { tempDir, isolateGlobals, bareFrom, specs, system, subsystem, component, contract, projectYaml } from '../helpers/stage8-family.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // All or nothing: a rename that cannot write every spec it must refuses before

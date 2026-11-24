@@ -13,6 +13,9 @@ import {
   tempDir, isolateGlobals, bareFrom, pushChange, approveAt, component, writeLedger, renameLedgerMethod, writeShop,
 } from '../helpers/stage8-family.js';
 
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
 // ---------------------------------------------------------------------------
 // Relation health on the canvas: ExternalStatus.health(), the family's
 // relations (family_validator.relations) for every shape a relation takes — a

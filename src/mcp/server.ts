@@ -716,7 +716,7 @@ function renderChangeReport(report: SpecChangeReport): string {
   if (!(report.published ?? []).length && (report.breaks ?? []).length > 0) {
     lines.push('', `BREAKS ${report.breaks!.length} consumer(s) implementing this abstraction: each reports IMPLEMENTS_MISMATCH until it restates the changed methods (this project never writes them):`);
     for (const c of report.breaks!) {
-      const uses = (c.uses ?? []).map((u) => `${u.publicName} implements ${(u.implementedMembers ?? u.members).join('/')}${u.specs?.length ? ` in ${u.specs.join(', ')}` : ''}`);
+      const uses = (c.uses ?? []).map((u) => `${u.publicName}${u.members.length ? ` (changed: ${u.members.join(', ')})` : ''}, implemented in ${u.specs?.length ? u.specs.join(', ') : 'its specs'} (today: ${(u.implementedMembers ?? []).join('/')})`);
       lines.push(`- ${c.project} (${c.section}.${c.alias})${c.found === 'search' ? ` [${c.directory}]` : ''}${uses.length ? `: ${uses.join('; ')}` : ''}`);
     }
   }
@@ -3921,14 +3921,23 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // only the rendering was prose. Both channels carry it, from the one report.
         const report = updateSpecGated(kind, id, delta, dryRun);
         // Step 3: the public names a consumer reaches the abstraction's contract through.
-        const methodsChanged = report.changes.some((c) => c.path === 'methods' || c.path.startsWith('methods.'));
+        // Only a method added or removed, or a signature changed, breaks an implementer: prose does not.
+        const changedMethods = [...new Set(report.changes.flatMap((c) => {
+          const m = /^methods\.([^.]+)(?:\.(params|returns|signature|signatureFrom|async)(?:\.|$))?/.exec(c.path);
+          if (!m) return c.path === 'methods' ? ['(all)'] : [];
+          return m[2] || c.path === `methods.${m[1]}` ? [m[1]] : [];
+        }))];
+        const methodsChanged = changedMethods.length > 0;
         const implementedNames = abstractContract && methodsChanged
           ? new Set(publishedUsesOf([{ kind: 'interface', id }], []).map((u) => u.publicName))
           : new Set<string>();
         // Step 4: the consumers a removed published method breaks, and those implementing a changed abstraction.
         const breaks = report.published ? consumers.map((c) => narrowedToUses(c, report.published!)).filter((c): c is ExternalConsumer => c !== null) : [];
         for (const c of consumers) {
-          const implemented = (c.uses ?? []).filter((u) => implementedNames.has(u.publicName) && (u.implementedMembers ?? []).length > 0);
+          // Each use names the methods that changed (members) beside the ones it implements now.
+          const implemented = (c.uses ?? [])
+            .filter((u) => implementedNames.has(u.publicName) && (u.implementedMembers ?? []).length > 0)
+            .map((u) => ({ ...u, members: changedMethods.filter((m) => m !== '(all)') }));
           if (implemented.length === 0) continue;
           const held = breaks.find((b) => b.key === c.key && b.alias === c.alias);
           if (held) held.uses = [...(held.uses ?? []), ...implemented.filter((u) => !(held.uses ?? []).some((h) => h.publicName === u.publicName))];

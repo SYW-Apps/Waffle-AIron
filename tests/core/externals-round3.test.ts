@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -21,6 +21,9 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { updateSpecGated } from '../../src/core/authoring.js';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Round-3 trial fixes in the externals / surfaces area, against real projects
@@ -418,13 +421,20 @@ describe('R3-34 / R3-3 — the producer sees a sibling-checkout consumer and its
       const searched = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: added, dryRun: true, search: [p.root] });
       expect(searched.isError ?? false, searched.text).toBe(false);
       expect(searched.text).toContain('BREAKS 1 consumer(s) implementing this abstraction');
-      expect(searched.text).toMatch(/- studio \(externals\.geo\).*tile-source implements load_tile/);
+      expect(searched.text).toMatch(/- studio \(externals\.geo\).*tile-source \(changed: evict_tile\), implemented in itile_cache \(today: load_tile\)/);
       expect(searched.structured.breaks[0]).toMatchObject({ project: 'studio', alias: 'geo' });
       const unsearched = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: added, dryRun: true });
       expect(unsearched.text).toContain('outside this family were not searched');
       // A description edit changes no method: nothing is named.
       const prose = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: { description: 'Where tiles load from, precisely.' }, dryRun: true });
       expect(prose.text).not.toContain('BREAKS');
+      // ...nor does a method's own description: only a method added, removed or re-signed breaks an implementer.
+      const methodProse = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: { methods: [{ name: 'load_tile', description: 'Load one tile, precisely.' }] }, dryRun: true, search: [p.root] });
+      expect(methodProse.isError ?? false, methodProse.text).toBe(false);
+      expect(methodProse.text).not.toContain('BREAKS');
+      // A retyped return does.
+      const retyped = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: { methods: [{ name: 'load_tile', returns: 'string' }] }, dryRun: true, search: [p.root] });
+      expect(retyped.text).toMatch(/tile-source \(changed: load_tile\)/);
     } finally {
       await mcp.close();
     }

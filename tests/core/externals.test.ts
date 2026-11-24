@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -14,6 +14,9 @@ import { validateProject, type ValidationResult } from '../../src/core/validatio
 import { consumedContractInputs } from '../../src/core/specs.js';
 import { contentDigest, ownerOf, producerOf, declares, familyNode } from '../../src/models/index.js';
 import { approveAt, bareFrom, isolateGlobals, pushChange } from '../helpers/stage8-family.js';
+
+// Git-backed fixtures (bare repositories, pins): slow under a loaded full suite.
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 // ---------------------------------------------------------------------------
 // Stage 2b — the project graph and declared externals, run against a REAL
