@@ -115,6 +115,59 @@ methods:
           notices
         type: local
       - stepNumber: 13
+        label: abstraction-touched
+        description: >-
+          Decide whether the write touches an abstraction, whose findings land on specs the write
+          does not name: a contract that implements one or belongs to an abstract component, as
+          stored or as the delta leaves it, or a component the delta makes or unmakes abstract
+        type: branch
+        condition: the spec is such a contract or component
+        onFalseStep: 21
+      - stepNumber: 14
+        description: >-
+          Rehearse the delta, as a method move rehearses its own: a private copy of the bound tree
+          to write it on
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: rehearsalCopy
+      - stepNumber: 15
+        description: >-
+          Bound to the copy, read the active rule set, to set aside the findings that judge code — a
+          copy holds the design alone
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 16
+        description: 'Judge the copy as it stands: the owner''s gate, its design errors and warnings'
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 17
+        description: >-
+          Apply the delta on the copy through the core client adapter with the hook injected,
+          exactly as the real write applies it
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: updateSpec
+      - stepNumber: 18
+        description: Judge the copy as the delta leaves it, the same way
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 19
+        description: Discard the copy, whatever the rehearsal did
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: discardRehearsal
+      - stepNumber: 20
+        description: >-
+          The findings the write brings: each error and warning the copy reports after the delta
+          that it did not report before, counted by code and spec (a message naming the copy's
+          folder read as the project's) — an IMPLEMENTS_MISMATCH on an implementer, an abstraction
+          left unimplemented. Reported, never refusing: an abstraction edit leaves its implementers
+          mismatched until each is restated. A rehearsal that throws names nothing
+        type: local
+      - stepNumber: 21
         description: >-
           Apply the delta through the core client adapter's update with that hook injected, so the
           judgement runs on the merged spec at the last point before anything reaches disk,
@@ -123,12 +176,12 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: updateSpec
-      - stepNumber: 14
+      - stepNumber: 22
         description: Decide whether removed methods take implementation entries with them
         type: branch
         condition: the write removed contract methods that implementation entries realize
-        onFalseStep: 16
-      - stepNumber: 15
+        onFalseStep: 24
+      - stepNumber: 23
         description: >-
           For each implementation holding such an entry, remove the entries through the core
           adapter's update in the same dry-run mode, and record each `<implementation>.<method>` as
@@ -136,7 +189,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: updateSpec
-      - stepNumber: 16
+      - stepNumber: 24
         description: >-
           When the write changes a Portal's transport — a dry run included — name its impact on the
           callers: read the components (and their implementations' call, register and dispatch
@@ -145,7 +198,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadComponentSpecs
-      - stepNumber: 17
+      - stepNumber: 25
         description: >-
           When the delta writes a contract's `implements` — a dry run included — ask what validate
           will say of it, and add a problem to the report as a notice that names the finding that
@@ -153,7 +206,7 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: implementsProblem
-      - stepNumber: 18
+      - stepNumber: 26
         description: >-
           Decide whether the write changed a contract method's signature, a dry run included: a
           parameter added, removed, retyped or made optional or required, the returns changed, or
@@ -162,8 +215,8 @@ methods:
         condition: >-
           the spec is a contract and the change report names a changed params or returns of one of
           its methods
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 28
+      - stepNumber: 27
         description: >-
           For each such method, look up the references to <component>.<method> without text mentions
           and keep the callers: the calling specs (a call, dispatch or register step, a declared
@@ -179,12 +232,12 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findReferences
-      - stepNumber: 20
+      - stepNumber: 28
         description: Decide whether this write invalidated any test
         type: branch
         condition: the change report names a changed or deleted method and the project declares test roots
-        onFalseStep: 23
-      - stepNumber: 21
+        onFalseStep: 31
+      - stepNumber: 29
         description: >-
           Place each changed method in the file realizing it: for a contract, every implementation
           realizing it with its symbol and file; for an implementation or a type, the method's entry
@@ -192,7 +245,7 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 22
+      - stepNumber: 30
         description: >-
           Find the tests that encode those methods, so the write that creates the collision is the
           one that reports it; the method names come from the change report's own paths, which
@@ -200,13 +253,13 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 23
+      - stepNumber: 31
         description: >-
           Return the change report: what changed, which of the delta's paths changed nothing, or
           that nothing did and nothing was written — the respellings applied, the implementation
           entries cascaded, the public names a removed method was published under, the callers to
-          review of a changed signature and the implementers that must restate it, and the tests to
-          revisit
+          review of a changed signature and the implementers that must restate it, the findings a
+          write touching an abstraction brings, and the tests to revisit
         type: return
         outcome: reported
   - name: moveMethods
@@ -655,6 +708,58 @@ methods:
         type: throw
         error: rule violation or method-referenced
       - stepNumber: 18
+        label: abstraction-touched
+        description: >-
+          Decide whether the write touches an abstraction, whose findings land on specs the write
+          does not name: a contract candidate that implements one or belongs to an abstract
+          component, or a component candidate that is abstract or was
+        type: branch
+        condition: the candidate is such a contract or component
+        onFalseStep: 26
+      - stepNumber: 19
+        description: >-
+          Rehearse the write, as a delta update touching an abstraction rehearses its own: a private
+          copy of the bound tree to write it on
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: rehearsalCopy
+      - stepNumber: 20
+        description: >-
+          Bound to the copy, read the active rule set, to set aside the findings that judge code — a
+          copy holds the design alone
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 21
+        description: 'Judge the copy as it stands: the owner''s gate, its design errors and warnings'
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 22
+        description: >-
+          Persist the candidate on the copy through the core client adapter, exactly as the real
+          write persists it
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: saveSpec
+      - stepNumber: 23
+        description: Judge the copy as the write leaves it, the same way
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 24
+        description: Discard the copy, whatever the rehearsal did
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: discardRehearsal
+      - stepNumber: 25
+        description: >-
+          The findings the write brings: each error and warning the copy reports after the write
+          that it did not report before, counted by code and spec (a message naming the copy's
+          folder read as the project's) — an IMPLEMENTS_MISMATCH on an implementer, an abstraction
+          left unimplemented. Reported, never refusing. A rehearsal that throws names nothing
+        type: local
+      - stepNumber: 26
         description: >-
           When the restatement changes the signature of a contract method the stored contract held —
           a parameter added, removed, retyped or made optional or required, the returns changed, or
@@ -666,7 +771,7 @@ methods:
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findReferences
-      - stepNumber: 19
+      - stepNumber: 27
         label: tests
         description: >-
           When the application names a changed or removed method and the project declares test
@@ -676,26 +781,27 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: loadImplementationSpecs
-      - stepNumber: 20
+      - stepNumber: 28
         description: >-
           Find the tests that encode those methods, each searched by its stored symbol when it has
           one
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 21
+      - stepNumber: 29
         label: dry-run
         description: Decide whether the caller asked only what the write would do
         type: branch
         condition: the restatement is a dry run
-        onFalseStep: 23
-      - stepNumber: 22
+        onFalseStep: 31
+      - stepNumber: 30
         description: >-
           Answer the receipt the write would give, marked dryRun — the implementation entries it
-          would cascade among it — with nothing written
+          would cascade and the findings a write touching an abstraction would bring among it — with
+          nothing written
         type: return
         outcome: dry run
-      - stepNumber: 23
+      - stepNumber: 31
         label: save
         description: >-
           Persist the candidate through the core client adapter, collecting the store's placement
@@ -703,20 +809,21 @@ methods:
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: saveSpec
-      - stepNumber: 24
+      - stepNumber: 32
         description: >-
           Remove the dropped methods' implementation entries through the core adapter's update, each
           recorded as cascaded with a notice naming it
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: updateSpec
-      - stepNumber: 25
+      - stepNumber: 33
         label: receipt
         description: >-
           Return the write receipt: the kind, id and name written, whether a spec already held the
           id, the status written, the notices — the gate's warnings, the application's re-authoring
           notices and the store's placement notices — the respellings applied, the entries cascaded,
-          the callers to review of a changed signature, and the tests to revisit
+          the callers to review of a changed signature, the findings a write touching an abstraction
+          brings, and the tests to revisit
         type: return
         outcome: written
   - name: deleteSpec
@@ -907,11 +1014,11 @@ lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
       reason: >-
-        deleteSpec is the boundary refusals, the subtree plan, the tests found while their
-        realizations still exist, and the same seven-step rehearsal (copy, rule set, judge, write,
-        judge, discard, compare) moveSpec and moveMethods run inline. The rehearsal is one
-        copy-bound region whose findings feed both the plan and the result; splitting it into a
-        helper would only move that region behind a call the three tools make with different writes.
+        deleteSpec, writeSpec and updateSpecGated each carry the same seven-step rehearsal (copy,
+        rule set, judge, write, judge, discard, compare) moveSpec and moveMethods run inline, beside
+        their boundary refusals, judgement and reports. The rehearsal is one copy-bound region whose
+        findings feed the result; splitting it into a helper would only move that region behind a
+        call the tools make with different writes.
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-11-24T08:32:08.447Z'
+updatedAt: '2026-11-24T19:16:24.706Z'

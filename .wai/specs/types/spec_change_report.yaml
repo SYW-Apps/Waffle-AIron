@@ -110,7 +110,17 @@ fields:
       failing the write. Absent when the write changed no contract method's signature or nothing
       calls it.
     optional: true
+  - name: findings
+    type: list<string>
+    description: >-
+      The design findings a write touching an abstraction brings, read off a rehearsal on a copy of
+      the tree: each error and warning the result reports that the tree does not report now (an
+      IMPLEMENTS_MISMATCH on an implementer, an abstraction left unimplemented), as `<severity>
+      <CODE> [spec] message`. Information only: such a write is never refused for them, since an
+      abstraction edit leaves its implementers to restate. Absent when the write touches no
+      abstraction; empty when it brings none or the rehearsal could not run
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-18T21:11:43.565Z'
-updatedAt: '2026-11-22T22:56:08.547Z'
+updatedAt: '2026-11-24T19:15:26.138Z'
