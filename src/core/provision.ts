@@ -1353,7 +1353,7 @@ function namePublicReferences(out: Crossing[], into: Crossing[], memberDir: stri
           let after = respellTypeNames(before, (token) => (token.startsWith(side.prefix) ? side.prefix + side.publicOf('type', token.slice(side.prefix.length)) : token));
           for (const id of bare) {
             const name = side.publicOf('type', id);
-            if (name !== id) after = after.replace(new RegExp(`(^|[^A-Za-z0-9_:.-])${id.replace(/[.*+?^${}()|[]\]/g, '\$&')}(?![A-Za-z0-9_:.-])`, 'g'), (_m, lead: string) => `${lead}${name}`);
+            if (name !== id) after = after.replace(new RegExp(`(^|[^A-Za-z0-9_:.-])${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![A-Za-z0-9_:.-])`, 'g'), (_m, lead: string) => `${lead}${name}`);
           }
           if (after !== before) {
             slot.holder[slot.key] = after;
