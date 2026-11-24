@@ -245,18 +245,97 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Hand the move to the core client adapter with that hook injected, so the judgement runs on
-          the resulting components at the last point before anything reaches disk, and the store —
-          which holds the tree — enumerates the candidate homes a refusal needs
+          Rehearse the move, as a spec move rehearses its own: a private copy of the bound tree to
+          write it on
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: rehearsalCopy
+      - stepNumber: 7
+        description: >-
+          Bound to the copy, read the active rule set, to set aside the findings that judge code — a
+          copy holds the design alone
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 8
+        description: 'Judge the copy as it stands: the owner''s gate, its design errors and warnings'
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 9
+        description: >-
+          Write the move on the copy through the core client adapter with the hook injected, exactly
+          as the real move would be written
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: moveMethods
-      - stepNumber: 7
+      - stepNumber: 10
+        description: Judge the copy as the move leaves it, the same way
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 11
+        description: Discard the copy, whatever the rehearsal did
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: discardRehearsal
+      - stepNumber: 12
         description: >-
-          Return the move's report unchanged: what moved and how many references followed it, or
-          which rule refused it and where these methods could live instead
+          The findings the move brings: each error and warning the copy reports after the move that
+          it did not report before, counted by code and spec (a message naming the copy's folder
+          read as the project's) — an undeclared dependency call, an implementation left without its
+          method, a leaked technology. A rehearsal that throws names nothing
+        type: local
+      - stepNumber: 13
+        description: Did a rule refuse the move on the copy?
+        type: branch
+        condition: the rehearsal's report carries refusals
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Return that refusal as the move's report (marked dryRun when asked): which rule refused it
+          and where these methods could live instead; nothing was written
         type: return
-        outcome: reported
+        outcome: refused report
+      - stepNumber: 15
+        description: >-
+          Does the rehearsal leave a new error? Asked of a dry run too, so a dry run is refused
+          exactly when the move would be
+        type: branch
+        condition: the findings hold an error
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Return the move refused: its refusals name each new error with its code, spec and message,
+          as a spec move's refusal does, and its findings list them; nothing was written
+        type: return
+        outcome: refused report
+      - stepNumber: 17
+        description: A dry run stops here
+        type: branch
+        condition: dryRun
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Return the rehearsal's report, marked dryRun, with the findings the result will have;
+          nothing was written
+        type: return
+        outcome: the planned move
+      - stepNumber: 19
+        description: >-
+          Hand the move to the core client adapter with that hook injected, so the judgement runs on
+          the resulting components at the last point before anything reaches disk, and the store —
+          which holds the tree — enumerates the candidate homes a refusal needs; the move was
+          rehearsed whole, so it is written as rehearsed
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: moveMethods
+      - stepNumber: 20
+        description: >-
+          Return the move's report with the rehearsal's findings: what moved and how many references
+          followed it
+        type: return
+        outcome: the move's report
   - name: moveSpec
     narrative:
       - stepNumber: 1
@@ -388,29 +467,31 @@ methods:
           read as the project's)
         type: local
       - stepNumber: 20
-        description: A dry run stops here
+        description: >-
+          Does the rehearsal leave a new error? Asked of a dry run too, so a dry run is refused
+          exactly when the move would be
         type: branch
-        condition: dryRun is set
+        condition: the rehearsal's findings hold an error
         onFalseStep: 22
       - stepNumber: 21
         description: >-
-          Return the rehearsal's report, marked dryRun — the specs it moves and rewrites, the files
-          and references, the findings the result will have and the gate's notices; nothing was
-          written
-        type: return
-        outcome: SpecMove (dry run)
+          Refuse the move with the findings it would leave — each error's code, spec and message —
+          before anything is written; a dry run is answered with the same refusal, never as a plan
+        type: throw
+        error: the move would leave an error
       - stepNumber: 22
-        description: Does the rehearsal leave a new error?
+        description: A dry run stops here
         type: branch
-        condition: the findings hold an error
+        condition: dryRun
         onFalseStep: 24
       - stepNumber: 23
         label: rehearsal-refused
         description: >-
-          Refuse the move with the findings it would leave — each error's code, spec and message —
-          before anything is written
-        type: throw
-        error: the move would leave an error validate reports
+          Return the rehearsal's report, marked dryRun — the specs it moves and rewrites, the files
+          and references, the findings the result will have (warnings only: an error refused it
+          above) and the gate's notices; nothing was written
+        type: return
+        outcome: the planned move
       - stepNumber: 24
         description: >-
           Move each spec through the core client adapter in turn — the addressed one first, then
@@ -733,24 +814,67 @@ methods:
         targetComponent: authoring_validator_adapter
         targetMethod: findTestsReferencing
       - stepNumber: 15
+        description: >-
+          Rehearse the deletion, as a move rehearses its own: a private copy of the bound tree to
+          delete on
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: rehearsalCopy
+      - stepNumber: 16
+        description: >-
+          Bound to the copy, read the active rule set, to set aside the findings that judge code — a
+          copy holds the design alone
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: listRules
+      - stepNumber: 17
+        description: 'Judge the copy as it stands: the owner''s gate, its design errors, warnings and notices'
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 18
+        description: Delete every spec of the set on the copy, innermost first
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: deleteSpec
+      - stepNumber: 19
+        description: Judge the copy as the deletion leaves it, the same way
+        type: call
+        targetComponent: authoring_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 20
+        description: Discard the copy, whatever the rehearsal did
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: discardRehearsal
+      - stepNumber: 21
+        description: >-
+          The findings the deletion brings: each error, warning and notice the copy reports after
+          the deletion that it did not report before, counted by code and spec (a message naming the
+          copy's folder read as the project's) — an abstraction left with one implementer
+          (ABSTRACTION_SINGLE_IMPLEMENTER), a caller left without its callee. A rehearsal that
+          throws names nothing
+        type: local
+      - stepNumber: 22
         label: plan
         description: Decide whether the caller asked only for the plan
         type: branch
         condition: the caller asked for a dry run
-        onFalseStep: 17
-      - stepNumber: 16
+        onFalseStep: 24
+      - stepNumber: 23
         label: dry-run
         description: >-
           Answer with the plan: every spec that would go, every reference that would be left, every
-          public name it publishes, and the tests to revisit — nothing removed
+          public name it publishes, the tests to revisit and the findings the result will have —
+          nothing removed
         type: return
         outcome: dry run
-      - stepNumber: 17
+      - stepNumber: 24
         description: Decide whether the deletion would leave references dangling
         type: branch
         condition: a spec outside the set still references it and the caller did not force the deletion
-        onFalseStep: 19
-      - stepNumber: 18
+        onFalseStep: 26
+      - stepNumber: 25
         label: referenced
         description: >-
           Refuse before anything is removed, naming each reference with the spec that holds it and
@@ -758,27 +882,36 @@ methods:
           them for validate to report
         type: throw
         error: 'referenced: other specs still reference what the deletion removes'
-      - stepNumber: 19
+      - stepNumber: 26
         label: remove
         description: For each spec of the set, innermost first, so a container goes after its content
         type: loop
         loopKind: forEach
         over: the specs the deletion takes
-        endStep: 20
-      - stepNumber: 20
+        endStep: 27
+      - stepNumber: 27
         description: >-
           Delete the spec document through the core client adapter, which prunes the folders it
           leaves empty
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: deleteSpec
-      - stepNumber: 21
+      - stepNumber: 28
         description: >-
           Return the deletion: the kind and id, that it was removed, every spec it took, the
-          references a forced deletion left dangling, the public names it published, and the tests
-          to revisit
+          references a forced deletion left dangling, the public names it published, the tests to
+          revisit and the findings the rehearsal named
         type: return
         outcome: deleted
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: >-
+        deleteSpec is the boundary refusals, the subtree plan, the tests found while their
+        realizations still exist, and the same seven-step rehearsal (copy, rule set, judge, write,
+        judge, discard, compare) moveSpec and moveMethods run inline. The rehearsal is one
+        copy-bound region whose findings feed both the plan and the result; splitting it into a
+        helper would only move that region behind a call the three tools make with different writes.
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-11-23T07:01:00.838Z'
+updatedAt: '2026-11-24T08:32:08.447Z'

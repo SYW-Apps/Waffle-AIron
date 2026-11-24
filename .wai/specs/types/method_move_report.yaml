@@ -96,7 +96,16 @@ fields:
       it left now anchors on the spec it arrived in, and a covered <from>.<method> unit names
       <to>.<method>. Empty on a refusal
     optional: false
+  - name: findings
+    type: list<string>
+    description: >-
+      The design findings the move brings, read off a rehearsal on a copy of the tree: each error
+      and warning the result reports that the tree does not report now (an undeclared dependency
+      call, an implementation left without its method, a leaked technology), as `<severity> <CODE>
+      [spec] message`. A dry run names them all; a move that would leave a new error is refused
+      (refusals) and nothing is written. Empty when it brings none or the rehearsal could not run
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-20T12:02:20.127Z'
-updatedAt: '2026-10-04T10:29:02.567Z'
+updatedAt: '2026-11-24T08:27:08.392Z'

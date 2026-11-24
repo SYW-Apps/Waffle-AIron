@@ -252,10 +252,13 @@ methods:
       type that realizes them, and re-exports naming a source subsystem in `from` with an optional
       component, interface, typeDef and `as` — and restamp updatedAt. A replacement, not a merge: an
       entry left out is gone. An own component item still needs its type and details; a re-export
-      may omit both.
+      may omit both. `dryRun` judges and answers the same change report and writes nothing. The
+      answer names what the replacement breaks that validate will report: a consumer subsystem taken
+      off an implement-role entry while one of its components implements that abstraction
+      (ABSTRACTION_UNPUBLISHED).
     signature: >-
-      setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
-      SpecChangeReport
+      setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>, dryRun?:
+      bool): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: subsystemId
@@ -266,6 +269,10 @@ methods:
         description: >-
           The full replacement list: type, details, and the realizing component and optional
           interface
+      - name: dryRun
+        type: bool
+        description: Answer what the replacement would change and break, writing nothing
+        optional: true
   - name: getSpec
     description: >-
       The sdd_get_spec workflow: read one stored spec by kind and id through the core client
@@ -669,4 +676,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-22T02:26:06.761Z'
+updatedAt: '2026-11-24T08:28:35.387Z'

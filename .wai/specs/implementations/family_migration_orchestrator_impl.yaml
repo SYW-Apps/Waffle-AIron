@@ -253,31 +253,6 @@ methods:
         targetComponent: family_transaction
         targetMethod: diff
       - stepNumber: 15
-        label: reach
-        description: >-
-          Judge the changes against the request's write reach: may the request write every project
-          the plan changes, whole? A family migration reshapes its projects whole, so a changed
-          owner needs project-rung write (write_reach.permits with no subsystem) and write on every
-          subsystem of it (write_reach.denials lists none). Outside a hosted request every root the
-          request opens is writable and nothing refuses
-        type: branch
-        condition: >-
-          a changed owner is unwritable at the project rung, or the write reach denies a subsystem
-          of a changed owner
-        onFalseStep: 18
-      - stepNumber: 16
-        description: Drop the rehearsal
-        type: call
-        targetComponent: family_transaction
-        targetMethod: discard
-      - stepNumber: 17
-        description: >-
-          Answer the plan refused: family-partial for each owner it may not write, and
-          subsystem-denied for each denied subsystem of an owner it changes, naming the subsystem
-          and the rung that decided it
-        type: return
-        outcome: refused plan
-      - stepNumber: 18
         label: findings-before
         description: >-
           When the request asks for it (announce — the CLI and MCP doors do; an internal re-plan
@@ -294,20 +269,59 @@ methods:
         type: call
         targetComponent: migration_validator_adapter
         targetMethod: validateFamily
-      - stepNumber: 19
+      - stepNumber: 16
         description: >-
           Read the rule set, and keep each run's design half: drop every finding whose code a
           code-judging rule declares, and keep error and warning severity. Name each finding the
           result has that the project does not report now — counted by project, code and spec (a
           loop by the folders it joins), so a path that differs between two copies never reads as
           new — as one plan note per severity: `after <verb>: N new error(s) the projects it changes
-          do not report now: CODE [spec] message; …` (the first few, then a count). The plan then
-          announces what its result will report — an approved project that would turn red, or a loop
-          the plan closes, is never a surprise after apply. A run that throws names nothing and
-          refuses nothing
+          do not report now: CODE [spec] message; …` (the first few, then a count). The few named
+          are the ones that matter first: a finding `wairon validate --ci` would fail on before a
+          draft-related warning it waives. A warning note ends by saying that code findings (an
+          import across the new boundary, say) are not foretold: the copies hold no code, and the
+          next validate judges it. The plan then announces what its result will report — an approved
+          project that would turn red, or a loop the plan closes, is never a surprise after apply. A
+          run that throws names nothing and refuses nothing
         type: call
         targetComponent: migration_validator_adapter
         targetMethod: listRules
+      - stepNumber: 17
+        label: reach
+        description: >-
+          Is the plan refused? First by the request's write reach: may the request write every
+          project the plan changes, whole? A family migration reshapes its projects whole, so a
+          changed owner needs project-rung write (write_reach.permits with no subsystem) and write
+          on every subsystem of it (write_reach.denials lists none); outside a hosted request every
+          root the request opens is writable. Then by its result: a migration is refused, as a
+          move_spec is, rather than leaving a family that no longer validates — a new ERROR the
+          projects it changes do not report now (a use loop it closes, PROJECT_USE_CYCLE; a
+          reference it breaks). Findings the plan's own follow-up clears are not counted: a warning
+          never refuses (an approval to renew, MEMBER_UNAPPROVED, a project to re-lock), nor does an
+          error owed to a step the plan names after apply (an external to pin, EXTERNAL_UNPINNED); a
+          plan that announced nothing (an internal re-plan) is refused by its reach alone
+        type: branch
+        condition: >-
+          a changed owner is unwritable at the project rung, the write reach denies a subsystem of a
+          changed owner, or the announced result names a new error-severity finding other than one
+          the plan's named follow-up clears
+        onFalseStep: 20
+      - stepNumber: 18
+        label: refused
+        description: Drop the rehearsal
+        type: call
+        targetComponent: family_transaction
+        targetMethod: discard
+      - stepNumber: 19
+        description: >-
+          Answer the plan refused: family-partial for each owner it may not write, and
+          subsystem-denied for each denied subsystem of an owner it changes, naming the subsystem
+          and the rung that decided it; or new-errors, naming each error the result would report
+          that the projects it changes do not report now, with its project, code, message and the
+          fix it states — so a dry run answers the same refusal the write would, and nothing is
+          written
+        type: return
+        outcome: refused plan
       - stepNumber: 20
         label: relock
         description: >-
@@ -426,4 +440,4 @@ methods:
         targetMethod: recover
 status: complete
 createdAt: '2026-09-30T20:36:19.753Z'
-updatedAt: '2026-11-21T16:05:32.850Z'
+updatedAt: '2026-11-24T08:31:53.200Z'

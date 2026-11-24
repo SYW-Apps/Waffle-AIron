@@ -205,12 +205,12 @@ methods:
   - name: reviewBranchConflict
     description: >-
       The newest pending lock request made on another branch than the checkout has now, or none
-      (review_orchestrator.branchConflict): what `wairon lock` checks before it approves this
-      checkout.
+      (review_orchestrator.branchConflict; none while a pending lock request was made on the
+      checkout's own branch): what `wairon lock` checks before it approves this checkout.
     signature: 'reviewBranchConflict(): review_branch_conflict?'
     returns: review_branch_conflict?
     params: []
     effect: read
 status: complete
 createdAt: '2026-09-25T17:32:24.931Z'
-updatedAt: '2026-11-20T01:26:45.242Z'
+updatedAt: '2026-11-24T08:23:50.327Z'

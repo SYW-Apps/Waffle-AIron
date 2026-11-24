@@ -86,7 +86,11 @@ methods:
           goes somewhere. The project's own gate, run alone, still reports it
         type: local
       - stepNumber: 11
-        description: Run the family checks over the root's graph
+        description: >-
+          Run the family checks over the root's graph. A project whose own gate already reports the
+          loop as PROJECT_USE_CYCLE (an error, naming each hop and the fix) is not told it again as
+          PROJECT_DEPENDENCY_CYCLE: that warning stays for a project in the loop whose own gate this
+          run did not judge
         type: call
         targetComponent: family_validator
         targetMethod: checkMembers
@@ -1118,4 +1122,4 @@ methods:
     symbol: projectInputs
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-11-20T19:41:12.825Z'
+updatedAt: '2026-11-24T08:25:40.399Z'

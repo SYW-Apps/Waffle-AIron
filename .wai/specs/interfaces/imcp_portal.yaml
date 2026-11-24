@@ -453,9 +453,11 @@ methods:
       its target's. An own Adapter item may say `shared: true` to publish the Adapter to every
       subsystem of the project. The tool for backfilling bindings once a subsystem's components
       exist, because a cross-subsystem dependency may only target a published public component.
+      `dryRun` answers the change and what it breaks (an implementer whose subsystem is taken off an
+      implement-role entry) and writes nothing.
     signature: >-
-      setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
-      SpecChangeReport
+      setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>, dryRun?:
+      bool): SpecChangeReport
     returns: SpecChangeReport
     params:
       - name: subsystemId
@@ -464,6 +466,10 @@ methods:
       - name: publicInterfaces
         type: list<PublicInterface>
         description: The full replacement list of published surfaces for this subsystem
+      - name: dryRun
+        type: bool
+        description: Answer what the replacement would change and break, writing nothing
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_set_public_interfaces
@@ -1595,4 +1601,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-22T15:12:07.545Z'
+updatedAt: '2026-11-24T08:28:48.852Z'

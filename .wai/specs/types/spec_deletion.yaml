@@ -62,7 +62,14 @@ fields:
       breaks, narrowed to what they use. Filled by the door that read the consumers; absent when
       none breaks.
     optional: true
+  - name: findings
+    type: list<string>
+    description: >-
+      The design findings the deletion brings, read off a rehearsal on a copy of the tree: each
+      error, warning and notice the result reports that the tree does not report now, as `<severity>
+      <CODE> [spec] message`. Empty when it brings none or the rehearsal could not run
+    optional: true
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:44.394Z'
-updatedAt: '2026-10-09T00:25:01.272Z'
+updatedAt: '2026-11-24T08:27:04.969Z'
