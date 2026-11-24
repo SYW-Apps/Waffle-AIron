@@ -432,17 +432,22 @@ methods:
         type: local
       - stepNumber: 6
         description: >-
-          Read the L0 export table: an entry re-exporting from this subsystem a component the
-          replacement no longer publishes (by component, or every one with `from` alone when none is
-          left) is left naming nothing, which validate reports as EXPORT_INVALID
+          Read the L0 export table and the components it names: an entry re-exporting from this
+          subsystem a component the replacement no longer publishes (by component, or every one with
+          `from` alone when none is left) is left naming nothing, which validate reports as
+          EXPORT_INVALID; and a named one whose component cannot serve the role the L0 entry itself
+          declares — called (no role) but neither a Portal nor an Observer, or implemented but
+          neither a Portal, an Adapter nor an abstract component — validate reports as
+          EXPORT_UNCONSUMABLE too
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 7
         description: >-
-          Name each such L0 entry with its public name and the fix (restore the subsystem entry, or
-          drop the L0 entry with sdd_update_spec on the system), and say that consumers outside the
-          family were not searched: sdd_list_consumers with search names them
+          Name each such L0 entry with its public name, the findings validate will report of it and
+          the fix (restore the subsystem entry, or drop the L0 entry with sdd_update_spec on the
+          system), and say that consumers outside the family were not searched: sdd_list_consumers
+          with search names them
         type: local
       - stepNumber: 8
         description: >-
@@ -1234,4 +1239,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-24T21:59:05.725Z'
+updatedAt: '2026-11-24T23:07:45.484Z'
