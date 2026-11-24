@@ -1803,7 +1803,17 @@ export function moveMethods(
     };
   }
   // Steps 17-18: a dry run answers the rehearsal.
-  if (dryRun && rehearsed !== undefined) return { ...rehearsed, moved: false, dryRun: true, findings };
+  // The rehearsal wrote its copy; to the caller each edit is one the real move would write.
+  if (dryRun && rehearsed !== undefined) {
+    return {
+      ...rehearsed,
+      moved: false,
+      dryRun: true,
+      findings,
+      edits: rehearsed.edits.map((e) => ({ ...e, written: false, dryRun: true })),
+      summary: rehearsed.summary.replace(/^Moved /, 'Dry run, nothing written: moving ').replace(/ written(?=[,.])/, ' to write').replace(/ re-pointed/, ' to re-point'),
+    };
+  }
   // Steps 19-20: the move, written once for real.
   return { ...coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun), findings };
 }

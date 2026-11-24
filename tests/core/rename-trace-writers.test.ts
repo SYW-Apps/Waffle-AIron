@@ -22,7 +22,7 @@ import {
   moveMethods,
 } from '../../src/core/specs.js';
 import { renameComponent, renameMethod, renameType } from '../../src/core/provision.js';
-import { applyRestatement, writeSpec } from '../../src/core/authoring.js';
+import { applyRestatement, writeSpec, moveMethods as gatedMoveMethods } from '../../src/core/authoring.js';
 import { projectOwnSurface } from '../../src/core/surfaces.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec, TypeSpec } from '../../src/models/index.js';
 
@@ -163,6 +163,19 @@ describe('moveMethods writes the trace', () => {
     moveMethods('cart', 'pricing', ['total']);
     const total = loadInterfaceSpec('ipricing')!.methods.find((m) => m.name === 'total');
     expect(total?.previousNames).toEqual(['icart.total']);
+  });
+
+  it('a gated dry run marks every edit unwritten and says nothing was written', () => {
+    shop();
+    const dry = gatedMoveMethods('cart', 'pricing', ['total'], true);
+    expect(dry.refusals, JSON.stringify(dry.refusals)).toEqual([]);
+    expect(dry.dryRun).toBe(true);
+    expect(dry.moved).toBe(false);
+    expect(dry.edits.length).toBeGreaterThan(0);
+    expect(dry.edits.every((e) => e.dryRun && !e.written)).toBe(true);
+    expect(dry.summary).toMatch(/^Dry run, nothing written: moving /);
+    expect(dry.summary).not.toMatch(/ written,| re-pointed/);
+    expect(loadInterfaceSpec('icart')!.methods.map((m) => m.name)).toContain('total');
   });
 
   it('refuses a name the receiving contract retired (name-retired)', () => {

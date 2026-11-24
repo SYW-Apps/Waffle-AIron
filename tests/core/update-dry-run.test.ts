@@ -183,6 +183,19 @@ describe('an update names the delta paths it did not act on', () => {
     expect(report.changes.map(c => c.path)).toEqual(['name']);
   });
 
+  it('a shorter list names the values it leaves and how to drop one, never just "already held"', () => {
+    seed();
+    updateSpec('component', 'flow_comp', { dependsOn: ['ledger', 'mailer'] });
+    const report = updateSpec('component', 'flow_comp', { dependsOn: ['ledger'] });
+    expect(report.ineffective).toEqual([
+      'dependsOn — the stored spec already held every value named; a list delta adds values and never drops one, so "mailer" stays — to drop one, send { value: "<entry>", action: "delete" }',
+    ]);
+    const same = updateSpec('component', 'flow_comp', { dependsOn: ['ledger', 'mailer'] });
+    expect(same.ineffective).toEqual(['dependsOn — the stored spec already held this value']);
+    const dropped = updateSpec('component', 'flow_comp', { dependsOn: [{ value: 'mailer', action: 'delete' }] });
+    expect(dropped.written).toBe(true);
+  });
+
   it('names an unset that removed nothing, and stays quiet about one that did', () => {
     seed();
     updateSpec('component', 'flow_comp', { basePath: '/v1' });

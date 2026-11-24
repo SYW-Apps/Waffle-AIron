@@ -16,6 +16,10 @@ import { compose } from '../../src/core/family-validation.js';
 import { computeApprovalId, unpinnedExternals, validateFamily } from '../../src/core/validation.js';
 import { refreshInputs } from '../../src/commands/lock.js';
 import { remove } from '../../src/core/external-declarations.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createMcpServer } from '../../src/mcp/server.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Round-3 trial fixes in the externals / surfaces area, against real projects
@@ -49,7 +53,7 @@ function bind(dir: string): void {
 
 function configYaml(id: string, extra: Record<string, unknown> = {}): string {
   return yaml.dump({
-    schemaVersion: '1.0.0', id, name: id, targets: [], rules: BASE_FIXTURE_RULES,
+    waironMajor: WAIRON_MAJOR, schemaVersion: '1.0.0', id, name: id, targets: [], rules: BASE_FIXTURE_RULES,
     extensions: { packs: [], useGlobalPacks: false }, ...extra, createdAt: TS, updatedAt: TS,
   }, { noRefs: true, lineWidth: 200 });
 }
@@ -388,6 +392,24 @@ describe('R3-34 / R3-3 — the producer sees a sibling-checkout consumer and its
     const found = listConsumers([p.root]);
     expect(found).toEqual([expect.objectContaining({ project: 'studio', alias: 'geo', section: 'externals', found: 'search', names: ['tile-library', 'tile-source'] })]);
   });
+
+  it('sdd_list_consumers answers within its output schema when a consumer implements an extension point', async () => {
+    const p = pair();
+    bind(p.geo);
+    const found = listConsumers([p.root]);
+    expect(found[0].uses?.some((u) => (u.implementedMembers ?? []).length > 0)).toBe(true);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'consumers-implements', version: '0.0.1' });
+    await Promise.all([createMcpServer().connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      await client.listTools();
+      const result = (await client.callTool({ name: 'sdd_list_consumers', arguments: { search: [p.root] } })) as { isError?: boolean; content?: { text?: string }[]; structuredContent?: { consumers: { uses?: { implementedMembers?: string[] }[] }[] } };
+      expect(result.isError ?? false, result.content?.[0]?.text).toBe(false);
+      expect(result.structuredContent?.consumers[0].uses?.some((u) => (u.implementedMembers ?? []).length > 0)).toBe(true);
+    } finally {
+      await client.close();
+    }
+  }, 60_000);
 
   const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
 
