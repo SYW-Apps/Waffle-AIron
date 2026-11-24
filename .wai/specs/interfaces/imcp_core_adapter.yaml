@@ -459,6 +459,11 @@ methods:
       and the L0, each only when absent. Forwarded to the core portal; sdd_initialize_system calls
       it so a project started over MCP alone has the configuration every other tool reads.
     signatureFrom: spec_maintenance_portal.ensureProjectInitialized
+  - name: loadInterfaceSpecs
+    description: 'Forward to spec_tree_portal.loadInterfaceSpecs: every contract of the bound tree'
+    signature: 'loadInterfaceSpecs(): list<InterfaceSpec>'
+    returns: list<InterfaceSpec>
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-23T00:54:41.972Z'
+updatedAt: '2026-11-24T08:58:57.881Z'

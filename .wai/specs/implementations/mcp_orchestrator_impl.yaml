@@ -405,11 +405,12 @@ methods:
         targetMethod: updateSpecGated
       - stepNumber: 4
         description: >-
-          Read the bound tree's components, to tell which consumer the replacement takes off an
+          Read the bound tree's contracts: an abstraction's implementers are named on their
+          contracts (implements), so these tell which consumer the replacement takes off an
           implement-role entry still has a component implementing that abstraction
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: loadComponentSpecs
+        targetMethod: loadInterfaceSpecs
       - stepNumber: 5
         description: >-
           Name what the replacement breaks: for each consumer subsystem removed from an entry with
@@ -1206,4 +1207,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-24T08:28:38.536Z'
+updatedAt: '2026-11-24T08:58:59.754Z'

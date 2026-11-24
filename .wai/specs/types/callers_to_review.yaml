@@ -40,7 +40,14 @@ fields:
       IMPLEMENTS_MISMATCH until it restates the new signature (a hand edit follows nothing; renames
       do). Absent when there are none.
     optional: true
+  - name: implementersLater
+    type: list<string>
+    description: >-
+      The implementers in `implementers` that sit below another abstraction of the chain: they
+      report IMPLEMENTS_MISMATCH only after the level above them is restated, while the others
+      report it now. Absent when every implementer is direct
+    optional: true
 methods: []
 sourcePath: src/core/specs.ts
 createdAt: '2026-11-22T22:56:07.705Z'
-updatedAt: '2026-11-23T07:01:00.459Z'
+updatedAt: '2026-11-24T08:59:39.604Z'
