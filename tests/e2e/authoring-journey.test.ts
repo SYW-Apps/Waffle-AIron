@@ -40,7 +40,13 @@ describe('e2e authoring journey (built server, empty project)', () => {
   });
 
   it('sdd_get_status reflects the subsystem and its components', async () => {
-    const out = await callToolOk(proj.client, 'sdd_get_status', {});
+    // The default is the summary: the subsystem with its counts, never the per-spec tree.
+    const summary = await callToolOk(proj.client, 'sdd_get_status', {});
+    expect(summary.text).toContain(JOURNEY.subsystem);
+    expect(summary.text).toMatch(/2 components/);
+    expect(summary.text).not.toContain(JOURNEY.orch);
+    // detail: full answers the whole tree.
+    const out = await callToolOk(proj.client, 'sdd_get_status', { detail: 'full' });
     expect(out.text).toContain(JOURNEY.subsystem);
     expect(out.text).toContain(JOURNEY.orch);
     expect(out.text).toContain(JOURNEY.worker);

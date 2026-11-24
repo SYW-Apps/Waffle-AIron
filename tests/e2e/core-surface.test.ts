@@ -61,7 +61,7 @@ describe('e2e core surface (the barrel forwards, on the built server and CLI)', 
     // both reach sdd_core through the core portal, so a missing forward answers
     // here rather than at compile time. Asked while the server still holds the
     // tree, before the CLI takes it.
-    const out = await callToolOk(proj.client, 'sdd_get_status', {});
+    const out = await callToolOk(proj.client, 'sdd_get_status', { detail: 'full' });
     statusBeforeApproval = out.text;
     // Release the server before the CLI operates on the same tree (Windows
     // file-lock hygiene); cleanup() closing again is a safe no-op.

@@ -25,6 +25,8 @@ export interface StatusPieces {
   network: string;
   /** The wairon release of the running server. */
   version: string;
+  /** True when the report is an explanation (the tree will not load, no project binds), never a tree. */
+  failed: boolean;
 }
 
 /** The whole answer: what `detail: full` returns, and what the tool always answered before. */
@@ -43,12 +45,12 @@ interface Tally {
 
 const TREE_CHARS = /^[│├└─\s]*/;
 
-/** The cut: leads, verdict, counts per subsystem, findings by code, Externals, Network, a pointer. */
+/** The cut: leads, verdict, counts per subsystem, any finding line the report carries by code, Externals, Network, a pointer. */
 export function summarizeStatus(p: StatusPieces): string {
   const lines = p.report.split('\n');
-  const isTree = lines.some((l) => l.startsWith('Architecture Status Dashboard'));
   // A report that failed (the tree will not load, no project binds) is the explanation: never cut.
-  if (!isTree) return fullStatus(p);
+  // Read from the report's own fact: the core report carries no heading to recognise it by.
+  if (p.failed) return fullStatus(p);
 
   const head: string[] = [];
   const keep: string[] = [];
@@ -106,7 +108,8 @@ export function summarizeStatus(p: StatusPieces): string {
     }
     const parts = [`${t.components} components`, `${t.interfaces} interfaces`, `${t.implementations} implementations`];
     if (t.types > 0) parts.push(`${t.types} types`);
-    counts.push(`${project ? '  ' : ''}${t.label === '(shared types)' ? t.label : `[Subsystem] ${t.label}`}: ${parts.join(', ')}`);
+    const shared = t.label === '(shared types)';
+    counts.push(`${project ? '  ' : ''}${shared ? t.label : `[Subsystem] ${t.label}`}: ${shared ? `${t.types} types` : parts.join(', ')}`);
   }
   for (const pr of projects) if (pr.subsystems === 0 && !counts.includes(pr.label)) counts.push(pr.label);
 
@@ -120,7 +123,7 @@ export function summarizeStatus(p: StatusPieces): string {
   if (externals) body.push('', externals);
   const network = p.network.trim();
   if (network) body.push('', network);
-  body.push('', 'This is the summary: pass `detail: full` for the whole per-spec tree, or use sdd_search_specs to look up one spec by name or meaning.');
+  body.push('', 'This is the summary: pass `detail: full` for the whole per-spec tree, use sdd_search_specs to look up one spec by name or meaning, and sdd_validate_tree for the findings (status does not validate).');
   return `${p.banner}${p.family}${out.join('\n')}\n${body.join('\n')}\n\nwairon ${p.version}\n`;
 }
 

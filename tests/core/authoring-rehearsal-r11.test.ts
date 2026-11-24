@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { setProjectRoot, listFilesRecursive } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { deleteSpec, moveSpec } from '../../src/core/authoring.js';
+import { deleteSpec, moveSpec, updateSpecGated } from '../../src/core/authoring.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { materializeFixtureProject, type FixtureTree } from '../rules-matrix/harness.js';
 
@@ -107,5 +107,53 @@ describe('sdd_set_public_interfaces dryRun', () => {
     expect(text).toContain('email-sender');
     expect(text).toContain('ABSTRACTION_UNPUBLISHED');
     expect(snapshot(root)).toEqual(before);
+  });
+});
+
+// Round 6: a write touching an abstraction rehearses on a copy and reports the
+// findings it lands on specs it does not name (IMPLEMENTS_MISMATCH on an
+// implementer), dry run or not, and is never refused for them.
+describe('a write touching an abstraction reports the findings it brings', () => {
+  const RETYPED = [{ name: 'sendNotice', params: [{ name: 'recipient', type: 'int', description: 'who' }] }];
+
+  it('update_spec on an implementer foretells its IMPLEMENTS_MISMATCH, dry run and real alike, and still writes', () => {
+    const root = project(true);
+    const before = snapshot(root);
+    const dry = updateSpecGated('interface', 'isms_sender', { methods: RETYPED }, true);
+    expect(dry.findings?.some((f) => /^error IMPLEMENTS_MISMATCH \[isms_sender\]/.test(f)), JSON.stringify(dry.findings)).toBe(true);
+    expect(snapshot(root)).toEqual(before);
+    const real = updateSpecGated('interface', 'isms_sender', { methods: RETYPED });
+    expect(real.written).toBe(true);
+    expect(real.findings).toEqual(dry.findings);
+  });
+
+  it('update_spec on the abstraction names each implementer it leaves mismatched', () => {
+    project(true);
+    const dry = updateSpecGated('interface', 'inotice_sender', { methods: RETYPED }, true);
+    const mismatched = (dry.findings ?? []).filter((f) => f.includes('IMPLEMENTS_MISMATCH')).join('\n');
+    expect(mismatched).toContain('[iemail_sender]');
+    expect(mismatched).toContain('[isms_sender]');
+  });
+
+  it('a write touching no abstraction carries no findings field', () => {
+    project(true);
+    const report = updateSpecGated('interface', 'iorder_notifier', { description: 'Tells the customer, precisely.' }, true);
+    expect(report.findings).toBeUndefined();
+  });
+
+  it('sdd_define_interface restating an implementer renders the findings it brings', async () => {
+    project(true);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'rehearsal-r11-test', version: '0.0.1' });
+    await Promise.all([createMcpServer().connect(serverTransport), client.connect(clientTransport)]);
+    clients.push(client);
+    const result = await client.callTool({
+      name: 'sdd_define_interface',
+      arguments: { id: 'isms_sender', name: 'ISmsSender', description: 'The SMS sender.', component: 'sms-sender', implements: ['notice-sender'], methods: [{ ...SEND, params: [{ name: 'recipient', type: 'int', description: 'who' }] }] },
+    }) as { isError?: boolean; content?: { text?: string }[]; structuredContent?: { findings?: string[] } };
+    const text = result.content?.[0]?.text ?? '';
+    expect(result.isError ?? false, text).toBe(false);
+    expect(text).toContain('FINDINGS this write brought');
+    expect(result.structuredContent?.findings?.some((f) => f.includes('IMPLEMENTS_MISMATCH'))).toBe(true);
   });
 });

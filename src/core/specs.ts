@@ -2326,6 +2326,12 @@ export interface SpecChangeReport {
    * signature changed or nothing calls it.
    */
   callersToReview?: CallersToReview[];
+  /**
+   * The design findings a write touching an abstraction brings, read off a
+   * rehearsal on a copy of the tree, as `<severity> <CODE> [spec] message`.
+   * Information only: never refusing. Absent when the write touches no abstraction.
+   */
+  findings?: string[];
 }
 
 /**
