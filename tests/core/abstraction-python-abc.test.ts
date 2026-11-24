@@ -46,6 +46,7 @@ describe('reading an abstract base class as a Protocol is read', () => {
       params: [{ name: 'recipient', type: 'str', optional: false }, { name: 'retries', type: 'int', optional: true }],
       returns: 'None',
       completesLater: false,
+      owed: true,
     }]);
     expect(facts.typeShapes!.NoticeSender.methods).toEqual(['send_notice']);
   });

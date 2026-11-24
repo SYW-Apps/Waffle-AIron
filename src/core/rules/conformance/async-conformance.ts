@@ -16,7 +16,8 @@ import { declaredReading, signatureMethods } from '../read-model.js';
 // method's `symbol` in its own file, at exact grade only, and where a name has
 // several bodies (a class member and the facade forwarding to it) only what
 // they ALL say is reported. A body completes later when it is declared
-// `async` or annotated to return a Promise (source_file_facts.asyncFunctions,
+// `async` (`async def` in Python) or annotated to return a Promise, a PromiseLike or an alias
+// of either, or in Python an Awaitable or a Coroutine (source_file_facts.asyncFunctions,
 // one entry per such body). A file that only CALLS the function holds no body
 // and is methodRealization's finding, never a second voice here.
 //
@@ -34,7 +35,7 @@ import { declaredReading, signatureMethods } from '../read-model.js';
 export const asyncConformanceRule: SddRule = {
   name: 'async-conformance',
   judges: 'code',
-  description: "Code-to-contract for ASYNC: a contract method whose returns is `async T` is realized by a function that completes later, and one whose returns is not, by one that completes now — every caller in every language with async/await is shaped by the difference, so a contract that hides it misleads every implementer and translation built from it. Compared with source_file_facts.asyncFunctions for the method's realizing function (under its `symbol`), at exact grade only; where a name has several bodies only what they all agree on is reported, as param-conformance does. An abstraction's method is compared with its declaration, never a body: whether the signature its declaring interface, trait, Protocol or abstract class states for the member completes later (member_signature_fact.completesLater, per overload, read at exact grade and by the Python reader for a Protocol or an abstract base class), whatever constructor, helpers or default bodies the class also holds, reported with the same ASYNC_MISMATCH; where the grade cannot read member signatures nothing is compared, and param-conformance's ABSTRACTION_DECLARATION_UNCOMPARED says so. A method whose file only calls the function is methodRealization's finding, and a method whose conformance dial is off (its own, else its implementation's) is not judged.",
+  description: "Code-to-contract for ASYNC: a contract method whose returns is `async T` is realized by a function that completes later, and one whose returns is not, by one that completes now — every caller in every language with async/await is shaped by the difference, so a contract that hides it misleads every implementer and translation built from it. Compared with source_file_facts.asyncFunctions for the method's realizing function (under its `symbol`), at exact grade, and in Python by the signature reader; a body completes later when it is declared async (`async def` in Python), or when its return is annotated as something awaited — in TypeScript a Promise, a PromiseLike or an alias of either, resolved through the checker; in Python an Awaitable or a Coroutine; where a name has several bodies only what they all agree on is reported, as param-conformance does. An abstraction's method is compared with its declaration, never a body: whether the signature its declaring interface, trait, Protocol or abstract class states for the member completes later (member_signature_fact.completesLater, per overload, read at exact grade and by the Python reader for a Protocol or an abstract base class), whatever constructor, helpers or default bodies the class also holds, reported with the same ASYNC_MISMATCH; where the grade cannot read member signatures nothing is compared, and param-conformance's ABSTRACTION_DECLARATION_UNCOMPARED says so. A method whose file only calls the function is methodRealization's finding, and a method whose conformance dial is off (its own, else its implementation's) is not judged.",
   codes: [
     {
       code: 'ASYNC_MISMATCH',
@@ -59,9 +60,9 @@ export const asyncConformanceRule: SddRule = {
       // ---- 2 / 6. silent unless a body is there to read ----
       // The bodies are the signatures the analyzer recorded under the name,
       // one per body; a name with none has no body in this file.
-      // A body is read at exact grade only; an abstraction's declaration is read wherever a reader
+      // A body is read at exact grade, or by the Python signature reader; an abstraction's declaration is read wherever a reader
       // recorded member signatures (exact grade, or the Python reader for a Protocol).
-      if (!facts || facts.status !== 'analyzed' || !(facts.analysisGrade === 'exact' || component?.abstract === true)) continue;
+      if (!facts || facts.status !== 'analyzed' || !(facts.analysisGrade === 'exact' || facts.reads?.includes('returns') || component?.abstract === true)) continue;
       const symbol = method.symbol ?? method.name;
       // The bodies, or — for an abstraction, which has none — the signatures its declaration states.
       let bodies: number;

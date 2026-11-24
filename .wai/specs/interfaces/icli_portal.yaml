@@ -482,6 +482,12 @@ methods:
     endpoint:
       transport: CLI
       command: wairon host user <action>
+  - name: reviewWithdraw
+    description: '`wairon review withdraw <id>`: take a pending review request back.'
+    signatureFrom: cli_runner.runReviewWithdraw
+    endpoint:
+      transport: CLI
+      command: wairon review withdraw
 status: complete
 createdAt: '2026-10-04T18:13:03.017Z'
-updatedAt: '2026-10-30T12:05:44.873Z'
+updatedAt: '2026-11-23T07:02:14.743Z'

@@ -106,6 +106,8 @@ interface ParamFinding {
   undecided?: boolean;
   /** A type mismatch between two annotated values (a scalar for another, one value for a list), not a shape the check cannot read. */
   scalar?: boolean;
+  /** An undeclared parameter the code itself declares optional, defaulted or rest: no caller has to pass it. */
+  optional?: boolean;
 }
 
 /**
@@ -514,7 +516,7 @@ function judge(
   taken.forEach(({ param, at }, r) => {
     if (pairedTaken.has(r)) return;
     const unit = unitOf(param, at);
-    found.undeclared.set(unit, { unit, told: `"${unit}"` });
+    found.undeclared.set(unit, { unit, told: `"${unit}"`, ...(param.optional ? { optional: true } : {}) });
   });
   // The handles a transport passes ahead of the arguments: the parameters
   // standing before every kept pair — undeclared, or substituted for a
@@ -700,6 +702,15 @@ export interface ReturnDrift {
   draftContext: boolean;
 }
 
+/** A list, a set or a map: the collections whose kind and elements a parameter is compared by. */
+const isCollection = (e: TypeExpression): boolean => e.form === 'list' || e.form === 'set' || e.form === 'map';
+
+/** Whether a code annotation is a tuple (TypeScript `[A, B]`, Python `tuple[...]`): a fixed shape no list holds. */
+function isTupleAnnotation(language: string | undefined, annotation: string): boolean {
+  const text = annotation.trim().replace(/^['"]|['"]$/g, '').trim().replace(/^readonly\s+/, '');
+  return language === 'python' ? /^(?:typing\.)?(?:tuple|Tuple)(?:\[|$)/.test(text) : text.startsWith('[');
+}
+
 /**
  * How a code annotation reads against a contract's type, through the file's
  * dialect: what RETURN_TYPE_MISMATCH judges a return by, and what a scalar
@@ -722,6 +733,12 @@ export function annotationAgreement(ctx: RuleContext): (language: string | undef
     if (!dialect) return undefined;
     let code = language === 'python' ? dialect.read(annotation) : readCodeAnnotation(annotation, true);
     let spec = parseTypePosition(declaredText, position).expression;
+    // A tuple has no canonical reading: where a list, a set or a map is declared it is another kind.
+    if (!code && spec && listsToo && scalarOnly && position === 'param') {
+      let declaredBare = spec;
+      while (declaredBare.form === 'optional') declaredBare = declaredBare.args[0];
+      if (isCollection(declaredBare) && isTupleAnnotation(language, annotation)) return false;
+    }
     if (!code || !spec) return undefined;
     if (code.form === 'async') code = code.args[0];
     if (spec.form === 'async') spec = spec.args[0];
@@ -810,13 +827,43 @@ export function annotationAgreement(ctx: RuleContext): (language: string | undef
       // list where one value is, is another argument whatever the element;
       // bytes travel as a list too.
       const many = (e: TypeExpression): boolean => e.form === 'list' || e.form === 'set';
+      // A record is an object: where the design declares one, a parameter the code
+      // annotates as one scalar (a string, a number, a boolean) cannot hold it.
+      if (listsToo && c && !d && spec.form === 'named' && (typeOf(spec.name as string)?.fields ?? []).length > 0 && !holdsOf(spec.name as string)) return false;
       if (listsToo && ((c && many(spec) && c.name !== 'bytes') || (d && many(code) && d.name !== 'bytes'))) return false;
-      // Two lists, or two sets, compare their element types the same way, where both
-      // elements read as one scalar; an element either side does not read so is not compared.
-      if (listsToo && ((code.form === 'list' && spec.form === 'list') || (code.form === 'set' && spec.form === 'set'))) {
-        const codeElement = code.args[0] ? scalar(code.args[0], codeHolds) : undefined;
-        const declaredElement = spec.args[0] ? scalar(spec.args[0], holdsOf) : undefined;
-        return codeElement && declaredElement ? agree(codeElement, declaredElement) : undefined;
+      // Collections are compared by kind and then by elements, nested collections
+      // included, where both sides read; an element either side does not read as a type
+      // the design knows is not compared, and an annotation that is no collection at all
+      // is left to the opaque-parameter rules.
+      if (listsToo && isCollection(spec)) {
+        if (isTupleAnnotation(language, annotation)) return false;
+        if (isCollection(code)) {
+          const element = (cs: TypeExpression, ds: TypeExpression): boolean | undefined => {
+            const cCollection = isCollection(cs);
+            const dCollection = isCollection(ds);
+            if (cCollection && dCollection) return collections(cs, ds);
+            if (cCollection || dCollection) {
+              const other = cCollection ? ds : cs;
+              if (other.form === 'named') return resolvable(other.name as string) ? false : undefined;
+              return other.form === 'primitive' && other.name !== 'any' && other.name !== 'void' ? false : undefined;
+            }
+            // A leaf the design can name — a primitive or a named type — is compared by the
+            // same agreement a top-level parameter uses; a union, any or unknown is not.
+            const leaf = (e: TypeExpression): boolean => e.form === 'named' || (e.form === 'primitive' && e.name !== 'any' && e.name !== 'void');
+            return leaf(cs) && leaf(ds) ? agree(cs, ds) : undefined;
+          };
+          const collections = (cs: TypeExpression, ds: TypeExpression): boolean | undefined => {
+            if (cs.form !== ds.form) return false;
+            let verdict: boolean | undefined = true;
+            cs.args.forEach((arg, i) => {
+              const one = ds.args[i] ? element(arg, ds.args[i]) : undefined;
+              if (one === false) verdict = false;
+              else if (one === undefined && verdict !== false) verdict = undefined;
+            });
+            return verdict;
+          };
+          return collections(code, spec);
+        }
       }
       if (!c || !d) return undefined;
       return agree(c, d);
@@ -942,10 +989,306 @@ function reportUncomparedDeclarations(ctx: RuleContext): void {
   }
 }
 
+/** Every parameter finding of one run, in report order, and the components whose own code drifted from a parameter. */
+interface ParamJudgements {
+  issues: Parameters<RuleContext['addIssue']>[];
+  takenBy: Map<string, Set<string>>;
+  drifted: Set<string>;
+}
+
+const paramJudgementMemo = new WeakMap<RuleContext, ParamJudgements>();
+
+/**
+ * Judge every realizing function's parameters against its contract's, once
+ * per rule context: the findings param conformance reports (steps 1-8), every
+ * name each implementation's functions take (what a declared injection is
+ * checked against), and the components drifted from a parameter
+ * (PARAM_TYPE_MISMATCH, UNDECLARED_PARAM, UNREALIZED_PARAM) — a caller's
+ * findings on such a component are held under the drift.
+ */
+function paramJudgements(ctx: RuleContext): ParamJudgements {
+  const memo = paramJudgementMemo.get(ctx);
+  if (memo) return memo;
+  const code = ctx.codeIndex();
+  const issues: Parameters<RuleContext['addIssue']>[] = [];
+  const drifted = new Set<string>();
+  const DRIFTS = new Set(['PARAM_TYPE_MISMATCH', 'UNDECLARED_PARAM', 'UNREALIZED_PARAM']);
+  const emit = (...args: Parameters<RuleContext['addIssue']>): void => {
+    issues.push(args);
+    if (!DRIFTS.has(args[1])) return;
+    const implementation = ctx.implementations.find(i => i.id === args[3]);
+    const component = implementation ? ctx.interfaceMap.get(implementation.contract)?.component : undefined;
+    if (component) drifted.add(component);
+  };
+  const { codeNameOf, typeOf, externalCodeName } = typeReading(ctx);
+  const scalarAgrees = annotationAgreement(ctx);
+  /** Whether the two sides describe the same type, read through the file's dialect; no annotation, no dialect or no reading is never agreement. */
+  const typeAgreesIn = (dialect: TypeDialect | null) => (declared: MethodParam, realized: ParameterFact): boolean => {
+    if (!realized.type || !dialect) return false;
+    const stated = parseTypePosition(declared.type, 'param', !!declared.optional);
+    if (!stated.expression) return false;
+    const names = new Map(codeNameOf);
+    for (const ref of declared.type.match(/[A-Za-z0-9_-]+::[A-Za-z0-9_:.-]+/g) ?? []) {
+      if (!names.has(ref)) names.set(ref, externalCodeName(ref));
+    }
+    return dialect.agrees(realized.type, stated.expression, names);
+  };
+  /**
+   * What a contract parameter's type expects of the code, where it settles
+   * anything: the kinds of value realizing it (a date or a datetime as an
+   * ISO string or a Date object, a duration as a number or a string, bytes
+   * as a buffer, a list or a string), and a record type's fields.
+   */
+  const expected = (declared: MethodParam): Expected | undefined => {
+    let expression = parseTypePosition(declared.type, 'param', !!declared.optional).expression;
+    while (expression && (expression.form === 'optional' || expression.form === 'result')) expression = expression.args[0];
+    if (!expression) return undefined;
+    if (expression.form === 'primitive') {
+      const loose: Record<string, ParameterKind[]> = {
+        date: ['string', 'object'], datetime: ['string', 'object'], duration: ['number', 'string'], bytes: ['object', 'list', 'string'],
+      };
+      if (expression.name && loose[expression.name]) {
+        return { kinds: new Set(loose[expression.name]), loose: true, told: `a ${expression.name}`, ...(SCALAR_MEMBERS[expression.name] ? { scalarMembers: SCALAR_MEMBERS[expression.name] } : {}) };
+      }
+    }
+    const kind = expressionKind(expression, name => typeKind(typeOf(name)));
+    if (expression.form === 'named' && expression.name) {
+      const type = typeOf(expression.name);
+      const fields = (type?.fields ?? [])
+        .map(field => (field && typeof field === 'object' ? (field as { name?: unknown }).name : undefined))
+        .filter((name): name is string => typeof name === 'string');
+      if (fields.length > 0 && kind === 'object') return { kinds: new Set(['object']), fields, told: `the record "${expression.name}"` };
+    }
+    if (!kind) return undefined;
+    return { kinds: new Set([kind]), told: aKind(kind), ...(PRIMITIVE_KINDS.has(kind) ? { scalarMembers: SCALAR_MEMBERS[kind] } : {}) };
+  };
+
+  // Every name each implementation's realizing functions take, bare — what
+  // a declared injection is checked against — and whether any function of
+  // it was read at all, which is what lets silence about one mean anything.
+  const takenBy = new Map<string, Set<string>>();
+
+  for (const { implementation, method, component, sourceFile, draftContext } of signatureMethods(ctx)) {
+    // ---- 0. the conformance dial: off is no realization check at all ----
+    const tier = method.conformance ?? implementation.conformance ?? defaultConformanceTier(component);
+    if (tier === 'off') continue;
+    // ---- 1. gather: the contract's parameters, and the code's ----
+    const contract = ctx.interfaceMap.get(implementation.contract);
+    if (!sourceFile) continue;
+    const declared = contract?.methods.find(m => m.name === method.name)?.params ?? [];
+    const file = pathKey(sourceFile);
+    const facts = code.factsAt(file);
+
+    // ---- 2 / 9. silent unless at least one signature is there to read ----
+    // Read at exact grade, or by a reader that read this language's
+    // signatures without a type checker (the Python reader says so in `reads`).
+    if (!facts || facts.status !== 'analyzed' || !(facts.analysisGrade === 'exact' || facts.reads?.includes('params'))) continue;
+    const symbol = method.symbol ?? method.name;
+    // An abstraction has no body to read: what it takes is what its declaration states, one signature
+    // per overload; with no signature recorded for the member nothing is compared.
+    let written: ParameterFact[][];
+    if (component?.abstract === true) {
+      const declaration = declaredReading(facts, symbol, component);
+      if (!declaration) continue;
+      written = declaration.params;
+    } else {
+      const signatures = facts.functionParams;
+      if (!signatures || !Object.prototype.hasOwnProperty.call(signatures, symbol)) continue;
+      const kept = publishedIndexes(signatures[symbol], facts.functionBodies?.[symbol], new Set(facts.exportedNames), new Set(Object.keys(judgedShapes(facts))));
+      written = kept.map(index => signatures[symbol][index]);
+    }
+    // A language whose parameters are named in snake_case (Python) names the
+    // contract's `documentId` `document_id`: the same parameter, spelled the
+    // language's way — read under the contract's name before anything is compared.
+    const snake = facts.language === 'python';
+    const contractNamed = new Map(declared.map(param => [casingKey(param.name), param.name] as const));
+    const candidates = written.map(signature => signature.map(param => (snake && param.name !== undefined && contractNamed.has(casingKey(param.name))
+      ? { ...param, name: contractNamed.get(casingKey(param.name)) as string } : param)));
+    if (candidates.length === 0) continue;
+
+    const taken = takenBy.get(implementation.id) ?? new Set<string>();
+    for (const candidate of candidates) for (const param of candidate) if (param.name !== undefined) taken.add(bare(param.name));
+    takenBy.set(implementation.id, taken);
+    if (declared.length === 0) continue;
+
+    // ---- 3 / 4. judge every candidate, and keep what they ALL say ----
+    const injected = new Set((implementation.injectedParams ?? []).map(bare));
+    const typeAgrees = typeAgreesIn(dialectOf(facts));
+    const typescript = facts.language === 'typescript';
+    const scalarDisagrees = (param: MethodParam, realized: ParameterFact): boolean =>
+      realized.type !== undefined && scalarAgrees(facts.language, realized.type, param.type, 'param', true, true) === false;
+    const judgements = candidates.map(realized => judge(declared, realized, injected, typeAgrees, expected, typescript, scalarDisagrees));
+    const subject = candidates.length > 1
+      ? `every function called "${symbol}" in "${file}"`
+      : `the function "${symbol}" in "${file}"`;
+    const opening = subject.charAt(0).toUpperCase() + subject.slice(1);
+    // The one green path a transport handle has, named with this method's
+    // own names: the handle injected, the contract's parameters after it.
+    const transport = agreed(judgements, 'transport').map(found => found.told);
+    const wiring = judgements[0].wiring;
+    const trailing = judgements[0].trailing;
+    const greenPath = transport.length > 0
+      ? ` If ${transport.map(name => `"${name}"`).join(' and ')} ${transport.length === 1 ? 'is a handle' : 'are handles'} whatever serves this method hands it (a request, a URL, a response) rather than an argument of the contract's caller, the one green path is: name ${transport.length === 1 ? 'it' : 'them'} in the implementation's \`injectedParams\` — [${[...wiring, ...transport].join(', ')}] — and take the contract's own parameters after ${transport.length === 1 ? 'it' : 'them'}, in order: ${symbol}(${[...wiring, ...transport, ...declared.map(param => `${param.name}${param.optional ? '?' : ''}`), ...trailing].join(', ')}), the router unpacking the path, query and body into them — or, where the framework hands the function the handles alone, read each of the contract's parameters off the injected request by its own name (\`${transport[0]}.params.${declared[0]?.name ?? 'id'}\`), which realizes it through the handle. An injected name matches with or without its leading underscore, and a handle the function never reads may carry one instead.`
+      : '';
+
+    // ---- 5 / 6. the surplus, on whichever side has it ----
+    const unrealized = agreed(judgements, 'unrealized');
+    if (unrealized.length > 0) {
+      // Through an injected request handle, the two ways a parameter is
+      // read off it — told with this method's own names.
+      const handle = [...wiring, ...trailing].find(name => REQUEST_HANDLES.has(bare(name).toLowerCase()));
+      const record = declared.find(param => (expected(param)?.fields?.length ?? 0) > 0)?.name ?? 'record';
+      const scalar = declared.find(param => !(expected(param)?.fields?.length))?.name ?? 'id';
+      const throughHandle = handle !== undefined
+        ? ` Through the injected request "${handle}", a parameter is realized by reading it off the handle by its own name (\`${handle}.params.${scalar}\`, or a helper's result: \`const { ${scalar} } = pathParams(${handle})\`), and the one record parameter by the body read whole: \`${handle}.body\`, or a function handed the request whose result the handler binds and uses whole (\`const ${record} = await readJsonBody(${handle})\`, then passes \`${record}\` on).`
+        : '';
+      // An injection naming the contract's own parameter sets the code's
+      // parameter of that name aside as wiring — said, since nothing else
+      // says why the contract's is left with nothing.
+      const injectedOwn = unrealized.filter(found => injected.has(bare(found.unit))).map(found => `"${found.unit}"`);
+      const injectionTold = injectedOwn.length > 0
+        ? ` The implementation's \`injectedParams\` names ${injectedOwn.join(', ')} — the contract's own parameter(s): an injected name is set aside as wiring, so the code's parameter of that name no longer realizes the contract's. Drop ${injectedOwn.length === 1 ? 'it' : 'them'} from \`injectedParams\` (sdd_update_spec, no re-lock).`
+        : '';
+      emit(
+        'warning',
+        'UNREALIZED_PARAM',
+        `Method "${method.name}" of contract "${implementation.contract}" declares ${unrealized.length} `
+        + `parameter(s) ${subject} does not take — ${unrealized.map(found => found.told).join(', ')}. The `
+        + 'contract is promising an argument that would go nowhere, and nothing breaks at a call site to '
+        + `correct it: every brief and every caller built from the contract passes one. Take the parameter in `
+        + `the code, or drop it from the contract.${injectionTold}${throughHandle}${greenPath}`,
+        implementation.id,
+        draftContext,
+        undefined,
+        { at: method.name, covers: unrealized.map(found => found.unit) },
+      );
+    }
+
+    const undeclared = agreed(judgements, 'undeclared');
+    if (undeclared.length > 0) {
+      emit(
+        'warning',
+        'UNDECLARED_PARAM',
+        `${opening} realizing method "${method.name}" of contract "${implementation.contract}" takes `
+        + `${undeclared.length} parameter(s) the contract does not declare and no declared injection accounts `
+        + `for — ${undeclared.map(found => found.optional ? `${found.told} (optional, defaulted or rest in the code)` : found.told).join(', ')}. `
+        + (undeclared.every(found => found.optional)
+          ? 'The contract does not declare it, and a caller built from the contract never passes it, so it is an argument the design never mentions. '
+          : 'An argument a caller must supply that the design never mentions is how a credential ends up in a signature nobody has read against its contract'
+            + (undeclared.some(found => found.optional) ? ' (the optional, defaulted or rest ones are not required of a caller, but the contract does not declare them, so a caller built from it never passes them)' : '') + '. ')
+        + 'Declare it on the contract, name it in the implementation\'s `injectedParams` when '
+        + 'whatever wires this component up supplies it (a leading or trailing run, with or without its underscore), or take it out of the signature.'
+        + greenPath,
+        implementation.id,
+        draftContext,
+        undefined,
+        { at: method.name, covers: undeclared.map(found => found.unit) },
+      );
+    }
+
+    // ---- 6b / 6c. a record, or a scalar, the code's type cannot hold ----
+    const mismatched = agreed(judgements, 'mismatched');
+    // agreed() keeps the first body's findings: every body must read the
+    // parameter as a plain mismatch, or the longer explanation stays.
+    const plainOnly = mismatched.every(found =>
+      judgements.every(judgement => judgement.mismatched.get(found.unit)?.scalar === true));
+    if (mismatched.length > 0 && plainOnly) {
+      // Two annotations that disagree say it in a sentence: the value the
+      // code takes is not the one the design declares.
+      emit(
+        'warning',
+        'PARAM_TYPE_MISMATCH',
+        `Method "${method.name}" of contract "${implementation.contract}" declares ${mismatched.length} `
+        + `parameter(s) ${subject} annotates as another type — ${mismatched.map(found => found.told).join('; ')}. `
+        + 'A caller built from the contract hands over a different value than the code takes (one value for a list, a number for a string, or a scalar for a record). '
+        + 'Type the parameter as the contract declares it, or change the contract if the code is right.',
+        implementation.id,
+        draftContext,
+        undefined,
+        { at: method.name, covers: mismatched.map(found => found.unit) },
+      );
+    } else if (mismatched.length > 0) {
+      emit(
+        'warning',
+        'PARAM_TYPE_MISMATCH',
+        `Method "${method.name}" of contract "${implementation.contract}" declares ${mismatched.length} `
+        + `parameter(s) ${subject} takes under a type that cannot hold what it declares — ${mismatched.map(found => found.told).join('; ')}. `
+        + 'Whatever a caller hands over there is never compared with what the design declares — an opaque type names no '
+        + 'field to compare, an object missing the record\'s fields or adding its own is another shape, the one a '
+        + 'credential rides in unread, and an opaque value read as an object where the contract declares a scalar is '
+        + 'an object in its place, and a scalar annotated as another scalar takes a different value — so the check fails closed on it, as it does on an opaque receiver. Type the '
+        + 'parameter as the contract declares it (a record by its code name), or declare on the contract the shape the code really takes.',
+        implementation.id,
+        draftContext,
+        undefined,
+        { at: method.name, covers: mismatched.map(found => found.unit) },
+      );
+    }
+
+    // ---- 7. a name that differs where the declared type agrees ----
+    const renamed = agreed(judgements, 'renamed');
+    if (renamed.length > 0) {
+      emit(
+        'warning',
+        'PARAM_NAME_MISMATCH',
+        (renamed.every(f => !f.undecided)
+          ? `Method "${method.name}" of contract "${implementation.contract}" and ${subject} agree on position and `
+            + `type but not on name for ${renamed.length} parameter(s) — ${renamed.map(f => f.told).join('; ')}. `
+            + 'The contract, the ERD and every brief carry one word and the code answers to another, which is a '
+            + 'rename nobody recorded rather than a different argument — the declared type agreeing is what says '
+            + 'so. Rename one side to the other.'
+          : `Method "${method.name}" of contract "${implementation.contract}" and ${subject} agree on position `
+            + `but not on name for ${renamed.length} parameter(s) — ${renamed.map(f => f.told).join('; ')}. `
+            + 'The contract, the ERD and every brief carry one word and the code answers to another: a rename nobody '
+            + 'recorded, or, where the types cannot be compared, possibly a different argument. Rename one side to '
+            + 'the other, or annotate the parameter with the contract\'s type so the two are compared.'),
+        implementation.id,
+        draftContext,
+        undefined,
+        { at: method.name, covers: renamed.map(found => found.unit) },
+      );
+    }
+
+    // ---- 8. a paired position the two sides read differently ----
+    const disagreed = agreed(judgements, 'optionality');
+    if (disagreed.length > 0) {
+      emit(
+        'warning',
+        'PARAM_OPTIONALITY',
+        `Method "${method.name}" of contract "${implementation.contract}" and ${subject} disagree about whether `
+        + `${disagreed.length} parameter(s) may be left out — ${disagreed.map(f => f.told).join('; ')}. One of `
+        + 'them is telling a caller an argument is required when it is not, or the reverse. Omittable is the '
+        + 'code\'s word for it: a default value and a rest parameter make an argument omittable exactly as a '
+        + 'question mark does.',
+        implementation.id,
+        draftContext,
+        undefined,
+        { at: method.name, covers: disagreed.map(found => found.unit) },
+      );
+    }
+  }
+
+  const out = { issues, takenBy, drifted };
+  paramJudgementMemo.set(ctx, out);
+  return out;
+}
+
+/**
+ * The components whose own code drifted from their contract's signature: a
+ * return (RETURN_TYPE_MISMATCH) or a parameter (PARAM_TYPE_MISMATCH,
+ * UNDECLARED_PARAM, UNREALIZED_PARAM). A caller's unresolved call and unshown
+ * edge to one only LOOK stale, and are held under the drift's own finding.
+ */
+export function signatureDrifts(ctx: RuleContext): Set<string> {
+  const ids = new Set(paramJudgements(ctx).drifted);
+  for (const drift of returnDrifts(ctx)) if (drift.component?.id) ids.add(drift.component.id);
+  return ids;
+}
+
 export const paramConformanceRule: SddRule = {
   name: 'param-conformance',
   judges: 'code',
-  description: "Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract's version. What a realization takes besides the contract's own parameters, at either end of its list, is wiring, declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument; a leading run and a trailing run of the names it declares are dropped, each name matching with or without its leading underscore, and a trailing one only where the contract declares no parameter of that name. A parameter whose name starts with an underscore means UNUSED, and it is set aside only where the analysis proves it is — named, with no identifier of that name in the body or in another parameter's default value and no read of `arguments`, as the request and URL a transport hands a handler that never reads them: a used `_secret` is judged like any parameter, and a name compared for a rename is read without its leading underscores. An OBJECT whose properties name two or more of the contract's own parameters BUNDLES them and is set apart first: each parameter it bundles is unrealized (the code takes it inside the object) and the object undeclared, so `cancelOrder(input: { orderId, customerId })` realizing `cancelOrder(orderId, customerId)` names both, never one half by position. The rest are PAIRED in order, since a caller passes arguments in order: among the order-keeping pairings, the one where the most names agree, then the most declared types, then the most kinds of value, and on a tie the one aligned against the TAIL of the realization's list — so an inserted first argument is the one named undeclared, never the declared one it pushed along. The declared type is what tells a rename from a substitution. Types agree when the code's annotation, read through the dialect of the language the file was analyzed as (type_dialect.agrees), is the contract's canonical type — so `string[]` agrees with `list<string>`, TypeScript's `number` with int and float alike, and an annotation the dialect cannot read agrees with nothing; a named type agrees through its code-level name, an EXTERNAL one (`alias::name`) through the name its pinned snapshot gives it, a MEMBER's through the name its own type spec gives it, read live from the family with its kind and fields — so where a parameter's type lives never decides whether it is compared — else its public name's last segment in the code's type casing. Where a type checker read the file, each parameter the code annotates also carries the KIND of value it takes (string, number, boolean, list, object or function; a platform class the checker's fixed library leaves out — a URL, a Request, node:http's IncomingMessage — is an object), compared with the kind the contract's type is (a primitive's, a list, a map or set as an object, an enum as a string, a named scalar as what it holds, a record type as an object, a signature as a function; a date or a datetime as a string or an object, a duration as a number or a string, bytes as an object, a list or a string; anything unsettled compares with nothing). A paired parameter whose name differs and whose type agrees — or whose kind is the same primitive, or one of the kinds a date or bytes is written as — is a rename, said with the contract's former name when the code still uses it; one whose name differs and whose kind of value differs is a SUBSTITUTION, a different argument in the declared one's place, so the declared parameter is unrealized and the code's undeclared: `getRoute(params: Record<string, string>)` realizing `getRoute(id: string)` is never a silent pairing. Where the contract's type is a record, an object is compared STRUCTURALLY, by the data property names the checker gives its type: one holding every field of the record is a rename, one sharing none of them a substitution whatever either side calls it, and a platform transport class (node:http's IncomingMessage, a fetch Request or Response, a URL, a socket) where a record is declared is a substitution too — so `planRoute(req: IncomingMessage)` and `planRoute(session: { user: string })` realizing `planRoute(request: plan_request)` are never silent pairings. A paired parameter named as a transport handle (req, res, ctx, request, response, next, reply) standing where the contract declares an argument of its own is a substitution unless its type agrees with the declared one or holds every field of the declared record — however the handle is typed, a hand-written `type Req = { params: … }` included: `cancelOrder(req, res)` realizing `cancelOrder(orderId, customerId)` is a handler's shape, not the contract's. Where the contract's type is a record, a paired parameter whose type cannot hold it fails closed, as an opaque receiver does (PARAM_TYPE_MISMATCH): an OPAQUE type — any, unknown, object, {}, an index signature alone (`Record<string, unknown>`), or no annotation at all in a TypeScript file — names no field the analysis could compare, and an object sharing some of the record's fields but not all of them, or adding fields the record does not declare, is another shape; the finding names the fields missing and the fields added, so `planRoute(request: any)` and `planRoute(request: { stops: unknown[]; secret: string })` realizing `planRoute(request: plan_request)` are never silent pairings. Where the contract's type is a scalar (a string, a number, a boolean — an enum or a named scalar as what it holds — or a date, a datetime or a duration, each as any value it is written as), a paired parameter whose type admits any value — opaque as above — and whose body reads a member off it directly that no such value has (`args.habitId`, where the contract declares the date `date`) is an object in the scalar's place, PARAM_TYPE_MISMATCH too; one read only as the scalar it is (`date.length`, `day.getTime()`) is not. And a paired parameter the code ANNOTATES as a scalar other than the one the contract declares — read through the file's dialect as a return is, a named scalar as what it holds and an enum as a string, TypeScript's `number` agreeing with int and float alike and a date, a datetime or a duration with the string, Date or number the code writes it as — takes a different value than the design declares: PARAM_TYPE_MISMATCH, naming both types (`authorId: number` realizing `authorId: string`, a Python `text: int` realizing `text: string`), whether the names agree or not. So is one value annotated where the contract declares a list or a set, or a list or a set annotated where it declares one value — `ingredients: string` realizing `ingredients: list<ingredient>`, `tag: string[]` realizing `tag: string` — bytes aside, which travel as a list. Two lists, or two sets, compare their element types the same way where both read as one scalar: `ids: number[]` realizing `ids: list<string>` is PARAM_TYPE_MISMATCH, naming both; an element either side does not read as one scalar (a named type, a union, any) is not compared. An annotation either side does not read as one scalar — a union, a named type the design does not know, any — is not compared. Where nothing decides between a rename and another argument (the types cannot be compared, no kind or field speaks, and no handle name does), the name still differs from the contract's either way, so it is PARAM_NAME_MISMATCH, said with the comparison that could not be made: a Python `quote_order(order_items: list[dict])` realizing `quote_order(items: list<order_item>)` is never silent. A parameter standing ahead of every kept pair under a name transports give their handles (req, request, res, response, reply, url, ctx, context, next, event, socket) is how a transport handle arrives, and the finding names the one green path for it: the handle in `injectedParams`, the contract's own parameters after it in order, the router unpacking the request into them — or, where the framework hands the function the handles alone, the contract's parameters read off the injected request by their own names: a contract parameter the code does not take but reads off an injected request handle (req, request, ctx, context, event, url) by its own name is realized through that handle — `req.params.code`, `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a destructuring at any depth, a local the handle's value flows into (`const url = new URL(req.url, base)`), and what a helper the handle is passed to reads off it or its result yields, where the helper is written in the same file or in a file no implementation claims (`const { orderId } = pathParams(req)`) — and the one RECORD parameter left unpaired is realized by the request's body read whole: `req.body`, or the request handed as the first argument to a function — any function, an imported one included, but a collaborator's method (a callee reached through `this.<field>` or through another of the handler's parameters) — whose result the handler binds to a local and then uses whole, passing it on, returning it, placing it into an object or a list, or assigning it (`const cart = await readJsonBody(req)`); a result only destructured or only read for members is a set of named reads, never the body. A parameter left unrealized because the implementation injects its own name is said so: the injection set the code's parameter of that name aside as wiring. An injected name none of the implementation's realizing functions read in this run takes is said as a NOTICE (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and one nothing takes hides nothing, since no function takes a parameter it could set aside — so it never fails a gate. A name with several bodies is judged on what they all agree on, and a method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here; a method whose conformance dial is off (its own, else its implementation's) is not judged. The signature's other half is its RETURN: a realizing function annotated to return a type its contract's `returns` does not describe is RETURN_TYPE_MISMATCH, naming the method, the contract's type and the code's — whatever every body of the name agrees on, read through the file's dialect. Completing later is ASYNC_MISMATCH's subject, so both sides are read past `async`; a named scalar agrees with what it holds, an enum with a string, a date, a datetime or a duration with the string (or Date, or number) the code writes it as, and a name differing only in case and separators with itself. Not compared: a contract returning void (whatever the code hands back beside it, no caller built from the contract reads), a function that registers the method's handler (a narrative `register` step), whose result is the handler's, a void function handed a response handle (`injectedParams`: res, response, reply, ctx, context), which writes its result through the handle, an unannotated body, and a type either side does not read or the design does not know — never accused. A caller whose port no longer matches the drifted class is not reported again on its own: its call to the drifted component that no longer resolves (CALL_ORIGIN_UNRESOLVED) and its declared edge to it that no longer shows (UNREALIZED_DEPENDENCY) are held under RETURN_TYPE_MISMATCH and judged again once it is fixed. An abstraction's method is compared where a body would be, with the declaration its file states, never with a body: the signature of the method-style member of its interface, trait, Protocol or abstract class (type_shape_fact.signatures, one candidate per overload, a function-typed property included, and the members of a shape it extends or intersects read as the one shape it is: `interface Dog extends Animal`, `type Dog = Animal & Walker`), whatever constructor, helpers or default bodies an abstract class also holds, which are never judged and never modelled; through the same parameter, type, optionality and return comparisons and the same codes (UNREALIZED_PARAM, UNDECLARED_PARAM, PARAM_NAME_MISMATCH, PARAM_OPTIONALITY, PARAM_TYPE_MISMATCH, RETURN_TYPE_MISMATCH), at exact grade and, for a Protocol, by the Python reader. An implementer stays compared with its own contract, which implements-contracts holds to its abstraction's, so abstraction code, its contract, the implementers' contracts and their code close one loop; where a grade cannot read member signatures nothing is guessed, and the abstraction says so once: ABSTRACTION_DECLARATION_UNCOMPARED, a notice on its implementation, names each contract method whose declaration nothing compared and why — the file's language has no reader of member signatures (Rust, Go, Java today), it was read below exact grade, or the member sits only on a concrete class, which declares nothing — the same in every language, so a declaration left uncompared is never silent. Python is read without a type checker by the analyzer's signature reader (source_file_facts.reads): its `def` parameter names — compared in the language's snake_case, so the contract's `documentId` is the code's `document_id` — their annotations and return annotations, the receiver (`self`, `cls`) set aside, judged like any other signature; an unannotated Python parameter is never read as opaque.",
+  description: "Code-to-contract for the SIGNATURE, the last of the three readings a spec-driven gate never made: a contract declares `params`, and nothing ever compared them to the parameters of the function that realizes the method. A contract could promise an argument the code does not take, take one the contract never mentions — including a secret — or name the same argument two different things, and the brief handed to an implementer would carry the contract's version. What a realization takes besides the contract's own parameters, at either end of its list, is wiring, declared on the implementation as `injectedParams` rather than inferred, because an inferred prefix cannot be told from a renamed first argument; a leading run and a trailing run of the names it declares are dropped, each name matching with or without its leading underscore, and a trailing one only where the contract declares no parameter of that name. A parameter whose name starts with an underscore means UNUSED, and it is set aside only where the analysis proves it is — named, with no identifier of that name in the body or in another parameter's default value and no read of `arguments`, as the request and URL a transport hands a handler that never reads them: a used `_secret` is judged like any parameter, and a name compared for a rename is read without its leading underscores. An OBJECT whose properties name two or more of the contract's own parameters BUNDLES them and is set apart first: each parameter it bundles is unrealized (the code takes it inside the object) and the object undeclared, so `cancelOrder(input: { orderId, customerId })` realizing `cancelOrder(orderId, customerId)` names both, never one half by position. The rest are PAIRED in order, since a caller passes arguments in order: among the order-keeping pairings, the one where the most names agree, then the most declared types, then the most kinds of value, and on a tie the one aligned against the TAIL of the realization's list — so an inserted first argument is the one named undeclared, never the declared one it pushed along. The declared type is what tells a rename from a substitution. Types agree when the code's annotation, read through the dialect of the language the file was analyzed as (type_dialect.agrees), is the contract's canonical type — so `string[]` agrees with `list<string>`, TypeScript's `number` with int and float alike, and an annotation the dialect cannot read agrees with nothing; a named type agrees through its code-level name, an EXTERNAL one (`alias::name`) through the name its pinned snapshot gives it, a MEMBER's through the name its own type spec gives it, read live from the family with its kind and fields — so where a parameter's type lives never decides whether it is compared — else its public name's last segment in the code's type casing. Where a type checker read the file, each parameter the code annotates also carries the KIND of value it takes (string, number, boolean, list, object or function; a platform class the checker's fixed library leaves out — a URL, a Request, node:http's IncomingMessage — is an object), compared with the kind the contract's type is (a primitive's, a list, a map or set as an object, an enum as a string, a named scalar as what it holds, a record type as an object, a signature as a function; a date or a datetime as a string or an object, a duration as a number or a string, bytes as an object, a list or a string; anything unsettled compares with nothing). A paired parameter whose name differs and whose type agrees — or whose kind is the same primitive, or one of the kinds a date or bytes is written as — is a rename, said with the contract's former name when the code still uses it; one whose name differs and whose kind of value differs is a SUBSTITUTION, a different argument in the declared one's place, so the declared parameter is unrealized and the code's undeclared: `getRoute(params: Record<string, string>)` realizing `getRoute(id: string)` is never a silent pairing. Where the contract's type is a record, an object is compared STRUCTURALLY, by the data property names the checker gives its type: one holding every field of the record is a rename, one sharing none of them a substitution whatever either side calls it, and a platform transport class (node:http's IncomingMessage, a fetch Request or Response, a URL, a socket) where a record is declared is a substitution too — so `planRoute(req: IncomingMessage)` and `planRoute(session: { user: string })` realizing `planRoute(request: plan_request)` are never silent pairings. A paired parameter named as a transport handle (req, res, ctx, request, response, next, reply) standing where the contract declares an argument of its own is a substitution unless its type agrees with the declared one or holds every field of the declared record — however the handle is typed, a hand-written `type Req = { params: … }` included: `cancelOrder(req, res)` realizing `cancelOrder(orderId, customerId)` is a handler's shape, not the contract's. Where the contract's type is a record, a paired parameter whose type cannot hold it fails closed, as an opaque receiver does (PARAM_TYPE_MISMATCH): an OPAQUE type — any, unknown, object, {}, an index signature alone (`Record<string, unknown>`), or no annotation at all in a TypeScript file — names no field the analysis could compare, and an object sharing some of the record's fields but not all of them, or adding fields the record does not declare, is another shape; the finding names the fields missing and the fields added, so `planRoute(request: any)` and `planRoute(request: { stops: unknown[]; secret: string })` realizing `planRoute(request: plan_request)` are never silent pairings. Where the contract's type is a scalar (a string, a number, a boolean — an enum or a named scalar as what it holds — or a date, a datetime or a duration, each as any value it is written as), a paired parameter whose type admits any value — opaque as above — and whose body reads a member off it directly that no such value has (`args.habitId`, where the contract declares the date `date`) is an object in the scalar's place, PARAM_TYPE_MISMATCH too; one read only as the scalar it is (`date.length`, `day.getTime()`) is not. And a paired parameter the code ANNOTATES as a scalar other than the one the contract declares — read through the file's dialect as a return is, a named scalar as what it holds and an enum as a string, TypeScript's `number` agreeing with int and float alike and a date, a datetime or a duration with the string, Date or number the code writes it as — takes a different value than the design declares: PARAM_TYPE_MISMATCH, naming both types (`authorId: number` realizing `authorId: string`, a Python `text: int` realizing `text: string`), whether the names agree or not. So is one value annotated where the contract declares a list or a set, or a list or a set annotated where it declares one value — `ingredients: string` realizing `ingredients: list<ingredient>`, `tag: string[]` realizing `tag: string` — bytes aside, which travel as a list. Collections are compared by kind and by elements. Where the contract declares a list, a set or a map and the code annotates a collection of another kind — a set, a map, a dict or a record, or a tuple, where a list is declared — it is PARAM_TYPE_MISMATCH naming both types (`ids: Set<string>` or a Python `ids: dict[str, str]` realizing `ids: list<string>`); a read-only or abstract sequence (`readonly T[]`, `ReadonlyArray<T>`, a Python `Sequence[T]`) reads as a list. Where both are of one kind their elements (a map's keys and values) are compared the same way, nested collections included: `ids: number[]` and `ids: list[list[str]]` realizing `ids: list<string>` are PARAM_TYPE_MISMATCH. An element either side does not read as a type the design knows (a union, any, unknown) is not compared, and an annotation that is no collection at all (any, unknown, object) is left to the opaque-parameter rules above. An annotation either side does not read as one scalar — a union, a named type the design does not know, any — is not compared. Where nothing decides between a rename and another argument (the types cannot be compared, no kind or field speaks, and no handle name does), the name still differs from the contract's either way, so it is PARAM_NAME_MISMATCH, said with the comparison that could not be made: a Python `quote_order(order_items: list[dict])` realizing `quote_order(items: list<order_item>)` is never silent. A parameter standing ahead of every kept pair under a name transports give their handles (req, request, res, response, reply, url, ctx, context, next, event, socket) is how a transport handle arrives, and the finding names the one green path for it: the handle in `injectedParams`, the contract's own parameters after it in order, the router unpacking the request into them — or, where the framework hands the function the handles alone, the contract's parameters read off the injected request by their own names: a contract parameter the code does not take but reads off an injected request handle (req, request, ctx, context, event, url) by its own name is realized through that handle — `req.params.code`, `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a destructuring at any depth, a local the handle's value flows into (`const url = new URL(req.url, base)`), and what a helper the handle is passed to reads off it or its result yields, where the helper is written in the same file or in a file no implementation claims (`const { orderId } = pathParams(req)`) — and the one RECORD parameter left unpaired is realized by the request's body read whole: `req.body`, or the request handed as the first argument to a function — any function, an imported one included, but a collaborator's method (a callee reached through `this.<field>` or through another of the handler's parameters) — whose result the handler binds to a local and then uses whole, passing it on, returning it, placing it into an object or a list, or assigning it (`const cart = await readJsonBody(req)`); a result only destructured or only read for members is a set of named reads, never the body. A parameter left unrealized because the implementation injects its own name is said so: the injection set the code's parameter of that name aside as wiring. An injected name none of the implementation's realizing functions read in this run takes is said as a NOTICE (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and one nothing takes hides nothing, since no function takes a parameter it could set aside — so it never fails a gate. A name with several bodies is judged on what they all agree on, and a method the named file only CALLS is left to `methodRealization`, which already reports that the body is not here; a method whose conformance dial is off (its own, else its implementation's) is not judged. The signature's other half is its RETURN: a realizing function annotated to return a type its contract's `returns` does not describe is RETURN_TYPE_MISMATCH, naming the method, the contract's type and the code's — whatever every body of the name agrees on, read through the file's dialect. Completing later is ASYNC_MISMATCH's subject, so both sides are read past `async`; a named scalar agrees with what it holds, an enum with a string, a date, a datetime or a duration with the string (or Date, or number) the code writes it as, and a name differing only in case and separators with itself. Not compared: a contract returning void (whatever the code hands back beside it, no caller built from the contract reads), a function that registers the method's handler (a narrative `register` step), whose result is the handler's, a void function handed a response handle (`injectedParams`: res, response, reply, ctx, context), which writes its result through the handle, an unannotated body, and a type either side does not read or the design does not know — never accused. A caller whose port no longer matches the drifted class — a return or a parameter drifted — is not reported again on its own: its call to the drifted component that no longer resolves (CALL_ORIGIN_UNRESOLVED) and its declared edge to it that no longer shows (UNREALIZED_DEPENDENCY) are held under the drift's own finding (RETURN_TYPE_MISMATCH, PARAM_TYPE_MISMATCH, UNDECLARED_PARAM or UNREALIZED_PARAM) and judged again once it is fixed. An abstraction's method is compared where a body would be, with the declaration its file states, never with a body: the signature of the method-style member of its interface, trait, Protocol or abstract class (type_shape_fact.signatures, one candidate per overload, a function-typed property included, and the members of a shape it extends or intersects read as the one shape it is: `interface Dog extends Animal`, `type Dog = Animal & Walker`), whatever constructor, helpers or default bodies an abstract class also holds, which are never judged and never modelled; through the same parameter, type, optionality and return comparisons and the same codes (UNREALIZED_PARAM, UNDECLARED_PARAM, PARAM_NAME_MISMATCH, PARAM_OPTIONALITY, PARAM_TYPE_MISMATCH, RETURN_TYPE_MISMATCH), at exact grade and, for a Protocol, by the Python reader. An implementer stays compared with its own contract, which implements-contracts holds to its abstraction's, so abstraction code, its contract, the implementers' contracts and their code close one loop; where a grade cannot read member signatures nothing is guessed, and the abstraction says so once: ABSTRACTION_DECLARATION_UNCOMPARED, a notice on its implementation, names each contract method whose declaration nothing compared and why — the file's language has no reader of member signatures (Rust, Go, Java today), it was read below exact grade, or the member sits only on a concrete class, which declares nothing — the same in every language, so a declaration left uncompared is never silent. Python is read without a type checker by the analyzer's signature reader (source_file_facts.reads): its `def` parameter names — compared in the language's snake_case, so the contract's `documentId` is the code's `document_id` — their annotations and return annotations, the receiver (`self`, `cls`) set aside, judged like any other signature; an unannotated Python parameter is never read as opaque.",
   codes: [
     {
       code: 'UNREALIZED_PARAM',
@@ -999,7 +1342,6 @@ export const paramConformanceRule: SddRule = {
   ],
 
   check(ctx: RuleContext): void {
-    const code = ctx.codeIndex();
 
     // ---- 11. the return type the code annotates, against the contract's `returns` ----
     for (const drift of returnDrifts(ctx)) {
@@ -1021,250 +1363,8 @@ export const paramConformanceRule: SddRule = {
       );
     }
 
-    const { codeNameOf, typeOf, externalCodeName } = typeReading(ctx);
-    const scalarAgrees = annotationAgreement(ctx);
-    /** Whether the two sides describe the same type, read through the file's dialect; no annotation, no dialect or no reading is never agreement. */
-    const typeAgreesIn = (dialect: TypeDialect | null) => (declared: MethodParam, realized: ParameterFact): boolean => {
-      if (!realized.type || !dialect) return false;
-      const stated = parseTypePosition(declared.type, 'param', !!declared.optional);
-      if (!stated.expression) return false;
-      const names = new Map(codeNameOf);
-      for (const ref of declared.type.match(/[A-Za-z0-9_-]+::[A-Za-z0-9_:.-]+/g) ?? []) {
-        if (!names.has(ref)) names.set(ref, externalCodeName(ref));
-      }
-      return dialect.agrees(realized.type, stated.expression, names);
-    };
-    /**
-     * What a contract parameter's type expects of the code, where it settles
-     * anything: the kinds of value realizing it (a date or a datetime as an
-     * ISO string or a Date object, a duration as a number or a string, bytes
-     * as a buffer, a list or a string), and a record type's fields.
-     */
-    const expected = (declared: MethodParam): Expected | undefined => {
-      let expression = parseTypePosition(declared.type, 'param', !!declared.optional).expression;
-      while (expression && (expression.form === 'optional' || expression.form === 'result')) expression = expression.args[0];
-      if (!expression) return undefined;
-      if (expression.form === 'primitive') {
-        const loose: Record<string, ParameterKind[]> = {
-          date: ['string', 'object'], datetime: ['string', 'object'], duration: ['number', 'string'], bytes: ['object', 'list', 'string'],
-        };
-        if (expression.name && loose[expression.name]) {
-          return { kinds: new Set(loose[expression.name]), loose: true, told: `a ${expression.name}`, ...(SCALAR_MEMBERS[expression.name] ? { scalarMembers: SCALAR_MEMBERS[expression.name] } : {}) };
-        }
-      }
-      const kind = expressionKind(expression, name => typeKind(typeOf(name)));
-      if (expression.form === 'named' && expression.name) {
-        const type = typeOf(expression.name);
-        const fields = (type?.fields ?? [])
-          .map(field => (field && typeof field === 'object' ? (field as { name?: unknown }).name : undefined))
-          .filter((name): name is string => typeof name === 'string');
-        if (fields.length > 0 && kind === 'object') return { kinds: new Set(['object']), fields, told: `the record "${expression.name}"` };
-      }
-      if (!kind) return undefined;
-      return { kinds: new Set([kind]), told: aKind(kind), ...(PRIMITIVE_KINDS.has(kind) ? { scalarMembers: SCALAR_MEMBERS[kind] } : {}) };
-    };
-
-    // Every name each implementation's realizing functions take, bare — what
-    // a declared injection is checked against — and whether any function of
-    // it was read at all, which is what lets silence about one mean anything.
-    const takenBy = new Map<string, Set<string>>();
-
-    for (const { implementation, method, component, sourceFile, draftContext } of signatureMethods(ctx)) {
-      // ---- 0. the conformance dial: off is no realization check at all ----
-      const tier = method.conformance ?? implementation.conformance ?? defaultConformanceTier(component);
-      if (tier === 'off') continue;
-      // ---- 1. gather: the contract's parameters, and the code's ----
-      const contract = ctx.interfaceMap.get(implementation.contract);
-      if (!sourceFile) continue;
-      const declared = contract?.methods.find(m => m.name === method.name)?.params ?? [];
-      const file = pathKey(sourceFile);
-      const facts = code.factsAt(file);
-
-      // ---- 2 / 9. silent unless at least one signature is there to read ----
-      // Read at exact grade, or by a reader that read this language's
-      // signatures without a type checker (the Python reader says so in `reads`).
-      if (!facts || facts.status !== 'analyzed' || !(facts.analysisGrade === 'exact' || facts.reads?.includes('params'))) continue;
-      const symbol = method.symbol ?? method.name;
-      // An abstraction has no body to read: what it takes is what its declaration states, one signature
-      // per overload; with no signature recorded for the member nothing is compared.
-      let written: ParameterFact[][];
-      if (component?.abstract === true) {
-        const declaration = declaredReading(facts, symbol, component);
-        if (!declaration) continue;
-        written = declaration.params;
-      } else {
-        const signatures = facts.functionParams;
-        if (!signatures || !Object.prototype.hasOwnProperty.call(signatures, symbol)) continue;
-        const kept = publishedIndexes(signatures[symbol], facts.functionBodies?.[symbol], new Set(facts.exportedNames), new Set(Object.keys(judgedShapes(facts))));
-        written = kept.map(index => signatures[symbol][index]);
-      }
-      // A language whose parameters are named in snake_case (Python) names the
-      // contract's `documentId` `document_id`: the same parameter, spelled the
-      // language's way — read under the contract's name before anything is compared.
-      const snake = facts.language === 'python';
-      const contractNamed = new Map(declared.map(param => [casingKey(param.name), param.name] as const));
-      const candidates = written.map(signature => signature.map(param => (snake && param.name !== undefined && contractNamed.has(casingKey(param.name))
-        ? { ...param, name: contractNamed.get(casingKey(param.name)) as string } : param)));
-      if (candidates.length === 0) continue;
-
-      const taken = takenBy.get(implementation.id) ?? new Set<string>();
-      for (const candidate of candidates) for (const param of candidate) if (param.name !== undefined) taken.add(bare(param.name));
-      takenBy.set(implementation.id, taken);
-      if (declared.length === 0) continue;
-
-      // ---- 3 / 4. judge every candidate, and keep what they ALL say ----
-      const injected = new Set((implementation.injectedParams ?? []).map(bare));
-      const typeAgrees = typeAgreesIn(dialectOf(facts));
-      const typescript = facts.language === 'typescript';
-      const scalarDisagrees = (param: MethodParam, realized: ParameterFact): boolean =>
-        realized.type !== undefined && scalarAgrees(facts.language, realized.type, param.type, 'param', true, true) === false;
-      const judgements = candidates.map(realized => judge(declared, realized, injected, typeAgrees, expected, typescript, scalarDisagrees));
-      const subject = candidates.length > 1
-        ? `every function called "${symbol}" in "${file}"`
-        : `the function "${symbol}" in "${file}"`;
-      const opening = subject.charAt(0).toUpperCase() + subject.slice(1);
-      // The one green path a transport handle has, named with this method's
-      // own names: the handle injected, the contract's parameters after it.
-      const transport = agreed(judgements, 'transport').map(found => found.told);
-      const wiring = judgements[0].wiring;
-      const trailing = judgements[0].trailing;
-      const greenPath = transport.length > 0
-        ? ` If ${transport.map(name => `"${name}"`).join(' and ')} ${transport.length === 1 ? 'is a handle' : 'are handles'} whatever serves this method hands it (a request, a URL, a response) rather than an argument of the contract's caller, the one green path is: name ${transport.length === 1 ? 'it' : 'them'} in the implementation's \`injectedParams\` — [${[...wiring, ...transport].join(', ')}] — and take the contract's own parameters after ${transport.length === 1 ? 'it' : 'them'}, in order: ${symbol}(${[...wiring, ...transport, ...declared.map(param => `${param.name}${param.optional ? '?' : ''}`), ...trailing].join(', ')}), the router unpacking the path, query and body into them — or, where the framework hands the function the handles alone, read each of the contract's parameters off the injected request by its own name (\`${transport[0]}.params.${declared[0]?.name ?? 'id'}\`), which realizes it through the handle. An injected name matches with or without its leading underscore, and a handle the function never reads may carry one instead.`
-        : '';
-
-      // ---- 5 / 6. the surplus, on whichever side has it ----
-      const unrealized = agreed(judgements, 'unrealized');
-      if (unrealized.length > 0) {
-        // Through an injected request handle, the two ways a parameter is
-        // read off it — told with this method's own names.
-        const handle = [...wiring, ...trailing].find(name => REQUEST_HANDLES.has(bare(name).toLowerCase()));
-        const record = declared.find(param => (expected(param)?.fields?.length ?? 0) > 0)?.name ?? 'record';
-        const scalar = declared.find(param => !(expected(param)?.fields?.length))?.name ?? 'id';
-        const throughHandle = handle !== undefined
-          ? ` Through the injected request "${handle}", a parameter is realized by reading it off the handle by its own name (\`${handle}.params.${scalar}\`, or a helper's result: \`const { ${scalar} } = pathParams(${handle})\`), and the one record parameter by the body read whole: \`${handle}.body\`, or a function handed the request whose result the handler binds and uses whole (\`const ${record} = await readJsonBody(${handle})\`, then passes \`${record}\` on).`
-          : '';
-        // An injection naming the contract's own parameter sets the code's
-        // parameter of that name aside as wiring — said, since nothing else
-        // says why the contract's is left with nothing.
-        const injectedOwn = unrealized.filter(found => injected.has(bare(found.unit))).map(found => `"${found.unit}"`);
-        const injectionTold = injectedOwn.length > 0
-          ? ` The implementation's \`injectedParams\` names ${injectedOwn.join(', ')} — the contract's own parameter(s): an injected name is set aside as wiring, so the code's parameter of that name no longer realizes the contract's. Drop ${injectedOwn.length === 1 ? 'it' : 'them'} from \`injectedParams\` (sdd_update_spec, no re-lock).`
-          : '';
-        ctx.addIssue(
-          'warning',
-          'UNREALIZED_PARAM',
-          `Method "${method.name}" of contract "${implementation.contract}" declares ${unrealized.length} `
-          + `parameter(s) ${subject} does not take — ${unrealized.map(found => found.told).join(', ')}. The `
-          + 'contract is promising an argument that would go nowhere, and nothing breaks at a call site to '
-          + `correct it: every brief and every caller built from the contract passes one. Take the parameter in `
-          + `the code, or drop it from the contract.${injectionTold}${throughHandle}${greenPath}`,
-          implementation.id,
-          draftContext,
-          undefined,
-          { at: method.name, covers: unrealized.map(found => found.unit) },
-        );
-      }
-
-      const undeclared = agreed(judgements, 'undeclared');
-      if (undeclared.length > 0) {
-        ctx.addIssue(
-          'warning',
-          'UNDECLARED_PARAM',
-          `${opening} realizing method "${method.name}" of contract "${implementation.contract}" takes `
-          + `${undeclared.length} parameter(s) the contract does not declare and no declared injection accounts `
-          + `for — ${undeclared.map(found => found.told).join(', ')}. An argument a caller must supply that the `
-          + 'design never mentions is how a credential ends up in a signature nobody has read against its '
-          + 'contract. Declare it on the contract, name it in the implementation\'s `injectedParams` when '
-          + 'whatever wires this component up supplies it (a leading or trailing run, with or without its underscore), or take it out of the signature.'
-          + greenPath,
-          implementation.id,
-          draftContext,
-          undefined,
-          { at: method.name, covers: undeclared.map(found => found.unit) },
-        );
-      }
-
-      // ---- 6b / 6c. a record, or a scalar, the code's type cannot hold ----
-      const mismatched = agreed(judgements, 'mismatched');
-      // agreed() keeps the first body's findings: every body must read the
-      // parameter as a plain mismatch, or the longer explanation stays.
-      const plainOnly = mismatched.every(found =>
-        judgements.every(judgement => judgement.mismatched.get(found.unit)?.scalar === true));
-      if (mismatched.length > 0 && plainOnly) {
-        // Two annotations that disagree say it in a sentence: the value the
-        // code takes is not the one the design declares.
-        ctx.addIssue(
-          'warning',
-          'PARAM_TYPE_MISMATCH',
-          `Method "${method.name}" of contract "${implementation.contract}" declares ${mismatched.length} `
-          + `parameter(s) ${subject} annotates as another type — ${mismatched.map(found => found.told).join('; ')}. `
-          + 'A caller built from the contract hands over a different value than the code takes (one value for a list, or a number for a string). '
-          + 'Type the parameter as the contract declares it, or change the contract if the code is right.',
-          implementation.id,
-          draftContext,
-          undefined,
-          { at: method.name, covers: mismatched.map(found => found.unit) },
-        );
-      } else if (mismatched.length > 0) {
-        ctx.addIssue(
-          'warning',
-          'PARAM_TYPE_MISMATCH',
-          `Method "${method.name}" of contract "${implementation.contract}" declares ${mismatched.length} `
-          + `parameter(s) ${subject} takes under a type that cannot hold what it declares — ${mismatched.map(found => found.told).join('; ')}. `
-          + 'Whatever a caller hands over there is never compared with what the design declares — an opaque type names no '
-          + 'field to compare, an object missing the record\'s fields or adding its own is another shape, the one a '
-          + 'credential rides in unread, and an opaque value read as an object where the contract declares a scalar is '
-          + 'an object in its place, and a scalar annotated as another scalar takes a different value — so the check fails closed on it, as it does on an opaque receiver. Type the '
-          + 'parameter as the contract declares it (a record by its code name), or declare on the contract the shape the code really takes.',
-          implementation.id,
-          draftContext,
-          undefined,
-          { at: method.name, covers: mismatched.map(found => found.unit) },
-        );
-      }
-
-      // ---- 7. a name that differs where the declared type agrees ----
-      const renamed = agreed(judgements, 'renamed');
-      if (renamed.length > 0) {
-        ctx.addIssue(
-          'warning',
-          'PARAM_NAME_MISMATCH',
-          (renamed.every(f => !f.undecided)
-            ? `Method "${method.name}" of contract "${implementation.contract}" and ${subject} agree on position and `
-              + `type but not on name for ${renamed.length} parameter(s) — ${renamed.map(f => f.told).join('; ')}. `
-              + 'The contract, the ERD and every brief carry one word and the code answers to another, which is a '
-              + 'rename nobody recorded rather than a different argument — the declared type agreeing is what says '
-              + 'so. Rename one side to the other.'
-            : `Method "${method.name}" of contract "${implementation.contract}" and ${subject} agree on position `
-              + `but not on name for ${renamed.length} parameter(s) — ${renamed.map(f => f.told).join('; ')}. `
-              + 'The contract, the ERD and every brief carry one word and the code answers to another: a rename nobody '
-              + 'recorded, or, where the types cannot be compared, possibly a different argument. Rename one side to '
-              + 'the other, or annotate the parameter with the contract\'s type so the two are compared.'),
-          implementation.id,
-          draftContext,
-          undefined,
-          { at: method.name, covers: renamed.map(found => found.unit) },
-        );
-      }
-
-      // ---- 8. a paired position the two sides read differently ----
-      const disagreed = agreed(judgements, 'optionality');
-      if (disagreed.length > 0) {
-        ctx.addIssue(
-          'warning',
-          'PARAM_OPTIONALITY',
-          `Method "${method.name}" of contract "${implementation.contract}" and ${subject} disagree about whether `
-          + `${disagreed.length} parameter(s) may be left out — ${disagreed.map(f => f.told).join('; ')}. One of `
-          + 'them is telling a caller an argument is required when it is not, or the reverse. Omittable is the '
-          + 'code\'s word for it: a default value and a rest parameter make an argument omittable exactly as a '
-          + 'question mark does.',
-          implementation.id,
-          draftContext,
-          undefined,
-          { at: method.name, covers: disagreed.map(found => found.unit) },
-        );
-      }
-    }
+    const { issues, takenBy } = paramJudgements(ctx);
+    for (const issue of issues) ctx.addIssue(...issue);
 
     // ---- 12. an abstraction's declaration nothing compared ----
     reportUncomparedDeclarations(ctx);

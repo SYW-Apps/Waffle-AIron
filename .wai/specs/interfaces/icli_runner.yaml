@@ -1003,6 +1003,17 @@ methods:
       runHostUser(action: string, options: { user?: string; name?: string; email?: string; unit?:
       string; status?: string; dataDir?: string }): Promise<void>
     returns: async void
+  - name: runReviewWithdraw
+    description: >-
+      `wairon review withdraw <id>`: take a pending review request back, so one an agent made on
+      another branch, or one nobody will answer, stops blocking `wairon lock` without --force. A
+      request no longer pending is refused, naming its status.
+    signature: 'runReviewWithdraw(id: string): async void'
+    returns: async void
+    params:
+      - name: id
+        type: string
+        description: The request id, as the lock refusal and the dev page name it
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-21T16:13:56.900Z'
+updatedAt: '2026-11-23T07:01:16.830Z'

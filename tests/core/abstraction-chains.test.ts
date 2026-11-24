@@ -273,6 +273,30 @@ describe('the narrative walk over a chain', () => {
     expect(issues.filter((i) => i.code === 'UNUSED_METHOD' && /email-sender|sms-sender|channel-sender/.test(i.message))).toEqual([]);
   });
 
+  it('lifts a reach of a narrower abstraction up the chain without coming down a sibling branch', () => {
+    const tree = chain({
+      caller: { dependsOn: ['channel-sender'] },
+      callerStep: { targetComponent: 'channel-sender' },
+      extraComponents: [
+        { id: 'freight-sender', componentType: 'Adapter', abstract: true, description: 'Delivers freight notices.' },
+        { id: 'ups-sender', componentType: 'Adapter', description: 'Delivers through UPS.' },
+      ],
+      extraInterfaces: [
+        { id: 'ifreight_sender', component: 'freight-sender', implements: ['notice-sender'], methods: [SEND] },
+        { id: 'iups_sender', component: 'ups-sender', implements: ['freight-sender'], methods: [SEND] },
+      ],
+      extraImplementations: [
+        { id: 'freight_sender_impl', contract: 'ifreight_sender', sourcePath: 'src/freight-sender.ts', methods: [{ name: 'sendNotice' }] },
+        { id: 'ups_sender_impl', contract: 'iups_sender', methods: [{ name: 'sendNotice', narrative: [{ stepNumber: 1, type: 'local', description: 'Post to UPS.' }] }] },
+      ],
+    });
+    const issues = issuesOf(tree);
+    expect(issues.filter((i) => i.code === 'UNUSED_COMPONENT' && i.specId === 'notice-sender')).toEqual([]);
+    expect(issues.filter((i) => i.code === 'UNUSED_METHOD' && /notice-sender/.test(i.message))).toEqual([]);
+    expect(issues.some((i) => i.code === 'UNUSED_COMPONENT' && i.specId === 'freight-sender')).toBe(true);
+    expect(issues.some((i) => i.code === 'UNUSED_COMPONENT' && i.specId === 'ups-sender')).toBe(true);
+  });
+
   it('leaves the chain unused when nothing calls the broadest abstraction', () => {
     const issues = issuesOf(chain({ noCaller: true }));
     expect(issues.some((i) => i.code === 'UNUSED_COMPONENT' && i.specId === 'email-sender')).toBe(true);

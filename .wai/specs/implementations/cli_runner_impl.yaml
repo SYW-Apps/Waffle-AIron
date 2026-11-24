@@ -4509,6 +4509,18 @@ methods:
         type: throw
         error: WaironError
     detail: full
+  - name: runReviewWithdraw
+    narrative:
+      - stepNumber: 1
+        description: Withdraw the request through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: withdrawReview
+      - stepNumber: 2
+        description: >-
+          Print the request withdrawn, its kind and the branch it was made on; a refusal (unknown
+          id, no longer pending) is printed as an error naming the status, and exits non-zero
+        type: local
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
@@ -4539,4 +4551,4 @@ lint:
         interleave their output. No domain state: nothing to store, list or recover.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-21T15:55:47.788Z'
+updatedAt: '2026-11-23T07:01:17.530Z'

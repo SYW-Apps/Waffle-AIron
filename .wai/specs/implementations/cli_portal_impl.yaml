@@ -770,6 +770,15 @@ methods:
         targetComponent: cli_runner
         targetMethod: runHostUser
     symbol: user <action>
+  - name: reviewWithdraw
+    sourcePath: src/cli/program.ts
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon review withdraw` with its argument to cli_runner.runReviewWithdraw.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runReviewWithdraw
+    symbol: withdraw <id>
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-11-10T11:04:01.992Z'
+updatedAt: '2026-11-23T07:02:15.431Z'

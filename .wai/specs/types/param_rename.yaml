@@ -85,7 +85,17 @@ fields:
       under the old name at the same position. Empty when nothing implements the component. A dry
       run names them too; another project's implementers are never written and are named by breaks
     optional: false
+  - name: codeToRename
+    type: list<string>
+    description: >-
+      The code that keeps the old name until someone edits it, so the next validate would report
+      PARAM_NAME_MISMATCH there: for each method the parameter moved on (the component's and each
+      implementer's that followed), each realizing function an implementation names — and an
+      abstraction's declaration — as <file>: <symbol>, the parameter at the same position. Read from
+      the implementations' recorded sourcePath and symbol; the code itself is not read or written.
+      Absent when no implementation names a file for them.
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-07T06:24:46.657Z'
-updatedAt: '2026-11-22T02:23:17.760Z'
+updatedAt: '2026-11-23T07:01:09.548Z'

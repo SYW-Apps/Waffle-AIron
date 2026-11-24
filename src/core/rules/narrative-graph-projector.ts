@@ -154,6 +154,16 @@ export function walk(ctx: RuleContext, seeds: WalkSeed[], options: WalkOptions =
         enqueueMethod(implementer, methodName);
       }
     }
+    if (ctx.componentMap.get(compId)?.abstract === true) {
+      // The lift up a chain marks the abstraction's method reached and never
+      // enqueues it, so it does not come down a sibling branch to its implementers.
+      for (const abstraction of ctx.abstractionsOf(compId)) {
+        if (ctx.componentMap.get(abstraction)?.abstract !== true) continue;
+        if (!ctx.interfaceMethodsOf(abstraction).some((m) => m.name === methodName)) continue;
+        reachedComponents.add(abstraction);
+        reachedMethods.add(methodKey(abstraction, methodName));
+      }
+    }
   };
 
   const reachComponent = (compId: string): void => {

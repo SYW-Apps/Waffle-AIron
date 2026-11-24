@@ -201,8 +201,9 @@ describe('promote, externalize --as project and rename-alias respell every refer
     expect(JSON.stringify(readYamlFile(specs(root, 'orders', '.index.yaml')))).not.toContain('consumers');
     // The new project reads the shop live by path: the promote takes no pin.
     expect(fs.existsSync(path.join(part, '.wai', 'inputs.lock.yaml'))).toBe(false);
-    // Family-consistent: no new error.
-    expect(newFindings(before, errorsOf(root))).toEqual([]);
+    // Family-consistent: no new error but the use loop the fixture builds — the shop and billing use
+    // each other both ways, which two projects may not (PROJECT_USE_CYCLE, once at each root).
+    expect(newFindings(before, errorsOf(root))).toEqual(['PROJECT_USE_CYCLE [] @-', 'PROJECT_USE_CYCLE [billing] @-']);
   });
 
   it('externalize --as project: the moved types\' consumers respelled `alias::name`, re-exports complete, a sibling pin re-taken; plan = apply; no new error', () => {

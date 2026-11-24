@@ -51,6 +51,7 @@ import {
   type ResolvedMethod,
   type SpecId,
 } from './types.js';
+import path from 'node:path';
 import { buildCodeIndex, buildDependencyEdges, buildImplementationMethods, buildImportGraph, buildOwnershipIndex, buildRealizationIndex, buildSpecIds } from './read-model.js';
 import { SDD_RULES, retiredIssueCodes } from './repository.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
@@ -465,6 +466,14 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
 
   const boundNode = family?.nodes.find((n) => n.namespace === '');
   const ownerId = boundNode?.id ?? '';
+  /** rule_context.partFolderOf — the folder of the bound root's part holding the key, relative to the bound root; undefined when none does. */
+  const partFolderOf = (specId: string): string | undefined => {
+    if (!boundNode) return undefined;
+    const part = boundNode.parts.find((p) => p.directory !== undefined && p.specIds.includes(specId));
+    if (!part?.directory) return undefined;
+    const rel = path.relative(boundNode.directory, part.directory).split(path.sep).join('/');
+    return rel === '' || rel.startsWith('..') || path.isAbsolute(rel) ? undefined : rel;
+  };
   const nodeOf = (key: string | undefined) => (key === undefined ? undefined : family?.nodes.find((n) => n.namespace === key));
   const projectTableOf = (key: string): ResolvedExportTable | undefined =>
     (opts.exportTables ?? []).find((t) => t.level === 'project' && t.owner === key && key !== '');
@@ -1078,6 +1087,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     interfaceMethodsOf,
     abstractionsOf,
     implementersOf,
+    partFolderOf,
     codeIndex,
     realizationIndex,
     importGraph,

@@ -23,7 +23,9 @@ import {
   readLockRecord,
   loadProjectConfig,
   reviewBranchConflict,
+  pendingReviews,
   projectFamily,
+  getLoaderIssues,
   type LockRecord,
   type StateId,
 } from '../core/index.js';
@@ -780,11 +782,21 @@ export function refreshInputs(): InputsRefresh {
 
 /**
  * cli_lock_adapter.assertApprovable — refuse, writing nothing, what no lock
- * may approve: a project requiring approved members with a member project not
+ * may approve: a tree the loader could not read whole (no --force overrides
+ * it), a project requiring approved members with a member project not
  * approved, or a pending lock request made on another branch (unless forced).
  * Inputs are not refused here: the lock refreshes the owed ones first.
  */
 export function assertApprovable(members: ProjectApproval[], force?: boolean): void {
+  // Steps 1-3: the approval records one digest per spec read, so a tree read
+  // in part would be approved as if the rest did not exist.
+  const loaderErrors = getLoaderIssues().filter((issue) => issue.severity === 'error');
+  if (loaderErrors.length > 0) {
+    throw new LockRefusedError(
+      `the tree could not be read whole — ${loaderErrors.map((issue) => `[${issue.specId ?? 'tree'}] ${issue.code}: ${issue.message}`).join(' ')} `
+        + 'Fix the declaration, then lock; --force does not override this. Nothing was written.',
+    );
+  }
   const config = loadProjectConfig();
   // A PROJECT member only: a part has no approval of its own — this lock is its approval.
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
@@ -800,7 +812,7 @@ export function assertApprovable(members: ProjectApproval[], force?: boolean): v
     const here = conflict.checkedOut ? `"${conflict.checkedOut}"` : 'a detached HEAD';
     throw new LockRefusedError(
       `the pending lock request was made on another branch: request ${conflict.requestId} was made on "${conflict.requestedOn}", and this checkout is on ${here}, `
-        + "so this lock would approve a design the request did not ask for. Switch to the request's branch, or pass --force to approve this checkout's design anyway. Nothing was written.",
+        + "so this lock would approve a design the request did not ask for. Switch to the request's branch, withdraw the request with `wairon review withdraw " + conflict.requestId + "` when it is no longer wanted, or pass --force to approve this checkout's design anyway. Nothing was written.",
     );
   }
 }
@@ -920,11 +932,22 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
     const refreshed = evidenceRefresh(onFile, gate, captured);
     if (!refreshed) return onFile;
     writeLockRecord(refreshed.record);
+    bringReviewsUpToDate();
     return refreshed.record;
   }
   // Step 26: the only file this lock writes.
   writeLockRecord(record);
+  // Step 21: the pending review requests, brought up to date by the approval just written.
+  bringReviewsUpToDate();
   return record;
+}
+
+/**
+ * Refresh the pending review requests so a lock request this approval answered is marked locked and
+ * one whose design moved is superseded (another branch's is left alone). Never fails the lock.
+ */
+function bringReviewsUpToDate(): void {
+  try { pendingReviews(); } catch { /* the lock stands whatever the refresh does */ }
 }
 
 /**

@@ -169,9 +169,13 @@ methods:
           and keep the callers: the calling specs (a call, dispatch or register step, a declared
           call) and the code sites the call graph resolved to it, and for a method whose contract
           implements an abstraction the callers of that abstraction's method too, since they reach
-          it through the abstraction. Record each method as callersToReview with what changed, at
-          most ten callers beside the total. Information only: no finding, no gate, and a failed
-          lookup records nothing
+          it through the abstraction, and for a method of an abstraction the callers of every
+          abstraction below it that restates it, which the lookup answers as its own. For a method
+          of an abstraction, record as implementers each contract implementing it at any depth that
+          restates the method with the signature the stored contract held: each will report
+          IMPLEMENTS_MISMATCH until edited. Record each method as callersToReview with what changed,
+          at most ten callers beside the total, and the implementers. Information only: no finding,
+          no gate, and a failed lookup records nothing
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findReferences
@@ -201,7 +205,8 @@ methods:
           Return the change report: what changed, which of the delta's paths changed nothing, or
           that nothing did and nothing was written — the respellings applied, the implementation
           entries cascaded, the public names a removed method was published under, the callers to
-          review of a changed signature, and the tests to revisit
+          review of a changed signature and the implementers that must restate it, and the tests to
+          revisit
         type: return
         outcome: reported
   - name: moveMethods
@@ -573,9 +578,10 @@ methods:
           When the restatement changes the signature of a contract method the stored contract held —
           a parameter added, removed, retyped or made optional or required, the returns changed, or
           whether it completes later; a dry run included — look up its callers as the change report
-          does (updateSpecGated), the abstraction's callers included, and record callersToReview, at
-          most ten callers beside the total. Information only: no finding, no gate, and a failed
-          lookup records nothing
+          does (updateSpecGated), the abstraction's callers and those of every abstraction below it
+          included, and record callersToReview, at most ten callers beside the total, with the
+          implementers that restate the old signature. Information only: no finding, no gate, and a
+          failed lookup records nothing
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: findReferences
@@ -775,4 +781,4 @@ methods:
         outcome: deleted
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-11-22T22:56:24.936Z'
+updatedAt: '2026-11-23T07:01:00.838Z'

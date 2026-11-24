@@ -29,6 +29,7 @@ import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound
 import { exportTablesRule } from './integrity/export-tables.js';
 import { externalDeclarationsRule } from './integrity/external-declarations.js';
 import { memberDeclarationsRule } from './integrity/member-declarations.js';
+import { projectUseCyclesRule } from './integrity/project-use-cycles.js';
 import { projectBoundariesRule } from './doctrine/project-boundaries.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
 import { contractSymmetryRule } from './narrative/contract-symmetry.js';
@@ -291,6 +292,7 @@ export const SDD_RULES: SddRule[] = [
   // projects depend on each other without a loop.
   externalDeclarationsRule,
   memberDeclarationsRule,
+  projectUseCyclesRule,
   projectBoundariesRule,
   cyclesRule,
   // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a

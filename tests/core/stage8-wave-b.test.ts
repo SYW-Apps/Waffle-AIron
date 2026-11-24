@@ -269,10 +269,12 @@ describe('stage 8 — promote and demote', () => {
       .toEqual([{ component: 'schedule-portal', from: 'scheduling', audience: 'project' }]);
     expect((yaml.load(fs.readFileSync(specs(root, 'frontdesk', 'checkin-client', '.index.yaml'), 'utf8')) as { dependsOn: string[] }).dependsOn).toEqual(['scheduling::schedule-portal']);
     expect((yaml.load(fs.readFileSync(specs(part, 'scheduling', 'booking-client', '.index.yaml'), 'utf8')) as { dependsOn: string[] }).dependsOn).toEqual(['clinic::patient-portal']);
+    // The clinic and scheduling use each other both ways: as two projects that is a use loop, the one
+    // error the promote leaves (PROJECT_USE_CYCLE), which the demote below takes back.
     bind(part);
-    expect(validateProject({}).issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(validateProject({}).issues.filter((i) => i.severity === 'error').map((i) => i.code)).toEqual(['PROJECT_USE_CYCLE']);
     bind(root);
-    expect(validateFamily({}).issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect([...new Set(validateFamily({}).issues.filter((i) => i.severity === 'error').map((i) => i.code))]).toEqual(['PROJECT_USE_CYCLE']);
 
     const demoted = migrate(root, { verb: 'demote', alias: 'scheduling' });
     expect(demoted.applied).toBe(true);

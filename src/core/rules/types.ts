@@ -651,6 +651,8 @@ export interface RuleContext {
   abstractionsOf(componentId: string): string[];
   /** rule_context.implementersOf — every component, abstract or concrete, that implements the abstraction through any chain (memoized, cycle-safe). */
   implementersOf(abstractionId: string): string[];
+  /** rule_context.partFolderOf — the folder (relative to the bound root, as the scan recorded it) of the part holding the spec key; undefined for the bound project's own specs and a member project's. Pure over the scan. */
+  partFolderOf(specId: string): string | undefined;
   /** The run's source-code model keyed for lookup (memoized). */
   codeIndex(): CodeIndex;
   /** Which files realize which components, both ways (memoized). */

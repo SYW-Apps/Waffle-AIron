@@ -735,6 +735,10 @@ methods:
         type: int
         description: This process's id
     effect: write
+  - name: withdrawReview
+    description: 'Forward to the core approval portal: take a pending review request back.'
+    signatureFrom: approval_portal.withdrawReview
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-21T15:56:05.831Z'
+updatedAt: '2026-11-23T07:01:14.459Z'

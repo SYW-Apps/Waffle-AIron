@@ -424,13 +424,19 @@ methods:
           against this root, lexically and through links (the declaring project decides containment,
           so a member is accepted or refused identically whichever root loads it); a `../` sibling
           leaves the root by its declaration and is resolved lexically: an escaping contained path
-          is PROJECTPATH_ESCAPE and a directory already on the walk CIRCULAR_SUBPROJECT_REFERENCE,
-          each a loader issue carrying the member's key; a missing one records a member-absent
-          problem in the graph and no loader issue — the family run reports it as MEMBER_NOT_FOUND
-          (stage 4 retires SUBPROJECT_NOT_FOUND), and the declaring project's own gate reports its
-          references into the member as unavailable. A project member whose configuration declares
-          PartOf is a kind-mismatch problem. Each is skipped. Otherwise, below the depth bound, walk
-          the member the same way from step 2, as a member of this root declared under its alias
+          is PROJECTPATH_ESCAPE, each a loader issue carrying the member's key. A directory already
+          on the walk is CIRCULAR_SUBPROJECT_REFERENCE, a loader issue carrying the member's key,
+          only when the walk reached this root through member declarations alone: a containment
+          loop. When a path external led the walk to this root (a project, or a member of it, that
+          uses this root as a producer: a member using its own parent), the member is a project the
+          walk already holds, met again through this root's containment of it, and containment is no
+          dependency: it is skipped with no issue and the project is read once (whether the uses
+          loop is project-use-cycles' to judge); a missing one records a member-absent problem in
+          the graph and no loader issue — the family run reports it as MEMBER_NOT_FOUND (stage 4
+          retires SUBPROJECT_NOT_FOUND), and the declaring project's own gate reports its references
+          into the member as unavailable. A project member whose configuration declares PartOf is a
+          kind-mismatch problem. Each is skipped. Otherwise, below the depth bound, walk the member
+          the same way from step 2, as a member of this root declared under its alias
         type: local
       - stepNumber: 15
         label: tables
@@ -732,4 +738,4 @@ methods:
     symbol: loadGroupSpecs
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-11-21T16:16:31.154Z'
+updatedAt: '2026-11-23T19:16:55.917Z'

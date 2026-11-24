@@ -551,6 +551,19 @@ methods:
       in the same way. The caller separates the concrete implementers from the abstract ones by the
       abstract mark of each component, so the one query serves a rule that counts concrete
       implementers and one that follows the chain downwards.
+  - name: partFolderOf
+    signature: 'partFolderOf(specId: string): string?'
+    params:
+      - name: specId
+        type: string
+        description: A spec key of the run's scan
+    returns: string?
+    description: >-
+      The folder of the part that holds a spec key of the run's scan, relative to the bound root, as
+      the scan recorded it (a part's specIds and directory); absent for a spec of the bound
+      project's own folder and for a member project's. Pure over the scan: the rules that name a
+      path a part's author may have written from the part's folder read it, so none re-derives the
+      part layout.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-11-22T02:15:52.426Z'
+updatedAt: '2026-11-23T07:41:27.150Z'

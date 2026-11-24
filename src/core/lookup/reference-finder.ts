@@ -42,6 +42,35 @@ interface Subject {
   ids: string[];
   names: string[];
   methodName?: string;
+  /** For a method of an abstraction: each abstraction below it that restates it, and the contracts below it (any depth) restating it. */
+  below?: { abstractions: string[]; contracts: { id: string; component: string }[] };
+}
+
+/**
+ * The components implementing `component` through a local implements entry, at
+ * any depth: the abstractions among them (the ones callers may reach it
+ * through) and every contract of theirs that restates `method`.
+ */
+function implementersBelow(index: Index, component: string, method: string): NonNullable<Subject['below']> {
+  const abstractions: string[] = [];
+  const contracts: { id: string; component: string }[] = [];
+  const seen = new Set<string>([component]);
+  let frontier = [component];
+  while (frontier.length > 0) {
+    const next: string[] = [];
+    for (const intf of index.interfaces) {
+      if (!(intf.implements ?? []).some((e) => frontier.includes(e))) continue;
+      if (!intf.methods.some((m) => m.name === method)) continue;
+      if (!contracts.some((c) => c.id === intf.id)) contracts.push({ id: intf.id, component: intf.component });
+      if (!seen.has(intf.component)) {
+        seen.add(intf.component);
+        next.push(intf.component);
+        if (index.components.find((c) => c.id === intf.component)?.abstract === true) abstractions.push(intf.component);
+      }
+    }
+    frontier = next;
+  }
+  return { abstractions, contracts };
 }
 
 const LEVEL: Record<Exclude<LookupImpact, 'none' | 'public'>, number> = { component: 0, subsystem: 1, project: 2, family: 3 };
@@ -121,10 +150,21 @@ function subjectFor(index: Index, target: LookupMatch): Subject {
         };
       }
       const contracts = index.interfaces.filter((i) => i.component === owner && i.methods.some((m) => m.name === name));
-      const impls = index.implementations.filter((impl) => contracts.some((c) => c.id === impl.contract) && impl.methods.some((m) => m.name === name));
-      const realized = impls.flatMap((impl) => impl.methods.filter((m) => m.name === name).map((m) => ({ m, file: m.sourcePath ?? impl.sourcePath })));
+      // An implementation realizes the method in its own sourcePath unless a method entry names another
+      // file: an abstraction's implementation often lists no methods at all (code linkage only).
+      const realizes = (impl: Index['implementations'][number]): boolean => impl.methods.some((m) => m.name === name) || !!impl.sourcePath;
+      const impls = index.implementations.filter((impl) => contracts.some((c) => c.id === impl.contract) && realizes(impl));
+      // The same-named method of every abstraction below it is this one's too: its code is searched with it.
+      const below = implementersBelow(index, owner, name);
+      const belowImpls = index.implementations.filter((impl) => below.abstractions.some((a) => index.interfaces.some((i) => i.id === impl.contract && i.component === a)) && realizes(impl));
+      const realized = [...impls, ...belowImpls].flatMap((impl) => {
+        const entries = impl.methods.filter((m) => m.name === name);
+        return entries.length > 0
+          ? entries.map((m) => ({ m: m as { symbol?: string }, file: m.sourcePath ?? impl.sourcePath }))
+          : [{ m: {} as { symbol?: string }, file: impl.sourcePath }];
+      });
       return {
-        ...empty, refs: [], method: { component: owner, name },
+        ...empty, refs: [], method: { component: owner, name }, below,
         files: [...new Set(realized.map((r) => r.file).filter((f): f is string => !!f).map(pathKey))],
         symbol: realized.map((r) => r.m.symbol).find((s) => !!s) ?? name,
         searched: realized.map((r) => ({ name, symbol: r.m.symbol, sourcePath: r.file })),
@@ -217,10 +257,23 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     ? specIndexMethodReferences(index, subject.method.component, [subject.method.name])
     : specIndexReferencesTo(index, subject.refs);
   const references: LookupReference[] = [];
+  // A method of an abstraction is reached through each abstraction below it that restates it.
+  const viaAbstraction: { ref: SpecReference; through: string }[] = [];
+  if (subject.method && subject.below) {
+    for (const abstraction of subject.below.abstractions) {
+      for (const ref of specIndexMethodReferences(index, abstraction, [subject.method.name])) viaAbstraction.push({ ref, through: abstraction });
+    }
+    for (const contract of subject.below.contracts) {
+      references.push({
+        kind: 'implements', evidence: 'declared', agreement: 'unjudged', fromSpec: contract.id, fromMember: subject.method.name,
+        place: placeOfSpec(index, project, { kind: 'interface', id: contract.id }), inTest: false, linked: true,
+      });
+    }
+  }
   const callerFiles = new Map<LookupReference, string[]>();
   /** The code name each declared caller is realized by, to tell a caller that only forwards to the target. */
   const callerSymbols = new Map<LookupReference, string>();
-  for (const ref of walked) {
+  for (const { ref, through } of [...walked.map((w) => ({ ref: w, through: undefined as string | undefined })), ...viaAbstraction]) {
     // The target's own component and contract are part of it, not references to it; its
     // implementation stays, since one of its methods calling another is a real (component-wide) use.
     if (subject.specIds.has(ref.id) && ref.kind !== 'implementation') continue;
@@ -234,6 +287,7 @@ export function collect(target: string, includeText?: boolean): LookupReferences
       place: placeOfSpec(index, project, ref),
       inTest: false,
       linked: !subject.viaType,
+      ...(through !== undefined ? { through } : {}),
     };
     references.push(entry);
     if (entry.kind === 'call-step' && ref.kind === 'implementation' && member) {

@@ -22,7 +22,7 @@ methods:
       kind gets implemented alike instead of reinvented per instance.
     signature: >-
       resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
-      variantsById: list<VariantDef>): VariantGuidance?
+      variantsById: map<string, VariantDef>): VariantGuidance?
     returns: VariantGuidance?
     params:
       - name: component
@@ -32,7 +32,7 @@ methods:
         type: list<ComponentSpec>
         description: Every component, for finding same-variant siblings.
       - name: variantsById
-        type: list<VariantDef>
+        type: map<string, VariantDef>
         description: The loaded variant registry, keyed by id.
   - name: composeVariantGuidance
     description: >-
@@ -43,7 +43,7 @@ methods:
       construction, not by two copies staying in step.
     signature: >-
       composeVariantGuidance(comps: list<ComponentSpec>, allComponents: list<ComponentSpec>,
-      variantsById: list<VariantDef>): string
+      variantsById: map<string, VariantDef>): string
     returns: string
     params:
       - name: comps
@@ -53,8 +53,8 @@ methods:
         type: list<ComponentSpec>
         description: Every component, for finding same-variant siblings.
       - name: variantsById
-        type: list<VariantDef>
+        type: map<string, VariantDef>
         description: The loaded variant registry, keyed by id.
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-11-20T01:28:09.068Z'
+updatedAt: '2026-11-23T01:52:11.561Z'

@@ -463,6 +463,13 @@ export interface MemberSignatureFact {
   params: ParameterFact[];
   /** The return annotation as written and whitespace-normalized; absent when the signature states none. */
   returns?: string;
+  /**
+   * Whether every implementer must realize the member: an interface, trait or Protocol member, or an
+   * abstract method (a TypeScript `abstract` member, a Python method marked @abstractmethod). False for a
+   * member with a body an implementer inherits. Absent where the reader cannot tell, which the rules read
+   * as not owed.
+   */
+  owed?: boolean;
   /** Whether the signature completes later: declared async, or annotated to return a Promise (an `async def` in Python). */
   completesLater: boolean;
 }

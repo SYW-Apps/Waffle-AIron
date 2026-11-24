@@ -10,6 +10,8 @@ export {
   // `wairon dev` tells the project where its page is shown, so an agent's review request can say.
   announceDevServer,
   withdrawDevServer,
+  // `wairon review withdraw` (approval_portal withdrawReview).
+  withdrawReview,
   loadSystemSpec,
   createMember,
   moveMember,

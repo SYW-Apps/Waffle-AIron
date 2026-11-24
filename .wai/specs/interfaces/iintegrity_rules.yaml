@@ -866,6 +866,35 @@ methods:
           omits on a contract that is not a concrete Portal implementing a Portal abstraction, or
           naming a method no Portal abstraction it implements, directly or through the chain,
           declares
+  - name: projectUseCycles
+    description: >-
+      Rule project-use-cycles. Projects of one family use each other through `alias::name`
+      references: a dependsOn, a call, register or dispatch step, an implements entry, a type
+      position or a re-export naming another project's public name (project_family.references,
+      consumer to producer). Membership is containment and a part is its parent's own subsystems, so
+      neither is a use: a member that uses its parent (a plugin implementing its host's abstraction)
+      is the ordinary one-way shape. When the uses loop — the bound project uses a project that,
+      directly or through others, uses it back — neither side can be built, versioned or approved
+      before the other, as a crate, module or package cycle is refused in the languages the code is
+      written in: PROJECT_USE_CYCLE (error), once, naming the projects around the loop in order and
+      one reference that makes each edge, with the fix: move what both sides use (an abstraction and
+      its types, say) into a project of its own that each uses, or make the member a part again
+      (member demote), whose names are its parent's own. It reads the project graph's nodes and
+      references; a candidate run with no graph reports nothing. A family migration's dry run
+      validates the planned family, so it foretells the finding.
+    signature: 'projectUseCycles(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PROJECT_USE_CYCLE
+        severity: error
+        summary: >-
+          The bound project uses a project that, directly or through others, uses it back: no side
+          can be built, versioned or approved before the other. Move what both use into a project of
+          its own, or make the member a part again.
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-11-22T02:33:31.861Z'
+updatedAt: '2026-11-23T19:16:57.840Z'

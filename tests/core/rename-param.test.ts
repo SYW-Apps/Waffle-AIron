@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { saveSystemSpec, saveSpec, saveComponentSpec, saveInterfaceSpec, invalidateSpecCache, loadInterfaceSpec, loadComponentSpec } from '../../src/core/specs.js';
+import { saveSystemSpec, saveSpec, saveComponentSpec, saveInterfaceSpec, saveImplementationSpec, invalidateSpecCache, loadInterfaceSpec, loadComponentSpec } from '../../src/core/specs.js';
 import { renameParam } from '../../src/core/provision.js';
 import { exportDesign } from '../../src/core/design-export.js';
 import { applyRestatement } from '../../src/core/authoring.js';
@@ -109,5 +109,44 @@ describe('renameParam', () => {
     renameParam('habit-api', 'create', 'frequency', 'cadence');
     invalidateSpecCache();
     expect(() => renameParam('habit-api', 'create', 'habitId', 'frequency')).toThrow(/name-retired/);
+  });
+});
+
+describe('renameParam codeToRename', () => {
+  function chain(): void {
+    project();
+    for (const id of ['base', 'child']) {
+      saveComponentSpec({ id, name: id, description: 'd', subsystem: 'core', componentType: 'Orchestrator', owns: [], dependsOn: [], ...(id === 'base' ? { abstract: true } : {}), createdAt: now, updatedAt: now } as ComponentSpec);
+    }
+    const methods = [{ name: 'run', description: 'Runs.', signature: 'run(item: string): void', returns: 'void', params: [{ name: 'item', type: 'string', description: 'the item' }] }];
+    saveInterfaceSpec({ id: 'ibase', name: 'ibase', description: 'c', component: 'base', methods, createdAt: now, updatedAt: now });
+    saveInterfaceSpec({ id: 'ichild', name: 'ichild', description: 'c', component: 'child', implements: ['base'], methods, createdAt: now, updatedAt: now } as InterfaceSpec);
+    saveImplementationSpec({ id: 'base_impl', name: 'base impl', description: 'd', contract: 'ibase', sourcePath: 'src/base.ts', methods: [{ name: 'run', symbol: 'runBase' }], createdAt: now, updatedAt: now } as never);
+    saveImplementationSpec({ id: 'child_impl', name: 'child impl', description: 'd', contract: 'ichild', sourcePath: 'src/child.ts', methods: [{ name: 'run', sourcePath: 'src/child-run.ts' }], createdAt: now, updatedAt: now } as never);
+    invalidateSpecCache();
+  }
+
+  it('names each realizing function of the method on the component and each implementer, on a dry run and an apply', () => {
+    chain();
+    const expected = ['src/base.ts: runBase', 'src/child-run.ts: run'];
+    const dry = renameParam('base', 'run', 'item', 'entry', true);
+    expect(dry.dryRun).toBe(true);
+    expect(dry.codeToRename).toEqual(expected);
+    invalidateSpecCache();
+    const done = renameParam('base', 'run', 'item', 'entry');
+    expect(done.followed).toEqual(['child.run']);
+    expect(done.codeToRename).toEqual(expected);
+  });
+
+  it('names the file of an implementation that lists no methods (code linkage only)', () => {
+    chain();
+    saveImplementationSpec({ id: 'base_impl', name: 'base impl', description: 'd', contract: 'ibase', sourcePath: 'src/base.ts', methods: [], createdAt: now, updatedAt: now } as never);
+    invalidateSpecCache();
+    expect(renameParam('base', 'run', 'item', 'entry', true).codeToRename).toEqual(['src/base.ts: run', 'src/child-run.ts: run']);
+  });
+
+  it('is absent when no implementation names a file', () => {
+    project();
+    expect(renameParam('habit-api', 'create', 'frequency', 'cadence').codeToRename).toBeUndefined();
   });
 });

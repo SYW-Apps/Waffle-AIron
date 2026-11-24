@@ -339,22 +339,6 @@ lint:
         The one-command-at-a-time guard: a process-local in-flight flag set and cleared around one
         command run, never read after it ends, and meaningless across processes. No domain state:
         nothing to store, list or recover.
-    - code: UNDECLARED_WRITE_CALL
-      at: reviews
-      covers:
-        - review_orchestrator.pending
-      reason: >-
-        Step 5's call to host_core_adapter.pendingReviews is this call: the adapter re-exports the
-        core approval portal, so the analyzer reads the core workflow behind the forward (bringing a
-        pending request up to date saves it).
-    - code: UNDECLARED_WRITE_CALL
-      at: decide
-      covers:
-        - review_orchestrator.status
-        - review_orchestrator.decide
-      reason: >-
-        Steps 5 and 10 call host_core_adapter.reviewStatus and decideReview: the adapter re-exports
-        the core approval portal, so the analyzer reads the core workflow behind each forward.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-20T00:31:21.329Z'
+updatedAt: '2026-11-23T01:52:40.309Z'

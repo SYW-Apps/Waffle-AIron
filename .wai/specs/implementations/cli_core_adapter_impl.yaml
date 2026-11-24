@@ -427,6 +427,13 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: withdrawDevServer
+  - name: withdrawReview
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: withdrawReview
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-07T02:43:11.409Z'
+updatedAt: '2026-11-23T07:01:15.113Z'

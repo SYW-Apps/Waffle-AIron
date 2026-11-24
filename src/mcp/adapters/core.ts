@@ -31,6 +31,8 @@ export {
   reviseRules,
   reviseDebt,
   reviseProject,
+  // imcp_core_adapter.ensureProjectInitialized — the bootstrap completed without overwriting: configuration and L0, each only when absent.
+  ensureProjectInitialized,
   getStatusReport,
   approvalVerdict,
   composeAgentBrief,

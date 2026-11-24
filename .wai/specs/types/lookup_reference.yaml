@@ -41,7 +41,14 @@ fields:
       The reference names the element's id; false for a bare-name mention that may mean something
       else
     optional: false
+  - name: through
+    type: string
+    description: >-
+      For a reference to a method of an abstraction found on the same-named method of an abstraction
+      below it: that abstraction's component id, the one the referrer reaches this method through.
+      Absent for a direct reference.
+    optional: true
 methods: []
 sourcePath: src/models/lookup.ts
 createdAt: '2026-10-25T19:07:36.277Z'
-updatedAt: '2026-10-25T19:07:37.096Z'
+updatedAt: '2026-11-23T07:41:24.907Z'

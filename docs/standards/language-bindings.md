@@ -54,7 +54,7 @@ its `typeMapping`; the others are the idiomatic spellings to follow.
 | `date`, `datetime`, `duration` | `string` (ISO 8601) | `chrono` types | `date`, `datetime`, `timedelta` | `time.Time`, `time.Duration` | `java.time` / `DateTime`, `TimeSpan` |
 | `list<T>` | `T[]` | `Vec<T>` | `list[T]` | `[]T` | `List<T>` |
 | `set<T>` | `Set<T>` | `HashSet<T>` | `set[T]` | `map[T]struct{}` | `Set<T>` |
-| `map<K, V>` | `Record<K, V>` | `HashMap<K, V>` | `dict[K, V]` | `map[K]V` | `Map<K, V>` / `Dictionary<K, V>` |
+| `map<K, V>` | `Record<K, V>` (a `Map<K, V>` is as valid a realization) | `HashMap<K, V>` | `dict[K, V]` | `map[K]V` | `Map<K, V>` / `Dictionary<K, V>` |
 | `T?` | `T \| null` | `Option<T>` | `T \| None` | `*T` | nullable `T` / `T?` |
 | `A \| B` | `A \| B` | `enum` with payload | `A \| B` | an interface both implement | `sealed` hierarchy |
 | `async T` | `Promise<T>` | `async fn` → `T` | `async def` → `T` | a blocking call or a channel | `CompletableFuture<T>` / `suspend` / `Task<T>` |

@@ -41,7 +41,7 @@ describe('member signatures: the exact TypeScript reader', () => {
     expect(signatures.send).toEqual([{
       params: [{ name: 'recipient', type: 'string', optional: false }, { name: 'retries', type: 'number', optional: true }],
       returns: 'void',
-      completesLater: false,
+      completesLater: false, owed: true,
     }]);
     expect(signatures.fetch[0].returns).toBe('Promise<string>');
     expect(signatures.fetch[0].completesLater).toBe(true);
@@ -103,7 +103,7 @@ describe('member signatures: the exact TypeScript reader', () => {
     expect(signatures.ship[0]).toEqual({
       params: [{ name: 'weight', type: 'number', optional: false }, { name: 'express', type: 'boolean', optional: true }],
       returns: 'string',
-      completesLater: false,
+      completesLater: false, owed: true,
     });
     expect(signatures.poll[0].completesLater).toBe(true);
   });
@@ -151,7 +151,7 @@ describe('member signatures: the Python reader', () => {
     expect(signatures.send).toEqual([{
       params: [{ name: 'recipient', type: 'str', optional: false }, { name: 'retries', type: 'int', optional: true }],
       returns: 'None',
-      completesLater: false,
+      completesLater: false, owed: true,
     }]);
     expect(signatures.fetch[0].completesLater).toBe(true);
     expect(signatures.fetch[0].returns).toBe('str');
@@ -160,7 +160,7 @@ describe('member signatures: the Python reader', () => {
 
   it('keeps a parameter unannotated and a return absent when the Protocol states none', () => {
     const facts = read('src/sender.py', 'from typing import Protocol\n\n\nclass Sender(Protocol):\n    def send(self, recipient): ...\n');
-    expect(facts.typeShapes!.Sender.signatures!.send[0]).toEqual({ params: [{ name: 'recipient', optional: false }], completesLater: false });
+    expect(facts.typeShapes!.Sender.signatures!.send[0]).toEqual({ params: [{ name: 'recipient', optional: false }], completesLater: false, owed: true });
   });
 
   it('records a Protocol written with a typing prefix or a subscript, and a staticmethod keeps its first parameter', () => {
@@ -375,6 +375,52 @@ describe('an abstraction declaration is promised surface: export-conformance', (
     expect(found(tree, 'UNDECLARED_EXPORT')).toEqual([]);
     expect(found(tree, 'UNDECLARED_PUBLIC_MEMBER')).toEqual([]);
   });
+  it('reports an extra member of an interface that no contract method names, used or not', () => {
+    const tree = flat({
+      declaration: 'export interface NoticeSender { sendNotice(recipient: string): void; flush(): void }\n',
+      implementer: "import type { NoticeSender } from './notice_sender';\nexport class EmailSender implements NoticeSender { sendNotice(recipient: string): void { void recipient; } flush(): void {} }\n",
+    });
+    const issues = found(tree, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].specId).toBe('notice_sender_impl');
+    expect(issues[0].message).toContain('NoticeSender.flush');
+    expect(issues[0].message).not.toContain('NoticeSender.sendNotice');
+  });
+  it('reports an extra abstract method of an abstract class but not a helper with a body that something uses', () => {
+    const tree = flat({
+      declaration: 'export abstract class NoticeSender {\n  abstract sendNotice(recipient: string): void;\n  abstract flush(): void;\n  trim(value: string): string { return value.trim(); }\n  describe(): string { return this.trim(" x "); }\n}\n',
+      implementer: "import { NoticeSender } from './notice_sender';\nexport class EmailSender extends NoticeSender { sendNotice(recipient: string): void { void this.trim(recipient); void this.describe(); } flush(): void {} }\n",
+    });
+    const messages = found(tree, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl').map((i) => i.message).join('\n');
+    expect(messages).toContain('NoticeSender.flush');
+    expect(messages).not.toContain('NoticeSender.trim');
+  });
+  it('Python: reports an extra @abstractmethod of an ABC, but not an extra method with a body', () => {
+    const impl = 'from .notice_sender import NoticeSender\n\n\nclass EmailSender(NoticeSender):\n    def send_notice(self, recipient: str) -> None:\n        print(recipient)\n\n    def flush(self) -> None:\n        pass\n';
+    const withAbstract = flat({
+      language: 'python',
+      declaration: 'from abc import ABC, abstractmethod\n\n\nclass NoticeSender(ABC):\n    @abstractmethod\n    def send_notice(self, recipient: str) -> None: ...\n\n    @abstractmethod\n    def flush(self) -> None: ...\n',
+      implementer: impl,
+    });
+    const messages = found(withAbstract, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl').map((i) => i.message).join('\n');
+    expect(messages).toContain('NoticeSender.flush');
+    expect(messages).not.toContain('NoticeSender.send_notice');
+    const withBody = flat({
+      language: 'python',
+      declaration: 'from abc import ABC, abstractmethod\n\n\nclass NoticeSender(ABC):\n    @abstractmethod\n    def send_notice(self, recipient: str) -> None: ...\n\n    def flush(self) -> None:\n        return None\n',
+      implementer: impl,
+    });
+    expect(found(withBody, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl')).toEqual([]);
+  });
+  it('Python: reports an extra member of a Protocol', () => {
+    const tree = flat({
+      language: 'python',
+      declaration: 'from typing import Protocol\n\n\nclass NoticeSender(Protocol):\n    def send_notice(self, recipient: str) -> None: ...\n    def flush(self) -> None: ...\n',
+    });
+    const messages = found(tree, 'UNDECLARED_PUBLIC_MEMBER').filter((i) => i.specId === 'notice_sender_impl').map((i) => i.message).join('\n');
+    expect(messages).toContain('NoticeSender.flush');
+    expect(messages).not.toContain('NoticeSender.send_notice');
+  });
   it('promises only the declaration: a name beside it that another component takes still crosses', () => {
     const tree = flat({
       declaration: 'export interface NoticeSender { sendNotice(recipient: string): void }\nexport const CHANNEL = "mail";\n',
@@ -476,6 +522,32 @@ describe('dependency-conformance over a chain of abstractions', () => {
     expect(found(flat({ language: 'python' }), 'UNDECLARED_DEPENDENCY')).toEqual([]);
     const reverse = flat({ language: 'python', declaration: 'from typing import Protocol\n\nfrom .email_sender import EmailSender\n\n\nclass NoticeSender(Protocol):\n    def send_notice(self, recipient: str) -> None: ...\n\n\nDEFAULT = EmailSender\n' });
     expect(found(reverse, 'UNDECLARED_DEPENDENCY').filter((i) => i.message.includes('src/notice_sender.py'))).toHaveLength(1);
+  });
+
+  /** The kennel holds `held` (Animal or Dog) and its narrative calls that component; dog.ts restates nothing. */
+  function narrowDeclaration(held: 'animal' | 'dog'): FixtureTree {
+    const tree = chain({
+      'src/dog.ts': "import type { Animal } from './animal';\nexport interface Dog extends Animal {}\n",
+      // The implementer names no implements clause, so only the declaration the checker lands on says which abstraction a call is of.
+      'src/golden.ts': "export class GoldenRetriever { speak(volume: number): string { return 'woof'.repeat(volume); } }\n",
+      'src/kennel.ts': `import type { ${held === 'dog' ? 'Dog' : 'Animal'} } from './${held}';\nexport class Kennel { constructor(private readonly animal: ${held === 'dog' ? 'Dog' : 'Animal'}) {} feed(): void { this.animal.speak(1); } }\n`,
+    });
+    for (const c of tree.components!) if (c.id === 'kennel') c.dependsOn = [held];
+    for (const i of tree.implementations!) {
+      if (i.id !== 'kennel_impl') continue;
+      const step = i.methods![0].narrative![0] as { targetComponent: string };
+      step.targetComponent = held;
+      (i.methods![0] as { detail?: string }).detail = 'full';
+    }
+    return tree;
+  }
+  it('lands a call typed by a narrower declaration, whose member the base declares, on the narrower abstraction', () => {
+    expect(found(narrowDeclaration('dog'), 'UNNARRATED_CALL')).toEqual([]);
+    expect(found(narrowDeclaration('dog'), 'CALL_STEP_UNREALIZED')).toEqual([]);
+  });
+  it('still lands a call typed by the base declaration on the base', () => {
+    expect(found(narrowDeclaration('animal'), 'UNNARRATED_CALL')).toEqual([]);
+    expect(found(narrowDeclaration('animal'), 'CALL_STEP_UNREALIZED')).toEqual([]);
   });
 });
 

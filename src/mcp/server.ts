@@ -82,6 +82,7 @@ import {
   getLoaderIssues,
   readProjectSystem,
   publishedUsesOf,
+  ensureProjectInitialized,
 } from './adapters/core.js';
 import { unparsedSpecSentence } from '../models/unparsed-spec.js';
 import { standing as treeStanding } from './adapters/upgrade.js';
@@ -106,7 +107,7 @@ import { relationHealth, type ExternalAddition, type ExternalRequest, type Exter
 import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork, listRules } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
-import { declaredExternals, declaredMembers } from '../models/project.js';
+import { declaredExternals, declaredMembers, effectiveProjectId } from '../models/project.js';
 import { narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
 import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
@@ -797,6 +798,7 @@ function renderCallersToReview(entries: CallersToReview[] | undefined): string[]
   for (const entry of entries) {
     const capped = entry.total > entry.callers.length ? ` (${entry.callers.length} of ${entry.total}; sdd_find_references lists all)` : '';
     lines.push(`- ${entry.method} (${entry.change}): ${entry.callers.join(', ')}${capped}`);
+    if (entry.implementers?.length) lines.push(`  implementers to restate it (each reports IMPLEMENTS_MISMATCH until edited): ${entry.implementers.join(', ')}`);
   }
   return lines;
 }
@@ -807,6 +809,7 @@ const callersToReviewOutput = z.array(z.object({
   change: z.string().describe('What changed in its signature, in one line.'),
   callers: z.array(z.string()).describe('Up to ten callers: calling specs as <component>.<method>, then code sites as path:line.'),
   total: z.number().describe('How many callers the lookup found; more than callers lists when it was capped.'),
+  implementers: z.array(z.string()).optional().describe('For a method of an abstraction: each contract implementing it, at any depth, that restates the old signature, as <contract>.<method>; each reports IMPLEMENTS_MISMATCH until edited.'),
 })).optional().describe(
   'For each contract method whose signature this write changed (or, on a dry run, would change), the callers to review. '
   + 'Information only: never a finding, never a gate. Absent when no signature changed or nothing calls it.',
@@ -1185,6 +1188,7 @@ const findReferencesOutput = {
       agreement: z.enum(['confirmed', 'declared-only', 'observed-only', 'unjudged']),
       fromSpec: z.string().optional(), fromMember: z.string().optional(), file: z.string().optional(), line: z.number().optional(),
       place: lookupPlaceOutput, inTest: z.boolean(), linked: z.boolean(),
+      through: z.string().optional().describe('For a reference found on the same-named method of an abstraction below the target: that abstraction\'s component id. Absent for a direct reference.'),
     })),
     waivers: z.array(z.object({ kind: z.enum(['unclaimed', 'carried', 'lint-allow']), subject: z.string(), reason: z.string() })),
     impact: z.enum(['none', 'component', 'subsystem', 'project', 'family', 'public']),
@@ -2274,9 +2278,25 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           } as unknown as SystemSpec,
           fields: systemInputFields,
         };
-        // Step 2: through the authoring seam. Step 3: the receipt — the L0 is a
+        // Step 5 (mcp_orchestrator.initializeSystem): a project started over MCP
+        // alone has no configuration; create the default one as `wairon init`
+        // would, and say so. A configuration that exists is left as it is. The L0
+        // the helper may bootstrap is the one step 6 then writes over, so it does
+        // not count as an existing system.
+        // The id as `wairon init` picks it: the name slugified, else `<slug>-project`
+        // when the id grammar refuses the slug (a device name, a reserved word).
+        const projectId = effectiveProjectId({ name }) ?? effectiveProjectId({ name: name + ' project' }) ?? 'project';
+        const bootstrapped = ensureProjectInitialized(name, projectId, vision);
+        // Step 6: through the authoring seam. Step 7: the receipt — the L0 is a
         // singleton, read back by the id "system", the handle sdd_get_spec takes.
         const receipt = writeSpec(restatement);
+        // Whether the L0 existed is decided by the bootstrap, before the write: an L0 it just wrote is this
+        // call's own, so the receipt says it was written, with no re-authoring or carried-forward notice.
+        if (bootstrapped.wroteSystem) {
+          receipt.replacedExisting = false;
+          receipt.notices = receipt.notices.filter((n) => !/already existed — re-authored in place|^Carried forward \(not expressible|^CLEARED by omission/.test(n));
+        }
+        if (bootstrapped.wroteConfig) receipt.notices.push('Created the default project configuration .wai/project.yaml (this folder had none), as `wairon init --yes` would; its id is ' + JSON.stringify(projectId) + '. Edit it with sdd_configure_project.');
         return writeReceipt(
           `Successfully ${receipt.replacedExisting ? 're-authored' : 'initialized'} L0 System Spec for "${name}".`,
           receipt,
@@ -2752,7 +2772,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ id: string; method: string; param: string; newName: string; dryRun?: boolean; search?: string[] }>(server,
     'sdd_rename_param',
     {
-      description: 'Rename a parameter of a contract method. The parameter moves on every interface of the component that declares the method, keeping its place, type, description and optionality, and its old name joins the parameter\'s rename trace (previousNames), which the design export shows as `formerly` so a generator or consumer can tell the rename from a signature change; each signature is re-derived from the params, a method whose signatureFrom names this one follows by itself, and an HTTP endpoint path placeholder `{old}` (or `/:old`) is respelled on the method\'s own binding and on every method whose signatureFrom takes its signature (the URL a caller sends is unchanged). Renaming a parameter of an abstraction\'s method renames the parameter at the same position on every implementer of this project that holds it under the old name, directly or through a chain of abstractions, all or nothing; the dry run and the report name each (`followed`), and another project\'s implementers are never written (`breaks` names the consumers that implement the abstraction). Prose is never rewritten. Refuses, writing nothing: a name another parameter of an implementer that would follow holds or retired (name-taken or name-retired, naming it), a name that is no identifier, or a reserved word, in the language of an implementer that would follow (invalid-name, naming it), a component no project in reach holds (spec-missing), one another project holds (chained-spec — by its alias, its key, or a bare id only a member holds; the refusal names that project and how it is changed there), a method no contract of the component declares (method-missing), a parameter the method does not declare, or takes from another project\x27s method or a signature type (param-missing, naming that source), a new name that is not an identifier, or not in rules.naming.variables when that is set and the component implements no extension point (an `alias::name` entry; invalid-name), and a name another parameter of the method holds (name-taken) or retired (name-retired). Asked of a method that takes its signature from another of this project\x27s contract methods (a Portal verb with signatureFrom), the rename is made on that source and reaches the asked method through its signatureFrom; `routedFrom` names the method asked for. Returns the component, method, from and to, the interfaces it moved in, the placeholders respelled, `publishedIn` (the export entries carrying the method, and every published verb forwarding it), `published` (the same, method-granular, with former names) and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) that call it there — a call by a former method name included. With dryRun it answers all of that and writes nothing. The approval reads the contract as changed until the next `wairon lock`, as with any edit.',
+      description: 'Rename a parameter of a contract method. The parameter moves on every interface of the component that declares the method, keeping its place, type, description and optionality, and its old name joins the parameter\'s rename trace (previousNames), which the design export shows as `formerly` so a generator or consumer can tell the rename from a signature change; each signature is re-derived from the params, a method whose signatureFrom names this one follows by itself, and an HTTP endpoint path placeholder `{old}` (or `/:old`) is respelled on the method\'s own binding and on every method whose signatureFrom takes its signature (the URL a caller sends is unchanged). Renaming a parameter of an abstraction\'s method renames the parameter at the same position on every implementer of this project that holds it under the old name, directly or through a chain of abstractions, all or nothing; the dry run and the report name each (`followed`), and another project\'s implementers are never written (`breaks` names the consumers that implement the abstraction). Prose is never rewritten. Refuses, writing nothing: a name another parameter of an implementer that would follow holds or retired (name-taken or name-retired, naming it), a name that is no identifier, or a reserved word, in the language of an implementer that would follow (invalid-name, naming it), a component no project in reach holds (spec-missing), one another project holds (chained-spec — by its alias, its key, or a bare id only a member holds; the refusal names that project and how it is changed there), a method no contract of the component declares (method-missing), a parameter the method does not declare, or takes from another project\x27s method or a signature type (param-missing, naming that source), a new name that is not an identifier, or not in rules.naming.variables when that is set and the component implements no extension point (an `alias::name` entry; invalid-name), and a name another parameter of the method holds (name-taken) or retired (name-retired). Asked of a method that takes its signature from another of this project\x27s contract methods (a Portal verb with signatureFrom), the rename is made on that source and reaches the asked method through its signatureFrom; `routedFrom` names the method asked for. Returns the component, method, from and to, the interfaces it moved in, the placeholders respelled, `publishedIn` (the export entries carrying the method, and every published verb forwarding it), `published` (the same, method-granular, with former names), `codeToRename` (the code that keeps the old name until someone edits it, `<file>: <symbol>` for each realizing function of each method the parameter moved on, an abstraction\x27s declaration included, from the recorded sourcePath and symbol of the implementations; the code itself is never read or written; absent when none names a file) and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) that call it there — a call by a former method name included. With dryRun it answers all of that and writes nothing. The approval reads the contract as changed until the next `wairon lock`, as with any edit.',
       inputSchema: {
         id: z.string().describe('The component whose contract method\'s parameter is renamed (namespaced if needed)'),
         method: z.string().describe('The contract method'),
