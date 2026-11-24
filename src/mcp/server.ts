@@ -689,7 +689,7 @@ const externalStatusesOutput = {
  * narrative or landed nowhere at all, so an edit that never happened read
  * exactly like one that did.
  */
-function renderChangeReport(report: SpecChangeReport): string {
+function renderChangeReport(report: SpecChangeReport, searched?: boolean): string {
   const lines = [report.dryRun ? `DRY RUN — nothing was written. ${report.summary}` : report.summary];
   for (const change of report.changes) {
     const to = change.after === undefined ? '' : `: ${JSON.stringify(change.after)}`;
@@ -711,7 +711,7 @@ function renderChangeReport(report: SpecChangeReport): string {
   // is a field nobody reads, and the whole point is that the change which
   // creates the collision is the one that says so.
   lines.push(...renderRespellings(report.respellings));
-  lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun, report.rerouted === true));
+  lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun, report.rerouted === true, searched));
   // A changed abstraction removes nothing published, yet breaks every consumer implementing it.
   if (!(report.published ?? []).length && (report.breaks ?? []).length > 0) {
     lines.push('', `BREAKS ${report.breaks!.length} consumer(s) implementing this abstraction: each reports IMPLEMENTS_MISMATCH until it restates the changed methods (this project never writes them):`);
@@ -731,7 +731,7 @@ function renderChangeReport(report: SpecChangeReport): string {
  * breaks there — the block a rename's dry run has always carried, for a delete
  * and a method removal alike.
  */
-function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray<ExternalConsumer>, dryRun: boolean, rerouted = false): string[] {
+function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray<ExternalConsumer>, dryRun: boolean, rerouted = false, searched?: boolean): string[] {
   if (published.length === 0) return [];
   // A route moved (sdd_set_endpoints) takes nothing away: a client spelling the old route breaks.
   const loses = rerouted
@@ -739,7 +739,10 @@ function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray
     : `— a consumer of these ${dryRun ? 'would lose' : 'lost'} what goes`;
   const lines = ['', `PUBLISHED as: ${published.map((u) => `${u.publicName}${u.members.length ? ` (${u.members.join(', ')})` : ''}`).join('; ')} ${loses}.`];
   if (breaks.length === 0) {
-    lines.push('No consumer in reach uses it (the family, and the searched folders when `search` names any).');
+    // Said once: an unsearched answer is about the family alone, and says how to look further.
+    lines.push(searched === false
+      ? 'No consumer in this family uses it; consumers outside it were not searched — pass `search: [<folder holding sibling checkouts>]` to name them.'
+      : 'No consumer in reach uses it (the family, and the searched folders when `search` names any).');
     return lines;
   }
   lines.push(`BREAKS ${breaks.length} consumer(s), whose specs still reach it:`);
@@ -756,15 +759,30 @@ function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray
  * component or type the subsystem no longer publishes, or a wildcard
  * re-export (`from` alone) of a subsystem that now publishes nothing.
  */
-function danglingReExports(subsystem: string, after: PublicInterface[]): { publicName: string; item?: string }[] {
+function danglingReExports(subsystem: string, after: PublicInterface[]): { publicName: string; item?: string; unconsumable?: string }[] {
   const system = loadSystemSpec();
   const entries = ((system as { publicInterfaces?: PublicInterface[] } | null)?.publicInterfaces ?? []).filter((e) => e.from === subsystem);
   const published = new Set(after.flatMap((pi) => [pi.component, pi.typeDef, pi.as].filter((v): v is string => typeof v === 'string' && v !== '')));
-  const out: { publicName: string; item?: string }[] = [];
+  const out: { publicName: string; item?: string; unconsumable?: string }[] = [];
   for (const e of entries) {
     const item = e.component ?? e.typeDef;
     if (item) {
-      if (!published.has(item)) out.push({ publicName: e.as ?? item, item });
+      if (published.has(item)) continue;
+      // Step 6: the role the L0 entry itself declares decides what can serve it, once the subsystem's entry is gone.
+      const comp = e.component ? loadComponentSpec(e.component) : null;
+      let unconsumable: string | undefined;
+      if (comp) {
+        const implemented = e.role === 'implement';
+        const serves = implemented
+          ? ['Portal', 'Adapter'].includes(comp.componentType) || comp.abstract === true
+          : ['Portal', 'Observer'].includes(comp.componentType);
+        if (!serves) {
+          unconsumable = implemented
+            ? `${comp.componentType} "${comp.id}" cannot back an extension point (only a Portal, an Adapter or an abstract component can)`
+            : `${comp.componentType} "${comp.id}" cannot be called across the boundary (only a Portal or an Observer can)`;
+        }
+      }
+      out.push({ publicName: e.as ?? item, item, ...(unconsumable ? { unconsumable } : {}) });
     } else if (after.length === 0) {
       out.push({ publicName: e.as ?? subsystem });
     }
@@ -805,7 +823,7 @@ function unpublishedImplementers(
 }
 
 /** A deletion as one answer: what went (or would), what still references it, and the tests to revisit. */
-function renderDeletion(deletion: SpecDeletion): string {
+function renderDeletion(deletion: SpecDeletion, searched?: boolean): string {
   const others = deletion.removed.filter((r) => !(r.kind === deletion.kind && r.id === deletion.id));
   const lines = [deletion.dryRun
     ? `DRY RUN — nothing was deleted. Deleting ${deletion.kind} "${deletion.id}" would remove ${deletion.removed.length} spec${deletion.removed.length === 1 ? '' : 's'}.`
@@ -817,7 +835,7 @@ function renderDeletion(deletion: SpecDeletion): string {
       : 'LEFT DANGLING (forced) — validate reports each:');
     lines.push(...deletion.references.map((r) => `- ${r.kind} "${r.id}" (${r.position}) -> ${r.target.kind} "${r.target.id}"`));
   }
-  lines.push(...renderBreaks(deletion.published, deletion.breaks ?? [], deletion.dryRun));
+  lines.push(...renderBreaks(deletion.published, deletion.breaks ?? [], deletion.dryRun, false, searched));
   lines.push(...renderTestsToRevisit(deletion.testsToRevisit));
   if (deletion.findings?.length) {
     lines.push('', `FINDINGS the deletion ${deletion.dryRun ? 'would leave' : 'left'} that the tree does not report now:`);
@@ -2541,7 +2559,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Steps 6-7: the L0 entries re-exporting what the replacement no longer publishes.
         const dangling = danglingReExports(subsystem, publicInterfaces as PublicInterface[]);
         const danglingBlock = dangling.length
-          ? `\n${dangling.map((d) => `- L0 export "${d.publicName}" re-exports ${d.item ? `"${d.item}" ` : ''}from subsystem "${subsystem}", which ${d.item ? 'no longer publishes it' : 'publishes nothing now'}: will report EXPORT_INVALID. Restore the subsystem entry, or drop the L0 entry (sdd_update_spec on the system).`).join('\n')}\nConsumers outside this family were not searched: sdd_list_consumers with search names them.`
+          ? `\n${dangling.map((d) => `- L0 export "${d.publicName}" re-exports ${d.item ? `"${d.item}" ` : ''}from subsystem "${subsystem}", which ${d.item ? 'no longer publishes it' : 'publishes nothing now'}: will report EXPORT_INVALID${d.unconsumable ? `, and EXPORT_UNCONSUMABLE: ${d.unconsumable}` : ''}. Restore the subsystem entry, or drop the L0 entry (sdd_update_spec on the system).`).join('\n')}\nConsumers outside this family were not searched: sdd_list_consumers with search names them.`
           : '';
         return structured(
           `${dryRun === true ? 'DRY RUN — nothing was written. Would update' : 'Updated'} public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).\n${renderChangeReport(report)}${unpublishedBlock}${danglingBlock}`,
@@ -3885,7 +3903,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const breaks = consumers.map((c) => narrowedToUses(c, deletion.published)).filter((c): c is ExternalConsumer => c !== null);
         const answer = breaks.length > 0 ? { ...deletion, breaks } : deletion;
         // Step 4.
-        return structured(renderDeletion(answer), answer);
+        return structured(renderDeletion(answer, (search ?? []).length > 0), answer);
       } catch (e) {
         return errText(String(e));
       }
@@ -3944,10 +3962,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           else breaks.push({ ...c, uses: implemented });
         }
         if (breaks.length > 0) report.breaks = breaks;
-        if (implementedNames.size > 0 && !(search ?? []).length) {
+        const searched = (search ?? []).length > 0;
+        // A removal's published block already says what was not searched: say it once.
+        if (implementedNames.size > 0 && !searched && !(report.published ?? []).length) {
           report.notices.push(`Consumers implementing ${[...implementedNames].join(', ')} outside this family were not searched: pass search (a folder holding sibling checkouts) to name them.`);
         }
-        return structured(renderChangeReport(report), report);
+        return structured(renderChangeReport(report, removes ? searched : undefined), report);
       } catch (e) {
         return errText(String(e));
       }
