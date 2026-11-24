@@ -8,8 +8,10 @@ methods: []
 sourcePath: src/mcp/status-summary.ts
 values:
   - name: summary
-    description: Approval, counts per level and subsystem, errors and warnings by code, and what to read next
+    description: >-
+      Approval, counts per level and subsystem, any finding the report itself carries (a tree that
+      will not load), and what to read next — sdd_validate_tree for the findings
   - name: full
     description: The whole report, as the CLI's wairon status prints it
 createdAt: '2026-10-25T19:07:13.593Z'
-updatedAt: '2026-10-25T19:09:39.253Z'
+updatedAt: '2026-11-24T19:50:37.585Z'

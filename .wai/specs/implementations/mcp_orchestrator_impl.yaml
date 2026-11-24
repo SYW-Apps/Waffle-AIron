@@ -723,9 +723,11 @@ methods:
         description: >-
           Unless detail full was asked for, cut the composed report to its summary: the leading
           staleness and transaction lines, the approval verdict, one count line per level and
-          subsystem (members as projects), the findings counted by code, the Externals section when
-          present, and one line naming detail full and sdd_search_specs for more. The whole report
-          stays the CLI's: only this answer is cut
+          subsystem (members as projects), any finding line the report itself carries counted by
+          code, the Externals section when present, and one line naming detail full,
+          sdd_search_specs and sdd_validate_tree (status does not validate, so the findings are
+          validate's to list). A report that failed to load is the explanation and is never cut. The
+          whole report stays the CLI's: only this answer is cut
         type: local
       - stepNumber: 8
         description: >-
@@ -1207,4 +1209,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-24T08:58:59.754Z'
+updatedAt: '2026-11-24T19:50:50.467Z'

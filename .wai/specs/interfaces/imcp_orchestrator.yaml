@@ -63,7 +63,8 @@ methods:
       declared under by its parent and the parent project's name (only within the request's reach),
       and the members this root declares with their paths. Members print as projects, not
       subsystems. By default the answer is the summary an agent's context can hold (approval
-      verdict, counts per level and subsystem, findings by code, what to read next); detail full
+      verdict, counts per level and subsystem, any finding the report itself carries, what to read
+      next — sdd_validate_tree for the findings, since status does not validate); detail full
       answers the whole report.
     signature: 'getStatus(subsystem?: string, recursive?: bool, detail?: StatusDetail): string'
     returns: string
@@ -676,4 +677,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-24T08:28:35.387Z'
+updatedAt: '2026-11-24T19:50:49.268Z'
