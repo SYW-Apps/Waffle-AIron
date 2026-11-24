@@ -175,6 +175,8 @@ export interface SpecDeletion {
    * nothing removed is published.
    */
   published: ExportUse[];
+  /** What the deletion leaves that the tree does not report now, rehearsed on a copy: `<severity> <CODE> [spec] message`. */
+  findings?: string[];
   /** The consumers whose specs reach a published name on a member it carries. Filled by the door that read them. */
   breaks?: ExternalConsumer[];
 }
@@ -1368,14 +1370,17 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
       ? testsInvalidatedBy(ref.kind, ref.id, methods, [spec as Spec | null], bound)
       : [];
   });
-  // Steps 18-19: the plan alone.
-  if (dryRun) return { kind, id, deleted: false, dryRun: true, removed, references, testsToRevisit, published };
-  // Steps 20-21: references a deletion would leave dangling refuse it, unless forced.
+  // Steps 18-24: the deletion rehearsed on a copy — what it leaves that the tree does not report now.
+  const findings = rehearseWrite(['error', 'warning', 'notice'], () => {
+    for (const ref of removed) coreDeleteSpec(ref.kind as WritableSpecKind, ref.id);
+  }).added.map((f) => f.text);
+  // Steps 25-26: the plan alone.
+  if (dryRun) return { kind, id, deleted: false, dryRun: true, removed, references, testsToRevisit, published, findings };
+  // Steps 27-28: references a deletion would leave dangling refuse it, unless forced.
   if (references.length > 0 && !force) throw new Error(referencedRefusal(kind, id, references));
-  // Steps 22-23: innermost first, so a container goes after its content.
+  // Innermost first, so a container goes after its content.
   for (const ref of removed) coreDeleteSpec(ref.kind as WritableSpecKind, ref.id);
-  // Step 24.
-  return { kind, id, deleted: true, dryRun: false, removed, references, testsToRevisit, published };
+  return { kind, id, deleted: true, dryRun: false, removed, references, testsToRevisit, published, findings };
 }
 
 /**
@@ -1591,17 +1596,23 @@ function callersToReviewOf(before: InterfaceSpec | null, after: InterfaceSpec): 
     if (change === null) continue;
     const { callers, restating } = callersOf(before.component, method.name, [...(before.implements ?? []), ...(after.implements ?? [])]);
     // Each contract below restating the method with the signature the stored contract held will report IMPLEMENTS_MISMATCH.
+    const later: string[] = [];
     const implementers = restating
       .filter((id) => id !== before.id)
       .filter((id) => {
-        const held = (loadSpec('interface', id) as InterfaceSpec | null)?.methods?.find((m) => m.name === method.name);
-        return held !== undefined && signatureChange(signatureView(was), signatureView(held)) === null;
+        const heldSpec = loadSpec('interface', id) as InterfaceSpec | null;
+        const held = heldSpec?.methods?.find((m) => m.name === method.name);
+        if (held === undefined || signatureChange(signatureView(was), signatureView(held)) !== null) return false;
+        // A contract implementing the edited component directly reports now; one further down, once the level above is restated.
+        if (!(heldSpec?.implements ?? []).includes(before.component)) later.push(`${id}.${method.name}`);
+        return true;
       })
       .map((id) => `${id}.${method.name}`);
     if (callers.length === 0 && implementers.length === 0) continue;
     out.push({
       method: `${before.component}.${method.name}`, change, callers: callers.slice(0, CALLERS_LISTED), total: callers.length,
       ...(implementers.length > 0 ? { implementers } : {}),
+      ...(later.length > 0 ? { implementersLater: later } : {}),
     });
   }
   return out;
@@ -1771,8 +1782,30 @@ export function moveMethods(
     true,
   );
   if (foreign !== undefined) throw new Error(foreign);
-  // Steps 4-7: the judgement as a hook, the move through the core adapter.
-  return coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun);
+  // Steps 4-12: the judgement as a hook; the move rehearsed on a copy of the tree, errors and warnings.
+  const { result: rehearsed, added } = rehearseWrite(['error', 'warning'], () => coreMoveMethods(from, to, methods, methodMoveGate(from), false));
+  const findings = added.map((f) => f.text);
+  // Steps 13-14: a rule refused the move on the copy.
+  if (rehearsed !== undefined && rehearsed.refusals.length > 0) return { ...rehearsed, dryRun: dryRun === true };
+  // Steps 15-16: a move that would leave a new error is refused, dry run or not.
+  const errors = added.filter((f) => f.severity === 'error');
+  if (rehearsed !== undefined && errors.length > 0) {
+    return {
+      ...rehearsed,
+      moved: false,
+      edits: [],
+      repointed: 0,
+      refusals: errors.map((e) => e.text.replace(/^error /, '')),
+      notices: [...rehearsed.notices, 'Nothing was written.'],
+      summary: `Refused: moving ${methods.join(', ')} from "${from}" to "${to}" would leave ${errors.length === 1 ? 'an error' : `${errors.length} errors`} validate reports — rehearsed in a copy of the tree. Nothing was written.`,
+      dryRun: dryRun === true,
+      findings,
+    };
+  }
+  // Steps 17-18: a dry run answers the rehearsal.
+  if (dryRun && rehearsed !== undefined) return { ...rehearsed, moved: false, dryRun: true, findings };
+  // Steps 19-20: the move, written once for real.
+  return { ...coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun), findings };
 }
 
 /**
@@ -1842,6 +1875,44 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
 interface RehearsedFinding { severity: string; key: string; text: string }
 
 /**
+ * Rehearse a write in a private copy of the bound tree: judge the copy before
+ * and after `act` (code-judging findings set aside, the given severities kept)
+ * and answer what `act` returned with the findings it brings, counted by code
+ * and spec. A rehearsal that throws names nothing: `result` is undefined.
+ */
+function rehearseWrite<T>(severities: string[], act: () => T): { result: T | undefined; added: RehearsedFinding[] } {
+  const root = getProjectRoot();
+  const copy = rehearsalCopy();
+  try {
+    return runWithProjectRoot(copy, () => {
+      const codeCodes = new Set(listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
+      const judged = (): RehearsedFinding[] => validateProject().issues
+        .filter((i) => severities.includes(i.severity) && !codeCodes.has(i.code))
+        .map((i) => ({
+          severity: i.severity,
+          key: `${i.severity}|${i.code}|${i.specId ?? ''}`,
+          text: `${i.severity} ${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.split(copy).join(root).replace(/\.\s*$/, '')}`,
+        }));
+      const before = judged();
+      const result = act();
+      const seen = new Map<string, number>();
+      for (const f of before) seen.set(f.key, (seen.get(f.key) ?? 0) + 1);
+      const added: RehearsedFinding[] = [];
+      for (const f of judged()) {
+        const left = seen.get(f.key) ?? 0;
+        if (left > 0) seen.set(f.key, left - 1);
+        else added.push(f);
+      }
+      return { result: result as T | undefined, added };
+    });
+  } catch {
+    return { result: undefined, added: [] };
+  } finally {
+    discardRehearsal(copy);
+  }
+}
+
+/**
  * Steps 13-25 of moveSpec: rehearse the move in a private copy of the bound
  * tree — written there, the copy judged before and after — then answer the
  * rehearsal as the plan (a dry run), refuse a move that leaves a new error,
@@ -1885,18 +1956,18 @@ function rehearsedMove(kind: WritableSpecKind, id: string, ids: string[], subsys
     discardRehearsal(copy);
   }
   const findings = added.map((f) => f.text);
-  // Steps 20-21: a dry run answers the rehearsal.
-  if (dryRun) {
-    const plan = foldMoves(reports, true);
-    return { ...plan, notices: [...plan.notices, ...notices], findings };
-  }
-  // Steps 22-23: a move that leaves a new error is refused before anything is written.
+  // Steps 20-21: a move that leaves a new error is refused — a dry run exactly as the move.
   const errors = added.filter((f) => f.severity === 'error');
   if (errors.length > 0) {
     throw new Error(
       `Refused: moving ${kind} ${ids.length > 1 ? ids.map((sid) => `"${sid}"`).join(', ') : `"${id}"`} to ${subsystem ? `subsystem "${subsystem}"` : 'system level'} would leave ${errors.length === 1 ? 'an error' : `${errors.length} errors`} validate reports — the move was rehearsed in a copy of the tree:\n`
       + `${errors.map((e) => `- ${e.text}`).join('\n')}\n\nNothing was written.`,
     );
+  }
+  // Steps 22-23: a dry run answers the rehearsal.
+  if (dryRun) {
+    const plan = foldMoves(reports, true);
+    return { ...plan, notices: [...plan.notices, ...notices], findings };
   }
   // Steps 24-25: written for real, one move after another — the set was judged and rehearsed whole.
   const report = foldMoves(ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false, parent)), false);

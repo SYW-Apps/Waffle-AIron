@@ -51,6 +51,7 @@ import {
   loadComponentSpec,
   loadComponentSpecs,
   loadInterfaceSpec,
+  loadInterfaceSpecs,
   loadImplementationSpec,
   loadTypeSpec,
   loadGroupSpecs,
@@ -108,7 +109,7 @@ import { validateProject, validateRegistry, validateFamily, measurePackImpact, f
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
 import { declaredExternals, declaredMembers, effectiveProjectId } from '../models/project.js';
-import { narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
+import { consumerMethodLabels, narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
 import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
 import { practiceSections, resolvePractices } from '../models/practices.js';
@@ -232,7 +233,8 @@ function publicInterfacesReplacement(
   if (twice.length) {
     return `Refusing to set the public interfaces of subsystem "${subsystem}": the list names ${twice.join(', ')} more than once. `
       + 'An entry is identified by the component and interface it is bound to — or, not yet bound, by its type and '
-      + 'details — so two entries sharing one are the same entry stated twice. Drop the duplicate. Nothing was written.';
+      + 'details — so two entries sharing one are the same entry stated twice. Drop the duplicate. '
+      + 'An own entry is identified by component AND interface, so the same component published both for call and implement is legal when each entry narrows with `interface:`. Nothing was written.';
   }
   // Only an Adapter is published as shared (public-surface-shared); a component
   // not found yet is left to the validator, which names it.
@@ -394,7 +396,38 @@ function migrationTool(request: MigrationRequest, dryRun?: boolean): CallToolRes
     const how = report.outcome.restored ? 'the family was restored exactly as before' : 'some files could not be restored: a person must run `wairon doctor --fix` in the project';
     return errText(`the ${request.verb} migration failed (${report.outcome.failure ?? 'unknown failure'}) and ${how}.\n${body}`);
   }
-  return structured(body, view);
+  // The text block of an externalize summarizes the per-file change list; the structured content keeps it whole.
+  return structured(request.verb === 'externalize' ? JSON.stringify(summarizedChanges(view), null, 2) : body, view);
+}
+
+/** The one sentence a rename answers with when no `search` folder was given: who was not looked for. */
+function unsearchedNote(search: string[] | undefined, dryRun: boolean | undefined): { searchNote?: string } {
+  return dryRun === true && (search === undefined || search.length === 0)
+    ? { searchNote: 'Consumers outside this family were not searched — pass `search: [<folder holding sibling checkouts>]` to name them.' }
+    : {};
+}
+
+/** The per-file change list as counts per project and action, the first few paths, then "N more". */
+function summarizedChanges(view: Record<string, unknown>): Record<string, unknown> {
+  const plan = view.plan as { changes?: { project: string; path: string; action: string }[] } | undefined;
+  const changes = plan?.changes ?? [];
+  if (!plan || changes.length <= 8) return view;
+  const counts = new Map<string, number>();
+  for (const c of changes) counts.set(`${c.project} ${c.action}`, (counts.get(`${c.project} ${c.action}`) ?? 0) + 1);
+  const shown = changes.slice(0, 5).map((c) => `${c.action} ${c.project}: ${c.path}`);
+  return {
+    ...view,
+    plan: {
+      ...plan,
+      changes: undefined,
+      changesSummary: {
+        total: changes.length,
+        counts: [...counts].map(([key, n]) => `${key}: ${n}`),
+        first: shown,
+        more: `${changes.length - shown.length} more (the full list is in the structured content)`,
+      },
+    },
+  };
 }
 
 /** A family-migration report as a tool answers it: the plan without its private rehearsal, the edits without their write calls. */
@@ -707,6 +740,38 @@ function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray
   return lines;
 }
 
+/**
+ * The implementers a replaced export table leaves unpublished: for every
+ * abstraction the subsystem published with role implement, the components of
+ * OTHER subsystems whose contract lists it in `implements` and whose subsystem
+ * the old table served but the new one does not (an entry dropped entirely
+ * serves nobody; an entry without consumers serves every subsystem).
+ */
+function unpublishedImplementers(
+  subsystem: string,
+  before: PublicInterface[],
+  after: PublicInterface[],
+): { component: string; subsystem: string; abstraction: string }[] {
+  const serves = (list: PublicInterface[], abstraction: string, consumer: string): boolean =>
+    list.some((pi) => pi.role === 'implement' && !pi.from && pi.component === abstraction
+      && ((pi.consumers ?? []).length === 0 || (pi.consumers ?? []).includes(consumer)));
+  const abstractions = [...new Set(before.filter((pi) => pi.role === 'implement' && !pi.from && pi.component).map((pi) => pi.component!))];
+  if (abstractions.length === 0) return [];
+  const components = loadComponentSpecs();
+  const out: { component: string; subsystem: string; abstraction: string }[] = [];
+  for (const intf of loadInterfaceSpecs()) {
+    const owner = components.find((c) => c.id === intf.component);
+    if (!owner || owner.subsystem === subsystem) continue;
+    for (const abstraction of abstractions) {
+      if (!(intf.implements ?? []).includes(abstraction)) continue;
+      if (serves(before, abstraction, owner.subsystem) && !serves(after, abstraction, owner.subsystem)) {
+        out.push({ component: owner.id, subsystem: owner.subsystem, abstraction });
+      }
+    }
+  }
+  return out;
+}
+
 /** A deletion as one answer: what went (or would), what still references it, and the tests to revisit. */
 function renderDeletion(deletion: SpecDeletion): string {
   const others = deletion.removed.filter((r) => !(r.kind === deletion.kind && r.id === deletion.id));
@@ -722,6 +787,10 @@ function renderDeletion(deletion: SpecDeletion): string {
   }
   lines.push(...renderBreaks(deletion.published, deletion.breaks ?? [], deletion.dryRun));
   lines.push(...renderTestsToRevisit(deletion.testsToRevisit));
+  if (deletion.findings?.length) {
+    lines.push('', `FINDINGS the deletion ${deletion.dryRun ? 'would leave' : 'left'} that the tree does not report now:`);
+    lines.push(...deletion.findings.map((f) => `- ${f}`));
+  }
   return lines.join('\n');
 }
 
@@ -798,7 +867,12 @@ function renderCallersToReview(entries: CallersToReview[] | undefined): string[]
   for (const entry of entries) {
     const capped = entry.total > entry.callers.length ? ` (${entry.callers.length} of ${entry.total}; sdd_find_references lists all)` : '';
     lines.push(`- ${entry.method} (${entry.change}): ${entry.callers.join(', ')}${capped}`);
-    if (entry.implementers?.length) lines.push(`  implementers to restate it (each reports IMPLEMENTS_MISMATCH until edited): ${entry.implementers.join(', ')}`);
+    if (entry.implementers?.length) {
+      const later = new Set(entry.implementersLater ?? []);
+      const now = entry.implementers.filter((i) => !later.has(i));
+      if (now.length) lines.push(`  implementers to restate it (report IMPLEMENTS_MISMATCH now): ${now.join(', ')}`);
+      if (later.size) lines.push(`  implementers further down (report IMPLEMENTS_MISMATCH after the level above is restated): ${[...later].join(', ')}`);
+    }
   }
   return lines;
 }
@@ -810,6 +884,7 @@ const callersToReviewOutput = z.array(z.object({
   callers: z.array(z.string()).describe('Up to ten callers: calling specs as <component>.<method>, then code sites as path:line.'),
   total: z.number().describe('How many callers the lookup found; more than callers lists when it was capped.'),
   implementers: z.array(z.string()).optional().describe('For a method of an abstraction: each contract implementing it, at any depth, that restates the old signature, as <contract>.<method>; each reports IMPLEMENTS_MISMATCH until edited.'),
+  implementersLater: z.array(z.string()).optional().describe('The part of implementers further down a chain (an implementer that is itself an abstraction implemented below): each reports IMPLEMENTS_MISMATCH only after the level above is restated.'),
 })).optional().describe(
   'For each contract method whose signature this write changed (or, on a dry run, would change), the callers to review. '
   + 'Information only: never a finding, never a gate. Absent when no signature changed or nothing calls it.',
@@ -913,6 +988,9 @@ const specDeletionOutput = {
   ),
   breaks: z.array(breakingConsumerOutput).optional().describe(
     'The consumers in reach (family members included, and checkouts in the searched folders) whose specs reach a published name on a member the deletion takes — the projects it breaks. Absent when none breaks.',
+  ),
+  findings: z.array(z.string()).optional().describe(
+    'What the deletion leaves that the tree does not report now, rehearsed on a copy: `<severity> <CODE> [spec] message`, errors, warnings and notices.',
   ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecDeletion | keyof typeof staleServerOutput, z.ZodTypeAny>;
@@ -2385,17 +2463,18 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem: string; publicInterfaces: { role?: 'call' | 'implement'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string; shared?: boolean }[] }>(server,
+  reg<{ subsystem: string; dryRun?: boolean; publicInterfaces: { role?: 'call' | 'implement'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string; shared?: boolean }[] }>(server,
     'sdd_set_public_interfaces',
     {
       description: 'Set (replace) an existing subsystem\'s export table (its publicInterfaces). An OWN item binds details to the component (and optional interface) that realizes it, or exports a type the subsystem owns (typeDef). A RE-EXPORT names another subsystem of the project in `from` and one component (optionally narrowed with `interface`) or one typeDef from what it exports, optionally renamed with `as` — `from` alone re-exports everything it exports; details are optional on a re-export, which inherits its target\'s. An own Adapter item may say `shared: true` to publish the Adapter to every subsystem of the project. The export kind is derived from the backing Portal\'s transport, so `type` is no longer authored; `role: implement` exports an extension point consumers implement. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a component its owning subsystem publishes; a re-export is a name, not a licence. A replacement, not a merge: an entry left out is removed. An own entry\'s identity is its component and interface, a re-export\'s its source, item and name, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
       inputSchema: {
         subsystem: z.string().describe('The L1 subsystem id to update'),
         publicInterfaces: z.array(publicInterfaceItemInput).describe('The full replacement list of the subsystem\'s export table: own items and re-exports'),
+        dryRun: z.boolean().optional().describe('Answer what the replacement would change — and each implementer it would leave unpublished (ABSTRACTION_UNPUBLISHED) — and write nothing'),
       },
       outputSchema: specChangeReportOutput,
     },
-    ({ subsystem, publicInterfaces }) => {
+    ({ subsystem, publicInterfaces, dryRun }) => {
       try {
         // mcp_orchestrator.setPublicInterfaces step 1: the subsystem whose
         // published surface is being set.
@@ -2407,9 +2486,14 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const delta = publicInterfacesReplacement(subsystem, sub.publicInterfaces ?? [], publicInterfaces);
         if (typeof delta === 'string') return errText(delta);
         // Step 3: through the authoring seam. Step 4: the change report.
-        const report = updateSpecGated('subsystem', subsystem, delta, undefined, 'sdd_set_public_interfaces');
+        const report = updateSpecGated('subsystem', subsystem, delta, dryRun === true ? true : undefined, 'sdd_set_public_interfaces');
+        // Step 5: each implementer the removed consumers leave without a publication to reach.
+        const unpublished = unpublishedImplementers(subsystem, sub.publicInterfaces ?? [], publicInterfaces as PublicInterface[]);
+        const unpublishedBlock = unpublished.length
+          ? `\n${unpublished.map((u) => `- ${u.component} (subsystem "${u.subsystem}") implements "${u.abstraction}": will report ABSTRACTION_UNPUBLISHED. Restore "${u.subsystem}" as a consumer of the role-implement entry for "${u.abstraction}", or drop the implements entry of "${u.component}".`).join('\n')}`
+          : '';
         return structured(
-          `Updated public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).\n${renderChangeReport(report)}`,
+          `${dryRun === true ? 'DRY RUN — nothing was written. Would update' : 'Updated'} public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).\n${renderChangeReport(report)}${unpublishedBlock}`,
           report,
         );
       } catch (e) {
@@ -2704,7 +2788,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // A contract a consumer depends on as a whole counts too (external_consumer.narrowedToUses).
         const published = report.publishedIn.map((publicName) => ({ publicName, kind: 'component' as const, members: [method] }));
         const breaks = consumers.map((c) => narrowedToUses(c, published)).filter((c): c is ExternalConsumer => c !== null);
-        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
+        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}), ...unsearchedNote(search, dryRun) });
       } catch (e) {
         return errMessage(e);
       }
@@ -2733,7 +2817,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const consumers = externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d)));
         const report = renameType(resolved, newId, dryRun, allowShadowed);
         const breaks = consumers.map((c) => narrowedToUses(c, report.publishedIn)).filter((c): c is ExternalConsumer => c !== null);
-        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
+        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}), ...unsearchedNote(search, dryRun) });
       } catch (e) {
         return errMessage(e);
       }
@@ -2762,7 +2846,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const consumers = externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d)));
         const report = renameField(resolved, field, newName, dryRun);
         const breaks = consumers.map((c) => narrowedToUses(c, report.publishedIn)).filter((c): c is ExternalConsumer => c !== null);
-        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
+        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}), ...unsearchedNote(search, dryRun) });
       } catch (e) {
         return errMessage(e);
       }
@@ -2792,7 +2876,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Every entry publishing the method or a follower verb forwarding it,
         // a call by a former name included: who must follow.
         const breaks = consumers.map((c) => narrowedToUses(c, report.published ?? [])).filter((c): c is ExternalConsumer => c !== null);
-        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}) });
+        return json({ ...report, ...(breaks.length > 0 ? { breaks } : {}), ...unsearchedNote(search, dryRun) });
       } catch (e) {
         return errMessage(e);
       }
@@ -2818,7 +2902,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // tool answers with — so a mistyped id reads as a mistyped id rather than
         // as a rule refusing the design; then the move is judged as a whole and
         // writes all of it or none of it.
-        return json(moveMethods(qualifiedComponentId(from), qualifiedComponentId(to), methods, dryRun));
+        const report = moveMethods(qualifiedComponentId(from), qualifiedComponentId(to), methods, dryRun);
+        const found = report.findings?.length
+          ? `\n\nFINDINGS the move ${report.dryRun ? 'would bring' : report.moved ? 'brought' : 'would bring (refused)'}:\n${report.findings.map((f) => `- ${f}`).join('\n')}`
+          : '';
+        return text(`${JSON.stringify(report, null, 2)}${found}`);
       } catch (e) {
         return errMessage(e);
       }
@@ -4039,8 +4127,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const consumers = externalConsumers(search?.map((d) => path.resolve(root, d)));
         const lines = consumers.length
           ? consumers.map((c) => {
-            const calls = (c.uses ?? []).flatMap((u) => u.members.filter((m) => m !== 'type').map((m) => `${u.publicName}.${m}`));
-            return `${c.project} (${c.section}.${c.alias})${c.found ? ` [${c.directory}]` : ''}: ${c.names.length ? c.names.join(', ') : 'declares it, uses no name yet'}${c.broken?.length ? ` — still writes ${c.broken.join(', ')} (no longer exported)` : ''}${calls.length ? `; calls ${calls.join(', ')}` : ''}`;
+            const { calls, implements: implemented } = consumerMethodLabels(c);
+            return `${c.project} (${c.section}.${c.alias})${c.found ? ` [${c.directory}]` : ''}: ${c.names.length ? c.names.join(', ') : 'declares it, uses no name yet'}${c.broken?.length ? ` — still writes ${c.broken.join(', ')} (no longer exported)` : ''}${calls.length ? `; calls ${calls.join(', ')}` : ''}${implemented.length ? `\n  implements: ${implemented.join(', ')}` : ''}`;
           })
           : [`No project ${search?.length ? 'of the family in reach, nor in the searched folders,' : 'of the family in reach'} consumes this project.${search?.length ? '' : ' Pass search with the folder holding sibling checkouts to look outside the family.'}`];
         return structured(lines.join('\n'), { consumers });

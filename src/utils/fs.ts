@@ -97,7 +97,7 @@ export function ignoreWriteLock(waiDir: string): boolean {
   const held = fileIo.exists(file) ? fileIo.readText(file) : null;
   if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === WRITE_LOCK_IGNORE)) return false;
   const body = held === null
-    ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${WRITE_LOCK_IGNORE}\n`
+    ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${WRITE_LOCK_IGNORE}\n# Machine-local state (review requests, the dev server's address): never committed.\n.local/\n`
     : `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${WRITE_LOCK_IGNORE}\n`;
   writeFile(file, body);
   return true;

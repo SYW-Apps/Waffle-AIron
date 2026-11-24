@@ -107,6 +107,8 @@ export interface ExportUse {
   specs?: string[];
   /** Per member reached, the consumer's specs whose references reach THAT member, sorted. */
   memberSpecs?: Record<string, string[]>;
+  /** The members the consumer reaches by implementing them (an `implements` entry), not by calling them; sorted. */
+  implementedMembers?: string[];
   /** On a rename's published list: the entry's former public names (its rename trace). */
   formerNames?: string[];
   /** On a rename's published list: per member, its former method names (previousNames). */

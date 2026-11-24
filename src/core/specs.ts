@@ -2247,6 +2247,8 @@ export interface CallersToReview {
   total: number;
   /** For a method of an abstraction: each contract implementing it, at any depth, that restates the old signature, as `<contract>.<method>`. */
   implementers?: string[];
+  /** The part of `implementers` further down a chain: each reports IMPLEMENTS_MISMATCH only after the level above is restated. */
+  implementersLater?: string[];
 }
 
 export interface SpecChangeReport {
@@ -2427,6 +2429,13 @@ export interface MethodMoveReport {
    * covered `<from>.<method>` unit names `<to>.<method>`. Empty on a refusal.
    */
   carried: CarriedRekey[];
+  /**
+   * The design findings the move brings, read off a rehearsal on a copy of the
+   * tree: each error and warning the result reports that the tree does not now,
+   * as `<severity> <CODE> [spec] message`. Empty when it brings none or the
+   * rehearsal could not run.
+   */
+  findings?: string[];
 }
 
 // ---------------------------------------------------------------------------

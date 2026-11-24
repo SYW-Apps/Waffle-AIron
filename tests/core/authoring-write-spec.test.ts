@@ -502,6 +502,6 @@ describe('deleteSpec — the delete names the tests of the methods it took away'
 
   it('reports nothing for a spec without methods', () => {
     project({ testRoots: ['tests'] });
-    expect(deleteSpec('component', 'checkout')).toEqual({ kind: 'component', id: 'checkout', deleted: true, dryRun: false, removed: [{ kind: 'component', id: 'checkout' }], references: [], testsToRevisit: [], published: [] });
+    expect(deleteSpec('component', 'checkout')).toEqual({ kind: 'component', id: 'checkout', deleted: true, dryRun: false, removed: [{ kind: 'component', id: 'checkout' }], references: [], testsToRevisit: [], published: [], findings: [] });
   });
 });

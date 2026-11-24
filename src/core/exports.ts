@@ -882,7 +882,7 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
   // Steps 3-4: none, an empty usage.
   if (references.length === 0) return { consumer, producer, used: [], unexported: [] };
   const table = resolveProjectExportTable(producer || undefined);
-  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string>; memberSpecs: Map<string, Set<string>> }>();
+  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string>; memberSpecs: Map<string, Set<string>>; implemented?: Set<string> }>();
   const unexported: CrossProjectReference[] = [];
   // Step 5: each reference counted under the name it bound to.
   for (const ref of references) {
@@ -897,6 +897,7 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
     if (member !== undefined) {
       slot.members.add(member);
       slot.memberSpecs.set(member, (slot.memberSpecs.get(member) ?? new Set<string>()).add(ref.specId));
+      if (ref.position === 'implements' && member !== 'type') (slot.implemented ??= new Set<string>()).add(member);
     }
     used.set(entry.publicName, slot);
   }
@@ -906,7 +907,7 @@ export function exportUsageOf(consumer: string, producer: string): ExportUsage {
     producer,
     used: [...used.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort(), ...memberSpecsOf(u.memberSpecs) })),
+      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort(), ...memberSpecsOf(u.memberSpecs), ...implementedOf(u.implemented) })),
     unexported,
   };
 }
@@ -917,6 +918,11 @@ function memberSpecsOf(perMember: Map<string, Set<string>>): { memberSpecs?: Rec
   const out: Record<string, string[]> = {};
   for (const member of [...perMember.keys()].sort()) out[member] = [...perMember.get(member)!].sort();
   return { memberSpecs: out };
+}
+
+/** The members a consumer implements, sorted, as an ExportUse records them; nothing when it implements none. */
+function implementedOf(implemented: Set<string> | undefined): { implementedMembers?: string[] } {
+  return implemented !== undefined && implemented.size > 0 ? { implementedMembers: [...implemented].sort() } : {};
 }
 
 /** The public name a bare import spells, as the consumer's `use` on the alias writes it. */
@@ -978,7 +984,7 @@ export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
     && ((r.form === 'alias' && r.authored.split('::').length === 2 && r.authored.startsWith(`${alias}::`))
       || (r.form === 'import' && (r.importedVia ?? '').split(', ').includes(alias))));
   // Step 3: each counted under the public name it spells, with the members its position reaches.
-  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string>; memberSpecs: Map<string, Set<string>> }>();
+  const used = new Map<string, { kind: 'component' | 'type'; members: Set<string>; specs: Set<string>; memberSpecs: Map<string, Set<string>>; implemented?: Set<string> }>();
   for (const ref of through) {
     const publicName = ref.form === 'import' ? importedName(ref.authored, use) : ref.authored.slice(alias.length + 2);
     const slot = used.get(publicName) ?? { kind: ref.position === 'type' ? 'type' as const : 'component' as const, members: new Set<string>(), specs: new Set<string>(), memberSpecs: new Map<string, Set<string>>() };
@@ -986,6 +992,7 @@ export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
     for (const member of membersAt(ref)) {
       slot.members.add(member);
       slot.memberSpecs.set(member, (slot.memberSpecs.get(member) ?? new Set<string>()).add(ref.specId));
+      if (ref.position === 'implements' && member !== 'type') (slot.implemented ??= new Set<string>()).add(member);
     }
     used.set(publicName, slot);
   }
@@ -995,7 +1002,7 @@ export function pinnedUsageOf(consumer: string, alias: string): ExportUsage {
     producer: alias,
     used: [...used.entries()]
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort(), ...memberSpecsOf(u.memberSpecs) })),
+      .map(([publicName, u]) => ({ publicName, kind: u.kind, members: [...u.members].sort(), specs: [...u.specs].sort(), ...memberSpecsOf(u.memberSpecs), ...implementedOf(u.implemented) })),
     unexported: [],
   };
 }

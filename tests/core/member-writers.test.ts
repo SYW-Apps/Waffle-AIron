@@ -115,6 +115,8 @@ describe('createMember', () => {
     expect(part).toEqual(['keep-me', '.spec-write.lock*', '']);
     const project = fs.readFileSync(path.join(rootDir, 'packages', 'billing', '.wai', '.gitignore'), 'utf8');
     expect(project).toContain('.spec-write.lock*');
+    // A fresh file also carries the review store's `.local/` line, once, so the store never dirties it later.
+    expect(project.split(/\r?\n/).filter((l) => l.trim() === '.local/')).toHaveLength(1);
   });
 
   it('writes the shorthand without a description, and a vision naming the member of this project', () => {

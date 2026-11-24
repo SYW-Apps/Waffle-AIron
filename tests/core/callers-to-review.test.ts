@@ -332,6 +332,18 @@ describe('an abstraction chain', () => {
     expect(entry.method).toBe('carrier.quote');
     expect(entry.callers).toContain('hall.run');
     expect(entry.implementers?.sort()).toEqual(['idhl.quote', 'iparcel_carrier.quote']);
+    // Only the direct implementer reports now; dhl, one level further down, reports once parcel_carrier is restated.
+    expect(entry.implementersLater).toEqual(['idhl.quote']);
+  });
+
+  it('has no later level when every implementer is direct', () => {
+    seedChain();
+    updateSpecGated('interface', 'idhl', { implements: ['carrier'] });
+    invalidateSpecCache();
+    const report = updateSpecGated('interface', 'icarrier', {
+      methods: [{ name: 'quote', params: [{ name: 'weight', type: 'string', description: 'w' }, { name: 'zone', type: 'string', description: 'z', optional: true }] }],
+    }, true);
+    expect(report.callersToReview?.[0]?.implementersLater).toBeUndefined();
   });
 
   it('leaves out an implementer that already restates the new signature', () => {

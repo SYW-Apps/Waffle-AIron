@@ -443,10 +443,30 @@ describe('moveMethods', () => {
     // to give methods away.
     root = books({ complexity: { maxComponentDependencies: 2 } });
 
-    const report = gatedMoveMethods('intake', 'ledger', ['post', 'audit']);
+    // The gate alone (the rehearsal's design findings are the next test's subject).
+    const report = moveMethods('intake', 'ledger', ['post', 'audit'], methodMoveGate('intake'));
 
     expect(report.moved).toBe(true);
     expect(declared(root, 'iledger')).toEqual(['reconcile', 'post', 'audit']);
+  });
+
+  it('rehearses the move: a dry run names the findings, and a move leaving a new error is refused with nothing written', () => {
+    root = books({ complexity: { maxComponentDependencies: 2 } });
+    const before = snapshot(path.join(root, '.wai'));
+
+    const dry = gatedMoveMethods('intake', 'ledger', ['post', 'audit'], true);
+    expect(dry.dryRun).toBe(true);
+    expect(dry.moved).toBe(false);
+    expect(dry.findings?.some((f) => f.includes('UNDECLARED_DEPENDENCY_CALL'))).toBe(true);
+    expect(dry.refusals.length).toBeGreaterThan(0);
+    expect(snapshot(path.join(root, '.wai'))).toEqual(before);
+
+    const real = gatedMoveMethods('intake', 'ledger', ['post', 'audit']);
+    expect(real.moved).toBe(false);
+    expect(real.dryRun).toBe(false);
+    expect(real.refusals.some((r) => r.startsWith('UNDECLARED_DEPENDENCY_CALL'))).toBe(true);
+    expect(real.findings).toEqual(dry.findings);
+    expect(snapshot(path.join(root, '.wai'))).toEqual(before);
   });
 
   it('asks the hook to assess each candidate rather than driving the search on caught exceptions', () => {

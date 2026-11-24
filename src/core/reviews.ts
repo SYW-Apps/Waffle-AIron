@@ -174,6 +174,8 @@ export class ReviewOrchestrator {
     const root = getProjectRoot();
     const now = gitHead.head(root)?.branch;
     const design = designIdOf();
+    // A pending lock request made on this very branch is the one this lock answers; other branches' requests stay pending.
+    if (this.store.list().some((r) => r.status === 'pending' && r.kind === 'lock' && r.branch === now)) return undefined;
     const hit = this.store.list().find((r) =>
       r.status === 'pending' && r.kind === 'lock' && r.branch && r.branch !== now && r.designId !== design && gitHead.hasBranch(root, r.branch));
     return hit ? { requestId: hit.id, requestedOn: hit.branch as string, checkedOut: now ?? null } : undefined;

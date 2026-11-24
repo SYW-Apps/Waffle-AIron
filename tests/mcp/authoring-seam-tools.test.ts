@@ -387,7 +387,7 @@ describe('sdd_delete_spec — the deletion as data', () => {
       kind: 'interface', id: 'ishop_portal', deleted: true, dryRun: false,
       removed: [{ kind: 'interface', id: 'ishop_portal' }], references: [],
       testsToRevisit: [{ method: 'pay', symbol: 'pay', imported: ['tests/pay.test.ts'], mentioned: [], indiscriminate: false }],
-      published: [],
+      published: [], findings: [],
     });
     expect(textOf(result)).toBe(
       'Successfully deleted interface spec "ishop_portal".\n\nTESTS TO REVISIT:\n- pay (searched as "pay")\n  imports it: tests/pay.test.ts',

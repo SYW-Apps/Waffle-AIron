@@ -12,6 +12,7 @@ export {
   loadComponentSpec,
   loadComponentSpecs,
   loadInterfaceSpec,
+  loadInterfaceSpecs,
   loadImplementationSpec,
   loadTypeSpec,
   loadGroupSpecs,

@@ -210,14 +210,16 @@ export function writeShop(dir: string, declare: Record<string, unknown>): void {
  * schedule-portal) and a contained PART `scheduling` at services/scheduling,
  * whose booking client uses the frontdesk's patient-portal and patient type.
  * References cross both ways, so a promote has something to respell and a
- * demote something to take back.
+ * demote something to take back. With `oneWay`, the checkin client depends on
+ * nothing, so only the part uses the clinic: a promote leaves no use loop
+ * (PROJECT_USE_CYCLE), which a migration would refuse.
  */
-export function writeClinic(root: string): { root: string; part: string } {
+export function writeClinic(root: string, options: { oneWay?: boolean } = {}): { root: string; part: string } {
   projectYaml(root, { id: 'clinic', name: 'Clinic', members: { scheduling: 'services/scheduling' } });
   system(root, 'Clinic');
   subsystem(root, 'Clinic', 'frontdesk', { publicInterfaces: [{ details: 'Patients', component: 'patient-portal' }] });
   component(root, 'frontdesk', 'patient-portal', 'Portal');
-  component(root, 'frontdesk', 'checkin-client', 'Adapter', ['schedule-portal']);
+  component(root, 'frontdesk', 'checkin-client', 'Adapter', options.oneWay ? [] : ['schedule-portal']);
   type(specs(root, 'types', 'patient.yaml'), 'patient', [{ name: 'name', type: 'string' }], { subsystem: 'frontdesk' });
   const part = path.join(root, 'services', 'scheduling');
   subsystem(part, 'Clinic', 'scheduling', { publicInterfaces: [{ details: 'Schedules', component: 'schedule-portal' }] });

@@ -174,10 +174,16 @@ function fillDecor(decor?: StatusDecor): FilledDecor {
   };
 }
 
-/** How a member's storage reads in the report: contained, its sibling folder, git and its short commit, or hosted. */
-function storageOf(storage: string, directory: string | undefined, commit: string | undefined): string {
+/** The folder `directory`, as a path relative to `from` with forward slashes (`../..`, `../ship`). */
+function pathFrom(from: string, directory: string): string {
+  const relative = path.relative(from, directory).replace(/\\/g, '/');
+  return relative === '' ? '.' : relative.startsWith('.') ? relative : `./${relative}`;
+}
+
+/** How a member's storage reads in the report: contained, the path to its folder, git and its short commit, or hosted. */
+function storageOf(storage: string, directory: string | undefined, commit: string | undefined, from?: string): string {
   if (storage === 'git') return `git ${commit ? commit.slice(0, 7) : ''}`.trim();
-  if (storage === 'path') return directory ? `../${path.basename(directory)}` : 'sibling';
+  if (storage === 'path') return directory ? pathFrom(from ?? fromProjectRoot('.'), directory) : 'sibling';
   if (storage === 'hosted') return 'hosted';
   return 'contained';
 }
@@ -510,7 +516,7 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
       const isLast = ownSubs.length + j === total - 1;
       // A member in a `../` sibling checkout is composed like a contained one; its label says where it is stored.
       const top = family.nodes.find((n) => n.namespace === '')?.directory;
-      const sibling = top !== undefined && path.relative(top, member.directory).startsWith('..') ? ` · ${storageOf('path', member.directory, undefined)}` : '';
+      const sibling = top !== undefined && path.relative(top, member.directory).startsWith('..') ? ` · ${storageOf('path', member.directory, undefined, top)}` : '';
       const label = `[Project] ${member.mountAlias ?? member.namespace} (${member.id ?? 'no id'})${sibling}`;
       // Step 9: the member's approval state and pin — read, never recomputed.
       const approval = approvalTag(options.approvals?.find((a) => a.key === member.namespace));
@@ -524,7 +530,7 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
     referenced.forEach((e, k) => {
       const key = ns === '' ? e.alias : `${ns}::${e.alias}`;
       const approval = approvalTag(options.approvals?.find((a) => a.key === key));
-      output += `${prefix(unread.length + k)}${mark.layer('project', `[Project] ${e.alias} · ${storageOf(e.sourceKind, e.directory, e.commit)}`)}${e.problem ? mark.missing(` (unavailable: ${e.problem})`) : ''}${approval}\n`;
+      output += `${prefix(unread.length + k)}${mark.layer('project', `[Project] ${e.alias} · ${storageOf(e.sourceKind, e.directory, e.commit, node?.directory)}`)}${e.problem ? mark.missing(` (unavailable: ${e.problem})`) : ''}${approval}\n`;
     });
   };
   renderProject('', '');

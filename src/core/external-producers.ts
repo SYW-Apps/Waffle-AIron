@@ -359,7 +359,7 @@ function brokenNames(usage: { unexported: { authored: string }[] }): { broken?: 
 
 /** What a consumer uses, method-granular (each public name with the members its references reach); absent when nothing. */
 function usesOf(usage: { used: ExternalConsumer['uses'] & object }): { uses?: NonNullable<ExternalConsumer['uses']> } {
-  return usage.used.length ? { uses: usage.used.map((u) => ({ publicName: u.publicName, kind: u.kind, members: [...u.members].sort(), ...(u.specs ? { specs: [...u.specs].sort() } : {}) })) } : {};
+  return usage.used.length ? { uses: usage.used.map((u) => ({ publicName: u.publicName, kind: u.kind, members: [...u.members].sort(), ...(u.specs ? { specs: [...u.specs].sort() } : {}), ...(u.implementedMembers ? { implementedMembers: [...u.implementedMembers].sort() } : {}) })) } : {};
 }
 
 /** The project roots a searched folder holds: itself when it is one, else each folder directly under it that is. */

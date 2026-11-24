@@ -254,7 +254,9 @@ describe('family codes — fire and control', () => {
     expect(family(familyAt(contractFamily().top), 'PROJECT_DEPENDENCY_CYCLE')).toEqual([]);
     const f = referenceFamily();
     const loops = family(familyAt(f.top), 'PROJECT_DEPENDENCY_CYCLE');
-    expect(loops.map((i) => i.project).sort()).toEqual(['core', 'shared', 'transpiler']);
+    // core's own gate reports its use loop (PROJECT_USE_CYCLE), so it is not told the same loop again.
+    expect(loops.map((i) => i.project).sort()).toEqual(['shared', 'transpiler']);
+    expect(family(familyAt(f.top), 'PROJECT_USE_CYCLE').map((i) => i.project)).toContain('core');
     expect(loops.every((i) => i.severity === 'warning')).toBe(true);
   });
 
