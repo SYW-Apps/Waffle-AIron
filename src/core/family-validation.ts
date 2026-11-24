@@ -399,6 +399,11 @@ export function run(options: ValidationOptions): ValidationResult {
   issues.splice(0, issues.length, ...paired);
   // Step 11: the family checks over the root's graph, narrowed to the selection.
   issues.push(...within(root, ceiling, () => checkMembers(narrowed(family, selected))));
+  // A project whose own gate reported its use loop (PROJECT_USE_CYCLE) is not told the same loop again.
+  const useLoops = new Set(issues.filter((i) => i.code === 'PROJECT_USE_CYCLE').map((i) => i.project ?? ''));
+  for (let i = issues.length - 1; i >= 0; i--) {
+    if (issues[i].code === 'PROJECT_DEPENDENCY_CYCLE' && useLoops.has(issues[i].project ?? '')) issues.splice(i, 1);
+  }
   // Step 10: the governance checks — each requiring project's requirements against the members below it.
   issues.push(...within(root, ceiling, () => checkPolicies(narrowed(family, selected))));
   // Step 12: the reachability and network checks only the family can make. At

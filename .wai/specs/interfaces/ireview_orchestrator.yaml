@@ -105,11 +105,12 @@ methods:
     description: >-
       The newest pending lock request made on another branch than the checkout has now, or none:
       what a lock of this checkout would approve is not the design that request asked to have
-      approved.
+      approved. None while a pending lock request was made on the checkout's own branch: the lock
+      answers that one, and leaves the other branch's requests pending for their own branch.
     signature: 'branchConflict(): review_branch_conflict?'
     returns: review_branch_conflict?
     params: []
     effect: read
 status: complete
 createdAt: '2026-11-07T02:37:33.473Z'
-updatedAt: '2026-11-10T18:57:42.771Z'
+updatedAt: '2026-11-24T08:23:43.987Z'

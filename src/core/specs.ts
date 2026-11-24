@@ -2247,6 +2247,8 @@ export interface CallersToReview {
   total: number;
   /** For a method of an abstraction: each contract implementing it, at any depth, that restates the old signature, as `<contract>.<method>`. */
   implementers?: string[];
+  /** The part of `implementers` further down a chain: each reports IMPLEMENTS_MISMATCH only after the level above is restated. */
+  implementersLater?: string[];
 }
 
 export interface SpecChangeReport {
@@ -2427,6 +2429,13 @@ export interface MethodMoveReport {
    * covered `<from>.<method>` unit names `<to>.<method>`. Empty on a refusal.
    */
   carried: CarriedRekey[];
+  /**
+   * The design findings the move brings, read off a rehearsal on a copy of the
+   * tree: each error and warning the result reports that the tree does not now,
+   * as `<severity> <CODE> [spec] message`. Empty when it brings none or the
+   * rehearsal could not run.
+   */
+  findings?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -3160,7 +3169,13 @@ export function ineffectiveDeltaPaths(
         // A list the write reordered was acted on: its values were held, their order was not.
         const order = (list: unknown): string[] => (Array.isArray(list) ? list.map(text) : []);
         if (plain.some((x) => !holds(m, x))) say(path, 'the level does not keep this value, so the write dropped it');
-        else if (plain.every((x) => holds(s, x)) && d.every((x) => plain.includes(x)) && same(order(m), order(s))) say(path, 'the stored spec already held this value');
+        else if (plain.every((x) => holds(s, x)) && d.every((x) => plain.includes(x)) && same(order(m), order(s))) {
+          // A shorter list is no request to drop the rest: list values merge.
+          const unnamed = order(s).filter((y) => !plain.some((x) => String(x) === y));
+          say(path, unnamed.length > 0
+            ? `the stored spec already held every value named; a list delta adds values and never drops one, so ${unnamed.map((y) => `"${y}"`).join(', ')} stay${unnamed.length === 1 ? 's' : ''} — to drop one, send { value: "<entry>", action: "delete" }`
+            : 'the stored spec already held this value');
+        }
         if (d.every((x) => plain.includes(x) || carriesEditMarker(x))) return;
       }
       for (const element of d) {

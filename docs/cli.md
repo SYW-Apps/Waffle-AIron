@@ -471,7 +471,11 @@ realizes it, in order. A framework handler is green without any design change:
   one kind their elements (a map's keys and values) are compared the same way,
   nested collections and named types the design knows included (`ids: number[]`
   for `ids: list<string>`, naming both). An element that is a union, `any` or
-  `unknown`, or a named type the design does not know, is not compared.
+  `unknown`, or a named type the design does not know, is not compared. A `void`
+  return is not compared either: a contract that declares a value is not
+  reported against a body that returns nothing, and the reverse. A public getter
+  or setter on a class is read as a property (state), not as a verb, so it is
+  never reported as `UNDECLARED_PUBLIC_MEMBER`.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the

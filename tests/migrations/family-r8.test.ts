@@ -176,11 +176,11 @@ describe('round 8 — 4b: internalize writes derived signature texts and names t
   it('the plan names the dependency loop re-pointing a sibling consumer at the parent closes, in a note and in its announcement', () => {
     const { root } = platform();
     const planned = plan(root, { verb: 'internalize', alias: 'shared', announce: true });
-    expect(planned.refusals).toEqual([]);
-    const notes = planned.notes.join('\n');
-    expect(notes).toMatch(/payments_svc.*loop/);
-    expect(notes).toMatch(/after internalize: .*PROJECT_DEPENDENCY_CYCLE/);
-    migrations.discard(planned);
+    // The loop is also a use loop (PROJECT_USE_CYCLE, an error): the plan is refused naming it.
+    expect(planned.refusals.length).toBeGreaterThan(0);
+    expect(planned.refusals.every((r) => r.code === 'new-errors')).toBe(true);
+    expect(planned.refusals.map((r) => r.detail).join('\n')).toMatch(/after internalize: .*PROJECT_USE_CYCLE/);
+    expect(planned.notes.join('\n')).toMatch(/payments_svc.*loop/);
   }, 120_000);
 });
 

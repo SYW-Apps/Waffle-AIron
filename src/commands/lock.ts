@@ -797,6 +797,20 @@ export function assertApprovable(members: ProjectApproval[], force?: boolean): v
         + 'Fix the declaration, then lock; --force does not override this. Nothing was written.',
     );
   }
+  // A family that could not be composed (a declared member whose directory is gone, two projects
+  // answering to one id) has no whole design to approve; --force does not override it.
+  const composition = projectFamily().problems.filter((p) => p.kind === 'member-absent' || p.kind === 'id-collision');
+  if (composition.length > 0) {
+    const named = composition.map((p) => {
+      const fix = p.kind === 'member-absent'
+        ? 'restore its directory or remove the declaration'
+        : 'give each project its own id';
+      return `${p.kind} "${p.id ?? p.projects.join(', ')}": ${p.detail} (${fix})`;
+    });
+    throw new LockRefusedError(
+      `the family could not be composed — ${named.join('; ')}. --force does not override this. Nothing was written.`,
+    );
+  }
   const config = loadProjectConfig();
   // A PROJECT member only: a part has no approval of its own — this lock is its approval.
   const unapproved = members.filter((m) => m.as !== 'part' && m.state !== 'approved');
@@ -837,9 +851,10 @@ export async function runLock(options: LockOptions, gate: ValidationResult, capt
   // Steps 5-7: what is being approved, and each direct member at its own root.
   const approvals = familyApprovals(1);
   const members = approvals.filter((a) => a.parent === '');
-  summarize(gate, members, captured, options);
-  // Step 9: what no lock may approve, refused before anything is written.
+  // What no lock may approve is refused before anything is printed or written, so a
+  // refused lock never says the gate would pass.
   assertApprovable(members, options.force);
+  summarize(gate, members, captured, options);
   const config = loadProjectConfig();
   logger.blank();
   logger.warn('This records the current design as approved in .wai/lock.json (no spec file is rewritten) and refreshes the generated outputs of this project.');

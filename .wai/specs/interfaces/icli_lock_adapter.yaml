@@ -113,11 +113,12 @@ methods:
   - name: assertApprovable
     description: >-
       Refuse, writing nothing, what no lock may approve: a tree the loader could not read whole (a
-      loader error: an escaping or circular member path, an unreadable document), which no --force
-      overrides; a project requiring approved members with a member project not approved, or, unless
-      forced, a pending lock request made on another branch than the checkout has now. Inputs are
-      not refused here: the lock refreshes the owed ones first, and lock-check refuses what stays
-      owed.
+      loader error: an escaping or circular member path, an unreadable document) or a family that
+      could not be composed (a declared member with no project on disk, two members resolving to one
+      id), which no --force overrides; a project requiring approved members with a member project
+      not approved, or, unless forced, a pending lock request made on another branch than the
+      checkout has now while none was made on the checkout's own branch. Inputs are not refused
+      here: the lock refreshes the owed ones first, and lock-check refuses what stays owed.
     signature: 'assertApprovable(members: list<ProjectApproval>, force?: bool): void'
     returns: void
     params:
@@ -144,4 +145,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-11-23T19:17:02.066Z'
+updatedAt: '2026-11-24T08:23:52.275Z'

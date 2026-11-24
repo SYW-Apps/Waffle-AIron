@@ -33,7 +33,7 @@ function run(cwd: string, ...args: string[]): { status: number | null; out: stri
 function clinic(): string {
   const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-r8-exit-')));
   dirs.push(top);
-  return writeClinic(path.join(top, 'clinic')).root;
+  return writeClinic(path.join(top, 'clinic'), { oneWay: true }).root;
 }
 
 describe('round 8 — a refused member command exits non-zero', () => {

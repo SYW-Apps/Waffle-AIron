@@ -291,7 +291,24 @@ export function consumerReaches(consumer: ExternalConsumer, publicNames: readonl
 }
 
 /**
- * external_consumer.narrowedTo — a consumer as a rename of `member` on one of
+ * What a consumer does with a producer's methods, split by how it reaches them:
+ * `calls` for the methods it calls, `implements` for the ones it implements
+ * (an implements entry of an implement-role export), each as `name.method`. Pure.
+ */
+export function consumerMethodLabels(consumer: ExternalConsumer): { calls: string[]; implements: string[] } {
+  const calls: string[] = [];
+  const implemented: string[] = [];
+  for (const u of consumer.uses ?? []) {
+    for (const m of u.members) {
+      if (m === 'type') continue;
+      (u.implementedMembers?.includes(m) ? implemented : calls).push(`${u.publicName}.${m}`);
+    }
+  }
+  return { calls, implements: implemented };
+}
+
+/**
+ * external_consumer.narrowedTo —a consumer as a rename of `member` on one of
  * `publicNames` breaks it: only those public names, each with that one member,
  * so a dry run names what breaks rather than the consumer's whole use of the
  * producer. Its specs stay those that reach the public name. Pure.

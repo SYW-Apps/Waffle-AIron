@@ -60,10 +60,12 @@ methods:
       every reference that named the old home, and judge the RESULT before anything reaches disk. A
       component of another project is refused first (crossProjectWriteRefusal). The judgement is the
       point — a rename changes identity and can stay mechanical, but a move changes which component
-      owns behaviour, which is exactly what the stereotype and dependency rules judge. On a refusal
-      nothing is written and the report names the rule plus where the methods could live instead,
-      because a refusal that only names the rule leaves the caller to search for a legal home by
-      hand.
+      owns behaviour, which is exactly what the stereotype and dependency rules judge. The move is
+      rehearsed on a private copy of the tree, judged before and after, as a spec move is: a dry run
+      names the design findings the result will have, and a move that would leave a new error is
+      refused — the dry run with it — naming each one. On a refusal nothing is written and the
+      report names the rule plus where the methods could live instead, because a refusal that only
+      names the rule leaves the caller to search for a legal home by hand.
     signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
     returns: MethodMoveReport
     params:
@@ -126,10 +128,12 @@ methods:
       gate takes on every other write; `force` deletes anyway and answers the references it left
       dangling, for a staged teardown. Every public name a consumer reaches what goes through is
       read before anything goes (published), so the door can name the consumers the deletion breaks,
-      exactly as a rename does. `dryRun` answers the same plan — what would be removed, what
-      references it, what it publishes, the tests to revisit — and removes nothing. The tests that
-      encode a removed method are found before anything goes, while the implementations that place
-      them still exist.
+      exactly as a rename does. The deletion is rehearsed on a private copy of the tree, judged
+      before and after, so the plan and the result name the design findings it brings (errors,
+      warnings and notices: an abstraction left with one implementer, say). `dryRun` answers the
+      same plan — what would be removed, what references it, what it publishes, the tests to
+      revisit, the findings it brings — and removes nothing. The tests that encode a removed method
+      are found before anything goes, while the implementations that place them still exist.
     signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
     returns: SpecDeletion
     params:
@@ -166,10 +170,11 @@ methods:
       written there and the copy validated before and after, so the report names every file it
       writes and every reference it re-points, and the design errors and warnings the result will
       have that the tree does not report now; a new error refuses the move before anything is
-      written. A group is not judged by the doctrine gate (it holds no edges); its rehearsal is the
-      type-groups rule: a `parent` of another home than the destination, an unknown parent or one
-      that closes a loop refuses the move. A dry run answers that rehearsal and writes nothing;
-      otherwise the move is written through the core adapter.
+      written, a dry run included — a dry run is refused exactly when the move would be. A group is
+      not judged by the doctrine gate (it holds no edges); its rehearsal is the type-groups rule: a
+      `parent` of another home than the destination, an unknown parent or one that closes a loop
+      refuses the move. A dry run answers that rehearsal and writes nothing; otherwise the move is
+      written through the core adapter.
     signature: >-
       moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
       list<string>, parent?: string): SpecMove
@@ -204,4 +209,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-09-18T21:12:15.156Z'
-updatedAt: '2026-11-22T02:29:56.366Z'
+updatedAt: '2026-11-24T08:28:08.441Z'

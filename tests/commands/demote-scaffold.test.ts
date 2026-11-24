@@ -32,7 +32,7 @@ describe('wairon member demote', () => {
     const top = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-demote-scaffold-')));
     dirs.push(top);
     execFileSync('git', ['init', '-q'], { cwd: top });
-    const { root, part } = writeClinic(path.join(top, 'clinic'));
+    const { root, part } = writeClinic(path.join(top, 'clinic'), { oneWay: true });
     run(root, 'member', 'promote', 'scheduling', '--yes');
     expect(fs.existsSync(path.join(part, '.mcp.json'))).toBe(true);
     expect(fs.existsSync(path.join(part, '.claude', 'CLAUDE.md'))).toBe(true);

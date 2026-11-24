@@ -157,9 +157,32 @@ export function rehearse(plan: MigrationPlan): MigrationPlan {
     return { ...plan, refusals: [...plan.refusals, ...refused] };
   }
   // Steps 19-20: what the result will report that the family does not now.
-  const announced = plan.request.announce === true ? newFindings(plan, rehearsal, scopeOf(plan, projects), changes) : [];
-  // Steps 21-23.
-  return { ...plan, notes: [...plan.notes, ...announced], rehearsal, changes, relock: relockOf(plan, changes, rehearsal) };
+  const announced = plan.request.announce === true ? newFindings(plan, rehearsal, scopeOf(plan, projects), changes) : { notes: [], added: [] };
+  // Steps 17-19: a new error the result reports (other than one the plan's named follow-up
+  // clears) refuses the plan, as a move_spec is refused; a warning never does.
+  const newErrors = announced.added.filter((f) => f.issue.severity === 'error' && !FOLLOWED_UP.has(f.issue.code));
+  if (newErrors.length > 0) {
+    transaction.discard(rehearsal);
+    return {
+      ...plan,
+      refusals: [...plan.refusals, ...newErrors.map((f) => ({
+        code: 'new-errors',
+        project: f.owner.startsWith('loop ') ? '' : f.owner,
+        detail: `after ${plan.request.verb}: the result would report ${f.issue.code}${f.issue.specId ? ` [${f.issue.specId}]` : ''} in ${f.owner.startsWith('loop ') ? 'the family' : `project ${f.owner}`}, which the projects it changes do not report now: ${f.issue.message.replace(/\.\s*$/, '')}`,
+      }))],
+    };
+  }
+  // Steps 20-22.
+  return { ...plan, notes: [...plan.notes, ...announced.notes], rehearsal, changes, relock: relockOf(plan, changes, rehearsal) };
+}
+
+/** Errors owed to a step the plan names after apply (an external to pin): never a refusal. */
+const FOLLOWED_UP = new Set(['EXTERNAL_UNPINNED']);
+
+/** A finding `validate --ci` waives while a spec is draft: named after the ones it fails on. */
+function waivedFirst<T extends { code: string }>(items: T[]): T[] {
+  const draft = (i: T): number => (i.code.startsWith('DRAFT_') ? 1 : 0);
+  return [...items].sort((a, b) => draft(a) - draft(b));
 }
 
 /** How many new findings of one severity a note names before it counts the rest. */
@@ -181,9 +204,10 @@ const NOTE_HEAD = 5;
  * of the .wai trees, so neither reads code, and the live sources are never
  * analysed for it. A run that throws names nothing.
  */
-function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: TransactionScope, changes: FileChange[]): string[] {
+function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: TransactionScope, changes: FileChange[]): { notes: string[]; added: { owner: string; issue: ValidationIssue }[] } {
+  const none = { notes: [], added: [] };
   const owners = [...new Set(changes.map((c) => path.resolve(c.project)))];
-  if (owners.length === 0) return [];
+  if (owners.length === 0) return none;
   type Found = { owner: string; issue: ValidationIssue };
   const run = (copy: Rehearsal): Found[] | null => {
     try {
@@ -205,7 +229,7 @@ function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: Transacti
   // The result first: a result that reports no error or warning announces
   // nothing, and the projects as they stand need no judging at all.
   const after = onCopy(rehearsal, () => run(rehearsal));
-  if (after === null || after.length === 0) return [];
+  if (after === null || after.length === 0) return none;
   let before: Found[] | null = null;
   let pristine: Rehearsal | null = null;
   try {
@@ -217,25 +241,27 @@ function newFindings(plan: MigrationPlan, rehearsal: Rehearsal, scope: Transacti
   } finally {
     if (pristine) transaction.discard(pristine);
   }
-  if (before === null || after === null) return [];
+  if (before === null || after === null) return none;
   const key = (f: Found): string => `${f.owner}|${f.issue.severity}|${f.issue.code}|${f.issue.specId ?? ''}`;
   const seen = new Map<string, number>();
   for (const f of before) seen.set(key(f), (seen.get(key(f)) ?? 0) + 1);
-  const added: ValidationIssue[] = [];
+  const addedFound: Found[] = [];
   for (const f of after) {
     const left = seen.get(key(f)) ?? 0;
     if (left > 0) seen.set(key(f), left - 1);
-    else added.push(f.issue);
+    else addedFound.push(f);
   }
+  const added = addedFound.map((f) => f.issue);
   const notes: string[] = [];
   for (const severity of ['error', 'warning'] as const) {
-    const these = added.filter((i) => i.severity === severity);
+    const these = waivedFirst(added.filter((i) => i.severity === severity));
     if (these.length === 0) continue;
     const named = these.slice(0, NOTE_HEAD).map((i) => `${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.replace(/\.\s*$/, '')}`);
     const rest = these.length - named.length;
-    notes.push(`after ${plan.request.verb}: ${these.length} new ${severity}(s) the projects it changes do not report now: ${named.join('; ')}${rest > 0 ? `; … and ${rest} more` : ''}.`);
+    const code = severity === 'warning' ? ' Code findings (an import across the new boundary, say) are not foretold: the copies hold no code, and the next validate judges it.' : '';
+    notes.push(`after ${plan.request.verb}: ${these.length} new ${severity}(s) the projects it changes do not report now: ${named.join('; ')}${rest > 0 ? `; … and ${rest} more` : ''}.${code}`);
   }
-  return notes;
+  return { notes, added: addedFound };
 }
 
 /**

@@ -81,7 +81,9 @@ methods:
       brings in), run the verb's own writes on the copy, and answer the plan with the copy's
       difference as its file changes and every changed owner that carries a lock as a project to
       re-lock. A core writer's refusal met on the copy drops the rehearsal and becomes the plan's
-      refusal. An already-refused plan is answered unchanged. Writes nothing into the family.
+      refusal; so does a result that would report an error the changed projects do not report now
+      (new-errors, an announced plan only), other than one the plan's named follow-up clears. An
+      already-refused plan is answered unchanged. Writes nothing into the family.
     signature: 'rehearse(plan: MigrationPlan): MigrationPlan'
     returns: MigrationPlan
     params:
@@ -92,4 +94,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:35:39.470Z'
-updatedAt: '2026-11-21T16:14:33.962Z'
+updatedAt: '2026-11-24T08:25:05.061Z'

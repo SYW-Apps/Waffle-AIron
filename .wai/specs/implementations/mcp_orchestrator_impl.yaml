@@ -398,12 +398,31 @@ methods:
       - stepNumber: 3
         description: >-
           Apply it through the authoring client adapter, answering for sdd_set_public_interfaces, so
-          a subsystem of another project is refused naming this tool
+          a subsystem of another project is refused naming this tool; with dryRun the same write is
+          judged and answered, and nothing is written
         type: call
         targetComponent: mcp_authoring_adapter
         targetMethod: updateSpecGated
       - stepNumber: 4
-        description: 'Answer with the change report: every entry added, changed or removed'
+        description: >-
+          Read the bound tree's contracts: an abstraction's implementers are named on their
+          contracts (implements), so these tell which consumer the replacement takes off an
+          implement-role entry still has a component implementing that abstraction
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: >-
+          Name what the replacement breaks: for each consumer subsystem removed from an entry with
+          role implement (an entry left out entirely removes all of its consumers), each of its
+          components that lists the published abstraction in implements will report
+          ABSTRACTION_UNPUBLISHED, named with the fix (restore the consumer, or drop the implements
+          entry)
+        type: local
+      - stepNumber: 6
+        description: >-
+          Answer with the change report: every entry added, changed or removed, marked dry run when
+          nothing was written, and what it breaks
         type: return
         outcome: reported
     symbol: sdd_set_public_interfaces
@@ -1188,4 +1207,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-23T07:01:22.321Z'
+updatedAt: '2026-11-24T08:58:59.754Z'

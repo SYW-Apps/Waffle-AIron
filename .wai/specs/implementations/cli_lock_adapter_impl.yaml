@@ -63,6 +63,17 @@ methods:
         targetMethod: familyApprovals
       - stepNumber: 6
         description: >-
+          Refuse, writing nothing and before any summary is printed, what no lock may approve
+          (cli_lock_adapter.assertApprovable, given the members and --force): a tree the loader
+          could not read whole or a family that could not be composed, a project that requires
+          approved members with a member project not approved, or, without --force, a pending lock
+          request made on another branch than the checkout has now. A refused lock never prints that
+          `wairon validate --ci` would pass or any line of a summary it will not act on
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: assertApprovable
+      - stepNumber: 7
+        description: >-
           Read the approval on record: when no own spec moved, the summary must still say what did
           (an approval part such as the rule tuning, the network, `composition` or the pack
           selections, by LockRecord.movedParts; or the project id against the record's projectId),
@@ -70,7 +81,7 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: readLockRecord
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Read the specs of every kind (this component read and its siblings for subsystems,
           contracts, implementations and types) to say plainly how many of each are still draft or
@@ -79,7 +90,7 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Print the summary: the own specs changed, added and removed (a part's specs among them,
           under `members/<alias>/…`, since a part is this project's own content; a spec whose
@@ -109,15 +120,6 @@ methods:
           approval is not status, so a design that fails CI may still be locked, and the human is
           told what CI will do with it
         type: local
-      - stepNumber: 9
-        description: >-
-          Refuse, writing nothing, what no lock may approve (cli_lock_adapter.assertApprovable,
-          given the members and --force): a project that requires approved members with a member
-          project not approved, or, without --force, a pending lock request made on another branch
-          than the checkout has now
-        type: call
-        targetComponent: cli_lock_adapter
-        targetMethod: assertApprovable
       - stepNumber: 10
         description: >-
           Confirm with the human (skipped under --yes; a non-interactive shell without --yes
@@ -583,37 +585,59 @@ methods:
         type: throw
         error: the tree could not be read whole
       - stepNumber: 4
+        description: >-
+          Read the bound root's project graph: the members it declares and the problems met
+          composing them
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
+      - stepNumber: 5
+        description: >-
+          Could the family not be composed: a member it declares with no project on disk, or two
+          members resolving to one id?
+        type: branch
+        condition: the graph holds a member-absent or id-collision problem
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Refuse, writing nothing, naming each problem with its member and what to do (restore its
+          directory or remove the declaration; give each project its own id): a family composed in
+          part would be approved as if the missing member did not exist. --force does not override
+          it
+        type: throw
+        error: the family could not be composed
+      - stepNumber: 7
         description: 'Read the project configuration: its composition block (requireApprovedMembers)'
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-      - stepNumber: 5
+      - stepNumber: 8
         description: >-
           Does the project require approved members, and is a PROJECT member not approved? (A part
           has no approval of its own: this lock is its approval)
         type: branch
         condition: composition.requireApprovedMembers and a direct project member is not approved
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 10
+      - stepNumber: 9
         description: >-
           Refuse, writing nothing, naming each drifted or never-approved direct member with its
           state and the remedy: lock each at its own root first. A parent never approves below
           itself
         type: throw
         error: composition.requireApprovedMembers
-      - stepNumber: 7
+      - stepNumber: 10
         description: Read the newest pending lock request made on another branch than the checkout has now
         type: call
         targetComponent: approval_portal
         targetMethod: reviewBranchConflict
-      - stepNumber: 8
+      - stepNumber: 11
         description: >-
           Would this lock approve another branch's design than the one an agent asked to have
           approved, and was --force not given?
         type: branch
         condition: a conflict was answered and force is not set
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
           Refuse, writing nothing, naming the request, the branch it was made on and the branch
           checked out: switch back to that branch to approve what was asked, withdraw the request
@@ -621,7 +645,7 @@ methods:
           this checkout's design anyway
         type: throw
         error: the pending lock request was made on another branch
-      - stepNumber: 10
+      - stepNumber: 13
         description: Approvable
         type: return
         outcome: ok
@@ -681,4 +705,4 @@ lint:
         surfaces word-identical, which a second copy in the runner would not.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-11-23T19:17:00.253Z'
+updatedAt: '2026-11-24T08:24:10.380Z'

@@ -190,8 +190,10 @@ describe('a promote that would make the uses loop foretells it', () => {
     expect(validateProject({}).issues.filter((i) => i.code === 'PROJECT_USE_CYCLE')).toEqual([]);
 
     const planned = planAt(host, { verb: 'promote', alias: 'plugin', announce: true });
-    expect(planned.refusals).toEqual([]);
-    expect(planned.notes.join('\n')).toContain('PROJECT_USE_CYCLE');
-    migrations.discard(planned);
+    // The loop is a new error the promote would leave: the plan is refused, nothing is rehearsed.
+    expect(planned.refusals.length).toBeGreaterThan(0);
+    expect(planned.refusals.every((r) => r.code === 'new-errors')).toBe(true);
+    expect(planned.refusals.map((r) => r.detail).join('\n')).toContain('PROJECT_USE_CYCLE');
+    expect(planned.rehearsal).toBeUndefined();
   });
 });
