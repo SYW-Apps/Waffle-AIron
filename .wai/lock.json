@@ -2,14 +2,14 @@
   "format": 4,
   "stateId": {
     "algorithm": "sha256+design+policy",
-    "digest": "b18c28e390c628b761b268e0400999b74e325989cfd507b3e4463e6c7828fc23"
+    "digest": "92ba28cb34ff4831a97052e67d016f49f87a0a275e91a75f211590853945a867"
   },
-  "lockedAt": "2026-11-24T13:12:51.376Z",
+  "lockedAt": "2026-11-24T19:20:59.515Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "7.0.0-dev.5",
+  "validatorVersion": "7.0.0-dev.6",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -397,7 +397,7 @@
     ".wai/specs/implementations/audit_store_impl.yaml": "f2f626c07f6a1ae1fa8a4a5a84f48dcf6848332b9b57f888a56365881612f31a",
     ".wai/specs/implementations/authentication_impl.yaml": "97abcbaa63c5ce6e9ffae190b58dc623f675847032de0d06a9a4697a91faf378",
     ".wai/specs/implementations/authoring_core_adapter_impl.yaml": "e89f72fe5623ab8cbfd1999591fa645de2f889155531d8007e1cbcc6faafb47a",
-    ".wai/specs/implementations/authoring_orchestrator_impl.yaml": "82f340267109bca3ba9b91ac3d27cde3f9814adfc7564df6742ec06ad964dd39",
+    ".wai/specs/implementations/authoring_orchestrator_impl.yaml": "1622074a8cfe0763d0cfb2c2af7ad0632facfd974856ce7a9a2590824e171fff",
     ".wai/specs/implementations/authoring_portal_impl.yaml": "c01b25ec66135ef090b91ca1d85efdd19c6febe4f76245576ae6c1e644b51477",
     ".wai/specs/implementations/authoring_validator_adapter_impl.yaml": "b4e2eb5a6d5de6681ab01a4a3f1d5c2668d948e231779fef69c2543cecbb1201",
     ".wai/specs/implementations/authorization_impl.yaml": "2029b3dc0a6deab35344fa29a5585b2314636b251df4eb70da038d1a92ce42cd",
@@ -1713,7 +1713,7 @@
     ".wai/specs/types/source_file_status.yaml": "b0a5ba488e6b2b3d88c2ccd7e7fed579e3b87caf875cc42a93be0a8ce4684dae",
     ".wai/specs/types/spec_change.yaml": "9f3a157b97515f5eb4621a2e9d6f8129eb34ecfd9fe2df32f16259df3eba8471",
     ".wai/specs/types/spec_change_kind.yaml": "77df632e38c3dd0d1b47b3b1059b0a3097ef87785e7ef3ebb741cb47e6610ddc",
-    ".wai/specs/types/spec_change_report.yaml": "13bb32259e118faa76f5523572049df91bfb19012ca7a38afc3fcb7ee8d35a96",
+    ".wai/specs/types/spec_change_report.yaml": "b7984b09ed6d5454351f5daee8fa5f4e7afea7ea5a652c1138ddb47e257c8e94",
     ".wai/specs/types/spec_deletion.yaml": "508ea432023a17aaa1cce171dd9af06374414ac9a980d5e7137e3fb16d8c000f",
     ".wai/specs/types/spec_delta.yaml": "683cc9b79f302ef2f324e3c79423ba7fb194cb1889138fbbdd391e9191281f9f",
     ".wai/specs/types/spec_id.yaml": "b0754ddb1acb3214b26e1743ed7550c276cbd5348b87c03ce1214273c5dea303",
@@ -1732,7 +1732,7 @@
     ".wai/specs/types/spec_scan_options.yaml": "95f39a7c925c6ef09bad551cb3f1a4110f8926fcace20df76a96fe578117c2be",
     ".wai/specs/types/spec_status.yaml": "8e72c43b7b6ea1f517b2349d9d37d0cf7038f6673eeac657c8c8da2ec89ab142",
     ".wai/specs/types/spec_write_hooks.yaml": "3d2b8b36525b6e3c003cc0dd4e08d37e29d9c471b2c000a5d25bccd88ce3ef80",
-    ".wai/specs/types/spec_write_receipt.yaml": "a32fc02d20fef0ea03b2c87667ef11a0fca3278c469c5ebbaf5bb8b0fc234067",
+    ".wai/specs/types/spec_write_receipt.yaml": "da27b5c35793f69630bc006ee47606649faba511b28498ce50748229f50f11e7",
     ".wai/specs/types/stale_signature_text.yaml": "5d0ac3b12930261a4f28d8a3e6225f29494a4326898fccded878fada8da45da6",
     ".wai/specs/types/state_id.yaml": "2568c4c66d626fd69b9072e5ed7821b3496c247084f9594a609965a88dc8f4f2",
     ".wai/specs/types/status_command_options.yaml": "7798f6ef3227547c279b333d1e91133217c6bf9f02df08d2d168c77ef2f040e4",
@@ -1865,18 +1865,18 @@
   },
   "parts": {
     "composition": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
-    "design": "38150c296205ff7151fb3392194e820080ee213a79a96dd0f43dfb6173adfa96",
+    "design": "acb3094c9de1e318f553580a273749a27a924f5f0f175d0a54f11cc529a5927b",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "selections": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
   },
   "code": {
     "analyzer": {
-      "validatorVersion": "7.0.0-dev.5",
+      "validatorVersion": "7.0.0-dev.6",
       "doctrineDigest": "2b7dc11b305ad46269724ad73f59923aaa2ba634cbd221f0ee5fc929ab68cc86",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 0,
+    "warnings": 4,
     "notices": 95
   }
 }
