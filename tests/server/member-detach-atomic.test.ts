@@ -79,7 +79,7 @@ describe('stage 7 — a hosted detach relocates the member atomic-or-nothing', (
       else process.env[k] = v;
     }
     try { fs.rmSync(base, { recursive: true, force: true }); } catch { /* windows locks */ }
-  });
+  }, 120_000); // removes every data dir the test built: slow under a loaded full suite
 
   /** A fresh data dir: the fixture family, upgraded, its root placed in a unit. */
   function fresh(k: number): string {

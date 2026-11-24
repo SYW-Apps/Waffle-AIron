@@ -8040,7 +8040,12 @@ export class SpecWorkspace {
       if (leaving.length === 0) continue;
       // Each arriving entry carries its former key `<source contract>.<name>`
       // in its rename trace, so a consumer reads the move as a move.
-      arriving.push(...cloneSpec(leaving).map((m) => ({ ...m, previousNames: [...(m.previousNames ?? []), `${contract.id}.${m.name}`] })));
+      // A method moving back to a contract it once left drops that contract's own
+      // key from its trace: a trace names former keys, never the one it holds.
+      arriving.push(...cloneSpec(leaving).map((m) => ({
+        ...m,
+        previousNames: [...(m.previousNames ?? []).filter((k) => k !== `${receiving.id}.${m.name}`), `${contract.id}.${m.name}`],
+      })));
       // The copy is filtered, never the stored array: `filter` hands back the
       // SAME element objects, so a plan built that way shares its methods with
       // the snapshot a failed write has to restore — and the sweep below, which

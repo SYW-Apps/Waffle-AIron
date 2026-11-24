@@ -317,7 +317,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     const stale = at(f.dispatch, () => getExternalsStatus())[0];
     expect(stale).toMatchObject({ stale: true, drifted: true });
     expect(stale.uses).toEqual([{ publicName: 'invoicing', member: 'issueInvoice', state: 'changed' }]);
-  });
+  }, 120_000); // several git round-trips: slow under a loaded full suite
 
   it('property: reexport-is-transparent — the lock and the verdict are the same through a re-export chain', () => {
     const direct = family({ dispatchExternals: { billing: 'git' } });

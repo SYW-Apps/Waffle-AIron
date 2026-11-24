@@ -320,6 +320,10 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
       if (sourceFiles.length > 0 && sourceFiles.every(f => sourceExists(impl.id, f))) {
         score += 20;
       }
+    } else if (intf && comp.abstract === true) {
+      // An abstraction needs no implementation of its own: its implementers
+      // realize it, so it scores as implemented, its source files not counted.
+      score += 50;
     }
 
     const isDraft =
@@ -489,7 +493,9 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
           output += `${mark.structure(methodIndent + methodPrefix)}${methodLine}\n`;
         }
       } else {
-        output += `${mark.structure(subIndent + compIndent + '└── ')}${mark.missing('Implementation: Missing (-30%)')}\n`;
+        output += comp.abstract === true
+          ? `${mark.structure(subIndent + compIndent + '└── ')}${mark.structure('Implementation: none of its own — an abstraction, realized by its implementers')}\n`
+          : `${mark.structure(subIndent + compIndent + '└── ')}${mark.missing('Implementation: Missing (-30%)')}\n`;
       }
     }
     for (const line of typeLines) output += `${line}\n`;

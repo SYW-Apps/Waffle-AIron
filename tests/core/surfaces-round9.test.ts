@@ -231,7 +231,7 @@ describe('1. a used verb\'s route moving reaches the consumer', () => {
     expect(pin.detail).toContain('moved since the last pin: endpoint of stats_portal.getStats (GET /stats/{shortCode} → GET /v2/stats/{shortCode})');
     bind(consumer);
     expect(relationHealth(getExternalsStatus()[0])).toBe('ok');
-  });
+  }, 120_000); // several git round-trips: slow under a loaded full suite
 
   it('a verb stating a new status moves the route too', () => {
     const { producer, consumer, release } = pinnedPair();

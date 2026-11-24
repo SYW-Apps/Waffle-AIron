@@ -712,6 +712,14 @@ function renderChangeReport(report: SpecChangeReport): string {
   // creates the collision is the one that says so.
   lines.push(...renderRespellings(report.respellings));
   lines.push(...renderBreaks(report.published ?? [], report.breaks ?? [], report.dryRun, report.rerouted === true));
+  // A changed abstraction removes nothing published, yet breaks every consumer implementing it.
+  if (!(report.published ?? []).length && (report.breaks ?? []).length > 0) {
+    lines.push('', `BREAKS ${report.breaks!.length} consumer(s) implementing this abstraction: each reports IMPLEMENTS_MISMATCH until it restates the changed methods (this project never writes them):`);
+    for (const c of report.breaks!) {
+      const uses = (c.uses ?? []).map((u) => `${u.publicName} implements ${(u.implementedMembers ?? u.members).join('/')}${u.specs?.length ? ` in ${u.specs.join(', ')}` : ''}`);
+      lines.push(`- ${c.project} (${c.section}.${c.alias})${c.found === 'search' ? ` [${c.directory}]` : ''}${uses.length ? `: ${uses.join('; ')}` : ''}`);
+    }
+  }
   lines.push(...renderCallersToReview(report.callersToReview));
   lines.push(...renderAbstractionFindings(report.findings, report.dryRun));
   lines.push(...renderTestsToRevisit(report.testsToRevisit));
@@ -740,6 +748,28 @@ function renderBreaks(published: ReadonlyArray<ExportUse>, breaks: ReadonlyArray
     lines.push(`- ${c.project} (${c.section}.${c.alias})${c.found === 'search' ? ` [${c.directory}]` : ''}${uses.length ? `: ${uses.join('; ')}` : ''}`);
   }
   return lines;
+}
+
+/**
+ * The L0 export entries a replaced subsystem table leaves naming nothing
+ * (mcp_orchestrator.setPublicInterfaces steps 6-7): a named re-export of a
+ * component or type the subsystem no longer publishes, or a wildcard
+ * re-export (`from` alone) of a subsystem that now publishes nothing.
+ */
+function danglingReExports(subsystem: string, after: PublicInterface[]): { publicName: string; item?: string }[] {
+  const system = loadSystemSpec();
+  const entries = ((system as { publicInterfaces?: PublicInterface[] } | null)?.publicInterfaces ?? []).filter((e) => e.from === subsystem);
+  const published = new Set(after.flatMap((pi) => [pi.component, pi.typeDef, pi.as].filter((v): v is string => typeof v === 'string' && v !== '')));
+  const out: { publicName: string; item?: string }[] = [];
+  for (const e of entries) {
+    const item = e.component ?? e.typeDef;
+    if (item) {
+      if (!published.has(item)) out.push({ publicName: e.as ?? item, item });
+    } else if (after.length === 0) {
+      out.push({ publicName: e.as ?? subsystem });
+    }
+  }
+  return out;
 }
 
 /**
@@ -2508,8 +2538,13 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const unpublishedBlock = unpublished.length
           ? `\n${unpublished.map((u) => `- ${u.component} (subsystem "${u.subsystem}") implements "${u.abstraction}": will report ABSTRACTION_UNPUBLISHED. Restore "${u.subsystem}" as a consumer of the role-implement entry for "${u.abstraction}", or drop the implements entry of "${u.component}".`).join('\n')}`
           : '';
+        // Steps 6-7: the L0 entries re-exporting what the replacement no longer publishes.
+        const dangling = danglingReExports(subsystem, publicInterfaces as PublicInterface[]);
+        const danglingBlock = dangling.length
+          ? `\n${dangling.map((d) => `- L0 export "${d.publicName}" re-exports ${d.item ? `"${d.item}" ` : ''}from subsystem "${subsystem}", which ${d.item ? 'no longer publishes it' : 'publishes nothing now'}: will report EXPORT_INVALID. Restore the subsystem entry, or drop the L0 entry (sdd_update_spec on the system).`).join('\n')}\nConsumers outside this family were not searched: sdd_list_consumers with search names them.`
+          : '';
         return structured(
-          `${dryRun === true ? 'DRY RUN — nothing was written. Would update' : 'Updated'} public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).\n${renderChangeReport(report)}${unpublishedBlock}`,
+          `${dryRun === true ? 'DRY RUN — nothing was written. Would update' : 'Updated'} public interfaces for subsystem "${subsystem}" (${publicInterfaces.length} ${publicInterfaces.length === 1 ? 'entry' : 'entries'}).\n${renderChangeReport(report)}${unpublishedBlock}${danglingBlock}`,
           report,
         );
       } catch (e) {
@@ -3877,13 +3912,32 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const removes = kind === 'interface' && delta && typeof delta === 'object'
           && ((Array.isArray(delta.methods) && (delta.methods.length === 0 || delta.methods.some((m: any) => m?.action === 'delete' || m?.remove === true)))
             || (Array.isArray(delta.unset) && delta.unset.includes('methods')));
-        const consumers = removes ? externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d))) : [];
+        // ...or writes the methods of an abstraction's contract, which consumers may implement.
+        const abstractContract = kind === 'interface' && delta && typeof delta === 'object'
+          && (Array.isArray(delta.methods) || (Array.isArray(delta.unset) && delta.unset.includes('methods')))
+          && loadComponentSpec(loadInterfaceSpec(id)?.component ?? '')?.abstract === true;
+        const consumers = removes || abstractContract ? externalConsumers(search?.map((d) => path.resolve(getProjectRoot(), d))) : [];
         // Step 2: the gated write. The change report was ALREADY a structure;
         // only the rendering was prose. Both channels carry it, from the one report.
         const report = updateSpecGated(kind, id, delta, dryRun);
-        // Step 3: the consumers a removed published method breaks.
+        // Step 3: the public names a consumer reaches the abstraction's contract through.
+        const methodsChanged = report.changes.some((c) => c.path === 'methods' || c.path.startsWith('methods.'));
+        const implementedNames = abstractContract && methodsChanged
+          ? new Set(publishedUsesOf([{ kind: 'interface', id }], []).map((u) => u.publicName))
+          : new Set<string>();
+        // Step 4: the consumers a removed published method breaks, and those implementing a changed abstraction.
         const breaks = report.published ? consumers.map((c) => narrowedToUses(c, report.published!)).filter((c): c is ExternalConsumer => c !== null) : [];
+        for (const c of consumers) {
+          const implemented = (c.uses ?? []).filter((u) => implementedNames.has(u.publicName) && (u.implementedMembers ?? []).length > 0);
+          if (implemented.length === 0) continue;
+          const held = breaks.find((b) => b.key === c.key && b.alias === c.alias);
+          if (held) held.uses = [...(held.uses ?? []), ...implemented.filter((u) => !(held.uses ?? []).some((h) => h.publicName === u.publicName))];
+          else breaks.push({ ...c, uses: implemented });
+        }
         if (breaks.length > 0) report.breaks = breaks;
+        if (implementedNames.size > 0 && !(search ?? []).length) {
+          report.notices.push(`Consumers implementing ${[...implementedNames].join(', ')} outside this family were not searched: pass search (a folder holding sibling checkouts) to name them.`);
+        }
         return structured(renderChangeReport(report), report);
       } catch (e) {
         return errText(String(e));
