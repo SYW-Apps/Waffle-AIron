@@ -918,7 +918,7 @@ const abstractionFindingsOutput = z.array(z.string()).optional().describe(
 /** The findings a write touching an abstraction brings: information, never a refusal. */
 function renderAbstractionFindings(findings: string[] | undefined, dryRun: boolean): string[] {
   if (!findings?.length) return [];
-  return ['', `FINDINGS this write ${dryRun ? 'would bring' : 'brought'} on specs it does not name (an abstraction edit leaves its implementers to restate; validate reports them until they are):`, ...findings.map((f) => `- ${f}`)];
+  return ['', `FINDINGS this write ${dryRun ? 'would bring' : 'brought'} in the tree (information, not a refusal: an abstraction and its implementers mismatch until each is restated, and validate reports them until then):`, ...findings.map((f) => `- ${f}`)];
 }
 
 /** One public name a removal takes something away from: a delete's or a method removal's published list. */
@@ -1294,7 +1294,7 @@ const findReferencesOutput = {
 const getStatusOutput = {
   validatorVersion: z.string().describe('The wairon release of the running server process (StatusReport.validatorVersion), so a reading can be dated and a stale server told from a current one.'),
   detail: z.enum(['summary', 'full']).optional().describe('Which cut this answer is: summary (the default) or full'),
-  report: z.string().describe('The status answer of the detail asked for, exactly the text block: for full the tree with its completeness, the approval verdict, any banner and the Externals section; for summary the verdict, counts and findings by code. A client that reads only the structured content would otherwise see nothing but the release.'),
+  report: z.string().describe('The status answer of the detail asked for, exactly the text block: for full the tree with its completeness, the approval verdict, any banner and the Externals section; for summary the verdict, the counts and any finding the report itself carries (status does not validate: sdd_validate_tree lists the findings). A client that reads only the structured content would otherwise see nothing but the release.'),
   olderServer: olderServerOutput,
   ...staleServerOutput,
 };
@@ -3894,11 +3894,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem?: string; recursive?: boolean; detail?: StatusDetail }>(server,
     'sdd_get_status',
     {
-      description: 'Get the status of the SDD spec tree. Answers a SUMMARY by default: the approval verdict, the counts per subsystem (members as projects), the findings counted by code, any Externals section and the Network line. Pass detail: full for the whole per-spec tree with its completeness, and sdd_search_specs to look one spec up. Supports scoping and recursion controls. The structured content carries the answer (the text block, as `report`), the `detail` it is, and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
+      description: 'Get the status of the SDD spec tree. Answers a SUMMARY by default: the approval verdict, the counts per subsystem (members as projects), any Externals section and the Network line. Status does not validate: sdd_validate_tree lists the findings. Pass detail: full for the whole per-spec tree with its completeness, and sdd_search_specs to look one spec up. Supports scoping and recursion controls. The structured content carries the answer (the text block, as `report`), the `detail` it is, and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
         recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
-        detail: z.enum(['summary', 'full']).optional().describe('summary (default): approval, counts per level and subsystem, findings by code, what to read next. full: the whole report, as `wairon status` prints it'),
+        detail: z.enum(['summary', 'full']).optional().describe('summary (default): approval, counts per level and subsystem, what to read next (sdd_validate_tree for the findings). full: the whole report, as `wairon status` prints it'),
       },
       outputSchema: getStatusOutput,
     },

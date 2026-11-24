@@ -45,7 +45,7 @@ interface Tally {
 
 const TREE_CHARS = /^[│├└─\s]*/;
 
-/** The cut: leads, verdict, counts per subsystem, findings by code, Externals, Network, a pointer. */
+/** The cut: leads, verdict, counts per subsystem, any finding line the report carries by code, Externals, Network, a pointer. */
 export function summarizeStatus(p: StatusPieces): string {
   const lines = p.report.split('\n');
   // A report that failed (the tree will not load, no project binds) is the explanation: never cut.
@@ -123,7 +123,7 @@ export function summarizeStatus(p: StatusPieces): string {
   if (externals) body.push('', externals);
   const network = p.network.trim();
   if (network) body.push('', network);
-  body.push('', 'This is the summary: pass `detail: full` for the whole per-spec tree, or use sdd_search_specs to look up one spec by name or meaning.');
+  body.push('', 'This is the summary: pass `detail: full` for the whole per-spec tree, use sdd_search_specs to look up one spec by name or meaning, and sdd_validate_tree for the findings (status does not validate).');
   return `${p.banner}${p.family}${out.join('\n')}\n${body.join('\n')}\n\nwairon ${p.version}\n`;
 }
 

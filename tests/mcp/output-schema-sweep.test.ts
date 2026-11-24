@@ -131,6 +131,7 @@ describe('every structured answer fits its advertised outputSchema', () => {
     const summaryText = summary.content?.[0]?.text ?? '';
     expect(summary.structuredContent.detail).toBe('summary');
     expect(summaryText).toContain('This is the summary: pass `detail: full`');
+    expect(summaryText).toContain('sdd_validate_tree for the findings (status does not validate)');
     expect(summaryText).toMatch(/\[Subsystem\] orders[^:\n]*: 2 components, 2 interfaces, 2 implementations/);
     expect(summaryText).toContain('(shared types): 1 types');
     expect(summaryText).not.toContain('Interface: iorder_flow');
