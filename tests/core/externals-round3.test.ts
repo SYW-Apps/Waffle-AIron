@@ -466,6 +466,42 @@ describe('R3-34 / R3-3 — the producer sees a sibling-checkout consumer and its
     }
   }, 120_000);
 
+  it('round 8: a dangling L0 re-export whose component cannot serve the entry\'s own role foretells EXPORT_UNCONSUMABLE, as validate then reports', async () => {
+    const p = pair();
+    bind(p.geo);
+    // A second L0 name for the port, declaring no role: read as called, which an Adapter cannot serve.
+    updateSpecGated('system', 'system', { publicInterfaces: [{ from: 'tiling', component: 'tile-source-port', as: 'tile-port' }] });
+    const mcp = await connected();
+    try {
+      const r = await mcp.call('sdd_set_public_interfaces', { subsystem: 'tiling', publicInterfaces: [] });
+      expect(r.isError ?? false, r.text).toBe(false);
+      expect(r.text).toMatch(/L0 export "tile-port" .*EXPORT_INVALID, and EXPORT_UNCONSUMABLE: Adapter "tile-source-port" cannot be called across the boundary/);
+      // The role-implement entry on the same Adapter is served: no UNCONSUMABLE foretold for it.
+      expect(r.text).toMatch(/L0 export "tile-source" [^\n]*EXPORT_INVALID\. Restore/);
+      invalidateSpecCache();
+      const codes = validateProject().issues.filter((i) => i.code.startsWith('EXPORT_')).map((i) => `${i.code} ${i.message}`).join('\n');
+      expect(codes).toMatch(/EXPORT_UNCONSUMABLE[^\n]*tile-port/);
+    } finally {
+      await mcp.close();
+    }
+  }, 120_000);
+
+  it('round 8: a removal not searched says once that the answer is about the family alone', async () => {
+    const p = pair();
+    bind(p.geo);
+    updateSpecGated('component', 'tile-source-port', { abstract: true });
+    const mcp = await connected();
+    try {
+      const r = await mcp.call('sdd_update_spec', { kind: 'interface', id: 'itile_source_port', delta: { methods: [{ name: 'load_tile', action: 'delete' }] }, dryRun: true });
+      expect(r.isError ?? false, r.text).toBe(false);
+      expect(r.text).toContain('No consumer in this family uses it; consumers outside it were not searched');
+      expect(r.text).not.toContain('No consumer in reach uses it');
+      expect(r.text).not.toContain('outside this family were not searched: pass search');
+    } finally {
+      await mcp.close();
+    }
+  }, 120_000);
+
   it('sdd_list_consumers answers within its output schema when a consumer implements an extension point', async () => {
     const p = pair();
     bind(p.geo);
