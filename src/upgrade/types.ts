@@ -63,7 +63,15 @@ export interface StepPlan {
   reported: string[];
 }
 
-/** upgrade_plan — what upgrading a family to the running major would do. */
+/** upgrade_findings — what the running major's design rules report on one upgraded project's rehearsal copy. */
+export interface UpgradeFindings {
+  /** The project root, absolute (its live root, not the rehearsal's). */
+  project: string;
+  /** Each error and warning in one line: severity, code, spec and message, the rehearsal folder read as the project's. */
+  findings: string[];
+}
+
+/** upgrade_plan —what upgrading a family to the running major would do. */
 export interface UpgradePlan {
   /** The top root the plan was made from, absolute. */
   familyRoot: string;
@@ -79,6 +87,8 @@ export interface UpgradePlan {
   rehearsal?: Rehearsal;
   /** Every file the upgrade replaces, creates or deletes, per project. */
   changes: FileChange[];
+  /** For each older project holding a project.yaml, the design errors and warnings the running major reports on its upgraded copy; one with none is left out. */
+  findings: UpgradeFindings[];
 }
 
 /** tree_upgrade_report — what applying an upgrade plan came to. */

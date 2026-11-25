@@ -75,6 +75,12 @@ function hasOlder(plan: UpgradePlan): boolean {
   return plan.standings.some((s) => s.state === 'older');
 }
 
+/** The headings the plan and the report file share. */
+const REWRITTEN = 'Rewritten';
+const TO_DECIDE = 'To decide';
+const FINDINGS = 'Findings once upgraded';
+const FINDINGS_NOTE = 'The new major reports these on the upgraded tree; `wairon validate --ci` fails on them until they are resolved.';
+
 /** Print the plan: standings, every rewrite, what only an author can decide, then what the new major changes. */
 function printPlan(plan: UpgradePlan): void {
   logger.blank();
@@ -87,6 +93,7 @@ function printPlan(plan: UpgradePlan): void {
       : !s.stamped && stampOnly ? 'made by wairon 6.0.0, before the major stamp' : `written by major ${s.writtenMajor}${s.stamped ? '' : ' (unstamped)'}`;
     const note = s.state === 'older' ? written : s.state;
     console.log(`  ${s.root}  ${chalk.gray(note)}`);
+    if (s.state === 'older') console.log(`    ${chalk.gray(`project.yaml  waironMajor: ${s.writtenMajor} becomes ${s.runningMajor}`)}`);
   }
   if (isStampOnly(plan)) {
     console.log(`  ${chalk.gray('Nothing to rewrite: only the major stamp moves.')}`);
@@ -96,11 +103,18 @@ function printPlan(plan: UpgradePlan): void {
   for (const step of plan.steps) {
     if (step.changes.length === 0 && step.reported.length === 0) continue;
     console.log(`\n  ${chalk.bold(step.project)} ${chalk.gray(`(major ${step.step.from} to ${step.step.to})`)}`);
+    if (step.changes.length > 0) console.log(`    ${chalk.bold(REWRITTEN)}`);
     for (const c of step.changes) {
       const at = c.spec ? `${c.spec}: ` : '';
-      console.log(`    ${c.design ? chalk.yellow('design') : chalk.gray('       ')} ${at}${c.description}`);
+      console.log(`      - ${c.design ? `${chalk.yellow('[design]')} ` : ''}${at}${c.description}`);
     }
-    for (const r of step.reported) console.log(`    ${chalk.yellow('decide')} ${r}`);
+    if (step.reported.length > 0) console.log(`    ${chalk.bold(TO_DECIDE)}`);
+    for (const r of step.reported) console.log(`      - ${r}`);
+  }
+  for (const f of plan.findings ?? []) {
+    console.log(`\n  ${chalk.bold(FINDINGS)} ${chalk.gray(f.project)}`);
+    console.log(`    ${chalk.gray(FINDINGS_NOTE)}`);
+    for (const line of f.findings) console.log(`      - ${line}`);
   }
   if (plan.whatChanged.length > 0) {
     console.log(`\n  ${chalk.bold('What the new major changes')}`);
@@ -120,19 +134,26 @@ export const UPGRADE_REPORT_FILE = path.join('.wai', 'upgrade-report.md');
 export function reportMarkdown(plan: UpgradePlan): string {
   const lines = [`# wairon upgrade — to major ${plan.runningMajor}`, ''];
   for (const s of plan.standings) {
-    if (s.state === 'older') lines.push(`- \`${s.root}\`: ${s.unfinished ? `an unfinished upgrade from wairon ${s.writtenMajor}` : `written by major ${s.writtenMajor}`}`);
+    if (s.state === 'older') {
+      lines.push(`- \`${s.root}\`: ${s.unfinished ? `an unfinished upgrade from wairon ${s.writtenMajor}` : `written by major ${s.writtenMajor}`}`);
+      lines.push(`  - project.yaml: \`waironMajor: ${s.writtenMajor}\` becomes \`${s.runningMajor}\``);
+    }
   }
   for (const step of plan.steps) {
     if (step.changes.length === 0 && step.reported.length === 0) continue;
     lines.push('', `## ${step.project} (major ${step.step.from} to ${step.step.to})`);
     if (step.changes.length > 0) {
-      lines.push('', '### Rewritten', '');
+      lines.push('', `### ${REWRITTEN}`, '');
       for (const c of step.changes) lines.push(`- ${c.design ? '**design** ' : ''}${c.spec ? `\`${c.spec}\`: ` : ''}${c.description}`);
     }
     if (step.reported.length > 0) {
-      lines.push('', '### To decide', '');
+      lines.push('', `### ${TO_DECIDE}`, '');
       for (const r of step.reported) lines.push(`- ${r}`);
     }
+  }
+  for (const f of plan.findings ?? []) {
+    lines.push('', `## ${FINDINGS}: ${f.project}`, '', FINDINGS_NOTE, '');
+    for (const line of f.findings) lines.push(`- ${line}`);
   }
   if (plan.whatChanged.length > 0) {
     lines.push('', '## What the new major changes', '');
@@ -145,6 +166,7 @@ export function reportMarkdown(plan: UpgradePlan): string {
 function printOutcome(report: TreeUpgradeReport): void {
   for (const root of report.stamped) logger.success(`${root} is now on major ${report.plan.runningMajor}`);
   for (const root of report.relock) logger.warn(`${root}: the approved design moved — run \`wairon lock\` at its root`);
+  logger.info('The generated guides and skills keep the old major\'s text until `wairon generate` (or the next `wairon lock`) refreshes them.');
   if (isStampOnly(report.plan)) return;
   const file = path.join(report.plan.familyRoot, UPGRADE_REPORT_FILE);
   try {
@@ -207,7 +229,11 @@ export async function runUpgrade(options: UpgradeCommandOptions): Promise<void> 
   }
   // Steps 16-17: dropped; a non-interactive run is told how to confirm.
   discard(plan);
-  logger.info('Nothing was written. Run `wairon upgrade --yes` to apply it without a prompt.');
+  if (!isInteractive() && options.yes !== true) {
+    logger.info('Could not ask for a confirmation (no terminal to ask in): nothing was applied. Run `wairon upgrade --yes` to apply it without a prompt.');
+  } else {
+    logger.info('Nothing was written. Run `wairon upgrade --yes` to apply it without a prompt.');
+  }
 }
 
 /** The command that prints the curated notes of one release and the link to the full changelog. */

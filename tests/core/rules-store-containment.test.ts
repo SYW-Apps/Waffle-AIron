@@ -124,6 +124,8 @@ describe('INDEX_DOES_IO — an Index keeps a lookup in memory and does no IO', (
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('slot-index');
+      expect(found[0].message).toMatch(/keyed lookup becomes a read method on the Store/);
+      expect(found[0].message).toMatch(/computed read becomes a Query of the Repository/);
       expect(found[0].message).toContain('slot-adapter');
       expect(byCode(res, 'ARCHITECTURE_VIOLATION_INDEX_DEP')).toHaveLength(0);
     } finally { proj.cleanup(); }

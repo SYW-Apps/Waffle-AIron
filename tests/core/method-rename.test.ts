@@ -144,7 +144,7 @@ function books(): string {
     ],
   }));
   write('components/books_orch.yaml', comp('books_orch', 'books', 'Orchestrator', {
-    dependsOn: ['ledger', 'mailer'], description: 'posts entries, and its own prose names no method',
+    dependsOn: ['ledger', 'mailer'], description: 'posts entries, so post the file first; its own prose names no method',
   }));
   write('interfaces/ibooks_orch.yaml', intf('ibooks_orch', 'books_orch', ['run', 'tally']));
   write('implementations/books_orch_impl.yaml', impl('books_orch_impl', 'ibooks_orch', [
@@ -166,7 +166,7 @@ function books(): string {
   write('interfaces/imailer.yaml', intf('imailer', 'mailer', ['post']));
   write('implementations/mailer_impl.yaml', impl('mailer_impl', 'imailer', [{ name: 'post', steps: [{ type: 'local' }] }]));
   write('types/entry.yaml', {
-    kind: 'entity', id: 'entry', name: 'Entry', description: 'the entry a post appends', subsystem: 'books', componentClass: 'ledger',
+    kind: 'entity', id: 'entry', name: 'Entry', description: 'the entry that ledger.post appends', subsystem: 'books', componentClass: 'ledger',
     fields: [{ name: 'id', type: 'string', optional: false }], methods: [], createdAt: now, updatedAt: now,
   });
   setProjectRoot(root);
@@ -311,7 +311,8 @@ describe('renameMethod', () => {
       name: 'append',
       endpoint: { transport: 'gRPC', service: 'books.Ledger', method: 'post' },
     });
-    // Prose that merely CONTAINS the name is not a mention of it.
+    // Prose that merely CONTAINS the name, or uses the bare English word ("post the file"), is not a
+    // mention of the method: only `<component>.<method>` is. `ledger.post` in entry's prose is.
     expect(report.mentions).not.toContain('books_orch');
   });
 

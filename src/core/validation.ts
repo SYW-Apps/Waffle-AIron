@@ -601,6 +601,7 @@ export function validateProjectFresh(
 /** What the code half CHECKS at each reading, in the order a summary names them. */
 const CHECKED_AT_EXACT = ['methods', 'params', 'returns (where annotated)', 'public members', 'imports', 'calls', 'routes', 'data types'];
 const NOT_CHECKED_EVER = [
+  'test files (only the source files the design names are read, so a test importing a module that no longer exists stays clean)',
   'calls inside helpers and to collaborators a narrative never names (summarized by its detail)',
   'libraries and platform I/O a component uses (a file read, fetch, an HTTP client, a helper class no component realizes) — a library a component uses is not compared beyond a bound technology\'s packages',
 ];
@@ -684,6 +685,14 @@ function unroutedIn(codeModel: CodeModel, unrouted: readonly UnroutedPortal[], l
   return unrouted.filter((u) => u.files.some((file) => languageAt.get(pathKey(file)) === language)).length;
 }
 
+/** The files read at the weakest grade, named (up to three, then a count): `: a.py, b.py and 2 more`. Empty when none is named. */
+export function weakestFilesNote(analyzed: readonly SourceFileFacts[], grade: string): string {
+  const names = [...new Set(analyzed.filter((f) => f.analysisGrade === grade).map((f) => String(f.path).replace(/\\/g, '/')))].sort();
+  if (names.length === 0) return '';
+  const shown = names.slice(0, 3).join(', ');
+  return names.length > 3 ? `: ${shown} and ${names.length - 3} more` : `: ${shown}`;
+}
+
 /**
  * The code reading of a run, one line: the weakest analysis grade any
  * analyzed file was read at and, when a file was read at exact grade, the
@@ -702,7 +711,7 @@ export function codeReadingOf(codeModel: CodeModel, unrouted: readonly UnroutedP
   const by = compiler ? ` with TypeScript ${compiler.version} (${compiler.source === 'project' ? 'the project\'s own' : 'wairon\'s own copy'})` : '';
   const head = grade === 'exact'
     ? `Code read at grade exact${by}`
-    : `Code read at grade ${grade} (the weakest file's)${exact ? `; its exact-grade files${by}` : ''}`;
+    : `Code read at grade ${grade} (the weakest file's${weakestFilesNote(analyzed, grade)})${exact ? `; its exact-grade files${by}` : ''}`;
   const byLanguage = new Map<string, SourceFileFacts[]>();
   for (const f of analyzed) {
     const language = f.language ?? 'unknown';

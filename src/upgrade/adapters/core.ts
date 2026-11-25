@@ -14,7 +14,7 @@ import type { ValidationIssue } from '../../core/validation.js';
 export {
   findLegacySpecFiles, writeLockRecord, projectFamily, captureApprovedSpecs, loadProjectConfig,
 } from '../../core/index.js';
-export { computeApprovalId, resolvedPacks } from '../../core/validation.js';
+export { computeApprovalId, resolvedPacks, validateProject, listRules } from '../../core/validation.js';
 
 /**
  * iupgrade_core_adapter.getLoaderIssues — the loader's diagnostics for the

@@ -836,6 +836,13 @@ function renderDeletion(deletion: SpecDeletion, searched?: boolean): string {
     lines.push(...deletion.references.map((r) => `- ${r.kind} "${r.id}" (${r.position}) -> ${r.target.kind} "${r.target.id}"`));
   }
   lines.push(...renderBreaks(deletion.published, deletion.breaks ?? [], deletion.dryRun, false, searched));
+  if (deletion.released?.length) {
+    lines.push('', deletion.dryRun ? 'RELEASED — these owns entries would be dropped from their owners:' : 'RELEASED — these owns entries were dropped from their owners:');
+    lines.push(...deletion.released.map((r) => `- ${r.kind} "${r.id}" no longer owns ${r.target.kind} "${r.target.id}"`));
+  }
+  if (deletion.testsSearched === false) {
+    lines.push('', 'TESTS NOT SEARCHED — the project declares no rules.conformance.testRoots, so no tests were looked for; an empty list here is not "none found".');
+  }
   lines.push(...renderTestsToRevisit(deletion.testsToRevisit));
   if (deletion.findings?.length) {
     lines.push('', `FINDINGS the deletion ${deletion.dryRun ? 'would leave' : 'left'} that the tree does not report now:`);
@@ -1054,6 +1061,12 @@ const specDeletionOutput = {
   ),
   findings: z.array(z.string()).optional().describe(
     'What the deletion leaves that the tree does not report now, rehearsed on a copy: `<severity> <CODE> [spec] message`, errors, warnings and notices.',
+  ),
+  testsSearched: z.boolean().optional().describe(
+    'False when the project declares no test roots: an empty testsToRevisit then means tests were not searched, never that none were found. Absent when the deletion took away no method.',
+  ),
+  released: z.array(z.object({ kind: z.string(), id: z.string(), position: z.string(), target: z.object({ kind: z.string(), id: z.string() }) })).optional().describe(
+    'Each `owns` entry naming a removed spec that the deletion dropped from its owner (would drop, on a dry run): never dangling, never a refusal.',
   ),
   ...staleServerOutput,
 } satisfies Record<keyof SpecDeletion | keyof typeof staleServerOutput, z.ZodTypeAny>;

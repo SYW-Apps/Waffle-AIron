@@ -1,6 +1,7 @@
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
+import * as fs from 'fs';
 import * as path from 'path';
 import {
   // The approval surface, reached through core_portal rather than through
@@ -39,7 +40,7 @@ import { computeApprovalId, familyApprovals, resolvedPacks, unpinnedExternals, u
 import { pinExternals, recordPacks } from '../core/surface-portal.js';
 import type { ExternalPin } from '../models/specs.js';
 import {
-  approvalStamp, describeApprover, describeApprovalParts, designOnly, ciBlockingIssues, gatePartsProblem, missingTreeSentence, movedParts,
+  approvalStamp, upgradeLine, describeApprover, describeApprovalParts, designOnly, ciBlockingIssues, gatePartsProblem, missingTreeSentence, movedParts,
   type CodeAnalysis, type ProjectApproval,
 } from '../models/lock.js';
 import { canonicalize } from '../utils/canonical-json.js';
@@ -179,7 +180,7 @@ export function treeVerdict(strict: boolean): ApprovalCheck | null {
  */
 function ownApprovalBeside(state: string, own: ProjectApproval | undefined): string {
   if (state === 'locked' || own?.state === 'approved') return 'This project\'s own approval still covers its design.';
-  const after = ' — run `wairon lock` here after the member(s).';
+  const after = ` — run \`${waironCommand()} lock\` here after the member(s).`;
   if (own?.owed !== undefined) return `This project's own approval does not cover it either: ${own.owed}${after}`;
   const moved = own?.partsMoved ?? [];
   if (moved.includes('design')) return `This project's own specs changed since its approval too${after}`;
@@ -233,7 +234,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
         ? `Member project(s) carry spec changes nobody approved: ${drifted.map((m) => describeMemberAt(m, where)).join('; ')}. `
           + 'Nothing says a human has seen what is about to merge in them. '
         : `Member project(s) are not covered by their own approval: ${drifted.map((m) => describeMemberAt(m, where)).join('; ')}. `)
-        + `Fix: run \`wairon lock\` in each member's own folder and commit its .wai/lock.json. ${own}`,
+        + `Fix: run \`${waironCommand()} lock\` in each member's own folder and commit its .wai/lock.json. ${own}`,
     };
   }
 
@@ -273,7 +274,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
             ? ` Notice: the record's parts are ignored — ${ownEntry.partsIgnored}; the identity alone decided this, and \`wairon lock\` rewrites them.`
             : '')
           + (record!.upgraded
-            ? ` \`wairon upgrade\` carried this approval over from lock format ${record!.upgraded.fromFormat} without a review.`
+            ? ` ${upgradeLine(record!.upgraded.fromFormat, record!.upgraded.carried, waironCommand())}`
             : ''),
       };
     }
@@ -286,7 +287,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
           + `(the approval on record is ${approvalStamp(record!)}). `
           + `${whatMoved(record!, lock.current)} `
           + 'Nothing says a human has seen what is about to merge. '
-          + 'Fix: run `wairon lock` on this branch and commit the updated .wai/lock.json.',
+          + `Fix: run \`${waironCommand()} lock\` on this branch and commit the updated .wai/lock.json.`,
       };
     }
     default:
@@ -520,6 +521,36 @@ const LIST_LIMIT = 12;
 /** How many paths of one kind a summarized list still shows. */
 const LIST_HEAD = 8;
 
+/**
+ * Removed spec files, one line per removed component: a component's own file,
+ * its contract (`interfaces/i<id>`) and its implementation (`implementations/<id>_impl`)
+ * collapse into "component <id> (its component, contract and implementation)". Any other file
+ * (a type, a subsystem, a lone file of a component) keeps its path.
+ */
+export function groupRemovedByComponent(paths: string[]): string[] {
+  const kinds: Record<string, { word: string; id: (base: string) => string }> = {
+    components: { word: 'component spec', id: (b) => b },
+    interfaces: { word: 'contract', id: (b) => b.replace(/^i/, '') },
+    implementations: { word: 'implementation', id: (b) => b.replace(/_impl$/, '') },
+  };
+  const groups = new Map<string, { words: string[]; files: string[] }>();
+  const order: (string | { path: string })[] = [];
+  for (const p of paths) {
+    const m = /^(.*\.wai\/specs\/)(components|interfaces|implementations)\/([^/]+)\.yaml$/.exec(p.replace(/\\/g, '/'));
+    if (!m) { order.push({ path: p }); continue; }
+    const id = kinds[m[2]].id(m[3]);
+    let g = groups.get(id);
+    if (!g) { g = { words: [], files: [] }; groups.set(id, g); order.push(id); }
+    g.words.push(kinds[m[2]].word);
+    g.files.push(p);
+  }
+  return order.map((o) => {
+    if (typeof o !== 'string') return o.path;
+    const g = groups.get(o)!;
+    return g.files.length === 1 ? g.files[0] : `component ${o} (its ${g.words.join(', ')} — ${g.files.length} files)`;
+  });
+}
+
 /** One kind of change, listed — whole under --all or when short, else its head and a count of the rest. */
 function listPaths(mark: string, paths: string[], all: boolean): boolean {
   const shown = all || paths.length <= LIST_LIMIT ? paths : paths.slice(0, LIST_HEAD);
@@ -663,9 +694,9 @@ function summarize(gate: ValidationResult, members: ProjectApproval[], captured:
     const cut = [
       listPaths('~', diff.changed, all),
       listPaths('+', diff.added, all),
-      listPaths('-', diff.removed, all),
+      listPaths('-', groupRemovedByComponent(diff.removed), all),
     ].some(Boolean);
-    if (cut) logger.info('  (`wairon lock --all` lists every one; `wairon status --all` names them too)');
+    if (cut) logger.info(`  (\`${waironCommand()} lock --all\` lists every one; \`${waironCommand()} status --all\` names them too)`);
   }
   // The project's own inputs, when this lock records them for the first time
   // or they moved: the tuning a human approves is shown, never only digested.
@@ -1119,4 +1150,37 @@ function memberProjectOf(scope: string): ProjectApproval | null {
 function withoutCodes(analysis: CodeAnalysis): CodeAnalysis {
   const { codes: _codes, ...rest } = analysis;
   return rest;
+}
+
+
+/**
+ * Whether `script` (a resolved path of the running binary) is wairon installed
+ * under a node_modules folder of `projectRoot` (or of one of its parents), so the
+ * human ran it through `npx`.
+ */
+export function isLocalInstall(script: string | undefined, projectRoot: string): boolean {
+  if (!script) return false;
+  let real = script;
+  try { real = fs.realpathSync(script); } catch { /* keep the path as given */ }
+  const norm = (p: string): string => path.resolve(p).replace(/\\/g, '/').toLowerCase();
+  const target = norm(real);
+  const original = norm(script);
+  const root = norm(projectRoot);
+  for (const candidate of [target, original]) {
+    const at = candidate.lastIndexOf('/node_modules/');
+    if (at < 0) continue;
+    const owner = candidate.slice(0, at);
+    const inside = candidate.slice(at + '/node_modules/'.length);
+    const isWairon = /^(\.bin\/wairon|wairon\/)/.test(inside) || inside.startsWith('@wairon/');
+    if (isWairon && (root === owner || root.startsWith(`${owner}/`))) return true;
+  }
+  return false;
+}
+
+/**
+ * The command a hint names: `npx wairon` when the running binary lives in the
+ * project's node_modules (a local install), else `wairon`.
+ */
+export function waironCommand(projectRoot: string = process.cwd(), script: string | undefined = process.argv[1]): string {
+  return isLocalInstall(script, projectRoot) ? 'npx wairon' : 'wairon';
 }

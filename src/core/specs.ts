@@ -8086,15 +8086,14 @@ export class SpecWorkspace {
 
     const targetImpl = implementations.find((i) => i.contract === receiving.id);
     if (travelling.length > 0 && targetImpl) {
-      // An entry that relied on its old implementation's default file would
-      // otherwise be realized, silently, in whatever file the target's
-      // implementation names. It keeps its file as its own instead.
+      // A moved entry carries only a sourcePath it stated itself: the source
+      // implementation's default file is never copied onto it. It reads
+      // unrealized in its new home until its code moves, and says so.
       for (const entry of travelling) {
         const file = realizedIn.get(entry.name);
         if (entry.sourcePath || !file || file === targetImpl.sourcePath) continue;
-        entry.sourcePath = file;
-        plan.notices.push(`"${entry.name}" keeps ${file} as its own sourcePath: it was realized there by default, and `
-          + `"${targetImpl.id}" names ${targetImpl.sourcePath ? targetImpl.sourcePath : 'no file'} — moving a method is not moving its code.`);
+        plan.notices.push(`"${entry.name}" was realized in ${file} (from); "${targetImpl.id}" names ${targetImpl.sourcePath ? targetImpl.sourcePath : 'no file'} (to) — `
+          + `moving a method is not moving its code, so it reads unrealized until its code moves.`);
       }
       this.stageMoveEdit(plan, 'implementation', targetImpl.id, targetImpl, {
         ...cloneSpec(targetImpl),

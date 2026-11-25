@@ -75,7 +75,7 @@ describe('the lock record, v6 to v7', () => {
     expect(lock).not.toHaveProperty('gateParts');
     expect(lock).not.toHaveProperty('specsReading');
     expect(lock).not.toHaveProperty('reexpressed');
-    expect(lock.upgraded).toMatchObject({ fromFormat: 3, carried: true, compared: ['specs', 'design', 'rules', 'composition', 'network'] });
+    expect(lock.upgraded).toMatchObject({ fromFormat: 3, carried: true, compared: ['specs', 'rules', 'composition', 'network'] });
 
     // The v7 core reads it and finds the identity it computes now.
     setProjectRoot(root);
@@ -106,7 +106,7 @@ describe('the lock record, v6 to v7', () => {
     expect(lock.stateId).toEqual(old.stateId);
     expect(lock.parts).toEqual({});
     expect(lock.specs).toEqual(old.specs);
-    expect(lock.upgraded).toMatchObject({ fromFormat: 3, carried: false, compared: ['specs', 'design'] });
+    expect(lock.upgraded).toMatchObject({ fromFormat: 3, carried: false, compared: ['specs'] });
     expect(lock.lockedBy).toEqual({ id: 'approver', source: 'git' });
 
     // Stale for the v7 core: the identity it computes now is not the recorded one.

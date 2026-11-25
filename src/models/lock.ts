@@ -226,6 +226,16 @@ export function movedParts(record: { parts?: Record<string, string> }, current: 
 }
 
 /**
+ * What `wairon upgrade` did with an approval from an earlier major: carried it without a review, or could not.
+ * `cmd` is the command the hint names (`npx wairon` for a local install, which only the CLI knows).
+ */
+export function upgradeLine(fromFormat: number | string, carried: boolean, cmd = 'wairon'): string {
+  return carried
+    ? `\`${cmd} upgrade\` carried this approval over from an earlier wairon major (lock format ${fromFormat}) without a review.`
+    : `\`${cmd} upgrade\` could not carry this approval over from an earlier wairon major (lock format ${fromFormat}): it reads stale until the next \`${cmd} lock\`.`;
+}
+
+/**
  * lock_record.approvalStamp — `<lockedAt> by <approver>` as every verdict
  * names an approval; a record that carries no lockedAt or no usable lockedBy
  * says so instead of `undefined by unknown`. Pure.

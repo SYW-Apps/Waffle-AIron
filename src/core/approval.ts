@@ -3,7 +3,7 @@ import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 import { snapshotSpecFiles, graph, scanAllSpecs } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
-import { approvalStamp, describeApprovalParts, type ProjectApproval } from '../models/lock.js';
+import { approvalStamp, describeApprovalParts, upgradeLine, type ProjectApproval } from '../models/lock.js';
 import { parseYaml } from '../utils/yaml.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import {
@@ -416,7 +416,8 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
     // Name every one up to VERDICT_LIST_LIMIT; past it the first ones, the
     // count of the rest and the command that lists them — never a cut list
     // that reads as the whole account.
-    const named = [...diff.changed, ...diff.added, ...diff.removed].slice(0, VERDICT_LIST_LIMIT);
+    const marked = [...diff.changed.map((p) => `~ ${p}`), ...diff.added.map((p) => `+ ${p}`), ...diff.removed.map((p) => `- ${p}`)];
+    const named = marked.slice(0, VERDICT_LIST_LIMIT);
     const rest = diffSize(diff) - named.length;
 
     // One category needs no breakdown: "1 spec changed since approval (1
@@ -479,7 +480,7 @@ function memberNotes(approvals: ProjectApproval[], record: LockRecord): string {
   const unapproved = direct.filter((a) => a.state !== 'approved');
   const lines: string[] = [];
   if (record.upgraded) {
-    lines.push(`\`wairon upgrade\` carried this approval over from an earlier wairon major (lock format ${record.upgraded.fromFormat}) without a review${record.upgraded.carried ? '' : ' — it did not carry, so it reads stale until one `wairon lock`'}.`);
+    lines.push(upgradeLine(record.upgraded.fromFormat, record.upgraded.carried));
   }
   if (unapproved.length) {
     lines.push(`Member(s) not approved at their own root: ${unapproved.map((a) => `${a.alias ?? a.key} (${a.state}${a.partsMoved && a.partsMoved.length > 0 ? `: ${describeApprovalParts(a.partsMoved)} moved` : ''})`).join(', ')}.`);
