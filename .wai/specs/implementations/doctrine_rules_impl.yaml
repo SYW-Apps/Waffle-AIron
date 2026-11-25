@@ -392,8 +392,12 @@ methods:
         description: >-
           Report INDEX_DOES_IO (warning, on edge.from.id, at the Adapter's id as its site; draft
           context edge.draftContext) naming the Index and the Adapter: an Index keeps a lookup over
-          its Store's entries in memory, so move the read to the Store (the Store may depend on the
-          Adapter) and have the Index project what the Store holds
+          its Store's entries in memory and does no IO, so a lookup the backend answers belongs on
+          the data layer — a keyed lookup (by an id, a handle, an owner) becomes a read method of
+          the Store (which may depend on the Adapter), a computed read (a search, a filter over
+          several fields, an aggregate) becomes a Query of the Repository (which may depend on the
+          backend Adapter); keep an Index only for a lookup projected in memory from what the Store
+          holds
         type: local
       - stepNumber: 12
         description: On to the next edge
@@ -1984,4 +1988,4 @@ methods:
     exportedVia: abstractionFindingsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-11-22T15:13:19.785Z'
+updatedAt: '2026-11-25T20:24:14.331Z'

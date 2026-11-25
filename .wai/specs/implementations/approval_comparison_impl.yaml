@@ -135,10 +135,11 @@ methods:
           From the approvals the caller passed, when it passed any, take the root's own entry: its
           state, partsMoved, partsIgnored, owed and inputs. When the entry carries partsIgnored, one
           notice says the record's parts are ignored and `wairon lock` rewrites them. When the
-          record carries `upgraded`, one line says `wairon upgrade` carried the approval over from
-          the earlier major without a review. Then take the direct members (parent = the root) that
-          are drifted or never approved: each is the member's to lock, named so the parent knows,
-          never this project's drift
+          record carries `upgraded`, one line says what `wairon upgrade` did with the approval from
+          the earlier major: carried it over without a review, or could not carry it, so it reads
+          stale until one `wairon lock`. Then take the direct members (parent = the root) that are
+          drifted or never approved: each is the member's to lock, named so the parent knows, never
+          this project's drift
         type: local
       - stepNumber: 6
         description: Compare the tree against what was approved
@@ -180,4 +181,4 @@ methods:
     symbol: approvalVerdict
 status: complete
 createdAt: '2026-09-20T15:19:32.451Z'
-updatedAt: '2026-11-22T02:20:55.800Z'
+updatedAt: '2026-11-25T20:24:40.544Z'

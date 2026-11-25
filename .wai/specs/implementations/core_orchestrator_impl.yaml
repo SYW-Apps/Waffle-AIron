@@ -1748,7 +1748,10 @@ methods:
           findings — into <target>_impl, created inheriting the source implementation's sourcePath,
           when no implementation realizes the receiving contract — the specs it creates named for
           the report, and the dependencies the moved narratives call that the target does not have
-          yet
+          yet. An entry carries only the sourcePath it stated itself: one realized by its old
+          implementation's file by default arrives realized by the receiving implementation's file,
+          because moving a method is not moving its code — conformance then reports it unrealized
+          there until its code moves, and the report says so, naming both files
         type: local
       - stepNumber: 7
         description: >-
@@ -4114,4 +4117,4 @@ methods:
         outcome: the specs the method moved in and the pinned symbol, when one was set
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-23T07:02:16.455Z'
+updatedAt: '2026-11-25T20:22:30.977Z'

@@ -118,7 +118,7 @@ methods:
         endStep: 17
         catches:
           - error: StepRefused
-            step: 24
+            step: 28
       - stepNumber: 13
         description: >-
           For each kept step the oldest root runs, oldest first, and within it each older root that
@@ -167,26 +167,56 @@ methods:
         targetComponent: project_stamp_adapter
         targetMethod: write
       - stepNumber: 21
+        label: foretell
+        description: >-
+          Read the rules the validator runs, to tell those that judge code (the rehearsal copy holds
+          none, so they cannot judge it) from those that judge the design
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: listRules
+      - stepNumber: 22
+        description: >-
+          For each older root whose rehearsal copy holds a project.yaml (a part is judged with its
+          project)
+        type: loop
+        loopKind: forEach
+        over: the older project roots
+        endStep: 24
+      - stepNumber: 23
+        description: >-
+          Validate its rehearsal copy, bound as its root, with the running major's rules: the tree
+          exactly as the commit would leave it, stamps included
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: validateProject
+      - stepNumber: 24
+        description: >-
+          Keep the errors and warnings a design rule reports (a code-judging rule's set aside), each
+          in one line with the copy's folder read as the project's live root, under that live root;
+          a project with none is left out. This is what `wairon validate --ci` fails on once the
+          plan is applied, so the plan says it before anything is written
+        type: local
+      - stepNumber: 25
         description: 'Diff the copy against the live family: the plan''s file changes'
         type: call
         targetComponent: upgrade_migration_adapter
         targetMethod: diff
-      - stepNumber: 22
+      - stepNumber: 26
         description: Take the user-facing summary of the step the plan runs
         type: call
         targetComponent: v6_to_v7_tree_step
         targetMethod: whatChanged
-      - stepNumber: 23
+      - stepNumber: 27
         description: Answer the plan
         type: return
         outcome: UpgradePlan
-      - stepNumber: 24
+      - stepNumber: 28
         label: refused
         description: Restore the caller's binding and drop the rehearsal
         type: call
         targetComponent: upgrade_migration_adapter
         targetMethod: drop
-      - stepNumber: 25
+      - stepNumber: 29
         description: Answer the plan refused, naming the root, the step and why; nothing is written
         type: return
         outcome: refused plan
@@ -269,6 +299,16 @@ methods:
         description: Answer them
         type: return
         outcome: list<ReleaseNote>
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: plan
+      reason: >-
+        plan is one rehearsal workflow: stand each root, copy the family, run every kept step on the
+        copy, stamp it, foretell the new major's findings on that same copy, diff it, and drop it on
+        a refusal. The foretelling must judge the copy the steps and stamps just wrote, inside the
+        region that drops the copy on failure, so moving it behind another call would only split one
+        copy-bound region in two.
 status: draft
 createdAt: '2026-10-18T14:14:37.637Z'
-updatedAt: '2026-11-20T01:25:33.002Z'
+updatedAt: '2026-11-25T20:25:36.874Z'

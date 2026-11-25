@@ -1,0 +1,24 @@
+kind: value-object
+id: upgrade_findings
+name: UpgradeFindings
+description: >-
+  What the running major's rules report on one upgraded project, judged on its rehearsal copy before
+  anything is written: the errors and warnings a design check raises (code checks aside, as the copy
+  holds no code), so a tree clean under the old major learns before the commit that the new one
+  fails its gate.
+subsystem: sdd_upgrade
+fields:
+  - name: project
+    type: string
+    description: The project root, absolute (its live root, not the rehearsal's).
+    optional: false
+  - name: findings
+    type: list<string>
+    description: >-
+      Each error and warning in one line: severity, code, spec and message, the rehearsal folder
+      read as the project's.
+    optional: false
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-11-25T20:21:57.216Z'
+updatedAt: '2026-11-25T20:21:57.638Z'

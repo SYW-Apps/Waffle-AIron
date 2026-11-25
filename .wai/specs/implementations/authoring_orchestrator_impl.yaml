@@ -259,7 +259,10 @@ methods:
           that nothing did and nothing was written — the respellings applied, the implementation
           entries cascaded, the public names a removed method was published under, the callers to
           review of a changed signature and the implementers that must restate it, the findings a
-          write touching an abstraction brings, and the tests to revisit
+          write touching an abstraction brings, and the tests to revisit. A write that changed code
+          linkage (a sourcePath, symbol, exportedVia, injectedParams, router, bindings or simPath)
+          carries one notice that the code findings it may bring are not judged here, naming
+          sdd_validate_tree, which judges them: no rehearsal holds the code
         type: return
         outcome: reported
   - name: moveMethods
@@ -890,7 +893,10 @@ methods:
         description: >-
           Ask the index which references specs outside that set still hold to it
           (spec_index.referencesTo), each with the spec holding it and its position: a dependsOn or
-          owns, a contract's local implements entry naming an abstraction among them
+          owns, a contract's local implements entry naming an abstraction among them. An `owns`
+          entry naming a removed component is set apart as released: the deletion drops it from its
+          owner, since an owned member that goes leaves nothing to decide, so it neither dangles nor
+          refuses
         type: local
       - stepNumber: 11
         description: >-
@@ -945,16 +951,21 @@ methods:
         targetComponent: authoring_core_adapter
         targetMethod: deleteSpec
       - stepNumber: 19
+        description: On the copy, drop each released `owns` entry from its owner, as the deletion will
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: updateSpec
+      - stepNumber: 20
         description: Judge the copy as the deletion leaves it, the same way
         type: call
         targetComponent: authoring_validator_adapter
         targetMethod: validateProject
-      - stepNumber: 20
+      - stepNumber: 21
         description: Discard the copy, whatever the rehearsal did
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: discardRehearsal
-      - stepNumber: 21
+      - stepNumber: 22
         description: >-
           The findings the deletion brings: each error, warning and notice the copy reports after
           the deletion that it did not report before, counted by code and spec (a message naming the
@@ -962,13 +973,13 @@ methods:
           (ABSTRACTION_SINGLE_IMPLEMENTER), a caller left without its callee. A rehearsal that
           throws names nothing
         type: local
-      - stepNumber: 22
+      - stepNumber: 23
         label: plan
         description: Decide whether the caller asked only for the plan
         type: branch
         condition: the caller asked for a dry run
-        onFalseStep: 24
-      - stepNumber: 23
+        onFalseStep: 25
+      - stepNumber: 24
         label: dry-run
         description: >-
           Answer with the plan: every spec that would go, every reference that would be left, every
@@ -976,12 +987,12 @@ methods:
           nothing removed
         type: return
         outcome: dry run
-      - stepNumber: 24
+      - stepNumber: 25
         description: Decide whether the deletion would leave references dangling
         type: branch
         condition: a spec outside the set still references it and the caller did not force the deletion
-        onFalseStep: 26
-      - stepNumber: 25
+        onFalseStep: 27
+      - stepNumber: 26
         label: referenced
         description: >-
           Refuse before anything is removed, naming each reference with the spec that holds it and
@@ -989,25 +1000,41 @@ methods:
           them for validate to report
         type: throw
         error: 'referenced: other specs still reference what the deletion removes'
-      - stepNumber: 26
+      - stepNumber: 27
         label: remove
         description: For each spec of the set, innermost first, so a container goes after its content
         type: loop
         loopKind: forEach
         over: the specs the deletion takes
-        endStep: 27
-      - stepNumber: 27
+        endStep: 28
+      - stepNumber: 28
+        label: delete-one
         description: >-
           Delete the spec document through the core client adapter, which prunes the folders it
           leaves empty
         type: call
         targetComponent: authoring_core_adapter
         targetMethod: deleteSpec
-      - stepNumber: 28
+      - stepNumber: 29
+        label: release
         description: >-
-          Return the deletion: the kind and id, that it was removed, every spec it took, the
-          references a forced deletion left dangling, the public names it published, the tests to
-          revisit and the findings the rehearsal named
+          For each released `owns` entry, drop it from its owner through the core client adapter,
+          after the specs went
+        type: loop
+        loopKind: forEach
+        over: the released owns entries
+        endStep: 30
+      - stepNumber: 30
+        description: Remove the entry from the owner's owns list
+        type: call
+        targetComponent: authoring_core_adapter
+        targetMethod: updateSpec
+      - stepNumber: 31
+        description: >-
+          Return the deletion: the kind and id, that it was removed, every spec it took, the owns
+          entries it released from their owners, the references a forced deletion left dangling, the
+          public names it published, the tests to revisit (and whether tests were searched at all: a
+          project with no test roots searches none) and the findings the rehearsal named
         type: return
         outcome: deleted
 lint:
@@ -1021,4 +1048,4 @@ lint:
         call the tools make with different writes.
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-11-24T19:16:24.706Z'
+updatedAt: '2026-11-25T20:23:51.081Z'
