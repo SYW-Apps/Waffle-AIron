@@ -62,10 +62,11 @@ fields:
   - name: keyOrder
     type: list<string>
     description: >-
-      The record's keys in the order the file held them, so the rewrite keeps that order and appends
-      the keys format 4 adds after them
+      The record's keys in the order the file held them, so the rewrite keeps that order: each key
+      format 4 adds takes the place of the first key it drops (parts and upgraded where gateParts
+      stood), or follows the kept keys when none is dropped
     optional: true
 methods: []
 sourcePath: src/upgrade/steps/v6-to-v7/files.ts
 createdAt: '2026-11-20T01:23:11.737Z'
-updatedAt: '2026-11-25T21:41:23.123Z'
+updatedAt: '2026-11-25T23:15:07.153Z'
