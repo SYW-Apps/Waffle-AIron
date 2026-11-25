@@ -5053,7 +5053,13 @@ function collectMentions(specsDir: string | readonly string[], methodName: strin
     if (wireBound) mentions.add(contract.id);
   }
 
-  const named = identifierPattern(methodName);
+  // A method is mentioned as `<owner>.<method>` — its component's id or its
+  // contract's id, then the name — never by the bare word: a method named
+  // `find` or `post` is also ordinary English, and a bare match listed every
+  // spec that said "find the file". A prose naming the method without its owner
+  // is the writer's to find; the narrowest sound rule is the qualified form.
+  const owners = [...new Set(moved.flatMap((contract) => [contract.component, contract.id]).filter((o): o is string => !!o))];
+  const named = new RegExp(`(?<![A-Za-z0-9_])(?:${owners.map(escapeForPattern).join('|') || '(?!)'})\\.${escapeForPattern(methodName)}(?![A-Za-z0-9_])`);
   /** Whether any prose field this value nests names the method. */
   const namesMethod = (value: unknown): boolean => {
     if (Array.isArray(value)) return value.some(namesMethod);

@@ -59,7 +59,13 @@ fields:
       The wairon release that wrote the record, as the v6 record carries it (provenance only, not
       part of the approval); the write narrative keeps it and format 4 requires it
     optional: true
+  - name: keyOrder
+    type: list<string>
+    description: >-
+      The record's keys in the order the file held them, so the rewrite keeps that order and appends
+      the keys format 4 adds after them
+    optional: true
 methods: []
 sourcePath: src/upgrade/steps/v6-to-v7/files.ts
 createdAt: '2026-11-20T01:23:11.737Z'
-updatedAt: '2026-11-20T19:41:25.019Z'
+updatedAt: '2026-11-25T21:41:23.123Z'

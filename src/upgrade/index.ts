@@ -11,7 +11,7 @@ import type { ReleaseNote, TreeStanding, TreeUpgradeReport, UpgradePlan } from '
 // caller must gate on reach itself.
 // ---------------------------------------------------------------------------
 
-export type { ReleaseNote, StepPlan, TreeStanding, TreeStandingState, TreeUpgradeReport, UpgradeChange, UpgradePlan, UpgradeStep } from './types.js';
+export type { ReleaseNote, StepPlan, TreeStanding, TreeStandingState, TreeUpgradeReport, UpgradeChange, UpgradeFindings, UpgradePlan, UpgradeStep } from './types.js';
 
 /** iupgrade_portal.standing — where the project at the root stands against the running major. */
 export function standing(root: string): TreeStanding {

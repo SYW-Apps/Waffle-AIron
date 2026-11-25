@@ -179,6 +179,10 @@ export interface SpecDeletion {
   findings?: string[];
   /** The consumers whose specs reach a published name on a member it carries. Filled by the door that read them. */
   breaks?: ExternalConsumer[];
+  /** False when the project declares no test roots: an empty testsToRevisit then means not searched. Absent when no method went. */
+  testsSearched?: boolean;
+  /** Each `owns` entry naming a removed spec that the deletion dropped from its owner (would drop, on a dry run). */
+  released?: SpecReference[];
 }
 
 /**
@@ -1369,14 +1373,35 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
     const absent = crossProjectWriteRefusal([{ kind, id }], 'sdd_delete_spec', undefined, true);
     throw new Error(absent !== undefined && !absent.startsWith('spec-missing:') ? absent : missingRefusal(kind, id, index, absent));
   }
-  // Step 13: what stays behind still naming it.
-  const references = specIndexReferencesTo(index, removed, system);
+  // Step 13 (spec step 10): what stays behind still naming it. An `owns` entry
+  // naming a removed component is set apart as released: the deletion drops it
+  // from its owner, so it neither dangles nor refuses.
+  const allReferences = specIndexReferencesTo(index, removed, system);
+  const isRelease = (r: SpecReference): boolean => r.kind === 'component' && r.position === 'owns' && r.target.kind === 'component';
+  const released = allReferences.filter(isRelease);
+  const references = allReferences.filter((r) => !isRelease(r));
+  /** Drop each released entry from its owner (a no-op for an owner that no longer lists it). */
+  const dropReleased = (): void => {
+    const byOwner = new Map<string, Set<string>>();
+    for (const r of released) {
+      if (!byOwner.has(r.id)) byOwner.set(r.id, new Set());
+      byOwner.get(r.id)!.add(r.target.id);
+    }
+    for (const [owner, members] of byOwner) {
+      const stored = loadSpec('component', owner) as ComponentSpec | null;
+      const kept = (stored?.owns ?? []).filter((m) => !members.has(m));
+      if (stored && kept.length !== (stored.owns ?? []).length) updateSpec('component', owner, { owns: kept });
+    }
+  };
+  const releasedField = released.length > 0 ? { released } : {};
   // Step 14: every public name a consumer reaches what goes through, read before anything goes.
   const published = publishedUsesOf(removed, []);
   // Steps 15-17: the tests the removed methods encode, found while their realizations still exist.
+  let tookMethods = false;
   const testsToRevisit = removed.flatMap((ref) => {
     const spec = specOf(index, ref);
     const methods = ((spec as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name);
+    if (methods.length > 0 && (ref.kind === 'interface' || ref.kind === 'implementation' || ref.kind === 'type')) tookMethods = true;
     return ref.kind === 'interface' || ref.kind === 'implementation' || ref.kind === 'type'
       ? testsInvalidatedBy(ref.kind, ref.id, methods, [spec as Spec | null], bound)
       : [];
@@ -1384,14 +1409,18 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
   // Steps 18-24: the deletion rehearsed on a copy — what it leaves that the tree does not report now.
   const findings = rehearseWrite(['error', 'warning', 'notice'], () => {
     for (const ref of removed) coreDeleteSpec(ref.kind as WritableSpecKind, ref.id);
+    dropReleased();
   }).added.map((f) => f.text);
+  // Whether tests were searched: a project with no test roots searches none, so an empty list then is not "none found".
+  const searched = tookMethods ? { testsSearched: (bound.rules?.conformance?.testRoots ?? []).length > 0 } : {};
   // Steps 25-26: the plan alone.
-  if (dryRun) return { kind, id, deleted: false, dryRun: true, removed, references, testsToRevisit, published, findings };
+  if (dryRun) return { kind, id, deleted: false, dryRun: true, removed, references, testsToRevisit, published, findings, ...searched, ...releasedField };
   // Steps 27-28: references a deletion would leave dangling refuse it, unless forced.
   if (references.length > 0 && !force) throw new Error(referencedRefusal(kind, id, references));
   // Innermost first, so a container goes after its content.
   for (const ref of removed) coreDeleteSpec(ref.kind as WritableSpecKind, ref.id);
-  return { kind, id, deleted: true, dryRun: false, removed, references, testsToRevisit, published, findings };
+  dropReleased();
+  return { kind, id, deleted: true, dryRun: false, removed, references, testsToRevisit, published, findings, ...searched, ...releasedField };
 }
 
 /**
@@ -1554,8 +1583,28 @@ export function updateSpecGated(
     report.testsToRevisit = testsInvalidatedBy(kind, id, changed, [stored], bound, written);
   }
 
+  // Step 31: a write that changed code linkage says the code findings it may bring are not judged here.
+  if (report.changes.some((c) => changesLinkage(c))) {
+    report.notices.push(
+      'This write changed code linkage (' + CODE_LINKAGE_FIELDS.join(', ') + '): the code findings it may bring are not judged here — '
+      + 'sdd_validate_tree judges them, since no rehearsal holds the code.',
+    );
+  }
+
   // Step 23.
   return report;
+}
+
+/** The fields that say where a design is realized in code: outside the approved design, and judged against the code. */
+const CODE_LINKAGE_FIELDS = ['sourcePath', 'symbol', 'exportedVia', 'injectedParams', 'router', 'bindings', 'simPath'] as const;
+
+/** Whether one change of an update touches a code-linkage field: the field at the path's end, or inside an added/removed element. */
+function changesLinkage(change: { path: string; after?: string; before?: string }): boolean {
+  const segments = change.path.split(/[.\[\]]+/).filter((s) => s.length > 0);
+  if (CODE_LINKAGE_FIELDS.some((f) => segments.includes(f))) return true;
+  // A whole method added or removed carries its linkage inside the summarized value.
+  const text = `${change.after ?? ''} ${change.before ?? ''}`;
+  return segments.includes('methods') && CODE_LINKAGE_FIELDS.some((f) => new RegExp(`["']?\\b${f}["']?\\s*[:=]`).test(text));
 }
 
 /** Cap on the callers one changed method lists; the total says how many there were. */

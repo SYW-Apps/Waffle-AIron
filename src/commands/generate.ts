@@ -286,7 +286,10 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     // re-injects ITS guides into ITS own dir, not the original invocation dir.
     reinjectLocalGuides(getProjectRoot(), activeTargetTypes(projectConfig));
     logger.verbose('Local AI guides re-injected.');
-    logger.info(`Guides, skills and context reconciled for: ${activeTargetTypes(projectConfig).join(', ') || '(no active targets)'}.`);
+    const activeTypes = activeTargetTypes(projectConfig);
+    logger.info(activeTypes.length > 0
+      ? `Guides, skills and context reconciled for: ${activeTypes.join(', ')} (the enabled targets in .wai/project.yaml).`
+      : 'Guides, skills and context reconciled for: (no active targets — none are enabled under `targets` in .wai/project.yaml).');
   } catch (err) {
     logger.warn(`Failed to re-inject AI guides: ${String(err)}`);
   }

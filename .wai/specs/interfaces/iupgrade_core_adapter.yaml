@@ -51,6 +51,18 @@ methods:
       or git one
     signatureFrom: project_config_portal.loadProjectConfig
     effect: read
+  - name: validateProject
+    description: >-
+      Validate the project at the bound root (during an upgrade, a rehearsal copy) with the running
+      major's rules: what the upgrade plan foretells.
+    signatureFrom: validator_portal.validateProject
+    effect: read
+  - name: listRules
+    description: >-
+      The rules the validator runs, so the plan can set aside those that judge code, which a
+      rehearsal copy without code cannot judge.
+    signatureFrom: validator_portal.listRules
+    effect: none
 status: draft
 createdAt: '2026-10-18T13:06:25.595Z'
-updatedAt: '2026-11-20T01:26:10.394Z'
+updatedAt: '2026-11-25T20:22:05.352Z'

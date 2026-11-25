@@ -69,7 +69,22 @@ fields:
       error, warning and notice the result reports that the tree does not report now, as `<severity>
       <CODE> [spec] message`. Empty when it brings none or the rehearsal could not run
     optional: true
+  - name: testsSearched
+    type: bool
+    description: >-
+      Whether tests were searched for the removed methods: false when the project declares no test
+      roots, so an empty testsToRevisit then means not searched, never none found. Absent when the
+      deletion took away no method.
+    optional: true
+  - name: released
+    type: list<SpecReference>
+    description: >-
+      Each `owns` entry naming a removed spec, held by an owner outside the removed set: the
+      deletion drops it from its owner (an owned member that goes leaves nothing to decide), so it
+      is never a dangling reference and never refuses the deletion. On a dry run, the entries it
+      would drop.
+    optional: true
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:44.394Z'
-updatedAt: '2026-11-24T08:27:04.969Z'
+updatedAt: '2026-11-25T20:22:56.890Z'

@@ -2,11 +2,12 @@ import * as chain from './chain.js';
 import * as migrations from './adapters/migrations.js';
 import * as release from './adapters/release.js';
 import * as stamp from './adapters/stamp.js';
+import * as core from './adapters/core.js';
 import * as v6ToV7 from './steps/v6-to-v7/step.js';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { rehearsalRoot, type FileChange } from '../migrations/types.js';
+import { rehearsalRoot, type FileChange, type Rehearsal } from '../migrations/types.js';
 import { StepRefused } from './types.js';
-import type { ReleaseNote, StepPlan, TreeStanding, TreeUpgradeReport, UpgradePlan, UpgradeStep } from './types.js';
+import type { ReleaseNote, StepPlan, TreeStanding, TreeUpgradeReport, UpgradeFindings, UpgradePlan, UpgradeStep } from './types.js';
 
 // ---------------------------------------------------------------------------
 // upgrade_orchestrator — the workflow that brings a family of projects to the
@@ -63,7 +64,7 @@ export function standing(root: string): TreeStanding {
 
 /** A plan that writes nothing: the family is current, or the release refuses it. */
 function emptyPlan(root: string, runningMajor: number, standings: TreeStanding[], refusal?: string): UpgradePlan {
-  return { familyRoot: root, runningMajor, standings, steps: [], whatChanged: [], changes: [], ...(refusal ? { refusal } : {}) };
+  return { familyRoot: root, runningMajor, standings, steps: [], whatChanged: [], changes: [], findings: [], ...(refusal ? { refusal } : {}) };
 }
 
 /** iupgrade_orchestrator.plan — plan the upgrade of the family under the root onto one rehearsal. */
@@ -141,10 +142,12 @@ export function plan(root: string): UpgradePlan {
       const copy = rehearsalRoot(rehearsal, project.root);
       if (stamp.holdsConfig(copy)) stamp.write(copy, runningMajor);
     }
-    // Steps 21-23.
+    // Steps 21-24: foretell what the running major's design rules report on each upgraded copy.
+    const findings = foretell(older.map((s) => s.root), rehearsal);
+    // Steps 25-27.
     const changes = migrations.diff(rehearsal);
     const whatChanged = ran.has(RUNNER_FROM) ? v6ToV7.whatChanged() : [];
-    return { familyRoot: root, runningMajor, standings, steps, whatChanged, rehearsal, changes };
+    return { familyRoot: root, runningMajor, standings, steps, whatChanged, rehearsal, changes, findings };
   } catch (e) {
     // Steps 24-25: dropped, nothing written live.
     migrations.drop(rehearsal);
@@ -153,6 +156,26 @@ export function plan(root: string): UpgradePlan {
     }
     throw e;
   }
+}
+
+/**
+ * The errors and warnings the running major's design rules report on each older root's rehearsal copy that holds a
+ * project.yaml (a part is judged with its project), bound as the copy and judged as the commit would leave it, stamps
+ * included. The rules that judge code are set aside: the copy holds none. A project with none is left out.
+ */
+function foretell(olderRoots: string[], rehearsal: Rehearsal): UpgradeFindings[] {
+  const codeCodes = new Set(core.listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
+  const out: UpgradeFindings[] = [];
+  for (const project of olderRoots) {
+    const copy = rehearsalRoot(rehearsal, project);
+    if (!stamp.holdsConfig(copy)) continue;
+    const issues = runWithProjectRoot(copy, () => core.validateProject().issues);
+    const lines = issues
+      .filter((i) => (i.severity === 'error' || i.severity === 'warning') && !codeCodes.has(i.code))
+      .map((i) => `${i.severity} ${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.split(copy).join(project).replace(/\.\s*$/, '')}`);
+    if (lines.length > 0) out.push({ project, findings: lines });
+  }
+  return out;
 }
 
 /** A step's refusal with the project and step it concerns. */

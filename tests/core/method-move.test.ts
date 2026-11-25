@@ -698,21 +698,21 @@ describe('moveMethods keeps where a moved entry is realized', () => {
     return dir;
   }
 
-  it('an entry realized by default in a different file keeps that file as its own, and the report says so', () => {
+  it('an entry without its own sourcePath ends without one, and the notice names both files', () => {
     root = booksWithFiles('src/books/intake.ts', 'src/books/archive.ts');
 
     const report = moveMethods('intake', 'archive', ['post', 'audit'], permissive);
 
     expect(report.moved).toBe(true);
-    // audit named no file: it was realized in intake_impl's, and still is.
-    expect(method(root, 'archive_impl', 'audit').sourcePath).toBe('src/books/intake.ts');
-    // post named its own file already: nothing to keep.
+    // audit named no file: the source implementation's file is never copied onto it.
+    expect(method(root, 'archive_impl', 'audit').sourcePath).toBeUndefined();
+    // post stated its own file: it carries it.
     expect(method(root, 'archive_impl', 'post').sourcePath).toBe('src/books/intake.ts');
     expect(report.notices).toContain(
-      '"audit" keeps src/books/intake.ts as its own sourcePath: it was realized there by default, and '
-      + '"archive_impl" names src/books/archive.ts — moving a method is not moving its code.',
+      '"audit" was realized in src/books/intake.ts (from); "archive_impl" names src/books/archive.ts (to) — '
+      + 'moving a method is not moving its code, so it reads unrealized until its code moves.',
     );
-    expect(report.notices.filter((n) => n.includes('keeps'))).toHaveLength(1);
+    expect(report.notices.filter((n) => n.includes('(from)'))).toHaveLength(1);
   });
 
   it('an entry whose default file is the target\'s own changes nothing', () => {
@@ -722,7 +722,7 @@ describe('moveMethods keeps where a moved entry is realized', () => {
 
     expect(report.moved).toBe(true);
     expect(method(root, 'archive_impl', 'audit').sourcePath).toBeUndefined();
-    expect(report.notices.some((n) => n.includes('keeps'))).toBe(false);
+    expect(report.notices.some((n) => n.includes('(from)'))).toBe(false);
   });
 });
 

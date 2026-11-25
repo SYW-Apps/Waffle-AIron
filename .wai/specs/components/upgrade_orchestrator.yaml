@@ -16,6 +16,7 @@ dependsOn:
   - installed_release_adapter
   - project_stamp_adapter
   - v6_to_v7_tree_step
+  - upgrade_core_adapter
 status: complete
 createdAt: '2026-10-18T13:02:33.103Z'
-updatedAt: '2026-11-20T01:25:37.500Z'
+updatedAt: '2026-11-25T20:25:20.485Z'

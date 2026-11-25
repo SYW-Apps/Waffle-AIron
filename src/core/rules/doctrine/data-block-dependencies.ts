@@ -133,7 +133,7 @@ export function dataBlockEdgeFindings(ctx: RuleContext, comp: ComponentSpec, dep
       severity: 'warning',
       code: 'INDEX_DOES_IO',
       at: depComp.id,
-      message: `Index component "${comp.id}" depends on Adapter "${depComp.id}". An Index keeps a lookup over its Store's entries in memory and does no IO — move the read to the Store (the Store may depend on the Adapter) and have the Index project what the Store holds.`,
+      message: `Index component "${comp.id}" depends on Adapter "${depComp.id}". An Index keeps a lookup over its Store's entries in memory and does no IO — move the read out of the Index: a keyed lookup becomes a read method on the Store (the Store may depend on the Adapter) with the Index projecting what the Store holds; a computed read becomes a Query of the Repository (a Query may depend on the Adapter).`,
     });
   }
   const indexBreach = comp.componentType === 'Index' && depComp.componentType === 'Index'

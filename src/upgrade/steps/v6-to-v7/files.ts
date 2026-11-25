@@ -37,6 +37,8 @@ export interface V6LockRecord {
   projectId?: string;
   commitSha?: string;
   compareUrl?: string;
+  /** The record's keys in the order the file held them, so the rewrite keeps it. */
+  keyOrder?: string[];
 }
 
 const LOCK_FILE = ['.wai', 'lock.json'];
@@ -80,7 +82,7 @@ export function readRecord(root: string): V6LockRecord | null {
   if (!files.exists(file)) return null;
   const raw = parseRecordText(files.readText(file), file);
   const lockedBy = approverOf(raw.lockedBy);
-  return {
+  const record: V6LockRecord = {
     stateId: raw.stateId as StateId,
     lockedAt: typeof raw.lockedAt === 'string' ? raw.lockedAt : '',
     ...(typeof raw.format === 'number' ? { format: raw.format } : {}),
@@ -88,7 +90,9 @@ export function readRecord(root: string): V6LockRecord | null {
     ...(lockedBy ? { lockedBy } : {}),
     ...pick(raw, 'validatorVersion'), ...pick(raw, 'validationResult'), ...pick(raw, 'code'),
     ...pick(raw, 'projectId'), ...pick(raw, 'commitSha'), ...pick(raw, 'compareUrl'),
+    keyOrder: Object.keys(raw),
   };
+  return record;
 }
 
 /** iv6_lock_file_adapter.readExternalsLock — parse <root>/.wai/externals.lock.yaml into the inputs lock's shape, with no packs; none when absent. */

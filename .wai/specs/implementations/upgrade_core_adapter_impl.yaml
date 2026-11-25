@@ -70,6 +70,20 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
+  - name: validateProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateProject
+  - name: listRules
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: listRules
 status: draft
 createdAt: '2026-10-18T14:14:23.627Z'
-updatedAt: '2026-11-20T19:41:23.660Z'
+updatedAt: '2026-11-25T20:22:06.335Z'

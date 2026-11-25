@@ -58,11 +58,12 @@ function planOf(rewrites: number, over: Partial<UpgradePlan> = {}): UpgradePlan 
     }],
     whatChanged: rewrites > 0 ? ['Specialists are Orchestrators'] : [],
     changes: [],
+    findings: [],
     ...over,
   };
 }
 
-const currentPlan = (): UpgradePlan => ({ familyRoot: ROOT, runningMajor: 6, standings: [standingOf('current')], steps: [], whatChanged: [], changes: [] });
+const currentPlan = (): UpgradePlan => ({ familyRoot: ROOT, runningMajor: 6, standings: [standingOf('current')], steps: [], whatChanged: [], changes: [], findings: [] });
 
 const committed = (plan: UpgradePlan, relock: string[] = []): TreeUpgradeReport => ({ plan, committed: true, stamped: [ROOT], relock });
 
@@ -146,6 +147,29 @@ describe('cli_runner.runUpgrade', () => {
     expect(adapter.apply).not.toHaveBeenCalled();
     expect(adapter.discard).toHaveBeenCalledWith(plan);
     expect(out).toContain('wairon upgrade --yes');
+    // Not a second --report: it says why nothing was applied.
+    expect(out).toContain('Could not ask for a confirmation (no terminal to ask in): nothing was applied');
+  });
+
+  it('prints the waironMajor change, the report headings, the foretold findings and the generate note', async () => {
+    terminal(false);
+    const plan = planOf(2, { findings: [{ project: ROOT, findings: ['warning UNUSED_COMPONENT [a] never reached'] }] });
+    plan.steps[0].reported = ['decide this'];
+    adapter.plan.mockReturnValue(plan);
+    adapter.apply.mockReturnValue(committed(plan));
+    await runUpgrade({ yes: true });
+    expect(out).toContain('waironMajor: 5 becomes 6');
+    expect(out).toContain('Rewritten');
+    expect(out).toContain('To decide');
+    expect(out).not.toContain('decide this'.toUpperCase());
+    expect(out).toContain('warning UNUSED_COMPONENT [a] never reached');
+    expect(out).toContain('wairon validate --ci');
+    expect(out).toContain('wairon generate');
+    const written = fs.readFileSync(path.join(ROOT, UPGRADE_REPORT_FILE), 'utf8');
+    expect(written).toContain('### Rewritten');
+    expect(written).toContain('### To decide');
+    expect(written).toContain('- warning UNUSED_COMPONENT [a] never reached');
+    expect(written).toContain('wairon validate --ci');
   });
 
   it('--yes applies all or nothing and names each project whose design moved with `wairon lock`', async () => {

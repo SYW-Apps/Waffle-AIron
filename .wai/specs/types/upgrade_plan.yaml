@@ -46,7 +46,15 @@ fields:
       Every file the upgrade replaces, creates or deletes, per project, as the rehearsal's
       difference found it.
     optional: false
+  - name: findings
+    type: list<UpgradeFindings>
+    description: >-
+      For each older project that holds a project.yaml, the errors and warnings the running major's
+      design rules report on its upgraded rehearsal copy (code checks aside); a project with none is
+      left out. What `wairon validate --ci` will fail on once the plan is applied, said before it
+      is.
+    optional: false
 methods: []
 sourcePath: src/upgrade/types.ts
 createdAt: '2026-10-18T13:04:12.298Z'
-updatedAt: '2026-10-18T13:06:07.204Z'
+updatedAt: '2026-11-25T20:22:00.571Z'

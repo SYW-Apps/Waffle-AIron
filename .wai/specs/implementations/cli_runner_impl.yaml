@@ -4195,9 +4195,12 @@ methods:
       - stepNumber: 6
         label: print
         description: >-
-          Print the plan: each project's standing; per project and spec every rewrite, the design
-          changes marked; what only an author can decide; then the short account of what the new
-          major changes. A stamp-only plan prints one line
+          Print the plan: each project's standing; per project the record of the new major in
+          project.yaml (`waironMajor: <old> becomes <new>`), then, under the headings the report
+          file uses (Rewritten, To decide), every rewrite per spec with the design changes marked,
+          and what only an author can decide; then the findings the new major's design rules report
+          once upgraded, per project, with the note that `wairon validate --ci` fails on them; then
+          the short account of what the new major changes. A stamp-only plan prints one line
         type: local
       - stepNumber: 7
         description: Only a report?
@@ -4238,10 +4241,12 @@ methods:
       - stepNumber: 14
         label: done
         description: >-
-          Print the projects now on the running major, and each project whose design moved with
-          `wairon lock` to run at its root; a plan that rewrote anything is also written whole to
-          .wai/upgrade-report.md at the family root (every rewrite and every decision verbatim, one
-          per line), so an author works from the file and never copies text off a wrapped console
+          Print the projects now on the running major, each project whose design moved with `wairon
+          lock` to run at its root, and that the generated guides still carry the old major's text
+          until `wairon generate` (or the next `wairon lock`) refreshes them; a plan that rewrote
+          anything is also written whole to .wai/upgrade-report.md at the family root (every
+          rewrite, every decision and every foretold finding verbatim, one per line), so an author
+          works from the file and never copies text off a wrapped console
         type: local
       - stepNumber: 15
         description: Upgraded
@@ -4254,7 +4259,9 @@ methods:
         targetComponent: cli_upgrade_adapter
         targetMethod: discard
       - stepNumber: 17
-        description: Say nothing was written, naming `wairon upgrade --yes` for a non-interactive run
+        description: >-
+          Say nothing was written and why: the run was declined, or — with no terminal to ask in —
+          it could not ask for a confirmation; name `wairon upgrade --yes` for a non-interactive run
         type: return
         outcome: declined
   - name: runWhatsNew
@@ -4551,4 +4558,4 @@ lint:
         interleave their output. No domain state: nothing to store, list or recover.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-23T07:01:17.530Z'
+updatedAt: '2026-11-25T20:24:30.328Z'

@@ -2,7 +2,12 @@ id: v6_to_v7_tree_step_impl
 name: v6 to v7 Tree Step Implementation
 description: >-
   src/upgrade/steps/v6-to-v7/step.ts. The comparison that decides whether an approval is carried
-  runs in plan and again in write, on the same rehearsal content, so both answer alike.
+  runs in plan and again in write, on the same rehearsal content, so both answer alike. It proves
+  the design unchanged by the per-spec design digests, which read each spec file as its author wrote
+  it; the whole-tree design part is never compared across the majors, because wairon 7 reads it
+  differently from the same files (a method taking its signature from a source no longer carries the
+  params, returns and signature text its source supplies), so comparing it would report a design
+  change where no spec changed.
 contract: iv6_to_v7_tree_step
 sourcePath: src/upgrade/steps/v6-to-v7/step.ts
 methods:
@@ -75,17 +80,20 @@ methods:
         targetMethod: computeApprovalId
       - stepNumber: 9
         description: >-
-          Is the approval unchanged: every own spec's digest equal to the record's (no spec added or
-          removed), and the design, rules, composition and network parts equal to the record's gate
-          parts of the same names (the projection both majors share)?
+          Is the approval unchanged: every own spec's design digest equal to the record's (no spec
+          added or removed), and the rules, composition and network parts equal to the record's gate
+          parts of the same names? The design part is not compared: the per-spec digests already
+          prove every authored spec unchanged, and wairon 7 reads the whole tree differently from
+          the same files, so its design part never equals wairon 6's
         type: branch
-        condition: the digests and the four shared parts all match
+        condition: the digests and the rules, composition and network parts all match
         onFalseStep: 12
       - stepNumber: 10
         description: >-
           Plan the record's rewrite: format <n> to 4, approval carried (the current identity and its
-          five parts written, upgraded {carried: true, compared: specs, design, rules, composition,
-          network}), lockedAt and lockedBy kept; not a design change
+          five parts written, upgraded {carried: true, compared: specs, rules, composition,
+          network}), lockedAt and lockedBy kept and every key of the record kept in its order, new
+          keys after them; not a design change
         type: local
       - stepNumber: 11
         description: Go on with the inputs
@@ -95,8 +103,10 @@ methods:
         label: not-carried
         description: >-
           Plan the record's rewrite without carrying it: format 4 with the old identity kept and
-          empty parts (upgraded {carried: false}), so it reads stale; report what moved (the own
-          specs added, changed or removed, and the parts that differ) and that one `wairon lock`
+          empty parts (upgraded {carried: false}), so it reads stale; report what moved in words a
+          reviewer can check: each own spec added, changed or removed by its key, and each part that
+          differs by what it covers (the rules part: the project's rule configuration; composition:
+          its composition settings; network: its declared network), and that one `wairon lock`
           re-approves it
         type: local
       - stepNumber: 13
@@ -263,4 +273,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-11-20T01:25:12.264Z'
-updatedAt: '2026-11-20T19:41:29.569Z'
+updatedAt: '2026-11-25T20:22:24.042Z'

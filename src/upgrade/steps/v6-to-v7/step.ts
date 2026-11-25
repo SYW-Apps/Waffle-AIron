@@ -26,8 +26,19 @@ import type { StepPlan, UpgradeChange, UpgradeStep } from '../../types.js';
 
 const STEP: UpgradeStep = { from: 6, to: 7 };
 
-/** The approval parts a v6 record and a v7 identity share the projection of. */
-const SHARED_PARTS = ['design', 'rules', 'composition', 'network'];
+/**
+ * The approval parts a v6 record and a v7 identity share the projection of. The whole-tree design part is not one:
+ * wairon 7 reads the same files differently (a method taking its signature from a source drops the params, returns and
+ * signature text the source supplies), so it never equals wairon 6's; the per-spec digests prove the design instead.
+ */
+const SHARED_PARTS = ['rules', 'composition', 'network'];
+
+/** What each shared part covers, in words a reviewer can check. */
+const PART_COVERS: Record<string, string> = {
+  rules: "the project's rule configuration",
+  composition: 'its composition settings',
+  network: 'its declared network',
+};
 
 /** The lock record format this step writes. */
 const FORMAT = 4;
@@ -102,7 +113,7 @@ function compare(record: V6LockRecord): Verdict {
   if (moved.length === 0 && differing.length === 0) {
     return { carried: true, now: { algorithm: identity.algorithm, digest: identity.digest, parts: now }, compared: ['specs', ...SHARED_PARTS], moved: [] };
   }
-  return { carried: false, compared, moved: [...moved, ...differing.map((p) => `the ${p} part differs`)] };
+  return { carried: false, compared, moved: [...moved, ...differing.map((p) => `the ${p} part: ${PART_COVERS[p] ?? p} differs`)] };
 }
 
 /** The format-4 record exactly as the verdict decided: carried, or the old identity kept with empty parts. */
@@ -110,7 +121,7 @@ function rewritten(record: V6LockRecord, verdict: Verdict): LockRecord {
   const { now } = verdict;
   const carried = verdict.carried && now !== undefined;
   const stateId = carried ? { algorithm: now.algorithm, digest: now.digest } : { algorithm: record.stateId.algorithm, digest: record.stateId.digest };
-  return {
+  const next = {
     stateId,
     lockedAt: record.lockedAt,
     lockedBy: record.lockedBy ?? { id: 'unknown', source: 'legacy' },
@@ -125,7 +136,12 @@ function rewritten(record: V6LockRecord, verdict: Verdict): LockRecord {
     ...(record.projectId ? { projectId: record.projectId } : {}),
     ...(record.commitSha ? { commitSha: record.commitSha } : {}),
     ...(record.compareUrl ? { compareUrl: record.compareUrl } : {}),
-  } as LockRecord;
+  } as Record<string, unknown>;
+  // The record keeps the order its keys had; the keys it gains follow them.
+  const ordered: Record<string, unknown> = {};
+  for (const key of record.keyOrder ?? []) if (key in next) ordered[key] = next[key];
+  for (const key of Object.keys(next)) if (!(key in ordered)) ordered[key] = next[key];
+  return ordered as unknown as LockRecord;
 }
 
 /** Each path producer's pin of a v6 externals lock: the alias, and the snapshot file it names. */
@@ -160,7 +176,7 @@ function recordChanges(record: V6LockRecord | null, changes: UpgradeChange[], re
   const verdict = compare(record);
   const from = record.format ?? 1;
   if (verdict.carried) {
-    changes.push({ description: `${LOCK_CHANGE}: format ${from} becomes 4, the approval carried (the design, rules, composition and network proven unchanged; who approved it, and when, are kept)`, design: false });
+    changes.push({ description: `${LOCK_CHANGE}: format ${from} becomes 4, the approval carried (every spec's design digest and the rules, composition and network proven unchanged; who approved it, and when, are kept)`, design: false });
     return;
   }
   changes.push({ description: `${LOCK_CHANGE}: format ${from} becomes 4, the old identity kept with no parts, so the approval reads stale until \`wairon lock\` approves the design again (who approved it, and when, are kept)`, design: true });
