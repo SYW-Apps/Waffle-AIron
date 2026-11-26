@@ -1878,13 +1878,21 @@ export function moveMethods(
       moved: false,
       dryRun: true,
       findings,
+      notices: [...rehearsed.notices, MOVED_CODE_UNJUDGED],
       edits: rehearsed.edits.map((e) => ({ ...e, written: false, dryRun: true })),
       summary: rehearsed.summary.replace(/^Moved /, 'Dry run, nothing written: moving ').replace(/ written(?=[,.])/, ' to write').replace(/ re-pointed/, ' to re-point'),
     };
   }
-  // Steps 19-20: the move, written once for real.
-  return { ...coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun), findings };
+  // Steps 19-21: the move, written once for real, saying the code findings it may bring are not judged here.
+  const moved = coreMoveMethods(from, to, methods, methodMoveGate(from), dryRun);
+  return { ...moved, findings, notices: moved.moved ? [...moved.notices, MOVED_CODE_UNJUDGED] : moved.notices };
 }
+
+/** The notice a method move carries: the moved methods name no file at their new home, and no rehearsal holds the code. */
+const MOVED_CODE_UNJUDGED =
+  'The moved methods name no source file of their own at their new home: the code findings this may bring (METHOD_SOURCE_PATH_MISSING, '
+  + 'UNREALIZED_METHOD) are not judged here, since no rehearsal holds the code. Set each moved method\'s sourcePath on the '
+  + 'destination implementation (code linkage, no re-lock), then sdd_validate_tree judges them.';
 
 /**
  * Move a component or a type to another subsystem as ONE gated write

@@ -119,6 +119,13 @@ describe('narrative-complexity — the step axis', () => {
     expect(codes(run(narrative(28), { narrativeStepsHardMax: 28 }))).not.toContain('NARRATIVE_STEPS_OVER_MAX');
   });
 
+  it('reports at the method, so an allow naming the method covers it and an allow naming none does not', () => {
+    const allow = (at?: string) => ({ lint: { allow: [{ code: 'EXCESSIVE_NARRATIVE_STEPS', ...(at ? { at } : {}), reason: 'a flat registration table' }] } });
+    expect(codes(run(narrative(30), {}, {}, allow('routeShipment')))).not.toContain('EXCESSIVE_NARRATIVE_STEPS');
+    expect(codes(run(narrative(30), {}, {}, allow('anotherMethod')))).toContain('EXCESSIVE_NARRATIVE_STEPS');
+    expect(codes(run(narrative(30), {}, {}, allow()))).toContain('EXCESSIVE_NARRATIVE_STEPS');
+  });
+
   it('a long flat list is long, not complex — the two axes are independent', () => {
     expect(codes(run(narrative(30)))).toEqual(['EXCESSIVE_NARRATIVE_STEPS']);
     expect(codes(run(narrative(0, 10)))).toEqual(['NARRATIVE_COMPLEXITY']);

@@ -473,7 +473,7 @@ describe('findTestsReferencing — resolved by the module a test imports FROM (F
     ].sort());
   });
 
-  it('keeps a prose or string mention as a mention, and drops a file that binds the name to another module', () => {
+  it('keeps a name string as a mention, and drops a file that binds the name to another module', () => {
     const root = tempProject();
     write(root, 'src/billing.ts', 'export function runBilling() {}\n');
     write(root, 'src/legacy.ts', 'export function runBilling() {}\n');
@@ -490,6 +490,17 @@ describe('findTestsReferencing — resolved by the module a test imports FROM (F
       mentioned: ['tests/portal.test.ts'],
       indiscriminate: false,
     }]);
+  });
+
+  it('a method named like a common word is mentioned by a call or its name, never by a comment, a sentence or a variable', () => {
+    const root = tempProject();
+    write(root, 'src/upgrade.ts', 'export function plan() {}\n');
+    write(root, 'tests/calls.test.ts', "it('runs', () => orchestrator.plan(root));");
+    write(root, 'tests/named.test.ts', "it('runs', () => tool.call('upgrade.plan'));");
+    write(root, 'tests/prose.test.ts', "// the plan comes first\nit('keeps the plan', () => { const plan = 1; return plan; });");
+    for (let i = 0; i < 20; i += 1) write(root, `tests/filler${i}.test.ts`, "it('x', () => 1);");
+    const found = findTestsReferencing([{ name: 'plan' }], root, ['tests']);
+    expect(found).toEqual([{ method: 'plan', symbol: 'plan', imported: [], mentioned: ['tests/calls.test.ts', 'tests/named.test.ts'], indiscriminate: false }]);
   });
 
   it('reads a destructured dynamic import like a static one', () => {

@@ -5391,7 +5391,12 @@ interface TestFileNames {
   imports: Set<string>;
   /** Every import binding with the module it came from, for the module-resolved search. */
   bindings: ImportedBinding[];
-  /** Every word-boundary identifier in the file: the universal floor, exactly as the generic grade reads one. */
+  /**
+   * Every name the file's code calls or reaches as a member (`name(` or `.name`), and every string
+   * literal that is a name (`'runBilling'`, `'billing.runBilling'`), comments left out: a method named
+   * like a common word (`plan`, `status`) is mentioned by a test that calls it or drives it by name,
+   * never by a comment, a sentence in a test title or a local variable spelled the same.
+   */
   words: Set<string>;
 }
 
@@ -5428,6 +5433,16 @@ function clauseBindings(clause: string, specifier: string): ImportedBinding[] {
   return out;
 }
 
+/** A name a test's code reaches as a member (`.name`) or calls (`name(`). */
+const CALLED_OR_MEMBER_RE = /\.\s*([A-Za-z_$][\w$]*)|([A-Za-z_$][\w$]*)\s*\(/g;
+
+/**
+ * A string literal that IS a name — `'runBilling'`, or one qualified as `'billing.runBilling'`,
+ * `'billing/runBilling'` or `'billing:runBilling'` — as a test that drives a method by its wire or
+ * dispatch name writes it. A sentence in a string is not one.
+ */
+const NAME_LITERAL_RE = /(['"`])(?:[\w$-]+[.:/])*([A-Za-z_$][\w$]*)\1/g;
+
 /**
  * The declared test roots, walked and read. An unreadable or binary file is
  * SKIPPED rather than fatal: naming the tests must never be the thing that
@@ -5454,7 +5469,8 @@ function readTestFiles(testRoots: readonly string[], projectRoot: string): TestF
     // A destructuring renames with a colon where an import clause says `as`.
     for (const m of code.matchAll(DYNAMIC_IMPORT_RE)) bindings.push(...clauseBindings(`{${m[1].replace(/:/g, ' as ')}}`, m[2]));
     const words = new Set<string>();
-    for (const m of text.matchAll(IDENTIFIER_RE)) words.add(m[0]);
+    for (const m of code.matchAll(CALLED_OR_MEMBER_RE)) words.add(m[1] ?? m[2]);
+    for (const m of code.matchAll(NAME_LITERAL_RE)) words.add(m[2]);
     scanned.push({ path: key, imports, bindings, words });
   }
   return scanned;
