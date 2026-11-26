@@ -515,8 +515,9 @@ detail: full
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
+      at: removeUnit
       reason: >-
-        removeUnit lists 37 steps here because the disposition IS the workflow: a gate, an existence
+        removeUnit lists its steps because the disposition IS the workflow: a gate, an existence
         check, four dispositions to validate and resolve, then two whole re-homing paths (reparent
         children, re-point placements, remap permission and user scopes, delete the emptied unit) or
         the cascade that deletes the subtree, and the best-effort audit. It arrived here from the
@@ -525,4 +526,4 @@ lint:
         the pretence this allow exists instead of.
 status: complete
 createdAt: '2026-09-18T16:57:28.238Z'
-updatedAt: '2026-10-17T16:27:16.202Z'
+updatedAt: '2026-11-26T14:34:05.722Z'

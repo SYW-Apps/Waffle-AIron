@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSpec, invalidateSpecCache, loadSpec } from '../../src/core/specs.js';
-import { deleteSpec, updateSpecGated } from '../../src/core/authoring.js';
+import { deleteSpec, moveMethods, updateSpecGated } from '../../src/core/authoring.js';
 import { renameMethod } from '../../src/core/provision.js';
 
 // QA round 9: deleting an owned member releases it, a deletion says whether tests
@@ -104,6 +104,31 @@ describe('deleteSpec releases an owned member and says whether tests were search
     } as never);
     invalidateSpecCache();
     expect(deleteSpec('interface', 'iempty', true).testsSearched).toBe(false);
+  });
+});
+
+describe('a method move names the code findings it does not judge', () => {
+  it('carries the notice on the dry run and the move', () => {
+    seed();
+    const base = { subsystem: 'links', dependsOn: [], status: 'complete', createdAt: now, updatedAt: now };
+    saveSpec('component', { ...base, id: 'link_lookup', name: 'link_lookup', description: 'resolves codes', componentType: 'Orchestrator', owns: [] } as never);
+    saveSpec('interface', {
+      id: 'ilink_lookup', name: 'Lookup', description: 'resolves codes', component: 'link_lookup',
+      methods: [{ name: 'resolve', description: 'resolves', params: [{ name: 'code', type: 'string' }], returns: 'string' }],
+      status: 'draft', createdAt: now, updatedAt: now,
+    } as never);
+    saveSpec('implementation', {
+      id: 'link_lookup_impl', name: 'LookupImpl', description: 'lookup impl', contract: 'ilink_lookup',
+      methods: [{ name: 'resolve', narrative: [] }], status: 'draft', createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+    const unjudged = (notices: string[]): boolean => notices.some((n) => n.includes('UNREALIZED_METHOD') && n.includes('sdd_validate_tree'));
+    const dry = moveMethods('link_repository', 'link_lookup', ['find'], true);
+    expect(dry.refusals).toEqual([]);
+    expect(unjudged(dry.notices)).toBe(true);
+    const real = moveMethods('link_repository', 'link_lookup', ['find']);
+    expect(real.moved).toBe(true);
+    expect(unjudged(real.notices)).toBe(true);
   });
 });
 

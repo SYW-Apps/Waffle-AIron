@@ -841,7 +841,7 @@ function renderDeletion(deletion: SpecDeletion, searched?: boolean): string {
     lines.push(...deletion.released.map((r) => `- ${r.kind} "${r.id}" no longer owns ${r.target.kind} "${r.target.id}"`));
   }
   if (deletion.testsSearched === false) {
-    lines.push('', 'TESTS NOT SEARCHED — the project declares no rules.conformance.testRoots, so no tests were looked for; an empty list here is not "none found".');
+    lines.push('', 'TESTS NOT SEARCHED — the project declares no rules.conformance.testRoots, so no tests were looked for; an empty list here is not "none found". To search them, declare the test folders with sdd_update_rules (add: {"conformance.testRoots": ["tests"]}); the rules are part of the approval, so the human re-locks after it.');
   }
   lines.push(...renderTestsToRevisit(deletion.testsToRevisit));
   if (deletion.findings?.length) {
@@ -1063,7 +1063,7 @@ const specDeletionOutput = {
     'What the deletion leaves that the tree does not report now, rehearsed on a copy: `<severity> <CODE> [spec] message`, errors, warnings and notices.',
   ),
   testsSearched: z.boolean().optional().describe(
-    'False when the project declares no test roots: an empty testsToRevisit then means tests were not searched, never that none were found. Absent when the deletion took away no method.',
+    'False when the project declares no test roots (rules.conformance.testRoots, set with sdd_update_rules): an empty testsToRevisit then means tests were not searched, never that none were found. Absent when the deletion took away no contract, implementation or type.',
   ),
   released: z.array(z.object({ kind: z.string(), id: z.string(), position: z.string(), target: z.object({ kind: z.string(), id: z.string() }) })).optional().describe(
     'Each `owns` entry naming a removed spec that the deletion dropped from its owner (would drop, on a dry run): never dangling, never a refusal.',
@@ -1825,6 +1825,24 @@ function underTreeLock(handler: () => CallToolResult): CallToolResult {
 }
 
 /**
+ * The command the human runs wairon with at a root: `npx wairon` when the
+ * project's package.json declares wairon as a dependency (a local install the
+ * human reaches through npx), else `wairon`. The server's own binary says
+ * nothing about it: the server may run from another checkout.
+ */
+function humanWaironCommand(root: string): string {
+  const file = path.join(root, 'package.json');
+  if (!ioFiles.exists(file)) return 'wairon';
+  try {
+    const pkg = JSON.parse(ioFiles.readText(file)) as Record<string, Record<string, string> | undefined>;
+    const declared = ['dependencies', 'devDependencies'].some((k) => pkg[k]?.['@wairon/cli'] !== undefined || pkg[k]?.wairon !== undefined);
+    return declared ? 'npx wairon' : 'wairon';
+  } catch {
+    return 'wairon';
+  }
+}
+
+/**
  * mcp_server.create step 4: the standing guard. The refusal for a tool call
  * whose bound tree was not written by the running wairon major, or null when it
  * may run. Judged per call, on the root the call is bound to (a hosted call
@@ -1850,7 +1868,7 @@ function standingRefusal(name: string): string | null {
       ? `was written by an older wairon major (${tree.writtenMajor}) than the one running (${tree.runningMajor})`
       : `carries no major stamp, so it is assumed to be written by wairon ${tree.writtenMajor} (the running major is ${tree.runningMajor}); if wairon 6.0.0 made it before the stamp existed, \`wairon upgrade\` only adds the stamp`;
     return `${name} refused — the project at ${root} ${written}. `
-      + 'Ask the human to run `wairon upgrade` there; the assistant never runs it. Nothing was read or written.';
+      + `Ask the human to run \`${humanWaironCommand(root)} upgrade\` there; the assistant never runs it. Nothing was read or written.`;
   }
   return `${name} refused — the project at ${root} cannot be served by this wairon (major ${tree.runningMajor}; the tree was written by major ${tree.writtenMajor}). ${tree.advice ?? ''}`.trim();
 }

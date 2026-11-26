@@ -449,7 +449,10 @@ methods:
           Walk those roots for test files, skipping node_modules and dot-directories, and read each
           one: its named-import names (both sides of a rename), its import bindings with the module
           each came from (static imports that open a statement, so a fixture's quoted source is not
-          read as the test's own import, and destructured dynamic imports), and its words
+          read as the test's own import, and destructured dynamic imports), and the names it uses —
+          read from its code with comments stripped: each name it calls, each name it reads as a
+          member, and each string that is a name, possibly qualified (`'upgrade.plan'`), never a
+          word of a sentence, a comment or a local variable
         type: local
       - stepNumber: 3
         description: >-
@@ -518,4 +521,4 @@ methods:
       code that changed.
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-11-22T22:54:20.847Z'
+updatedAt: '2026-11-26T14:26:23.534Z'

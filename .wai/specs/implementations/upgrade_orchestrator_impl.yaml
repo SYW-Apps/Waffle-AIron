@@ -303,6 +303,7 @@ methods:
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
+      at: plan
       reason: >-
         plan is one rehearsal workflow: stand each root, copy the family, run every kept step on the
         copy, stamp it, foretell the new major's findings on that same copy, diff it, and drop it on
@@ -311,4 +312,4 @@ lint:
         copy-bound region in two.
 status: draft
 createdAt: '2026-10-18T14:14:37.637Z'
-updatedAt: '2026-11-25T23:15:10.559Z'
+updatedAt: '2026-11-26T14:34:03.401Z'

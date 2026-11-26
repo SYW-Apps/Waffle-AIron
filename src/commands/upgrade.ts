@@ -10,6 +10,7 @@ import { WaironError } from '../utils/errors.js';
 import { isNewerVersion } from '../utils/version.js';
 import { standing, plan as planUpgrade, apply as applyUpgrade, discard, releaseNotes } from '../cli/adapters/upgrade.js';
 import type { UpgradePlan, TreeUpgradeReport } from '../upgrade/types.js';
+import { waironCommand } from './lock.js';
 
 // ---------------------------------------------------------------------------
 // cli_runner — the upgrade workflows: `wairon upgrade`, `wairon whatsnew`, the
@@ -229,10 +230,11 @@ export async function runUpgrade(options: UpgradeCommandOptions): Promise<void> 
   }
   // Steps 16-17: dropped; a non-interactive run is told how to confirm.
   discard(plan);
+  const confirm = `Run \`${waironCommand(root)} upgrade --yes\` to apply it without a prompt.`;
   if (!isInteractive() && options.yes !== true) {
-    logger.info('Could not ask for a confirmation (no terminal to ask in): nothing was applied. Run `wairon upgrade --yes` to apply it without a prompt.');
+    logger.info(`Could not ask for a confirmation (no terminal to ask in): nothing was applied. ${confirm}`);
   } else {
-    logger.info('Nothing was written. Run `wairon upgrade --yes` to apply it without a prompt.');
+    logger.info(`Nothing was written. ${confirm}`);
   }
 }
 
@@ -301,7 +303,7 @@ export async function guardStanding(commandPath: string): Promise<void> {
   }
   // Steps 17-18: refused, naming the upgrade and the refusal or failure when there was one.
   throw new UpgradeRefusedError(
-    `wairon ${commandPath}: this project was written by an older wairon major — run \`wairon upgrade\`.${refusal ? ` (${refusal})` : ''}`,
+    `wairon ${commandPath}: this project was written by an older wairon major — run \`${waironCommand(root)} upgrade\`.${refusal ? ` (${refusal})` : ''}`,
   );
 }
 

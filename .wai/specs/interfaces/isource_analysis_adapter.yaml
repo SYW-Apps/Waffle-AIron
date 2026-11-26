@@ -81,10 +81,12 @@ methods:
       listing every test of the provider. A method that carries no sourcePath is searched by name
       alone. One method given more than once (a contract realized in several files) is one entry,
       imported from any of them. A test file that merely names the symbol is reported as
-      `mentioned`, unless the name matched more than a tenth of the walked test files, in which case
-      the mention list is withheld and `indiscriminate` is set. Declaring no test roots walks
-      nothing and answers empty, which is what keeps this opt-in. Deterministic over file contents;
-      an unreadable test or source file is skipped, never fatal.
+      `mentioned`; naming it means calling it, reading it as a member, or holding it as a string
+      that is the name (`'runBilling'`, or qualified, `'upgrade.plan'`) — the word in a comment, in
+      a sentence or as a local variable is not a mention. When the name matched more than a tenth of
+      the walked test files, the mention list is withheld and `indiscriminate` is set. Declaring no
+      test roots walks nothing and answers empty, which is what keeps this opt-in. Deterministic
+      over file contents; an unreadable test or source file is skipped, never fatal.
     signature: >-
       findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
       list<string>): list<TestsToRevisit>
@@ -144,4 +146,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-11-22T22:48:47.722Z'
+updatedAt: '2026-11-26T14:26:22.168Z'

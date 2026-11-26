@@ -71,6 +71,8 @@ export const narrativeComplexityRule: SddRule = {
       const steps = entry.method.narrative.length;
       const score = cognitiveScore(entry.method);
       const band = complexityLevel(entry.method);
+      // Each finding is about one method: its name is the site a lint.allow names.
+      const site = { at: entry.method.name };
 
       // 2a. The cognitive axis: shape, not length.
       const warnAbove = cfg?.cognitiveWarnAbove ?? DEFAULT_WARN_ABOVE;
@@ -81,6 +83,8 @@ export const narrativeComplexityRule: SddRule = {
           `Method "${entry.method.name}" in implementation "${entry.implementation.id}" has a ${band} narrative (cognitive score ${score}), above the configured "${warnAbove}" band. Split it into steps that call smaller methods.`,
           entry.implementation.id,
           isDraft,
+          undefined,
+          site,
         );
       }
 
@@ -92,6 +96,8 @@ export const narrativeComplexityRule: SddRule = {
           `Method "${entry.method.name}" in implementation "${entry.implementation.id}" has a ${band} narrative (cognitive score ${score}), above the configured maximum band "${cfg.maxCognitiveLevel}". Split it into steps that call smaller methods.`,
           entry.implementation.id,
           isDraft,
+          undefined,
+          site,
         );
       }
 
@@ -104,6 +110,8 @@ export const narrativeComplexityRule: SddRule = {
           `Method "${entry.method.name}" in implementation "${entry.implementation.id}" contains ${steps} narrative steps, exceeding the configured limit of ${maxSteps}.`,
           entry.implementation.id,
           isDraft,
+          undefined,
+          site,
         );
       }
 
@@ -115,6 +123,8 @@ export const narrativeComplexityRule: SddRule = {
           `Method "${entry.method.name}" in implementation "${entry.implementation.id}" lists ${steps} narrative steps, above the configured hard maximum of ${cfg.narrativeStepsHardMax}. Extract part of the flow into a method of its own.`,
           entry.implementation.id,
           isDraft,
+          undefined,
+          site,
         );
       }
     }

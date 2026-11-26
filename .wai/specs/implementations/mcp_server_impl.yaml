@@ -30,11 +30,12 @@ methods:
           Wrap every tool registered below in the standing guard, which reads on each call where the
           bound tree stands (its stamp alone, so it is cheap): on a tree another major wrote, the
           tool runs nothing and answers a refusal with the standing's advice — for an older tree,
-          that the human runs `wairon upgrade` (the assistant never runs it), saying, for a tree
-          with no stamp, that none was found and the oldest major the upgrade reads is assumed, as
-          the upgrade itself says; for a newer one or one out of the window, the release to install.
-          Judged per call, so an upgrade the human runs while the server is up clears it without a
-          reconnect
+          that the human runs the upgrade (the assistant never runs it), named as the human's
+          command: `npx wairon upgrade` when the project's package.json declares wairon as a
+          dependency, `wairon upgrade` otherwise — saying, for a tree with no stamp, that none was
+          found and the oldest major the upgrade reads is assumed, as the upgrade itself says; for a
+          newer one or one out of the window, the release to install. Judged per call, so an upgrade
+          the human runs while the server is up clears it without a reconnect
         type: register
         targetComponent: mcp_upgrade_adapter
         targetMethod: standing
@@ -281,4 +282,4 @@ lint:
         makes. Remove once the registry is split into per-group registration methods.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-23T01:52:39.887Z'
+updatedAt: '2026-11-26T14:34:34.595Z'

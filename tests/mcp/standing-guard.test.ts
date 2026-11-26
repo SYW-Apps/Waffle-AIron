@@ -70,6 +70,15 @@ describe('the standing guard', () => {
     expect(textOf(read)).toContain('`wairon upgrade`');
   });
 
+  it('names `npx wairon upgrade` when the project declares wairon as a dependency', async () => {
+    const root = project(WAIRON_MAJOR - 1);
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'shop', devDependencies: { '@wairon/cli': '7.0.0' } }));
+    const call = await connect();
+    const status = await call('sdd_get_status', {});
+    expect(status.isError).toBe(true);
+    expect(textOf(status)).toContain('Ask the human to run `npx wairon upgrade`');
+  });
+
   it('an unstamped tree reads as the oldest major and is refused the same way', async () => {
     project(null);
     const call = await connect();
