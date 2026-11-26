@@ -249,6 +249,17 @@ describe('the tools answer with data, and still with the same sentence', () => {
   // A read: the spec, and the two derived markers kept apart from it
   // -------------------------------------------------------------------------
 
+  it('a deletion with no test roots says tests were not searched, and how to search them', async () => {
+    await call('sdd_define_interface', {
+      id: 'icheckout', name: 'CheckoutContract', description: 'Runs a checkout', component: 'checkout',
+      methods: [{ name: 'place', description: 'places an order', params: [], returns: 'void' }],
+    });
+    const deletion = await call('sdd_delete_spec', { kind: 'interface', id: 'icheckout', dryRun: true });
+    expect(deletion.structuredContent.testsSearched).toBe(false);
+    expect(textOf(deletion)).toContain('TESTS NOT SEARCHED');
+    expect(textOf(deletion)).toContain('sdd_update_rules (add: {"conformance.testRoots": ["tests"]})');
+  }, 60_000);
+
   it('sdd_get_spec answers with the spec under its own key', async () => {
     const result = await call('sdd_get_spec', { kind: 'component', id: 'checkout' });
     expect(result.structuredContent.kind).toBe('component');
