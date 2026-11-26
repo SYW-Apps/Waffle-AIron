@@ -76,10 +76,34 @@ describe('deleteSpec releases an owned member and says whether tests were search
     expect((loadSpec('component', 'link_repository') as { owns: string[] }).owns).toEqual([]);
   });
 
-  it('testsSearched is false when the project declares no test roots, and absent when no method went', () => {
+  it('an owner owning other members keeps them; the release and the rehearsal agree', () => {
+    seed();
+    const base = { subsystem: 'links', dependsOn: [], status: 'complete', createdAt: now, updatedAt: now };
+    saveSpec('component', { ...base, id: 'link_index', name: 'link_index', description: 'link_index component', componentType: 'Index', owns: [] } as never);
+    const owner = loadSpec('component', 'link_repository') as Record<string, unknown>;
+    saveSpec('component', { ...owner, owns: ['link_store', 'link_index'] } as never);
+    invalidateSpecCache();
+    const deletion = deleteSpec('component', 'link_store');
+    expect(deletion.deleted).toBe(true);
+    expect(deletion.findings ?? []).not.toEqual(expect.arrayContaining([expect.stringContaining('INVALID_OWNED_MEMBER')]));
+    invalidateSpecCache();
+    expect((loadSpec('component', 'link_repository') as { owns: string[] }).owns).toEqual(['link_index']);
+  });
+
+  it('testsSearched is false when the project declares no test roots, and absent when no contract, implementation or type went', () => {
     seed();
     expect(deleteSpec('interface', 'ilink_repository', true).testsSearched).toBe(false);
     expect(deleteSpec('component', 'link_store', true).testsSearched).toBeUndefined();
+  });
+
+  it('testsSearched is set for a contract with no method left', () => {
+    seed();
+    saveSpec('interface', {
+      id: 'iempty', name: 'Empty', description: 'empty contract', component: 'link_store', methods: [],
+      status: 'draft', createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+    expect(deleteSpec('interface', 'iempty', true).testsSearched).toBe(false);
   });
 });
 

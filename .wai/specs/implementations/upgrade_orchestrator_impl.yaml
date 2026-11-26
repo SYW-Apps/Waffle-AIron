@@ -191,10 +191,11 @@ methods:
         targetMethod: validateProject
       - stepNumber: 24
         description: >-
-          Keep the errors and warnings a design rule reports (a code-judging rule's set aside), each
+          Keep the errors and warnings a design rule reports (a code-judging rule's set aside), and
+          the notices naming a lint.allow of a code the new major retired (the allow can go), each
           in one line with the copy's folder read as the project's live root, under that live root;
-          a project with none is left out. This is what `wairon validate --ci` fails on once the
-          plan is applied, so the plan says it before anything is written
+          a project with none is left out. The errors and warnings are what `wairon validate --ci`
+          fails on once the plan is applied, so the plan says it before anything is written
         type: local
       - stepNumber: 25
         description: 'Diff the copy against the live family: the plan''s file changes'
@@ -310,4 +311,4 @@ lint:
         copy-bound region in two.
 status: draft
 createdAt: '2026-10-18T14:14:37.637Z'
-updatedAt: '2026-11-25T21:39:59.433Z'
+updatedAt: '2026-11-25T23:15:10.559Z'

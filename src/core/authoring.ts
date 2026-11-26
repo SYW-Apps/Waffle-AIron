@@ -1389,8 +1389,9 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
     }
     for (const [owner, members] of byOwner) {
       const stored = loadSpec('component', owner) as ComponentSpec | null;
-      const kept = (stored?.owns ?? []).filter((m) => !members.has(m));
-      if (stored && kept.length !== (stored.owns ?? []).length) updateSpec('component', owner, { owns: kept });
+      // A plain-value list in a delta appends and keeps: each released entry is removed by name.
+      const dropped = (stored?.owns ?? []).filter((m) => members.has(m));
+      if (stored && dropped.length > 0) updateSpec('component', owner, { owns: dropped.map((value) => ({ value, action: 'delete' })) });
     }
   };
   const releasedField = released.length > 0 ? { released } : {};
@@ -1401,7 +1402,8 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
   const testsToRevisit = removed.flatMap((ref) => {
     const spec = specOf(index, ref);
     const methods = ((spec as { methods?: { name: string }[] } | null)?.methods ?? []).map((m) => m.name);
-    if (methods.length > 0 && (ref.kind === 'interface' || ref.kind === 'implementation' || ref.kind === 'type')) tookMethods = true;
+    // A contract, implementation or type with no method left may still have a module tests import.
+    if (ref.kind === 'interface' || ref.kind === 'implementation' || ref.kind === 'type') tookMethods = true;
     return ref.kind === 'interface' || ref.kind === 'implementation' || ref.kind === 'type'
       ? testsInvalidatedBy(ref.kind, ref.id, methods, [spec as Spec | null], bound)
       : [];

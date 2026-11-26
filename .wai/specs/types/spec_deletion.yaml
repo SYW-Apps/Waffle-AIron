@@ -72,9 +72,10 @@ fields:
   - name: testsSearched
     type: bool
     description: >-
-      Whether tests were searched for the removed methods: false when the project declares no test
-      roots, so an empty testsToRevisit then means not searched, never none found. Absent when the
-      deletion took away no method.
+      Whether tests were searched for what the deletion took: false when the project declares no
+      test roots, so an empty testsToRevisit then means not searched, never none found. Set whenever
+      the deletion takes a contract, an implementation or a type, even one with no method left (its
+      module may still be imported by tests); absent when it takes none of them.
     optional: true
   - name: released
     type: list<SpecReference>
@@ -87,4 +88,4 @@ fields:
 methods: []
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:44.394Z'
-updatedAt: '2026-11-25T20:22:56.890Z'
+updatedAt: '2026-11-25T23:15:05.708Z'

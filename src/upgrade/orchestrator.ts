@@ -158,10 +158,14 @@ export function plan(root: string): UpgradePlan {
   }
 }
 
+/** The notice naming a lint.allow of a code a rule retired: the one notice the plan foretells. */
+const RETIRED_ALLOW = 'RETIRED_LINT_ALLOW_CODE';
+
 /**
  * The errors and warnings the running major's design rules report on each older root's rehearsal copy that holds a
  * project.yaml (a part is judged with its project), bound as the copy and judged as the commit would leave it, stamps
- * included. The rules that judge code are set aside: the copy holds none. A project with none is left out.
+ * included. The rules that judge code are set aside: the copy holds none. A notice is kept only when it names a
+ * lint.allow of a code the new major retired, an allow the author can now remove. A project with none is left out.
  */
 function foretell(olderRoots: string[], rehearsal: Rehearsal): UpgradeFindings[] {
   const codeCodes = new Set(core.listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
@@ -171,7 +175,7 @@ function foretell(olderRoots: string[], rehearsal: Rehearsal): UpgradeFindings[]
     if (!stamp.holdsConfig(copy)) continue;
     const issues = runWithProjectRoot(copy, () => core.validateProject().issues);
     const lines = issues
-      .filter((i) => (i.severity === 'error' || i.severity === 'warning') && !codeCodes.has(i.code))
+      .filter((i) => (i.severity === 'error' || i.severity === 'warning' || i.code === RETIRED_ALLOW) && !codeCodes.has(i.code))
       .map((i) => `${i.severity} ${i.code}${i.specId ? ` [${i.specId}]` : ''} ${i.message.split(copy).join(project).replace(/\.\s*$/, '')}`);
     if (lines.length > 0) out.push({ project, findings: lines });
   }
