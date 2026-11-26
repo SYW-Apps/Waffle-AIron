@@ -79,7 +79,7 @@ function hasOlder(plan: UpgradePlan): boolean {
 const REWRITTEN = 'Rewritten';
 const TO_DECIDE = 'To decide';
 const FINDINGS = 'Findings once upgraded';
-const FINDINGS_NOTE = 'The new major reports these on the upgraded tree; `wairon validate --ci` fails on them until they are resolved.';
+const FINDINGS_NOTE = 'The new major reports these on the upgraded tree; `wairon validate --ci` fails on the errors and warnings until they are resolved; a notice never fails it.';
 
 /** Print the plan: standings, every rewrite, what only an author can decide, then what the new major changes. */
 function printPlan(plan: UpgradePlan): void {

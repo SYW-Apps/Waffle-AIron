@@ -63,12 +63,15 @@ describe('the approval carried by the per-spec digests', () => {
 describe('the lock record key order', () => {
   it('keeps the keys the record had in their order and puts the new ones after them', () => {
     const root = project();
-    writeV6Lock(root);
+    // A kept key after the dropped ones (projectId) stays after the keys that take their place.
+    const v6 = { ...writeV6Lock(root), projectId: 'shop' };
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify(v6, null, 2) + '\n');
     const plan = upgrade.plan(root);
     expect(upgrade.apply(plan).committed).toBe(true);
-    // v6 order: format, stateId, lockedAt, lockedBy, validatorVersion, validationResult, status, specs, (dropped keys); then the new ones.
+    // v6 order: format, stateId, lockedAt, lockedBy, validatorVersion, validationResult, status, specs, (dropped specsReading,
+    // gateParts, members, reexpressed), projectId; the new keys take the first dropped key's place.
     expect(Object.keys(readLockJson(root))).toEqual([
-      'format', 'stateId', 'lockedAt', 'lockedBy', 'validatorVersion', 'validationResult', 'status', 'specs', 'parts', 'upgraded',
+      'format', 'stateId', 'lockedAt', 'lockedBy', 'validatorVersion', 'validationResult', 'status', 'specs', 'parts', 'upgraded', 'projectId',
     ]);
   });
 });
@@ -98,6 +101,22 @@ describe('the findings foretold in the plan', () => {
     try {
       const codeCodes = new Set(listRules().filter((r) => r.judges === 'code').flatMap((r) => r.codes.map((c) => c.code)));
       for (const f of plan.findings) for (const line of f.findings) expect(codeCodes.has(line.split(' ')[1])).toBe(false);
+    } finally {
+      upgrade.discard(plan);
+    }
+  });
+
+  it('foretells the notice on an allow of a code the new major retired, and no other notice', () => {
+    const root = project();
+    const file = path.join(root, '.wai', 'specs', 'shop-core', 'shop-orch', '.index.yaml');
+    const text = fs.readFileSync(file, 'utf8');
+    fs.writeFileSync(file, `${text.endsWith('\n') ? text : `${text}\n`}lint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: a standalone store, sanctioned in wairon 6\n`);
+    writeV6Lock(root);
+    const plan = upgrade.plan(root);
+    try {
+      const lines = plan.findings.flatMap((f) => f.findings);
+      expect(lines.some((l) => l.startsWith('notice RETIRED_LINT_ALLOW_CODE [shop-orch]'))).toBe(true);
+      expect(lines.filter((l) => l.startsWith('notice ')).every((l) => l.startsWith('notice RETIRED_LINT_ALLOW_CODE'))).toBe(true);
     } finally {
       upgrade.discard(plan);
     }

@@ -139,8 +139,14 @@ function rewritten(record: V6LockRecord, verdict: Verdict): LockRecord {
   } as Record<string, unknown>;
   // The record keeps the order its keys had; the keys it gains follow them.
   const ordered: Record<string, unknown> = {};
-  for (const key of record.keyOrder ?? []) if (key in next) ordered[key] = next[key];
-  for (const key of Object.keys(next)) if (!(key in ordered)) ordered[key] = next[key];
+  // The keys format 4 adds take the place of the first key it drops (parts and upgraded where gateParts stood).
+  const added = Object.keys(next).filter((key) => !(record.keyOrder ?? []).includes(key));
+  const placeAdded = (): void => { for (const key of added) ordered[key] = next[key]; };
+  for (const key of record.keyOrder ?? []) {
+    if (key in next) ordered[key] = next[key];
+    else if (!(added[0] in ordered)) placeAdded();
+  }
+  placeAdded();
   return ordered as unknown as LockRecord;
 }
 
