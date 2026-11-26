@@ -373,8 +373,11 @@ methods:
         onFalseStep: 19
       - stepNumber: 18
         description: >-
-          Return the rehearsal's report, marked dryRun, with the findings the result will have;
-          nothing was written
+          Return the rehearsal's report, marked dryRun, with the findings the result will have, and
+          a notice that the code findings the move may bring (METHOD_SOURCE_PATH_MISSING,
+          UNREALIZED_METHOD) are not judged here, since no rehearsal holds the code: set each moved
+          method's sourcePath on the destination implementation (code linkage, no re-lock), then
+          sdd_validate_tree judges them; nothing was written
         type: return
         outcome: the planned move
       - stepNumber: 19
@@ -389,7 +392,9 @@ methods:
       - stepNumber: 20
         description: >-
           Return the move's report with the rehearsal's findings: what moved and how many references
-          followed it
+          followed it; when methods moved, it carries the same notice the dry run does, that their
+          code findings are not judged here and sdd_validate_tree judges them once each moved
+          method's sourcePath is set on the destination implementation
         type: return
         outcome: the move's report
   - name: moveSpec
@@ -1040,12 +1045,29 @@ methods:
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
+      at: deleteSpec
       reason: >-
-        deleteSpec, writeSpec and updateSpecGated each carry the same seven-step rehearsal (copy,
-        rule set, judge, write, judge, discard, compare) moveSpec and moveMethods run inline, beside
-        their boundary refusals, judgement and reports. The rehearsal is one copy-bound region whose
+        deleteSpec carries the same seven-step rehearsal (copy, rule set, judge, write, judge,
+        discard, compare) moveSpec and moveMethods run inline, beside its boundary refusal, its
+        release of owned members, its judgement and its report. The rehearsal is one copy-bound
+        region whose findings feed the result; splitting it into a helper would only move that
+        region behind a call the tools make with different writes.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: writeSpec
+      reason: >-
+        writeSpec carries the same seven-step rehearsal (copy, rule set, judge, write, judge,
+        discard, compare) moveSpec and moveMethods run inline, beside its boundary refusal, the
+        restatement it applies, its judgement and its report. The rehearsal is one copy-bound region
+        whose findings feed the result; splitting it into a helper would only move that region
+        behind a call the tools make with different writes.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: updateSpecGated
+      reason: >-
+        updateSpecGated carries the same seven-step rehearsal (copy, rule set, judge, write, judge,
+        discard, compare) moveSpec and moveMethods run inline, beside its boundary refusal, the
+        delta it applies, its judgement and its report. The rehearsal is one copy-bound region whose
         findings feed the result; splitting it into a helper would only move that region behind a
         call the tools make with different writes.
 status: complete
 createdAt: '2026-09-18T21:13:15.300Z'
-updatedAt: '2026-11-25T20:23:51.081Z'
+updatedAt: '2026-11-26T14:33:44.531Z'

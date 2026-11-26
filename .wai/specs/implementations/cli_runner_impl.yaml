@@ -4261,7 +4261,9 @@ methods:
       - stepNumber: 17
         description: >-
           Say nothing was written and why: the run was declined, or — with no terminal to ask in —
-          it could not ask for a confirmation; name `wairon upgrade --yes` for a non-interactive run
+          it could not ask for a confirmation; name the upgrade with --yes for a non-interactive
+          run, spelled as the lock names its own command (`npx wairon` when the project declares
+          wairon as a dependency, `wairon` otherwise)
         type: return
         outcome: declined
   - name: runWhatsNew
@@ -4530,17 +4532,6 @@ methods:
         type: local
 lint:
   allow:
-    - code: EXCESSIVE_NARRATIVE_STEPS
-      reason: >-
-        runPack is the `wairon pack` family's action dispatcher: a flat twelve-arm if-chain in
-        src/cli/runner.ts, one adapter call per subcommand, cognitive score 1. Its 26 steps are two
-        per subcommand (the call and its return) plus the switch and the unknown-action refusal, so
-        the count tracks how many subcommands `pack` has, not what the method does — the same shape
-        sits at every size in this runner: runPacks (8), runAgent (9), runSurface (12), runRemote
-        (14). There is no seam to split on: all twelve arms call one module (src/commands/packs.ts),
-        and every `pack` subcommand's endpoint dispatches to runPack directly, so scope-based
-        sub-dispatchers would be invented here rather than named in the code. Adding a pack
-        subcommand adds two steps, which is the point.
     - code: PARAM_TYPE_MISMATCH
       at: runMcpInstall
       covers:
@@ -4556,6 +4547,48 @@ lint:
         src/commands/host.ts holds the dev commands' capture guard: a process-local flag set while
         one handed command's console output is captured and cleared when it ends, so two runs never
         interleave their output. No domain state: nothing to store, list or recover.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: runPack
+      reason: >-
+        runPack is the `wairon pack` family's action dispatcher: a flat twelve-arm if-chain in
+        src/cli/runner.ts, one adapter call per subcommand, cognitive score 1. Its steps are two per
+        subcommand (the call and its return) plus the switch and the unknown-action refusal, so the
+        count tracks how many subcommands `pack` has, not what the method does — the same shape sits
+        at every size in this runner: runPacks (8), runAgent (9), runSurface (12), runRemote (14).
+        There is no seam to split on: all twelve arms call one module (src/commands/packs.ts), and
+        every `pack` subcommand's endpoint dispatches to runPack directly, so scope-based
+        sub-dispatchers would be invented here rather than named in the code. Adding a pack
+        subcommand adds two steps, which is the point.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: runHostPacks
+      reason: >-
+        runHostPacks is the `wairon host packs` action dispatcher, the same shape as runPack: a
+        switch over list, install and remove, each with a project arm and an instance arm, one host
+        adapter call each. The project arms of install and remove add the preview-and-confirm step a
+        pack change asks for (measure the impact, print it, ask, or skip the question on an
+        unattended run). The count is three actions times two scopes plus that confirmation, not a
+        job to split: each arm is one call and its return.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: runInit
+      reason: >-
+        runInit is two paths of one command: a folder a parent project binds becomes that parent's
+        member (refuse, ask, or create it from the parent's root), and any other folder gets the
+        bootstrap. The bootstrap's steps are one call each for what init writes — the .wai
+        structure, the configuration with its default packs, the context files, the L0 system spec,
+        the skills, the MCP registration and the guides — each through the adapter that owns that
+        file. The count tracks how many artifacts a new project gets; folding the calls into prose
+        would hide the adapter hops the narrative exists to show.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: runDoctor
+      reason: >-
+        runDoctor is the command's two passes in order: with --fix, the repairs (unfinished
+        migrations, context, skills, guides, the three stored-form repairs, group folders, each
+        member below the root, the MCP registrations inside and outside the project), then the
+        report, one check per step (configuration, major, transactions, write lock, spec tree, the
+        three repair plans, generated files, skills, lock state, packs, leftover baselines, plugins,
+        the MCP server). Every repair and check is one call on the adapter that owns it, so the
+        count is the number of things doctor checks and repairs; folding them into prose would hide
+        the adapter hops, and each new check adds a step, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-25T20:24:30.328Z'
+updatedAt: '2026-11-26T14:34:36.360Z'

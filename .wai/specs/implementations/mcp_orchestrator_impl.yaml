@@ -1230,13 +1230,13 @@ conformance: anchored
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
+      at: getSpec
       reason: >-
         getSpec is the read tool's kind table: one inference block (three steps), one switch, and
         seven arms of two steps each — the level's own loader on the core client adapter, then the
         jump back to the one found-check — followed by the shared not-found, variant and narrowing
-        answer path. Its 27 steps are that table plus one shared tail; every arm is the same
-        two-step shape, so splitting it would only move the switch into a helper that the tool calls
-        once.
+        answer path. Its steps are that table plus one shared tail; every arm is the same two-step
+        shape, so splitting it would only move the switch into a helper that the tool calls once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-11-24T23:07:45.484Z'
+updatedAt: '2026-11-26T14:34:01.359Z'

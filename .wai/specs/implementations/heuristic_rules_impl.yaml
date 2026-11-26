@@ -527,7 +527,9 @@ methods:
           ctx.isImplementationDraft(entry.implementation) — the shared recipe for an
           implementation-anchored finding, which reads the implementation, its contract, its
           component and its subsystem — steps = entry.method.narrative.length, score =
-          entry.method.cognitiveScore() and band = entry.method.complexityLevel().
+          entry.method.cognitiveScore() and band = entry.method.complexityLevel(). Each finding
+          below is about this one method, so its site is the method's name: the site a lint.allow
+          names with `at`.
         type: local
       - stepNumber: 5
         description: Is the narrative's band above the band configured to warn?
@@ -539,8 +541,8 @@ methods:
         description: >-
           ctx.addIssue('warning', 'NARRATIVE_COMPLEXITY', naming the implementation, the method, its
           band and score, and the band configured to warn above, with the advice to split the
-          narrative into steps that call smaller methods), anchored on the implementation id and
-          carrying isDraft.
+          narrative into steps that call smaller methods), anchored on the implementation id,
+          carrying isDraft and reported at the method's name.
         type: local
       - stepNumber: 7
         description: Is a maximum band configured, and is this narrative above it?
@@ -551,7 +553,8 @@ methods:
       - stepNumber: 8
         description: >-
           ctx.addIssue('error', 'NARRATIVE_COMPLEXITY_OVER_MAX', naming the band, the score and the
-          configured maximum), anchored on the implementation id and carrying isDraft.
+          configured maximum), anchored on the implementation id, carrying isDraft and reported at
+          the method's name.
         type: local
       - stepNumber: 9
         description: Does the narrative list more steps than the configured limit, defaulting to 25?
@@ -562,7 +565,8 @@ methods:
       - stepNumber: 10
         description: >-
           ctx.addIssue('warning', 'EXCESSIVE_NARRATIVE_STEPS', naming the method, its step count and
-          the limit in force), anchored on the implementation id and carrying isDraft.
+          the limit in force), anchored on the implementation id, carrying isDraft and reported at
+          the method's name.
         type: local
       - stepNumber: 11
         description: >-
@@ -575,7 +579,8 @@ methods:
       - stepNumber: 12
         description: >-
           ctx.addIssue('error', 'NARRATIVE_STEPS_OVER_MAX', naming the step count and the configured
-          hard maximum), anchored on the implementation id and carrying isDraft.
+          hard maximum), anchored on the implementation id, carrying isDraft and reported at the
+          method's name.
         type: local
     symbol: check
     exportedVia: narrativeComplexityRule
@@ -1137,4 +1142,4 @@ methods:
     exportedVia: removableForwarderRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-11-22T02:26:26.068Z'
+updatedAt: '2026-11-26T14:25:19.475Z'

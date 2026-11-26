@@ -698,11 +698,16 @@ lint:
       at: src/commands/lock.ts
       covers:
         - NOTHING_TO_APPROVE
+        - waironCommand
       reason: >-
-        A message constant, not a capability: the one sentence lock, lock-check and status say of a
-        tree with nothing approvable yet. The runner prints it beside its own 'Nothing was written.'
-        when holdsNoDesign (a declared method) answers true; sharing the text keeps the three
-        surfaces word-identical, which a second copy in the runner would not.
+        Two shared texts, not capabilities. NOTHING_TO_APPROVE is the one sentence lock, lock-check
+        and status say of a tree with nothing approvable yet; the runner prints it beside its own
+        'Nothing was written.' when holdsNoDesign (a declared method) answers true, and sharing the
+        text keeps the three surfaces word-identical, which a second copy in the runner would not.
+        waironCommand is the command a printed hint names (`npx wairon` when the running binary is
+        the project's local install, else `wairon`); the upgrade command's refusal and confirmation
+        hints name the same command the lock hints do, which a second copy of the install check
+        would let drift.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-11-24T08:24:10.380Z'
+updatedAt: '2026-11-26T09:34:45.979Z'

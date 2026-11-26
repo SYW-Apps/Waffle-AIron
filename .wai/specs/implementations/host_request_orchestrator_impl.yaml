@@ -684,8 +684,9 @@ methods:
 lint:
   allow:
     - code: EXCESSIVE_NARRATIVE_STEPS
+      at: dispatchProjectLifecycleTool
       reason: >-
-        dispatchProjectLifecycleTool lists 38 steps because it IS the hosted data plane's tool
+        dispatchProjectLifecycleTool lists its steps because it IS the hosted data plane's tool
         table: one guard, one switch, and sixteen arms of two steps each — a call to the
         orchestrator that owns the tool, then the jump back to the one envelope-shaping step. Its
         cognitive score is 18 and every arm is flat. The count is the length of a closed list of
@@ -695,6 +696,17 @@ lint:
         two of the three new defaults would be unreachable code deciding what an impossible tool
         name does. Same shape and same reasoning as cli_runner.runPack and
         rule_registry.registerBuiltinRules.
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      at: handle
+      reason: >-
+        handle is the data plane's request pipeline, each stage one call on the component that owns
+        it, in the order a request must pass them: authenticate the credential, resolve the binding
+        and refuse a foreign one, read the family and the request's reach into it, recover
+        unfinished migrations, offer the lifecycle dispatch, authorize, serve or screen a
+        membership-changing call, run the scoped server, reconcile the family after an applied shape
+        change, and audit. Each stage gates the next, and the status codes it returns (401, 400,
+        403) belong to this one entry; splitting it would move a stage behind a call that only this
+        method makes.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-11-07T02:39:21.140Z'
+updatedAt: '2026-11-26T14:33:59.152Z'
