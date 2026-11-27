@@ -79,4 +79,4 @@ lint:
         src/core/rules/types.ts (code reaches it as RuleContext['ext']), so there is no symbol a
         sourcePath could bind.
 createdAt: '2026-07-14T18:56:56.419Z'
-updatedAt: '2026-11-06T21:44:25.990Z'
+updatedAt: '2026-11-27T22:48:26.805Z'

@@ -2,7 +2,9 @@ id: validation_thread_impl
 name: Validation Thread Implementation
 description: >-
   One Node worker thread, started on the first job, loading the validator once and keeping its memo
-  warm between jobs. Jobs run in arrival order; each binds its root only for its own run.
+  warm between jobs. Jobs run in arrival order; each binds its root only for its own run. A process
+  that does not hold the thread's entry (a packaged executable built without it) runs each job on
+  its own thread instead, so the gate is slower there but always answers.
 contract: ivalidation_thread
 sourcePath: src/core/validation-runner.ts
 simPath: tests/core/validation-runner.test.ts
@@ -10,44 +12,79 @@ methods:
   - name: run
     narrative:
       - stepNumber: 1
+        description: >-
+          Can the thread be started here: is its entry at hand, the built worker file beside this
+          module or, under a source run, the TypeScript source with its loader?
+        type: branch
+        condition: the worker's entry is found
+        onFalseStep: 11
+      - stepNumber: 2
         description: Start the worker thread when none runs
         type: local
-      - stepNumber: 2
+      - stepNumber: 3
         description: Post the job to the thread, after the jobs before it
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: Does the job ask for the owner's gate?
         type: branch
         condition: the job's gate is owner
-        onFalseStep: 6
-      - stepNumber: 4
+        onFalseStep: 7
+      - stepNumber: 5
         description: 'On the thread, bound to the job''s root: the owner''s gate through the memo'
         type: call
         targetComponent: validation_memo
         targetMethod: validateProject
-      - stepNumber: 5
+      - stepNumber: 6
         description: Go on to the answer
         type: jump
-        toStep: 7
-      - stepNumber: 6
+        toStep: 8
+      - stepNumber: 7
         label: asComplete
         description: 'On the thread, bound to the job''s root: the as-complete gate through the memo'
         type: call
         targetComponent: validation_memo
         targetMethod: validateAsComplete
-      - stepNumber: 7
+      - stepNumber: 8
         label: answer
         description: Did the thread fail the job?
         type: branch
         condition: the thread answered an error, or exited before answering
-        onFalseStep: 9
-      - stepNumber: 8
+        onFalseStep: 10
+      - stepNumber: 9
         description: Fail the caller with the thread's error
         type: throw
         error: the validation thread failed the job
-      - stepNumber: 9
+      - stepNumber: 10
         label: done
         description: Answer the result the thread handed back
+        type: return
+        outcome: the gate's result
+      - stepNumber: 11
+        label: inline
+        description: >-
+          No entry to start the thread from: run the job here, on the calling thread, bound to the
+          job's root. The process waits for the gate instead of serving beside it, and the gate
+          still answers rather than failing on a loader the process does not have
+        type: branch
+        condition: the job's gate is owner
+        onFalseStep: 14
+      - stepNumber: 12
+        description: 'Here, bound to the job''s root: the owner''s gate through the memo'
+        type: call
+        targetComponent: validation_memo
+        targetMethod: validateProject
+      - stepNumber: 13
+        description: Answer the owner's gate
+        type: return
+        outcome: the gate's result
+      - stepNumber: 14
+        label: inlineAsComplete
+        description: 'Here, bound to the job''s root: the as-complete gate through the memo'
+        type: call
+        targetComponent: validation_memo
+        targetMethod: validateAsComplete
+      - stepNumber: 15
+        description: Answer the as-complete gate
         type: return
         outcome: the gate's result
     symbol: runOnThread
@@ -63,4 +100,4 @@ methods:
     symbol: stopThread
 status: complete
 createdAt: '2026-11-11T23:26:18.619Z'
-updatedAt: '2026-11-12T00:30:48.614Z'
+updatedAt: '2026-11-27T13:32:23.476Z'

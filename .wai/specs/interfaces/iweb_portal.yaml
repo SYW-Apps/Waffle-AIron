@@ -1764,6 +1764,63 @@ methods:
       transport: HTTP
       method: GET
       path: /web/projects/members
+  - name: getDevUpgrade
+    description: >-
+      Local development server only: whether the served checkout was written by an older wairon
+      major (dev_cockpit_orchestrator.upgradeNeed); an empty answer when it was not. Mounted only
+      under devMode. CLIENT CONTRACT: when it names trees, the page shows nothing else — a popup it
+      does not let the developer close names each tree and the major that wrote it, warns when the
+      checkout has uncommitted changes, shows the terminal command to copy, and offers Show plan and
+      Upgrade; after a successful upgrade the page reloads.
+    signature: 'getDevUpgrade(sessionId: string): DevUpgradeNeed?'
+    returns: DevUpgradeNeed?
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev/upgrade
+  - name: runDevUpgrade
+    description: >-
+      Local development server only: run `wairon upgrade` at the served root
+      (dev_cockpit_orchestrator.upgrade) — its plan with report, otherwise applied — and answer what
+      it printed. Mounted only under devMode.
+    signature: 'runDevUpgrade(sessionId: string, report: bool): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+      - name: report
+        type: bool
+        description: Answer the plan only, writing nothing
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/upgrade
+  - name: openDevSource
+    description: >-
+      Local development server only: open one source file of the served project in the developer's
+      editor (dev_cockpit_orchestrator.openSource). Mounted only under devMode. CLIENT CONTRACT: the
+      canvas details panel lists a component's source files (`sources`) with an Open in editor
+      button only when the page is served by the development server; a hosted page, a shared page
+      and a downloaded file show none. When the answer is not opened, the page shows its reason in a
+      short note.
+    signature: 'openDevSource(sessionId: string, file: string, line?: int): DevOpenResult'
+    returns: DevOpenResult
+    params:
+      - name: sessionId
+        type: string
+      - name: file
+        type: string
+        description: The project-relative file
+      - name: line
+        type: int
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /web/dev/open
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-13T01:36:59.349Z'
+updatedAt: '2026-11-27T22:51:14.573Z'

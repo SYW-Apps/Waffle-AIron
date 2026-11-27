@@ -84,6 +84,27 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: listRules
+  - name: resolveExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveExternals
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project configuration portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: removeExternal
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project configuration portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: declareExternal
 status: draft
 createdAt: '2026-10-18T14:14:23.627Z'
-updatedAt: '2026-11-25T20:22:06.335Z'
+updatedAt: '2026-11-27T22:43:54.248Z'

@@ -63,6 +63,22 @@ methods:
       rehearsal copy without code cannot judge.
     signatureFrom: validator_portal.listRules
     effect: none
+  - name: resolveExternals
+    description: >-
+      Forward to spec_tree_portal.resolveExternals: the bound project's declared externals each
+      bound to its producer, a declaration with no source bound through the family it climbs to — so
+      the v6-to-v7 step finds the family project a bare external names, and where it is on disk.
+    signatureFrom: spec_tree_portal.resolveExternals
+  - name: removeExternal
+    description: >-
+      Forward to project_config_portal.removeExternal: take one external declaration out of the
+      bound (rehearsal) root's configuration, the first half of restating it with a source.
+    signatureFrom: project_config_portal.removeExternal
+  - name: declareExternal
+    description: >-
+      Forward to project_config_portal.declareExternal: write one external declaration back into the
+      bound (rehearsal) root's configuration, now naming its source.
+    signatureFrom: project_config_portal.declareExternal
 status: draft
 createdAt: '2026-10-18T13:06:25.595Z'
-updatedAt: '2026-11-25T20:22:05.352Z'
+updatedAt: '2026-11-27T22:43:49.014Z'

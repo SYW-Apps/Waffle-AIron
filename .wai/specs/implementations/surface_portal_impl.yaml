@@ -97,13 +97,14 @@ methods:
         type: call
         targetComponent: external_declarations
         targetMethod: remove
-  - name: updateExternalUse
+  - name: updateExternal
     narrative:
       - stepNumber: 1
         description: Dispatch the `use` change to the external-declarations workflow
         type: call
         targetComponent: external_declarations
-        targetMethod: updateUse
+        targetMethod: update
+    symbol: updateExternalUse
   - name: listConsumers
     narrative:
       - stepNumber: 1
@@ -155,4 +156,4 @@ methods:
         targetMethod: recordPacks
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-11-20T00:09:01.543Z'
+updatedAt: '2026-11-27T22:43:01.446Z'

@@ -1110,7 +1110,34 @@ methods:
         targetComponent: web_graph_orchestrator
         targetMethod: getProjectMembers
     symbol: getProjectMembers
+  - name: getDevUpgrade
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session the router decoded to dev_cockpit_orchestrator.upgradeNeed, and hand
+          back its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: upgradeNeed
+  - name: runDevUpgrade
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session and the report flag the router decoded to
+          dev_cockpit_orchestrator.upgrade, and hand back its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: upgrade
+  - name: openDevSource
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session, file and line the router decoded to
+          dev_cockpit_orchestrator.openSource, and hand back its result for the router to encode
+        type: call
+        targetComponent: dev_cockpit_orchestrator
+        targetMethod: openSource
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-11-10T19:05:59.211Z'
+updatedAt: '2026-11-27T22:51:15.644Z'

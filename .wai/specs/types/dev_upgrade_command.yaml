@@ -1,0 +1,18 @@
+kind: signature
+id: dev_upgrade_command
+name: DevUpgradeCommand
+description: >-
+  `wairon upgrade` at the served root as the CLI that started the dev server runs it: with --report,
+  the plan and nothing written; otherwise applied with --yes, the page's button being the
+  confirmation.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/dev-commands.ts
+params:
+  - name: report
+    type: bool
+    description: Answer the plan only, writing nothing
+returns: async DevCommandResult
+createdAt: '2026-11-27T22:45:40.289Z'
+updatedAt: '2026-11-27T22:45:40.696Z'

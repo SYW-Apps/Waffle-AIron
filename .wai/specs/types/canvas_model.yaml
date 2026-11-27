@@ -43,9 +43,12 @@ fields:
   - name: components
     type: list<any>
     description: >-
-      Each component with what the canvas shows about it, including the findings marked on it and an
+      Each component with what the canvas shows about it, including the findings marked on it, an
       abstract marker (`abstract`) on an abstraction, drawn as a node mark and no change of grouping
-      or layout.
+      or layout, its external links, and its source files (`sources`: each file its implementations
+      name, project-relative, with the contract methods realized there) — which the canvas offers to
+      open in the developer's editor only on the local development server, and which a shared
+      snapshot leaves out.
     optional: false
   - name: edges
     type: list<any>
@@ -125,4 +128,4 @@ fields:
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-11-21T23:31:21.576Z'
+updatedAt: '2026-11-27T22:50:13.376Z'

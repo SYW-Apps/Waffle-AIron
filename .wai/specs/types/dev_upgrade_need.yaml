@@ -1,0 +1,31 @@
+kind: value-object
+id: dev_upgrade_need
+name: DevUpgradeNeed
+description: >-
+  What the dev page shows, in a popup it does not let the developer close, when the served checkout
+  was written by an older wairon major: the trees, the running major, whether there are uncommitted
+  changes, and the terminal command that does the same.
+subsystem: sdd_host
+fields:
+  - name: trees
+    type: list<TreeBehind>
+    description: Each served tree an older major wrote
+    optional: false
+  - name: runningMajor
+    type: int
+    description: This wairon's major
+    optional: false
+  - name: uncommitted
+    type: bool
+    description: >-
+      Whether the served checkout has uncommitted changes, so the page warns that the upgrade's
+      rewrite then lands in the same diff
+    optional: false
+  - name: command
+    type: string
+    description: The terminal command that runs the same upgrade at the served root
+    optional: false
+methods: []
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-27T22:45:38.087Z'
+updatedAt: '2026-11-27T22:45:38.506Z'

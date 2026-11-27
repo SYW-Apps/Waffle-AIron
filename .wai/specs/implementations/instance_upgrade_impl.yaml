@@ -63,6 +63,27 @@ methods:
         targetComponent: retired_value_migration
         targetMethod: run
       - stepNumber: 11
+        label: devServer
+        description: >-
+          Is this the local development server? It serves the developer's own checkout, whose
+          upgrade is the developer's to run with its report and the approval it may carry, so it
+          never upgrades a tree: it starts on one an older major wrote and leaves it as it is, and
+          the web page reads `behind` and offers the upgrade
+        type: branch
+        condition: the host is the local development server
+        onFalseStep: 14
+      - stepNumber: 12
+        description: >-
+          Read the served trees an older major wrote, upgrading none, for the report (behind): the
+          start prints them and the web page offers the upgrade
+        type: call
+        targetComponent: instance_upgrade
+        targetMethod: behind
+      - stepNumber: 13
+        description: Go on with the member records
+        type: jump
+        toStep: 17
+      - stepNumber: 14
         label: trees
         description: >-
           Bring every hosted tree an older major wrote to the running major — run even on a current
@@ -70,12 +91,12 @@ methods:
         type: call
         targetComponent: instance_upgrade
         targetMethod: upgradeTrees
-      - stepNumber: 12
+      - stepNumber: 15
         description: Was any tree refused or failed, in a host that is not the local development server?
         type: branch
         condition: a hosted tree was not upgraded and the host is not in development mode
-        onFalseStep: 14
-      - stepNumber: 13
+        onFalseStep: 17
+      - stepNumber: 16
         description: >-
           Stop the start, naming each project and why, and the backup when one was taken; each tree
           already upgraded stays upgraded, its family committed whole. A development-mode host never
@@ -83,33 +104,33 @@ methods:
           web UI shows what did not load
         type: throw
         error: StartAborted
-      - stepNumber: 14
+      - stepNumber: 17
         label: members
         description: Was the data directory older?
         type: branch
         condition: the recorded major is below the running one
-        onFalseStep: 19
-      - stepNumber: 15
+        onFalseStep: 22
+      - stepNumber: 18
         description: Register the member records the upgraded trees declare, all or nothing
         type: call
         targetComponent: member_registration
         targetMethod: upgrade
-      - stepNumber: 16
+      - stepNumber: 19
         description: Was it applied?
         type: branch
         condition: the member upgrade was blocked or did not commit
-        onFalseStep: 18
-      - stepNumber: 17
+        onFalseStep: 21
+      - stepNumber: 20
         description: Stop the start, naming why and the backup
         type: throw
         error: StartAborted
-      - stepNumber: 18
+      - stepNumber: 21
         label: stamp
         description: Record the running major
         type: call
         targetComponent: instance_version_store
         targetMethod: write
-      - stepNumber: 19
+      - stepNumber: 22
         label: done
         description: Answer the report
         type: return
@@ -242,8 +263,35 @@ methods:
         type: return
         outcome: current
     detail: full
+  - name: behind
+    narrative:
+      - stepNumber: 1
+        description: Read every served project record
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 2
+        description: For each served root
+        type: loop
+        loopKind: forEach
+        over: >-
+          each record's root once, skipping a retired part and a root with no project.yaml, as
+          upgradeTrees does
+        endStep: 4
+      - stepNumber: 3
+        description: Read where its tree stands
+        type: call
+        targetComponent: host_upgrade_adapter
+        targetMethod: standing
+      - stepNumber: 4
+        description: Keep it with the major that wrote it when an older major did
+        type: local
+      - stepNumber: 5
+        description: Answer the trees kept
+        type: return
+        outcome: list<TreeBehind>
 previousIds:
   - data_dir_upgrade_impl
 status: draft
 createdAt: '2026-10-18T14:29:29.842Z'
-updatedAt: '2026-11-21T16:15:55.521Z'
+updatedAt: '2026-11-27T22:47:13.093Z'

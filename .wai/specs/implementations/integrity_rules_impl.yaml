@@ -208,11 +208,12 @@ methods:
         onFalseStep: 10
       - stepNumber: 8
         description: >-
-          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, the site it names if
-          it names one, and its stated reason: the code is an error (and whether it fired here), and
-          an error cannot be allowed — lint.allow silences warnings and notices only, so fix what
+          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code and the site it names
+          if it names one, then what to do first — the code is an error (and whether it fired here),
+          and an error cannot be allowed: lint.allow silences warnings and notices only, so fix what
           the finding names or remove the allow; a project may re-tune the code's severity in
-          rules.sddRuleSeverity
+          rules.sddRuleSeverity — and its stated reason last, cut to its first 80 characters, so the
+          instruction is never buried behind a long reason
         type: local
       - stepNumber: 9
         description: Continue with the next lint allow.
@@ -275,8 +276,9 @@ methods:
       - stepNumber: 20
         label: laReport
         description: >-
-          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, the site it names if
-          it names one, its stated reason, and that explanation.
+          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code and the site it names
+          if it names one, then that explanation with what to do, and its stated reason last, cut to
+          its first 80 characters, so the instruction is never buried behind a long reason.
         type: local
       - stepNumber: 21
         label: laEnd
@@ -1995,6 +1997,42 @@ methods:
     detail: full
     symbol: check
     exportedVia: projectUseCyclesRule
+  - name: externalLinks
+    sourcePath: src/core/rules/integrity/external-links.ts
+    narrative:
+      - stepNumber: 1
+        label: components
+        description: Check each component
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 5
+      - stepNumber: 2
+        description: Check each of its external links
+        type: loop
+        loopKind: forEach
+        over: component.externalLinks
+        endStep: 5
+      - stepNumber: 3
+        description: >-
+          Parse link.url as a URL; it is safe when it parses, its scheme is https (or http with the
+          host localhost or 127.0.0.1), and it names no user name or password
+        type: local
+      - stepNumber: 4
+        description: A safe link is left alone
+        type: branch
+        condition: the link is safe
+        onTrueStep: 1
+        onFalseStep: 5
+      - stepNumber: 5
+        label: report
+        description: >-
+          Report EXTERNAL_LINK_UNSAFE (error; spec component.id; draft context from the component)
+          naming the link's label or url (shortened) and why: not a URL, the scheme it uses, or
+          credentials in it — and the accepted form
+        type: local
+    symbol: check
+    exportedVia: externalLinksRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-11-23T19:16:58.578Z'
+updatedAt: '2026-11-27T22:51:28.660Z'

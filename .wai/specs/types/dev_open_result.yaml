@@ -1,0 +1,26 @@
+kind: value-object
+id: dev_open_result
+name: DevOpenResult
+description: >-
+  The answer to opening a source file in the developer's editor from the dev page: whether the
+  editor was started, or why not, so the page shows a short note instead of nothing.
+subsystem: sdd_host
+fields:
+  - name: opened
+    type: bool
+    description: Whether the editor was started on the file
+    optional: false
+  - name: editor
+    type: string
+    description: The editor command used
+    optional: true
+  - name: reason
+    type: string
+    description: >-
+      Why it was not opened: the file is outside the served project or not on disk, or no editor was
+      found (set WAIRON_EDITOR)
+    optional: true
+methods: []
+sourcePath: src/server/dev-commands.ts
+createdAt: '2026-11-27T22:51:02.762Z'
+updatedAt: '2026-11-27T22:51:03.268Z'

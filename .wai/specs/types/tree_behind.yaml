@@ -1,0 +1,20 @@
+kind: value-object
+id: tree_behind
+name: TreeBehind
+description: >-
+  One served tree an older wairon major wrote, which the local development server serves but never
+  upgrades: the web page names it and offers the upgrade.
+subsystem: sdd_host
+fields:
+  - name: root
+    type: string
+    description: The tree's root folder
+    optional: false
+  - name: writtenMajor
+    type: int
+    description: The major that wrote it
+    optional: false
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-11-27T22:44:53.653Z'
+updatedAt: '2026-11-27T22:44:54.062Z'

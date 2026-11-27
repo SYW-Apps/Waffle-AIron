@@ -43,16 +43,18 @@ methods:
         type: bool
         description: Answer what would be removed, writing nothing
         optional: true
-  - name: updateExternalUse
+  - name: updateExternal
     description: >-
-      Forward to surface_portal.updateExternalUse: add and remove `use` imports of one external
+      Forward to surface_portal.updateExternal: change one external's `use` imports and location
       (sdd_update_external).
-    signature: 'updateExternalUse(request: ExternalUseRequest): ExternalUseChange'
+    signature: 'updateExternal(request: ExternalUseRequest): ExternalUseChange'
     returns: ExternalUseChange
     params:
       - name: request
         type: ExternalUseRequest
-        description: The alias, the names to add and remove, and dryRun
+        description: The alias, the names to add and remove, the new location, and dryRun
+    previousNames:
+      - imcp_surfaces_adapter.updateExternalUse
   - name: listConsumers
     description: >-
       Forward to the surface portal: the projects that consume the bound project, the searched
@@ -75,4 +77,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-24T18:14:20.548Z'
-updatedAt: '2026-10-07T10:59:30.465Z'
+updatedAt: '2026-11-27T22:43:13.540Z'

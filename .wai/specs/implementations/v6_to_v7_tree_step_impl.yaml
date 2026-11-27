@@ -130,23 +130,37 @@ methods:
       - stepNumber: 16
         description: >-
           Read the project's configuration, whose external declarations tell a path producer (a
-          `../` or family external, read live in v7) from a hosted or git one
+          `../` external, read live in v7) from a hosted or git one, and name the bare ones (no
+          source: the family provided them in wairon 6)
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 17
+        description: >-
+          Bind the declared externals through the family the project climbs to, for each bare one
+          the family project that answers to its producer id and its folder
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 18
         description: Resolve the selected packs as they load now
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: resolvedPacks
-      - stepNumber: 18
+      - stepNumber: 19
         description: >-
           Plan the inputs: .wai/externals.lock.yaml becomes .wai/inputs.lock.yaml, keeping each
-          hosted or git entry and a part's parent entry, dropping each path producer's entry with
+          hosted or git entry and a part's parent entry, dropping each `../` producer's entry with
           its snapshot (each named: read live, never pinned), and recording the packs; not a design
-          change. A project with no externals lock and no pack writes none
+          change. A bare external whose family project is a folder on disk gets its source written —
+          the relative path from this project to it, so v7 reads it live like a path dependency —
+          and its pin is dropped, each named with the path written; a bare one the family does not
+          resolve to a folder on disk (none answers to its id, or it is a git or hosted member)
+          keeps its pin and declaration as they are and is reported for an author, naming why and
+          the `sdd_update_external` source to give it. A project with no externals lock, no bare
+          external and no pack writes none
         type: local
-      - stepNumber: 19
+      - stepNumber: 20
         description: 'Answer the plan: its changes in order, and what is reported for an author'
         type: return
         outcome: StepPlan
@@ -199,32 +213,60 @@ methods:
         targetComponent: upgrade_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 9
+        description: >-
+          Bind the declared externals through the family, for each bare one its family project's
+          folder
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 10
         description: Resolve the selected packs as they load now
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: resolvedPacks
-      - stepNumber: 10
-        description: >-
-          Assemble the inputs lock: the hosted and git entries and a part's parent entry kept, each
-          path producer's entry dropped, the packs recorded
-        type: local
       - stepNumber: 11
+        description: >-
+          Assemble the inputs lock: the hosted and git entries and a part's parent entry kept, a
+          bare external's entry kept when the family does not resolve it to a folder on disk, each
+          other path producer's entry dropped (a `../` one, and a bare one given its source below),
+          the packs recorded
+        type: local
+      - stepNumber: 12
         description: Write .wai/inputs.lock.yaml onto the rehearsal root
         type: call
         targetComponent: v6_lock_file_adapter
         targetMethod: writeInputsLock
-      - stepNumber: 12
+      - stepNumber: 13
+        description: Give each bare external its source
+        type: loop
+        loopKind: forEach
+        over: each bare external the family resolves to a folder on disk
+        endStep: 15
+      - stepNumber: 14
+        description: Take its declaration out of the rehearsal root's configuration
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: removeExternal
+      - stepNumber: 15
+        label: sourced
+        description: >-
+          Write it back with its source: the relative path from this project to its family project
+          (forward slashes), every other field kept as written
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: declareExternal
+      - stepNumber: 16
         description: For the v6 externals lock and each dropped path producer's snapshot
         type: loop
         loopKind: forEach
         over: .wai/externals.lock.yaml and the dropped snapshots
-        endStep: 13
-      - stepNumber: 13
+        endStep: 17
+      - stepNumber: 17
         description: Remove it from the rehearsal root
         type: call
         targetComponent: v6_lock_file_adapter
         targetMethod: removeFile
-      - stepNumber: 14
+      - stepNumber: 18
         description: Done
         type: return
         outcome: written
@@ -236,9 +278,10 @@ methods:
           Assemble the lines, most important first: the approval now covers the project's own design
           and policy only, so a release, a re-pin or a member's re-lock never re-opens it;
           .wai/inputs.lock.yaml replaces .wai/externals.lock.yaml and also records the packs; path
-          externals are read live and no longer pinned; a member's approval is its own lock, never
-          recorded by its parent; a record whose approval could not be proven unchanged needs one
-          `wairon lock`
+          externals are read live and no longer pinned, and an external with no source names the
+          relative path of its family project, so the project's own gate reads it live too; a
+          member's approval is its own lock, never recorded by its parent; a record whose approval
+          could not be proven unchanged needs one `wairon lock`
         type: local
       - stepNumber: 2
         description: Answer them
@@ -273,4 +316,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-11-20T01:25:12.264Z'
-updatedAt: '2026-11-25T23:15:08.855Z'
+updatedAt: '2026-11-27T22:44:14.730Z'
