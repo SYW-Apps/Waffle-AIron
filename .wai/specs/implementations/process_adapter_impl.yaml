@@ -22,6 +22,11 @@ methods:
     intent: >-
       Start a program detached with its streams ignored and leave it running (opening a browser). A
       program that cannot be started is not an error here: it is fire-and-forget.
+  - name: startChecked
+    narrative: []
+    intent: >-
+      Start a program detached with its streams ignored and leave it running, answering once the
+      operating system started it (null) or refused it (the reason). Never throws.
 status: draft
 createdAt: '2026-10-31T23:15:28.703Z'
-updatedAt: '2026-10-31T23:15:29.887Z'
+updatedAt: '2026-11-28T00:19:28.945Z'

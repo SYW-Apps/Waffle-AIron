@@ -156,8 +156,8 @@ methods:
       the developer's machine (where the dev server runs, whichever device the page is viewed on).
       Refused outside the local development server; a file outside the served project, one not on
       disk, or no editor found answers opened false with the reason, never an error page.
-    signature: 'openSource(sessionId: string, file: string, line?: int): DevOpenResult'
-    returns: DevOpenResult
+    signature: 'openSource(sessionId: string, file: string, line?: int): async DevOpenResult'
+    returns: async DevOpenResult
     params:
       - name: sessionId
         type: string
@@ -172,4 +172,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-11-07T02:41:40.170Z'
-updatedAt: '2026-11-27T22:51:06.235Z'
+updatedAt: '2026-11-28T00:19:34.193Z'

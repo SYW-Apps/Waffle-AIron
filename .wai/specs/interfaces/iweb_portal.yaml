@@ -1806,8 +1806,8 @@ methods:
       button only when the page is served by the development server; a hosted page, a shared page
       and a downloaded file show none. When the answer is not opened, the page shows its reason in a
       short note.
-    signature: 'openDevSource(sessionId: string, file: string, line?: int): DevOpenResult'
-    returns: DevOpenResult
+    signature: 'openDevSource(sessionId: string, file: string, line?: int): async DevOpenResult'
+    returns: async DevOpenResult
     params:
       - name: sessionId
         type: string
@@ -1823,4 +1823,4 @@ methods:
       path: /web/dev/open
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-11-27T22:51:14.573Z'
+updatedAt: '2026-11-28T00:20:00.434Z'

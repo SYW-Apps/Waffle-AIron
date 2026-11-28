@@ -2,7 +2,9 @@ schemaVersion: 1.0.0
 id: waffle-airon
 waironMajor: 7
 name: Waffle-AIron
+projectType: backend
 extensions:
+  packs: []
   # wairon's own doctrine is wairon's own — nothing from a developer's global
   # packs folder (~/.wairon/packs) may govern this repo. Without this, whatever a
   # contributor happens to have installed machine-wide silently injects profiles,
@@ -10,6 +12,8 @@ extensions:
   # instructions/resources then differ per developer, and CI (which has no global
   # packs) disagrees with every local run.
   useGlobalPacks: false
+paths:
+  specsDir: .wai/specs
 targets:
   - type: claude
     outputDir: .claude/agents
@@ -236,6 +240,7 @@ rules:
       - web/src/views/Tokens.tsx
       - web/src/views/Units.tsx
       - web/src/views/Users.tsx
+      - web/src/views/UpgradeGate.tsx
     # The conformance debt register: the code-vs-spec findings this tree carries
     # as DECLARED debt, grouped by the reason that explains them. `unclaimed`'s
     # one-way shape, for findings about code a spec does name.
@@ -271,5 +276,8 @@ rules:
             at: 'src/server/projects.ts'
             covers:
               - 'SUBPROJECT_SEPARATOR'
+execution:
+  tier: off
+  overrides: {}
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

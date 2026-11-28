@@ -33,7 +33,14 @@ fields:
       `wairon upgrade --report`, or `wairon upgrade --yes` once the developer pressed the page's
       Upgrade button.
     optional: false
+  - name: invocation
+    type: string
+    description: >-
+      How the CLI that started the server is invoked at the served root (`wairon`, or the node
+      command of a local build), so a command the page shows for copying reads as the terminal runs
+      it.
+    optional: false
 methods: []
 sourcePath: src/server/dev-commands.ts
 createdAt: '2026-11-07T02:41:16.714Z'
-updatedAt: '2026-11-27T22:45:43.926Z'
+updatedAt: '2026-11-28T00:20:06.684Z'

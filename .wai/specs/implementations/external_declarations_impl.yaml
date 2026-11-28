@@ -56,7 +56,7 @@ methods:
         description: A request with no source is filled in from the family
         type: branch
         condition: the request names no source
-        onFalseStep: 11
+        onFalseStep: 13
       - stepNumber: 7
         description: >-
           Did the candidate binding find the family project that answers to the producer id, as a
@@ -76,8 +76,20 @@ methods:
       - stepNumber: 9
         description: Go on to read the producer at that location
         type: jump
-        toStep: 11
+        toStep: 13
       - stepNumber: 10
+        description: >-
+          For the refusal's wording, climb from the bound root to the family's top, one chaining
+          parent at a time (best effort: a failure names no ids)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 11
+        description: Read the project graph at that top root, for the ids the family's projects answer to
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 12
         label: no-family
         description: >-
           Answer the refusal, writing nothing: no family project on disk answers to the producer id
@@ -85,7 +97,7 @@ methods:
           does, its location to give as the source
         type: return
         outcome: refused
-      - stepNumber: 11
+      - stepNumber: 13
         label: producer-id
         description: >-
           When the binding has a root, read the producer's configuration with that root bound
@@ -93,7 +105,7 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 12
+      - stepNumber: 14
         label: producer-exports
         description: >-
           With the producer's root bound the same way, read its resolved export table: the public
@@ -103,7 +115,7 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
           Does the producer contradict the declaration — answering to another id than declared (read
           from its configuration, or named by the family's own resolution of the alias), or, once
@@ -112,8 +124,8 @@ methods:
         condition: >-
           the producer answers to another id than the declared one, or it was read and a `use` name
           is not in its export table at this project's audience
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 17
+      - stepNumber: 16
         description: >-
           Answer the refusal naming what the producer contradicted, writing nothing: the id it
           answers to (declare `project:` or use that alias); each unexported `use` name with the
@@ -123,19 +135,19 @@ methods:
           external
         type: return
         outcome: refused by the producer
-      - stepNumber: 15
+      - stepNumber: 17
         label: dry
         description: A dry run stops here, the producer already checked
         type: branch
         condition: request.dryRun
-        onFalseStep: 17
-      - stepNumber: 16
+        onFalseStep: 19
+      - stepNumber: 18
         description: >-
           Answer what would be written (written false, the normalized declaration, the id the
           producer answers to) and, when the producer could not be read, why — nothing is written
         type: return
         outcome: dry run
-      - stepNumber: 17
+      - stepNumber: 19
         label: write
         description: >-
           Write the normalized declaration into `.wai/project.yaml` through the core's configuration
@@ -143,22 +155,22 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: declareExternal
-      - stepNumber: 18
+      - stepNumber: 20
         label: kept
         description: >-
           Pin it now when asked (the default) and the producer was read; an unreadable producer
           leaves it declared and unpinned, with the reason carried as `unreachable`
         type: branch
         condition: request.pin is not false and the producer was read
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 22
+      - stepNumber: 21
         description: >-
           Pin the new alias — its snapshot and lock entry — so its uses are judged against a
           reproducible pin from the first validate
         type: call
         targetComponent: surface_orchestrator
         targetMethod: pinExternals
-      - stepNumber: 20
+      - stepNumber: 22
         label: answer
         description: >-
           Answer the addition: written, the declaration, the producer id it answers to, the pin when
@@ -371,4 +383,4 @@ methods:
         outcome: changed
 status: complete
 createdAt: '2026-10-06T10:14:16.933Z'
-updatedAt: '2026-11-27T22:42:46.693Z'
+updatedAt: '2026-11-28T00:22:06.726Z'

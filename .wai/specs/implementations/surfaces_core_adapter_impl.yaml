@@ -171,6 +171,13 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: diffAgainstApproval
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward the chaining-parent read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveChainingParent
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-11-20T00:07:51.737Z'
+updatedAt: '2026-11-28T00:20:20.294Z'
