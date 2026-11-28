@@ -653,6 +653,7 @@ export function buildProgram(): Command {
     .option('--dry-run', 'add, use, remove: say what would change, write nothing (add still reads the producer)')
     .option('--add <names>', "use: public names to import bare, comma-separated ('*' for all)")
     .option('--remove <names>', 'use: names to stop importing, comma-separated')
+    .option('--source <location>', 'use: a new location for the producer (`../sibling`, `hosted:<id>`, `<git url>[#<commit>]`), the pin following it')
     .option('--search <dirs...>', 'consumers: also scan these folders (and the project roots directly under them) for projects declaring this one as an external')
     .action(async (action: string, aliases: string[] | undefined, opts) => {
       await runExternals(action, aliases ?? [], {
@@ -667,6 +668,7 @@ export function buildProgram(): Command {
         dryRun: opts.dryRun,
         ...(opts.add !== undefined ? { add: String(opts.add).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
         ...(opts.remove !== undefined ? { remove: String(opts.remove).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
+        ...(opts.source !== undefined ? { source: String(opts.source) } : {}),
       });
     });
 

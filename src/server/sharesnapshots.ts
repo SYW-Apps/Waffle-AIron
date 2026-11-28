@@ -147,6 +147,17 @@ function creatorReach(dataDir: string, principal: Principal, projectId: string, 
   };
 }
 
+/** The canvas model with each component's `sources` removed: the files are the developer's, opened only from the local dev page, never carried into a shared link. */
+function withoutSources<M extends { components: object[] }>(model: M): M {
+  return {
+    ...model,
+    components: model.components.map((c) => {
+      const { sources: _sources, ...rest } = c as { sources?: unknown };
+      return rest;
+    }),
+  };
+}
+
 export function captureSnapshot(
   dataDir: string,
   principal: Principal,
@@ -169,7 +180,7 @@ export function captureSnapshot(
       capturedAt: new Date().toISOString(),
       // Step 3: the canvas model is the primary payload the shared view renders,
       // with those relations on its consumption edges and no member record ids.
-      canvasModel: JSON.stringify(hostCore.buildCanvasDataModel(relations)),
+      canvasModel: JSON.stringify(withoutSources(hostCore.buildCanvasDataModel(relations))),
     };
     if (artifacts.includes('html')) {
       snapshot.html = hostCore.renderDiagram('canvas', relations);

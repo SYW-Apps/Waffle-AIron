@@ -90,6 +90,8 @@ describe('dev cockpit (sdd_host)', () => {
     lock: (s) => { calls.push({ name: 'lock', subsystem: s }); return lockImpl(s); },
     generate: async () => { calls.push({ name: 'generate' }); if (gate) await gate; return ok('generate', ['generated']); },
     doctor: async () => { calls.push({ name: 'doctor' }); return ok('doctor', ['\u001b[32mhealthy\u001b[39m']); },
+    upgrade: async () => ok('upgrade'),
+    invocation: 'wairon',
     family: async (c) => { calls.push({ name: c.action }); familyCalls.push(c); if (gate) await gate; return ok(c.action, ['\u001b[1mplanned\u001b[22m']); },
   });
 

@@ -17,6 +17,9 @@ dependsOn:
   - project_repository
   - git_head_adapter
   - host_validator_adapter
+  - instance_upgrade
+  - local_dev_registration
+  - process_adapter
 status: complete
 createdAt: '2026-11-07T02:41:33.911Z'
-updatedAt: '2026-11-12T01:02:20.257Z'
+updatedAt: '2026-11-27T22:50:50.201Z'

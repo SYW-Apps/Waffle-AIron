@@ -52,6 +52,8 @@ export interface ExternalsOptions {
   add?: string[];
   /** use: names to stop importing (--remove a,b). */
   remove?: string[];
+  /** use: a new location for the producer (--source <location>). */
+  source?: string;
   /** consumers: folders to scan for projects declaring this one as an external (--search <dir>…). */
   search?: string[];
 }
@@ -190,6 +192,7 @@ function printUseChange(change: ExternalUseChange, dryRun: boolean): void {
   }
   const moved = [change.added.length ? `+ ${change.added.join(', ')}` : '', change.removed.length ? `- ${change.removed.join(', ')}` : ''].filter(Boolean).join('; ') || 'no change';
   const list = change.use.length ? change.use.join(', ') : '(none)';
+  if (change.source) logger.info(`${chalk.cyan(change.alias)} location: ${change.source}${change.pin ? ` (pin ${change.pin})` : ''}`);
   if (dryRun) logger.info(`Dry run: ${chalk.cyan(change.alias)}.use would be [${list}] (${moved}). Nothing was written.`);
   else if (change.written) logger.success(`${chalk.cyan(change.alias)}.use is now [${list}] (${moved}).`);
   else logger.info(`${chalk.cyan(change.alias)}.use is already [${list}] — nothing to change.`);
@@ -286,11 +289,12 @@ export async function runExternals(action: string, aliases: string[], options: E
     case 'use': {
       // Steps 12-13.
       const [alias] = aliases;
-      if (alias === undefined) throw new WaironError('`wairon externals use` needs an alias: `wairon externals use <alias> --add a,b --remove c [--dry-run]`.');
+      if (alias === undefined) throw new WaironError('`wairon externals use` needs an alias: `wairon externals use <alias> --add a,b --remove c --source <location> [--dry-run]`.');
       const change = updateExternalUse({
         alias,
         ...(options.add !== undefined ? { add: options.add } : {}),
         ...(options.remove !== undefined ? { remove: options.remove } : {}),
+        ...(options.source !== undefined ? { source: options.source } : {}),
         ...(options.dryRun ? { dryRun: true } : {}),
       });
       if (options.json) printJson(change);

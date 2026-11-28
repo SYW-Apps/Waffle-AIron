@@ -129,7 +129,7 @@ export function removeExternal(alias: string, dryRun?: boolean): ExternalRemoval
 
 /** isurface_portal.updateExternalUse — add and remove `use` imports of one declared external (`wairon externals use`, sdd_update_external). Dispatched to the external-declarations workflow. */
 export function updateExternalUse(request: ExternalUseRequest): ExternalUseChange {
-  return externalDeclarations.updateUse(request);
+  return externalDeclarations.update(request);
 }
 
 /** isurface_portal.listConsumers — the family projects in reach that consume the bound project, and every project root in the searched folders declaring it as an external (`wairon externals consumers [--search <dir>…]`, sdd_list_consumers). Read-only. */

@@ -142,12 +142,16 @@ methods:
       sdd_remove_external) — its declaration and its pin together, so no orphaned pin is left; an
       orphaned pin alone is removed too. Dispatched to the external-declarations workflow.
     signatureFrom: external_declarations.remove
-  - name: updateExternalUse
+  - name: updateExternal
     description: >-
-      Published: add and remove `use` imports of one declared external (`wairon externals use`,
-      sdd_update_external) — refused in one sentence, an added name checked against what the
-      producer exports to this project. Dispatched to the external-declarations workflow.
-    signatureFrom: external_declarations.updateUse
+      Published: change one declared external field by field — add and remove `use` imports and give
+      it a new location (`wairon externals use`, sdd_update_external) — refused in one sentence, an
+      added name checked against what the producer exports to this project, a new location against
+      the id its producer answers to, the pin following the location. Dispatched to the
+      external-declarations workflow.
+    signatureFrom: external_declarations.update
+    previousNames:
+      - isurface_portal.updateExternalUse
   - name: listConsumers
     description: >-
       Published: the projects that consume the bound project — the family in reach, and with search
@@ -201,4 +205,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-11-20T00:08:59.970Z'
+updatedAt: '2026-11-27T22:43:11.599Z'

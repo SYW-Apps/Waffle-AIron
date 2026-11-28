@@ -28,9 +28,15 @@ fields:
     type: MemberUpgradeReport
     description: The member registration step, when it ran.
     optional: true
+  - name: behind
+    type: list<TreeBehind>
+    description: >-
+      Development mode only: each served tree an older major wrote, left as it is; the start prints
+      them and the web page offers the upgrade.
+    optional: true
 methods: []
 sourcePath: src/server/upgrade.ts
 previousIds:
   - data_dir_upgrade_report
 createdAt: '2026-10-18T14:27:19.681Z'
-updatedAt: '2026-10-18T14:32:17.205Z'
+updatedAt: '2026-11-27T22:47:12.200Z'

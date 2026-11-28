@@ -34,13 +34,14 @@ methods:
         type: call
         targetComponent: surface_portal
         targetMethod: removeExternal
-  - name: updateExternalUse
+  - name: updateExternal
     narrative:
       - stepNumber: 1
         description: Forward to the surface portal
         type: call
         targetComponent: surface_portal
-        targetMethod: updateExternalUse
+        targetMethod: updateExternal
+    symbol: updateExternalUse
   - name: listConsumers
     narrative:
       - stepNumber: 1
@@ -57,4 +58,4 @@ methods:
         targetMethod: diffSurface
 status: complete
 createdAt: '2026-07-24T18:14:33.463Z'
-updatedAt: '2026-10-07T10:59:32.077Z'
+updatedAt: '2026-11-27T22:43:03.558Z'

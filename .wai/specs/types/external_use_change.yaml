@@ -2,9 +2,9 @@ kind: value-object
 id: external_use_change
 name: ExternalUseChange
 description: >-
-  The answer to changing one external's `use` imports: the list as it stands after the change (or
-  would, on a dry run), what was added and removed — or why nothing was written, as one sentence
-  naming the accepted form or the closest exported names.
+  The answer to changing one declared external: its `use` list as it stands after the change (or
+  would, on a dry run), what was added and removed, its location when that changed — or why nothing
+  was written, as one sentence naming the accepted form or the closest exported names.
 subsystem: sdd_surfaces
 fields:
   - name: alias
@@ -14,8 +14,8 @@ fields:
   - name: written
     type: bool
     description: >-
-      Whether `.wai/project.yaml` now carries the changed `use` (false on a refusal, on a dry run
-      and when nothing changed)
+      Whether `.wai/project.yaml` now carries the change (false on a refusal, on a dry run and when
+      nothing changed)
     optional: false
   - name: use
     type: list<string>
@@ -33,7 +33,17 @@ fields:
     type: string
     description: Why nothing was written, in one sentence
     optional: true
+  - name: source
+    type: string
+    description: The location the declaration names after the change, when the change set one
+    optional: true
+  - name: pin
+    type: string
+    description: >-
+      What the location change did to the pin: dropped (a path producer, read live) or re-taken;
+      absent when the location did not change
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-06T23:03:09.747Z'
-updatedAt: '2026-10-06T23:03:10.483Z'
+updatedAt: '2026-11-27T22:41:50.369Z'

@@ -11,16 +11,20 @@ methods:
       or external, a location the grammar refuses (an absolute path, an inner `..`, an empty source,
       or text that is no location at all — braces, quotes, whitespace), a `ref` beside a non-git
       source, or a `#<commit>` that is not a full commit — each with one sentence naming the
-      accepted form. Otherwise bind the declaration to its producer BEFORE writing it (the core's
-      candidate binding, the one the written declaration will get) and, when the producer is
-      readable, confirm that it answers to the declared id and exports every `use` name to this
-      project; a contradiction refuses, writing nothing, naming the id it answers to, the closest
-      exported names — or, when the name is exported only to a narrower audience than this project
-      is read at, that audience, this project's and the ranking (project < department < instance <
-      partner < external). A dry run answers that same verdict, the producer read, and writes
-      nothing. A producer that cannot be read (a sibling not checked out, a remote offline) leaves
-      the declaration written and says so: it reads unavailable — never a pass — until pinned. Pins
-      it when asked and the producer was read. Never touches the spec tree.
+      accepted form. A request with no source has it filled in from the family: the relative path
+      from this project to the family project on disk that answers to the producer id, so the
+      declaration is read live like a path dependency — refused, naming the ids the family's
+      projects answer to, when none on disk does (a git or hosted member included, which is named by
+      its own location instead). Otherwise bind the declaration to its producer BEFORE writing it
+      (the core's candidate binding, the one the written declaration will get) and, when the
+      producer is readable, confirm that it answers to the declared id and exports every `use` name
+      to this project; a contradiction refuses, writing nothing, naming the id it answers to, the
+      closest exported names — or, when the name is exported only to a narrower audience than this
+      project is read at, that audience, this project's and the ranking (project < department <
+      instance < partner < external). A dry run answers that same verdict, the producer read, and
+      writes nothing. A producer that cannot be read (a sibling not checked out, a remote offline)
+      leaves the declaration written and says so: it reads unavailable — never a pass — until
+      pinned. Pins it when asked and the producer was read. Never touches the spec tree.
     signature: 'declare(request: ExternalRequest): ExternalAddition'
     returns: ExternalAddition
     params:
@@ -47,21 +51,28 @@ methods:
         type: bool
         description: Answer what would be removed, writing nothing
         optional: true
-  - name: updateUse
+  - name: update
     description: >-
-      Change one declared external's `use` imports: add public names (or `*`) and remove names, so a
-      project imports a producer's names bare without hand-editing `.wai/project.yaml`. Refused,
+      Change one declared external field by field: add public names (or `*`) to its `use` imports
+      and remove names, and give it a new location, so a project never hand-edits
+      `.wai/project.yaml` and never removes and re-adds an external to change one field. Refused,
       writing nothing, when the alias is not a declared external, when an entry is neither `*` nor a
-      public name, or — when the producer can be read — when an added name is not exported to this
-      project (naming the closest exported names, or the audience it is exported to). A dry run
-      answers the resulting list and writes nothing; a change that changes nothing writes nothing.
-      The pin is untouched: `use` decides how names are spelled, never what is pinned.
-    signature: 'updateUse(request: ExternalUseRequest): ExternalUseChange'
+      public name, when the location is one the grammar refuses, or — when the producer can be read
+      — when an added name is not exported to this project (naming the closest exported names, or
+      the audience it is exported to) or the new location reaches a producer answering to another
+      id. A new location rewrites the declaration with every other field kept, and the pin follows
+      it: dropped with its snapshot for a path producer, which is read live, re-taken for a git or
+      hosted one. A dry run answers the resulting declaration and writes nothing; a change that
+      changes nothing writes nothing. Without a new location the pin is untouched: `use` decides how
+      names are spelled, never what is pinned.
+    signature: 'update(request: ExternalUseRequest): ExternalUseChange'
     returns: ExternalUseChange
     params:
       - name: request
         type: ExternalUseRequest
         description: The alias, the names to add and remove, and whether this is a dry run
+    previousNames:
+      - iexternal_declarations.updateUse
 status: complete
 createdAt: '2026-10-06T10:13:59.636Z'
-updatedAt: '2026-10-06T23:05:10.108Z'
+updatedAt: '2026-11-27T22:42:06.109Z'

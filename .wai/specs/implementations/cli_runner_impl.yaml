@@ -297,6 +297,17 @@ methods:
         targetMethod: removeExisting
       - stepNumber: 15
         description: >-
+          Unpack the downloaded archive into a fresh folder: with `tar -xf` first (Windows 10 and
+          later ship a tar that reads zip), falling back to PowerShell's Expand-Archive for a zip,
+          each run without a shell and its own error output kept; the binary is looked for at the
+          archive's root and one folder down. When no extractor yields it, stop with an error naming
+          each extractor's output and where the downloaded archive is, so the person can unpack it
+          by hand
+        type: call
+        targetComponent: process_adapter
+        targetMethod: run
+      - stepNumber: 16
+        description: >-
           Download the asset for this platform and swap the running binary, keeping the previous one
           beside it so a bad release can be stepped back from. On Windows the running exe is renamed
           aside (an exe cannot be overwritten while it runs, but it can be renamed) after the
@@ -308,12 +319,12 @@ methods:
         type: call
         targetComponent: files_adapter
         targetMethod: copyFile
-      - stepNumber: 16
+      - stepNumber: 17
         description: Remove the downloaded archive and its checksum file
         type: call
         targetComponent: files_adapter
         targetMethod: removeFile
-      - stepNumber: 17
+      - stepNumber: 18
         description: Done
         type: return
         outcome: updated
@@ -4591,4 +4602,4 @@ lint:
         the adapter hops, and each new check adds a step, which is the point.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-11-26T14:34:36.360Z'
+updatedAt: '2026-11-27T22:51:50.115Z'

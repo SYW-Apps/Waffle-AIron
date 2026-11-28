@@ -93,6 +93,21 @@ describe('validation runner', () => {
     });
   }, 120000);
 
+  it('runs the gate on the calling thread when the worker entry is missing (a packaged executable)', async () => {
+    await runner.stop();
+    runner.simulateMissingWorkerEntry(true);
+    try {
+      await runWithProjectRoot(root, async () => {
+        const here = await runner.run('owner');
+        expect(here.issues.map((i) => i.code)).toEqual(validateProject().issues.map((i) => i.code));
+        const complete = await runner.run('as_complete');
+        expect(complete.issues.map((i) => i.code)).toEqual(validateAsComplete().issues.map((i) => i.code));
+      });
+    } finally {
+      runner.simulateMissingWorkerEntry(false);
+    }
+  }, 120000);
+
   it('stops without a running thread', async () => {
     await expect(stopBackground()).resolves.toBeUndefined();
   });

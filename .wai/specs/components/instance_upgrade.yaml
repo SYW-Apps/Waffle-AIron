@@ -22,6 +22,14 @@ dependsOn:
   - files_adapter
 previousIds:
   - data_dir_upgrade
+lint:
+  allow:
+    - code: INCOHESIVE_METHODS
+      reason: >-
+        Two halves of one start-time concern: run and resetDevDataDir bring the data directory to
+        the running major, while upgradeTrees and behind act on and read the served trees' standing
+        that run decides about. run calls both of the latter, so the concern is one; splitting the
+        trees into their own orchestrator would leave run a forwarder.
 status: complete
 createdAt: '2026-10-18T14:29:20.735Z'
-updatedAt: '2026-10-31T23:22:57.303Z'
+updatedAt: '2026-11-27T22:52:54.573Z'

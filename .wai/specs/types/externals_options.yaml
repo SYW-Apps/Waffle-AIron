@@ -52,7 +52,13 @@ fields:
       consumers: folders to scan, besides the family in reach, for project roots declaring this one
       as an external (--search <dir>…)
     optional: true
+  - name: source
+    type: string
+    description: >-
+      use: the producer's new location (--source): a relative folder, `hosted:<id>`, a git URL or
+      `<git url>#<commit>`; the declaration is restated and pinned again
+    optional: true
 methods: []
 sourcePath: src/commands/externals.ts
 createdAt: '2026-10-03T17:11:27.059Z'
-updatedAt: '2026-10-07T06:38:14.352Z'
+updatedAt: '2026-11-28T00:20:06.059Z'

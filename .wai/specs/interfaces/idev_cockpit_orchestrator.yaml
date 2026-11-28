@@ -118,6 +118,58 @@ methods:
         type: string
         description: The served project's root
     effect: read
+  - name: upgradeNeed
+    description: >-
+      Whether the served checkout was written by an older wairon major, and what the page's upgrade
+      popup shows: the trees, the running major, whether the checkout has uncommitted changes, and
+      the terminal command that does the same. None when every served tree is on the running major.
+      A live read, so it clears once the trees are upgraded.
+    signature: 'upgradeNeed(sessionId: string): DevUpgradeNeed?'
+    returns: DevUpgradeNeed?
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+    effect: read
+  - name: upgrade
+    description: >-
+      Run the CLI's `wairon upgrade` at the served root: with report, its plan, writing nothing;
+      otherwise applied (the page's button is the confirmation the terminal asks for), then the
+      family registered again from the upgraded declarations, so the page reloads onto the upgraded
+      tree without a restart. Refused outside the local development server, while another command
+      runs, and when no served tree needs it. A failed upgrade writes nothing and answers its
+      output.
+    signature: 'upgrade(sessionId: string, report: bool): async DevCommandResult'
+    returns: async DevCommandResult
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: report
+        type: bool
+        description: Answer the plan only, writing nothing
+    effect: write
+  - name: openSource
+    description: >-
+      Open one source file of the served project in the developer's editor, at a line when given:
+      the editor the WAIRON_EDITOR environment variable names, else VS Code's `code -g`, started on
+      the developer's machine (where the dev server runs, whichever device the page is viewed on).
+      Refused outside the local development server; a file outside the served project, one not on
+      disk, or no editor found answers opened false with the reason, never an error page.
+    signature: 'openSource(sessionId: string, file: string, line?: int): async DevOpenResult'
+    returns: async DevOpenResult
+    params:
+      - name: sessionId
+        type: string
+        description: The dev session
+      - name: file
+        type: string
+        description: The project-relative file, as a spec's sourcePath names it
+      - name: line
+        type: int
+        description: The line to open at
+        optional: true
+    effect: io
 status: complete
 createdAt: '2026-11-07T02:41:40.170Z'
-updatedAt: '2026-11-20T00:31:27.350Z'
+updatedAt: '2026-11-28T00:19:34.193Z'

@@ -2725,7 +2725,7 @@ export interface ProducerPin {
 export interface ExternalRequest {
   /** The alias the project's specs will reference it by (`alias::name`). */
   alias: string;
-  /** Where the producer is, in the one location grammar; omitted when the family provides it. */
+  /** Where the producer is, in the one location grammar (`../geo-sdk`, `hosted:<id>`, `<git url>`, `<git url>#<commit>`). Omitted, it is filled in from the family: the relative path of the family project on disk that answers to the producer id, so the external is read live like a path dependency; refused when no family project on disk answers to it. */
   source?: string;
   /** The producer's project id when it differs from the alias. */
   project?: string;
@@ -2801,6 +2801,8 @@ export interface ExternalUseRequest {
   add?: string[];
   /** Names to stop importing. */
   remove?: string[];
+  /** A new location for the producer, in the one location grammar; checked against the producer exactly as declaring one is, the pin following it (dropped for a path producer, which is read live; re-taken for a git or hosted one). */
+  source?: string;
   /** Answer what the `use` would become, writing nothing. */
   dryRun?: boolean;
 }
@@ -2821,6 +2823,10 @@ export interface ExternalUseChange {
   removed: string[];
   /** Why nothing was written, in one sentence. */
   refusal?: string;
+  /** The location the declaration names after the change, when the change set one. */
+  source?: string;
+  /** What the location change did to the pin: dropped (a path producer, read live) or re-taken; absent when the location did not change. */
+  pin?: string;
 }
 
 /** The verdict on one used member of a pinned external. */

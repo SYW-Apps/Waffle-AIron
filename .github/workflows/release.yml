@@ -147,6 +147,9 @@ jobs:
           "$BIN" init --yes
           [ -d .wai/specs ] || { echo "::error::init --yes created no .wai/specs"; exit 1; }
           "$BIN" validate --ci
+          # The MCP server validates on a worker thread with its own entry file:
+          # exercise that path too, since the CLI's validate never takes it.
+          node "$GITHUB_WORKSPACE/scripts/smoke-mcp-validate.mjs" "$BIN" "$WORK"
 
       - name: Get version from tag
         id: version

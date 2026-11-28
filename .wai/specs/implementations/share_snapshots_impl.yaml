@@ -22,7 +22,8 @@ methods:
       - stepNumber: 3
         description: >-
           Build the bound project's canvas model as data — the payload the shared engine renders —
-          with those relations on its consumption edges
+          with those relations on its consumption edges, and drop each component's source files
+          (`sources`) from it: a shared page names no path inside the repository
         type: call
         targetComponent: host_core_adapter
         targetMethod: buildCanvasDataModel
@@ -57,4 +58,4 @@ methods:
     symbol: captureSnapshot
 status: complete
 createdAt: '2026-07-18T09:30:49.067Z'
-updatedAt: '2026-10-19T06:12:25.207Z'
+updatedAt: '2026-11-27T22:50:34.180Z'

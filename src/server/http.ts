@@ -757,6 +757,9 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
     for (const tree of upgrade.trees) {
       if (tree.failure !== undefined) console.warn(`[wairon dev] ${tree.project} was not upgraded: ${tree.failure}`);
     }
+    for (const tree of upgrade.behind ?? []) {
+      console.warn(`[wairon dev] ${tree.root} was written by wairon ${tree.writtenMajor}: the dev page offers the upgrade (or run "wairon upgrade" there)`);
+    }
   }
   // Step 6: say whether the web UI is served and how a person signs in to it.
   noteWebUiPosture(cfg);

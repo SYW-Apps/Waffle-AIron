@@ -232,6 +232,17 @@ methods:
         description: The producer's root; the bound project when omitted
         optional: true
     effect: read
+  - name: resolveChainingParent
+    description: >-
+      Forward to spec_tree_portal.resolveChainingParent: the bound root's chaining parent (the
+      parent root that declares it as a member, and its alias there), or null at a top root or when
+      the request may not read above its root. Read by a refused external declaration, to name the
+      projects of the whole family it climbed to.
+    signature: 'resolveChainingParent(): ChainingParentRef?'
+    returns: ChainingParentRef?
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-11-20T00:07:51.061Z'
+updatedAt: '2026-11-28T00:20:19.178Z'

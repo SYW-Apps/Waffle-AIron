@@ -13,6 +13,7 @@ import type { ValidationIssue } from '../../core/validation.js';
 // ---------------------------------------------------------------------------
 export {
   findLegacySpecFiles, writeLockRecord, projectFamily, captureApprovedSpecs, loadProjectConfig,
+  resolveExternals, removeExternal, declareExternal,
 } from '../../core/index.js';
 export { computeApprovalId, resolvedPacks, validateProject, listRules } from '../../core/validation.js';
 

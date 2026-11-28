@@ -30,8 +30,12 @@ interface Waiting {
   reject: (error: Error) => void;
 }
 
-/** The worker entry is this module itself: its own built entry in dist, the TS source under tsx/vitest. */
-function workerEntry(): { file: string; execArgv: string[] } {
+/**
+ * The worker entry is this module itself: its own built entry in dist, the TS source under tsx/vitest.
+ * None when neither is at hand — a packaged executable built without the worker file, or a source
+ * run with no tsx loader beside it — and the caller then runs the job on its own thread.
+ */
+function workerEntry(): { file: string; execArgv: string[] } | null {
   const base = 'validation-runner';
   const built = [
     path.resolve(__dirname, 'core', `${base}.js`), // dist/index.js
@@ -40,8 +44,22 @@ function workerEntry(): { file: string; execArgv: string[] } {
   ].find((p) => existsSync(p));
   if (built) return { file: built, execArgv: [] };
   // Source run (tsx, vitest): the loader is found from this file, not the process cwd.
+  const source = path.resolve(__dirname, `${base}.ts`);
   const loader = path.resolve(__dirname, '..', '..', 'node_modules', 'tsx', 'dist', 'loader.mjs');
-  return { file: path.resolve(__dirname, `${base}.ts`), execArgv: ['--import', existsSync(loader) ? pathToFileURL(loader).href : 'tsx'] };
+  if (!existsSync(source) || !existsSync(loader)) return null;
+  return { file: source, execArgv: ['--import', pathToFileURL(loader).href] };
+}
+
+/** Test seam: pretend the worker's entry is missing, as in a packaged executable built without it. */
+let entryMissing = false;
+export function simulateMissingWorkerEntry(missing: boolean): void {
+  entryMissing = missing;
+}
+
+/** One job answered on the calling thread, bound to the job's root. */
+function runHere(job: ValidationJob): Promise<ValidationResult> {
+  return runWithProjectRoot(job.root, () =>
+    Promise.resolve(job.gate === 'owner' ? validationMemo.validateProject(job.options) : validationMemo.validateAsComplete(job.options)));
 }
 
 /** Whether this code runs inside the worker the thread started. */
@@ -68,8 +86,8 @@ function syncRef(w: Worker): void {
   else w.unref();
 }
 
-function startWorker(): Worker {
-  const { file, execArgv } = workerEntry();
+function startWorker(entry: { file: string; execArgv: string[] }): Worker {
+  const { file, execArgv } = entry;
   const w = new Worker(file, { execArgv, workerData: { validationThread: true } });
   w.on('message', (msg: { id: number; result?: ValidationResult; error?: string }) => {
     const job = waiting.get(msg.id);
@@ -92,11 +110,11 @@ function startWorker(): Worker {
 /** validation_thread.run — one job on the worker thread, after the jobs before it. */
 export function runOnThread(job: ValidationJob): Promise<ValidationResult> {
   // On the thread itself: the job's root bound for this run alone, the gate answered through the memo.
-  if (onValidationThread()) {
-    return runWithProjectRoot(job.root, () =>
-      Promise.resolve(job.gate === 'owner' ? validationMemo.validateProject(job.options) : validationMemo.validateAsComplete(job.options)));
-  }
-  const w = worker ?? (worker = startWorker());
+  if (onValidationThread()) return runHere(job);
+  // Steps 1 and 11-15: no entry to start the thread from — the job runs here instead of failing.
+  const entry = worker ? null : entryMissing ? null : workerEntry();
+  if (!worker && !entry) return runHere(job);
+  const w = worker ?? (worker = startWorker(entry as { file: string; execArgv: string[] }));
   const id = nextJob++;
   return new Promise<ValidationResult>((resolve, reject) => {
     waiting.set(id, { resolve, reject });

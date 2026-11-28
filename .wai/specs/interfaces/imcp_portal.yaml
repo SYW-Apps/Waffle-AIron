@@ -1061,7 +1061,8 @@ methods:
         type: string
         description: >-
           Where the producer is: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`;
-          omit when the family provides it
+          omitted, the relative path of the family project on disk that answers to the producer id
+          is written for it
         optional: true
       - name: project
         type: string
@@ -1179,20 +1180,22 @@ methods:
       method: tools/call sdd_remove_external
   - name: updateExternal
     description: >-
-      Tool (scope: tree, a write): add and remove `use` imports of one declared external, so the
-      project's specs may name the producer's public names bare (an `implements` of another
-      project's trait may then spell the producer's types as the producer does). An added name is
-      checked against what the producer exports to this project; refusals are one sentence naming
-      the closest exported names or the audience. Use it instead of editing .wai/project.yaml by
-      hand.
+      Tool (scope: tree, a write): change one declared external field by field — add and remove
+      `use` imports, so the project's specs may name the producer's public names bare (an
+      `implements` of another project's trait may then spell the producer's types as the producer
+      does), and give it a new location without removing and re-adding it. An added name is checked
+      against what the producer exports to this project, a new location against the id its producer
+      answers to; the pin follows a new location (dropped for a path producer, read live; re-taken
+      for a git or hosted one). Refusals are one sentence naming the closest exported names, the
+      audience, or the id. Use it instead of editing .wai/project.yaml by hand.
     signature: >-
-      updateExternal(alias: string, addUse?: list<string>, removeUse?: list<string>, dryRun?: bool):
-      ExternalUseChange
+      updateExternal(alias: string, addUse?: list<string>, removeUse?: list<string>, dryRun?: bool,
+      source?: string): ExternalUseChange
     returns: ExternalUseChange
     params:
       - name: alias
         type: string
-        description: The declared external whose `use` changes
+        description: The declared external to change
       - name: addUse
         type: list<string>
         description: Public names to import bare (`*` for all)
@@ -1203,7 +1206,11 @@ methods:
         optional: true
       - name: dryRun
         type: bool
-        description: Answer the resulting list, writing nothing
+        description: Answer the resulting list and declaration, writing nothing
+        optional: true
+      - name: source
+        type: string
+        description: 'A new location: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`'
         optional: true
     endpoint:
       transport: JSONRPC
@@ -1601,4 +1608,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-11-24T08:28:48.852Z'
+updatedAt: '2026-11-27T22:43:23.199Z'

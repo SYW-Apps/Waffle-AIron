@@ -6,10 +6,10 @@ methods:
   - name: run
     description: >-
       Bring the data directory and every hosted tree to the running major, or refuse to start,
-      naming why and, once one was taken, the backup. A development-mode host (`wairon dev`) is the
-      exception on one point: a hosted tree that was refused or failed is reported in the answer and
-      printed by the start, never stops it - the developer is looking at that tree, and the web UI
-      shows what did not load.
+      naming why and, once one was taken, the backup. A development-mode host (`wairon dev`) never
+      upgrades a tree: it serves the developer's own checkout, whose upgrade is the developer's to
+      run, so it starts on a tree an older major wrote and leaves it as it is — the web page names
+      it and offers the upgrade (behind).
     signature: 'run(): InstanceUpgradeReport'
     returns: InstanceUpgradeReport
     params: []
@@ -37,8 +37,18 @@ methods:
     returns: bool
     params: []
     effect: io
+  - name: behind
+    description: >-
+      The served trees an older major wrote, each root once through its family's top, a retired part
+      and a root with no project.yaml skipped: what the local development server serves without
+      upgrading and the web page asks the developer to upgrade. A live read, so it empties once the
+      trees are upgraded.
+    signature: 'behind(): list<TreeBehind>'
+    returns: list<TreeBehind>
+    params: []
+    effect: read
 previousIds:
   - idata_dir_upgrade
 status: draft
 createdAt: '2026-10-18T14:29:24.116Z'
-updatedAt: '2026-10-23T22:28:35.712Z'
+updatedAt: '2026-11-27T22:44:56.829Z'

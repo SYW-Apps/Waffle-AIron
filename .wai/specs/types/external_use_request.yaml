@@ -2,9 +2,10 @@ kind: value-object
 id: external_use_request
 name: ExternalUseRequest
 description: >-
-  What `wairon externals use` and sdd_update_external ask for: the public names to add to and remove
-  from one declared external's `use` imports, so a project never hand-edits `.wai/project.yaml` to
-  import a producer's names bare.
+  What `wairon externals use` and sdd_update_external ask for: one declared external changed field
+  by field — the public names added to and removed from its `use` imports, and a new location — so a
+  project never hand-edits `.wai/project.yaml` and never removes and re-adds an external to change
+  one field.
 subsystem: sdd_surfaces
 fields:
   - name: alias
@@ -25,7 +26,14 @@ fields:
     type: bool
     description: Answer what the `use` would become, writing nothing
     optional: true
+  - name: source
+    type: MemberSource
+    description: >-
+      A new location for the producer, in the one location grammar; checked against the producer
+      exactly as declaring one is, the pin following it (dropped for a path producer, which is read
+      live; re-taken for a git or hosted one)
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-10-06T23:03:05.551Z'
-updatedAt: '2026-10-06T23:03:06.292Z'
+updatedAt: '2026-11-27T22:41:48.161Z'

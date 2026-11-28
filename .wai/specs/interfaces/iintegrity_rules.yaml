@@ -895,6 +895,26 @@ methods:
           The bound project uses a project that, directly or through others, uses it back: no side
           can be built, versioned or approved before the other. Move what both use into a project of
           its own, or make the member a part again.
+  - name: externalLinks
+    description: >-
+      Rule external-links. A component's external link is rendered as a link a reader clicks — on
+      the canvas, the dev page and a shared page — so its url must be an absolute https URL (http
+      only for localhost or 127.0.0.1); any other scheme (`javascript:`, `data:`, `file:`), a
+      relative or malformed URL, or one carrying credentials is refused, naming the component and
+      the link. The canvas never renders such a link as clickable either, so a tree written before
+      this rule cannot be used against its viewers.
+    signature: 'externalLinks(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: EXTERNAL_LINK_UNSAFE
+        severity: error
+        summary: >-
+          A component's external link is not an absolute https URL (http only for localhost), or
+          carries credentials — it would be rendered as a clickable link
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-11-23T19:16:57.840Z'
+updatedAt: '2026-11-27T22:49:22.716Z'

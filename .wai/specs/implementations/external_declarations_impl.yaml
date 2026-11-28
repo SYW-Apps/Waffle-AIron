@@ -1,11 +1,14 @@
 id: external_declarations_impl
 name: External Declarations Implementation
 description: >-
-  The declare, remove and use workflows: read the request, refuse in one sentence, check against the
-  producer before anything is written, write, pin — or take a declaration and its pin out together,
-  or change its `use` imports. The alias is judged by identifier.problemAs alias (so "[a-z0-9-_]+"
-  below is that grammar in full: at most 64 characters, no leading "-", never a Windows device name
-  — it names its pin file — super or __proto__), and the declared maps are read by own key only.
+  The declare, remove and update workflows: read the request, refuse in one sentence, check against
+  the producer before anything is written, write, pin — or take a declaration and its pin out
+  together, or change its `use` imports and its location field by field. A declaration with no
+  source is given the relative path of the family project that answers to its producer id, so every
+  external the gate judges is read live by path or pinned. The alias is judged by
+  identifier.problemAs alias (so "[a-z0-9-_]+" below is that grammar in full: at most 64 characters,
+  no leading "-", never a Windows device name — it names its pin file — super or __proto__), and the
+  declared maps are read by own key only.
 contract: iexternal_declarations
 sourcePath: src/core/external-declarations.ts
 methods:
@@ -49,6 +52,52 @@ methods:
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternalCandidate
       - stepNumber: 6
+        label: sourceless
+        description: A request with no source is filled in from the family
+        type: branch
+        condition: the request names no source
+        onFalseStep: 13
+      - stepNumber: 7
+        description: >-
+          Did the candidate binding find the family project that answers to the producer id, as a
+          folder on disk?
+        type: branch
+        condition: >-
+          the binding is a family producer whose project is a folder on disk (not a git or hosted
+          member read from a cache)
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Give the normalized declaration its source: the relative path from this project's root to
+          that family project's root (forward slashes, a leading `../` when it climbs), so it is
+          written and read live as a path dependency, never as a bare name only the family run
+          resolves
+        type: local
+      - stepNumber: 9
+        description: Go on to read the producer at that location
+        type: jump
+        toStep: 13
+      - stepNumber: 10
+        description: >-
+          For the refusal's wording, climb from the bound root to the family's top, one chaining
+          parent at a time (best effort: a failure names no ids)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 11
+        description: Read the project graph at that top root, for the ids the family's projects answer to
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 12
+        label: no-family
+        description: >-
+          Answer the refusal, writing nothing: no family project on disk answers to the producer id
+          — naming the ids the family's projects answer to, and for a git or hosted member that
+          does, its location to give as the source
+        type: return
+        outcome: refused
+      - stepNumber: 13
         label: producer-id
         description: >-
           When the binding has a root, read the producer's configuration with that root bound
@@ -56,7 +105,7 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 7
+      - stepNumber: 14
         label: producer-exports
         description: >-
           With the producer's root bound the same way, read its resolved export table: the public
@@ -66,7 +115,7 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 8
+      - stepNumber: 15
         description: >-
           Does the producer contradict the declaration — answering to another id than declared (read
           from its configuration, or named by the family's own resolution of the alias), or, once
@@ -75,8 +124,8 @@ methods:
         condition: >-
           the producer answers to another id than the declared one, or it was read and a `use` name
           is not in its export table at this project's audience
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 17
+      - stepNumber: 16
         description: >-
           Answer the refusal naming what the producer contradicted, writing nothing: the id it
           answers to (declare `project:` or use that alias); each unexported `use` name with the
@@ -86,19 +135,19 @@ methods:
           external
         type: return
         outcome: refused by the producer
-      - stepNumber: 10
+      - stepNumber: 17
         label: dry
         description: A dry run stops here, the producer already checked
         type: branch
         condition: request.dryRun
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 19
+      - stepNumber: 18
         description: >-
           Answer what would be written (written false, the normalized declaration, the id the
           producer answers to) and, when the producer could not be read, why — nothing is written
         type: return
         outcome: dry run
-      - stepNumber: 12
+      - stepNumber: 19
         label: write
         description: >-
           Write the normalized declaration into `.wai/project.yaml` through the core's configuration
@@ -106,22 +155,22 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: declareExternal
-      - stepNumber: 13
+      - stepNumber: 20
         label: kept
         description: >-
           Pin it now when asked (the default) and the producer was read; an unreadable producer
           leaves it declared and unpinned, with the reason carried as `unreachable`
         type: branch
         condition: request.pin is not false and the producer was read
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 22
+      - stepNumber: 21
         description: >-
           Pin the new alias — its snapshot and lock entry — so its uses are judged against a
           reproducible pin from the first validate
         type: call
         targetComponent: surface_orchestrator
         targetMethod: pinExternals
-      - stepNumber: 15
+      - stepNumber: 22
         label: answer
         description: >-
           Answer the addition: written, the declaration, the producer id it answers to, the pin when
@@ -187,7 +236,7 @@ methods:
         description: 'Answer the removal: whether the declaration and the pin went'
         type: return
         outcome: removed
-  - name: updateUse
+  - name: update
     narrative:
       - stepNumber: 1
         description: >-
@@ -199,8 +248,11 @@ methods:
       - stepNumber: 2
         description: >-
           Read the request: the alias must be a declared external; every added and removed entry `*`
-          or a public name ([a-z0-9-_]+). Compute the resulting list: the current names in order,
-          minus the removed, plus each added name not already there (`*` covers every name)
+          or a public name ([a-z0-9-_]+); a new location through the one location grammar, refused
+          as declare refuses it. Compute the resulting list: the current names in order, minus the
+          removed, plus each added name not already there (`*` covers every name); and the resulting
+          declaration: the current one with the new location in place of the old, every other field
+          kept
         type: local
       - stepNumber: 3
         description: Anything refused?
@@ -240,35 +292,68 @@ methods:
         type: return
         outcome: refused by the producer
       - stepNumber: 9
-        label: dry
-        description: A dry run, or a change that changes nothing, writes nothing
+        label: location
+        description: A new location is checked against the producer it reaches before anything is written
         type: branch
-        condition: dryRun, or the resulting list equals the current one
-        onFalseStep: 11
+        condition: the request gives a location other than the declared one
+        onFalseStep: 14
       - stepNumber: 10
-        description: Answer the resulting list, written false
+        description: >-
+          Bind the resulting declaration to its producer through the core's candidate binding, as
+          declare does
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternalCandidate
+      - stepNumber: 11
+        description: >-
+          When the binding has a root, read the producer's configuration with that root bound
+          read-only, for the id it answers to
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 12
+        description: Does the producer at the new location answer to another id than the declared one?
+        type: branch
+        condition: the producer was read and answers to another id
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Answer the refusal naming the id the producer at that location answers to, writing nothing
+        type: return
+        outcome: refused by the producer
+      - stepNumber: 14
+        label: dry
+        description: >-
+          A dry run, or a change that changes nothing (the same `use` and the same location), writes
+          nothing
+        type: branch
+        condition: dryRun, or the resulting list equals the current one and no new location is given
+        onFalseStep: 16
+      - stepNumber: 15
+        description: Answer the resulting list and declaration, written false
         type: return
         outcome: unchanged or dry run
-      - stepNumber: 11
+      - stepNumber: 16
         label: drop
         description: >-
-          Names removed? The configuration portal only appends imports, so a removal restates the
-          declaration: take it out and write it back with the resulting `use` — restoring the
-          original declaration if the restatement is refused
+          Names removed, or a new location? The configuration portal only appends imports, so either
+          restates the declaration: take it out and write it back as the resulting declaration —
+          restoring the original one if the restatement is refused
         type: branch
-        condition: the change removes a name
-        onFalseStep: 14
-      - stepNumber: 12
+        condition: the change removes a name or gives a new location
+        onFalseStep: 19
+      - stepNumber: 17
         description: Take the declaration out
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: removeExternal
-      - stepNumber: 13
-        description: Write it back with the resulting `use`, every other field kept as written
+      - stepNumber: 18
+        description: >-
+          Write it back as the resulting declaration: the resulting `use` and location, every other
+          field kept as written
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: declareExternal
-      - stepNumber: 14
+      - stepNumber: 19
         label: append
         description: >-
           Import the added names (append-only and idempotent; after a restatement nothing is left to
@@ -276,10 +361,26 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: importNames
-      - stepNumber: 15
-        description: 'Answer the change: written, the resulting list, what was added and removed'
+      - stepNumber: 20
+        label: repin
+        description: Did the location change? The pin follows the location
+        type: branch
+        condition: the change gave a new location
+        onFalseStep: 22
+      - stepNumber: 21
+        description: >-
+          Pin the alias again at its new location: a path producer's earlier pin and snapshot are
+          dropped, since it is read live; a git or hosted producer is pinned anew
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinExternals
+      - stepNumber: 22
+        label: answer
+        description: >-
+          Answer the change: written, the resulting list, what was added and removed, and the
+          location and what happened to the pin when the location changed
         type: return
         outcome: changed
 status: complete
 createdAt: '2026-10-06T10:14:16.933Z'
-updatedAt: '2026-10-07T22:05:36.367Z'
+updatedAt: '2026-11-28T00:22:06.726Z'

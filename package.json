@@ -74,7 +74,9 @@
       "dist/webapp.html",
       "dist/swagger-ui/*"
     ],
-    "scripts": [],
+    "scripts": [
+      "dist/core/validation-runner.js"
+    ],
     "outputPath": "bin"
   },
   "dependencies": {

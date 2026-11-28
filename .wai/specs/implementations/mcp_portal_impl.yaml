@@ -363,7 +363,7 @@ methods:
           workflow
         type: call
         targetComponent: mcp_externals_orchestrator
-        targetMethod: updateUse
+        targetMethod: update
     symbol: sdd_update_external
   - name: renameField
     narrative:

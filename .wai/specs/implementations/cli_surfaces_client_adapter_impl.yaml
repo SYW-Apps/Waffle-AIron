@@ -73,7 +73,7 @@ methods:
         description: Forward to the surface portal
         type: call
         targetComponent: surface_portal
-        targetMethod: updateExternalUse
+        targetMethod: updateExternal
   - name: listConsumers
     narrative:
       - stepNumber: 1

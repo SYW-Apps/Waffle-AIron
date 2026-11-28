@@ -332,6 +332,172 @@ methods:
         description: Answer them
         type: return
         outcome: the producers
+  - name: upgradeNeed
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server
+        type: branch
+        condition: the host is not the local development server
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Read the served project's registered root
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
+        description: Read the served trees an older major wrote
+        type: call
+        targetComponent: instance_upgrade
+        targetMethod: behind
+      - stepNumber: 6
+        description: Every served tree on the running major?
+        type: branch
+        condition: no tree is behind
+        onFalseStep: 8
+      - stepNumber: 7
+        description: 'Answer none: the page shows no popup'
+        type: return
+        outcome: none
+      - stepNumber: 8
+        description: >-
+          Ask git whether the served checkout has uncommitted changes (`git status --porcelain -- .`
+          at the served root, no shell), so the popup warns that the rewrite would land in the same
+          diff; git missing, no checkout or any failure reads as none
+        type: call
+        targetComponent: process_adapter
+        targetMethod: run
+      - stepNumber: 9
+        description: >-
+          Answer the trees, the running major, the uncommitted flag and the terminal command
+          (`upgrade` after the invocation the starting CLI handed the server, as this install spells
+          it at the served root)
+        type: return
+        outcome: DevUpgradeNeed
+  - name: upgrade
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse outside the local development server, without the handed commands, or while another
+          command runs
+        type: branch
+        condition: >-
+          the host is not the local development server, it was handed no commands, or a command is
+          running
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse, naming the reason
+        type: throw
+        error: the command cannot run
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Read the served project's registered root
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
+        description: Read the served trees an older major wrote
+        type: call
+        targetComponent: instance_upgrade
+        targetMethod: behind
+      - stepNumber: 6
+        description: Nothing to upgrade?
+        type: branch
+        condition: no tree is behind
+        onFalseStep: 8
+      - stepNumber: 7
+        description: 'Refuse: there is nothing to upgrade'
+        type: throw
+        error: every served tree is on the running major
+      - stepNumber: 8
+        description: >-
+          Run the upgrade the CLI handed over at the served root, one command at a time: the report
+          when asked, otherwise applied unattended (the page's button is the confirmation),
+          capturing every line it prints with colour codes removed; a thrown error is a failed
+          result
+        type: local
+      - stepNumber: 9
+        description: Was it applied and did it succeed?
+        type: branch
+        condition: it was not a report and it succeeded
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Register the served family again from the upgraded declarations (idempotent), so the page
+          reloads onto the upgraded tree without a restart
+        type: call
+        targetComponent: local_dev_registration
+        targetMethod: register
+      - stepNumber: 11
+        description: Answer whether it succeeded and its output
+        type: return
+        outcome: the command's result
+  - name: openSource
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside the local development server
+        type: branch
+        condition: the host is not the local development server
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Refuse
+        type: throw
+        error: not the local development server
+      - stepNumber: 3
+        description: Authenticate the session
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 4
+        description: Read the served project's registered root
+        type: call
+        targetComponent: project_repository
+        targetMethod: existingRoot
+      - stepNumber: 5
+        description: >-
+          Resolve the file against the served root: refused when it is absolute, escapes the root
+          once resolved (symbolic links followed), or is not a file on disk
+        type: local
+      - stepNumber: 6
+        description: Refused?
+        type: branch
+        condition: the file was refused
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Answer opened false with the reason
+        type: return
+        outcome: not opened
+      - stepNumber: 8
+        description: >-
+          Choose the editor: the command WAIRON_EDITOR names (its words split, the file and line
+          appended as `<file>:<line>`), else `code -g <file>:<line>`; the file passed as one
+          argument, never through a shell
+        type: local
+      - stepNumber: 9
+        description: >-
+          Start the editor and leave it running, waiting until it started or was refused (the
+          command is not found)
+        type: call
+        targetComponent: process_adapter
+        targetMethod: startChecked
+      - stepNumber: 10
+        description: >-
+          Answer opened true with the editor, or opened false with the reason naming WAIRON_EDITOR
+          when no editor could be started
+        type: return
+        outcome: DevOpenResult
 lint:
   allow:
     - code: HIDDEN_STATE
@@ -341,4 +507,4 @@ lint:
         nothing to store, list or recover.
 status: complete
 createdAt: '2026-11-07T02:41:56.569Z'
-updatedAt: '2026-11-23T01:52:40.309Z'
+updatedAt: '2026-11-28T00:20:04.339Z'

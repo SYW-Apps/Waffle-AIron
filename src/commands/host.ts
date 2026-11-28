@@ -19,11 +19,12 @@ import { loadProjectConfig, seedDemoTree, buildCanvasDataModel } from './adapter
 import { announceDevServer, withdrawDevServer } from './adapters/core.js';
 import { runGenerate } from './generate.js';
 import { runDoctor } from './doctor.js';
+import { waironCommand } from './lock.js';
 import { effectiveProjectId } from '../models/project.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
-import type { DevCommand, DevCommands, DevCommandResult, DevFamilyCommand, DevFamilyRunner } from '../server/dev-commands.js';
+import type { DevCommand, DevCommands, DevCommandResult, DevFamilyCommand, DevFamilyRunner, DevUpgradeCommand } from '../server/dev-commands.js';
 import type { Command } from 'commander';
 import type {
   AuditRetentionPolicy,
@@ -494,7 +495,18 @@ export function devCommandsFor(root: string, commandTree?: () => Command): DevCo
     }
     await program.parseAsync(familyArgv(program, command), { from: 'user' });
   });
-  return { lock, generate, doctor, family };
+  const upgrade: DevUpgradeCommand = (report) => captureCommand('upgrade', root, async () => {
+    // Imported on use: the upgrade command imports this module's siblings.
+    const { runUpgrade } = await import('./upgrade.js');
+    await runUpgrade({ report, yes: !report });
+  });
+  let invocation = 'wairon';
+  try {
+    invocation = waironCommand(root);
+  } catch {
+    /* the plain name */
+  }
+  return { lock, generate, doctor, family, upgrade, invocation };
 }
 
 export async function runDev(options: HostOptions = {}): Promise<void> {
