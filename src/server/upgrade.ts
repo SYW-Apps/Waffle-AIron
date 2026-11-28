@@ -10,7 +10,7 @@ import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { WAIRON_MAJOR } from '../config/defaults.js';
 import type { TreeUpgradeReport } from './adapters/upgrade.js';
-import type { AuditEvent, HostConfig, PrincipalSubject } from './types.js';
+import type { AuditEvent, HostConfig, PrincipalSubject, TreeBehind } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Data Dir Upgrade (sdd_host)
@@ -77,6 +77,8 @@ export interface InstanceUpgradeReport {
   trees: HostedTreeUpgrade[];
   /** The member registration step, when it ran. */
   members?: MemberUpgradeReport;
+  /** The development server's served trees an older major wrote, left as they are; absent when none. */
+  behind?: TreeBehind[];
 }
 
 // ── instance_version_store ──────────────────────────────────────────────────
@@ -243,8 +245,12 @@ export function run(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy' | 'devMode'>
       );
     }
   }
+  // Step 11a: the development server serves the developer's own checkout, whose upgrade is the
+  // developer's to run (`wairon upgrade`, with its report and the approval it may carry): it upgrades
+  // no tree, starts on one an older major wrote, and reports it behind for the start to print and the page to offer.
+  const trailing = cfg.devMode === true ? behind(cfg) : [];
   // Step 11: run even on a current data directory, so a tree restored or imported from an older major is upgraded too.
-  const trees = upgradeTrees(cfg);
+  const trees = cfg.devMode === true ? [] : upgradeTrees(cfg);
   // Steps 12-13: only a hosted start stops on a failed tree; the development server keeps them in the report,
   // which the start prints and the web UI shows.
   const failed = trees.filter((t) => t.failure !== undefined);
@@ -269,7 +275,26 @@ export function run(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy' | 'devMode'>
     writeVersion(cfg.dataDir, to);
   }
   // Step 19.
-  return { fromMajor: from, toMajor: to, ...(backup ? { backup } : {}), ...(permissions ? { permissions } : {}), trees, ...(members ? { members } : {}) };
+  return {
+    fromMajor: from, toMajor: to, ...(backup ? { backup } : {}), ...(permissions ? { permissions } : {}), trees,
+    ...(members ? { members } : {}), ...(trailing.length > 0 ? { behind: trailing } : {}),
+  };
+}
+
+/** iinstance_upgrade.behind — the served trees an older major wrote, each family through its top, which the development server serves but never upgrades. */
+export function behind(cfg: Pick<HostConfig, 'dataDir'>): TreeBehind[] {
+  const out: TreeBehind[] = [];
+  const seen = new Set<string>();
+  for (const record of listProjectRecords(cfg.dataDir)) {
+    if (!record.rootPath || isRetiredPart(record)) continue;
+    const root = path.resolve(record.rootPath);
+    if (seen.has(root)) continue;
+    seen.add(root);
+    if (!['.wai', '.wairon'].some((dir) => files.exists(path.join(root, dir, 'project.yaml')))) continue;
+    const stand = runWithProjectRoot(root, () => hostUpgrade.standing(root));
+    if (stand.state === 'older') out.push({ root, writtenMajor: stand.writtenMajor });
+  }
+  return out;
 }
 
 /**

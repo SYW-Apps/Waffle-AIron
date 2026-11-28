@@ -1,6 +1,11 @@
 import { SddRule } from '../types.js';
 import { familyCodes } from '../network-arbiter.js';
 
+/** The first 80 characters of an allow's reason, with … when cut. */
+function reasonHead(reason: string): string {
+  return reason.length > 80 ? `${reason.slice(0, 80)}…` : reason;
+}
+
 /**
  * Audits per-spec lint suppressions (lint.allow — wairon's #[allow(...)]).
  * The suppression itself happens centrally in ctx.addIssue; this rule runs
@@ -70,7 +75,7 @@ export const lintAllowsRule: SddRule = {
         ctx.addIssue(
           'warning',
           'UNUSED_LINT_ALLOW',
-          `Spec "${a.specId}" allows "${a.code}"${at} (reason: ${a.reason}), but "${a.code}" is an error${fired ? ' and fired here as one' : ''}, and an error cannot be allowed — lint.allow silences warnings and notices only. Fix what the finding names, or remove the allow (a project may re-tune the code's severity in rules.sddRuleSeverity).`,
+          `Spec "${a.specId}" allows "${a.code}"${at}, but "${a.code}" is an error${fired ? ' and fired here as one' : ''}, and an error cannot be allowed — lint.allow silences warnings and notices only. Fix what the finding names, or remove the allow (a project may re-tune the code's severity in rules.sddRuleSeverity). Its reason: ${reasonHead(a.reason)}`,
           a.specId,
         );
         continue;
@@ -93,7 +98,7 @@ export const lintAllowsRule: SddRule = {
       ctx.addIssue(
         'warning',
         'UNUSED_LINT_ALLOW',
-        `Spec "${a.specId}" allows "${a.code}"${at} (reason: ${a.reason}), but ${why}.`,
+        `Spec "${a.specId}" allows "${a.code}"${at}, but ${why}. Its reason: ${reasonHead(a.reason)}`,
         a.specId,
       );
     }

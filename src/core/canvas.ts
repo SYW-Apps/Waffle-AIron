@@ -147,6 +147,8 @@ export interface CanvasModel {
     /** Opaque external references surfaced on the canvas element (see ExternalLinkSchema).
      *  wairon never fetches them; an `implementation` link is the external source-of-record. */
     externalLinks?: { url: string; type: string; label?: string }[];
+    /** The source files the component's implementations name, project-relative as written, each with the contract methods realized there; absent when none. The canvas offers them to the developer's editor on the local development server only; a shared snapshot leaves them out. */
+    sources?: { file: string; methods: string[] }[];
     /** Methods specified as intent prose instead of a narrative (the detail dial). */
     intents: { method: string; text: string }[];
   }[];
@@ -406,8 +408,17 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
     const impls = implementations.filter(im => contractIds.has(im.contract));
     const narratives: CanvasModel['components'][number]['narratives'] = [];
     const intents: CanvasModel['components'][number]['intents'] = [];
+    const sourceMethods = new Map<string, string[]>();
+    const noteSource = (file: string | undefined, method: string): void => {
+      if (!file) return;
+      const list = sourceMethods.get(file) ?? [];
+      if (!list.includes(method)) list.push(method);
+      sourceMethods.set(file, list);
+    };
     for (const impl of impls) {
+      if (impl.sourcePath && !sourceMethods.has(impl.sourcePath)) sourceMethods.set(impl.sourcePath, []);
       for (const m of impl.methods) {
+        noteSource(m.sourcePath ?? impl.sourcePath, m.name);
         if (!m.narrative.length) {
           if (m.intent) intents.push({ method: m.name, text: m.intent });
           continue;
@@ -466,6 +477,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
       owns: comp.owns.filter(o => componentIds.has(o)),
       dependsOn: comp.dependsOn,
       ...(comp.externalLinks && comp.externalLinks.length ? { externalLinks: comp.externalLinks } : {}),
+      ...(sourceMethods.size > 0 ? { sources: [...sourceMethods].map(([file, methods]) => ({ file, methods })) } : {}),
       interfaces: compInterfaces.map(i => ({
         id: i.id,
         name: i.name,
@@ -6235,7 +6247,22 @@ var MODEL = __MODEL_JSON__;
         body += section('External links', c.externalLinks.length, c.externalLinks.map(function (l) {
           var label = l.label || l.url;
           var tag = l.type === 'implementation' ? staticChip('source') : '';
+          var lu = String(l.url).toLowerCase();
+          var local = ['http://localhost', 'http://127.0.0.1'].some(function (p) { return lu.indexOf(p) === 0 && (lu.length === p.length || ':/?#'.indexOf(lu.charAt(p.length)) >= 0); });
+          if (lu.indexOf('https://') !== 0 && !local) {
+            return '<div class="method">' + tag + esc(label) + ' <span class="desc">(unsafe link not shown)</span></div>';
+          }
           return '<div class="method">' + tag + '<a href="' + esc(l.url) + '" target="_blank" rel="noopener" style="color:var(--accent);word-break:break-all">' + esc(label) + ' \\u2197</a></div>';
+        }).join(''), true);
+      }
+
+      // Source files: only where a host can open them (opts.onOpenSource, the dev page); never on a shared page, a downloaded file or hosted.
+      if (c.sources && c.sources.length && typeof opts !== 'undefined' && opts && typeof opts.onOpenSource === 'function') {
+        body += section('Source files', c.sources.length, c.sources.map(function (s) {
+          return '<div class="method"><div class="mname"><code style="display:inline;word-break:break-all">' + esc(s.file) + '</code><span class="grow"></span>'
+            + '<button class="flowbtn" data-opensource-file="' + esc(s.file) + '">Open in editor</button></div>'
+            + ((s.methods && s.methods.length) ? '<div class="mdesc">' + s.methods.map(esc).join(', ') + '</div>' : '')
+            + '</div>';
         }).join(''), true);
       }
 
@@ -6481,6 +6508,16 @@ var MODEL = __MODEL_JSON__;
           if (href) window.open(href + (tag ? '#/' + tag : ''), '_blank', 'noopener');
         });
       })(oapis[oi]);
+    }
+    var osrcs = panel.querySelectorAll('[data-opensource-file]');
+    for (var oi2 = 0; oi2 < osrcs.length; oi2++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && typeof opts.onOpenSource === 'function') {
+            opts.onOpenSource(b.getAttribute('data-opensource-file') || '');
+          }
+        });
+      })(osrcs[oi2]);
     }
     var ospecs = panel.querySelectorAll('[data-openspec-kind]');
     for (var si = 0; si < ospecs.length; si++) {

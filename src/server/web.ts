@@ -32,7 +32,7 @@ import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
 import * as hostCore from './adapters/core.js';
 import type { FamilyMember } from '../core/index.js';
 import * as devCockpit from './dev-commands.js';
-import type { DevApproval, DevCommandResult, DevReview, DevFamilyAction, DevFamilyCommand, DevReviewDecision } from './dev-commands.js';
+import type { DevApproval, DevCommandResult, DevReview, DevFamilyAction, DevFamilyCommand, DevReviewDecision, DevUpgradeNeed, DevOpenResult } from './dev-commands.js';
 import type { ReviewNote, ReviewStatus } from '../core/reviews.js';
 import * as hostSurfaces from './adapters/surfaces.js';
 import * as hostNetwork from './adapters/network.js';
@@ -586,6 +586,21 @@ export function getDevApproval(cfg: HostConfig, sessionId: string): DevApproval 
 /** Forward the session and the decoded arguments to the dev cockpit orchestrator: run one command the CLI handed the server. */
 export function runDevCommand(cfg: HostConfig, sessionId: string, command: string, subsystem?: string, member?: string): Promise<DevCommandResult> {
   return devCockpit.run(cfg, sessionId, command, subsystem, member); // step 1 (call)
+}
+
+/** Forward the session to the dev cockpit orchestrator: the trees an older major wrote, or null when none. */
+export function getDevUpgrade(cfg: HostConfig, sessionId: string): DevUpgradeNeed | null {
+  return devCockpit.upgradeNeed(cfg, sessionId); // step 1 (call)
+}
+
+/** Forward the session and the decoded flag to the dev cockpit orchestrator: the upgrade's report, or the upgrade itself. */
+export function runDevUpgrade(cfg: HostConfig, sessionId: string, report: boolean): Promise<DevCommandResult> {
+  return devCockpit.upgrade(cfg, sessionId, report); // step 1 (call)
+}
+
+/** Forward the session and the decoded file and line to the dev cockpit orchestrator: open the file in the developer's editor. */
+export function openDevSource(cfg: HostConfig, sessionId: string, file: string, line?: number): Promise<DevOpenResult> {
+  return devCockpit.openSource(cfg, sessionId, file, line); // step 1 (call)
 }
 
 /** Forward the session and the decoded family command to the dev cockpit orchestrator: a preview, or the change itself. */
@@ -3804,6 +3819,23 @@ export async function handleWebRequest(
         String(body?.command ?? ''),
         typeof body?.subsystem === 'string' && body.subsystem !== '' ? body.subsystem : undefined,
         memberOf(body),
+      ));
+    }
+    // GET /web/dev/upgrade → { trees, runningMajor, uncommitted, command } | null.
+    if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'upgrade') {
+      return sendJson(res, 200, getDevUpgrade(cfg, sessionId));
+    }
+    // POST /web/dev/upgrade { report } → { command, ok, output }.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'upgrade') {
+      return sendJson(res, 200, await runDevUpgrade(cfg, sessionId, body?.report === true));
+    }
+    // POST /web/dev/open { file, line? } → { opened, editor?, reason? }.
+    if (cfg.devMode === true && req.method === 'POST' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'open') {
+      return sendJson(res, 200, await openDevSource(
+        cfg,
+        sessionId,
+        typeof body?.file === 'string' ? body.file : '',
+        typeof body?.line === 'number' && Number.isInteger(body.line) ? body.line : undefined,
       ));
     }
     // POST /web/dev/family { action, args, options, report } → { command, ok, output }. The orchestrator

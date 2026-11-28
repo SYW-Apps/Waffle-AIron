@@ -1,7 +1,9 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as files from './files.js';
 import type { V6LockRecord } from './files.js';
 import * as core from '../../adapters/core.js';
-import { getProjectRoot, runWithProjectRoot } from '../../../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, userCacheDir } from '../../../utils/fs.js';
 import { declaredExternals, declaredMembers } from '../../../models/project.js';
 import type { InputsLock } from '../../../models/specs.js';
 import type { LockRecord } from '../../../core/index.js';
@@ -150,18 +152,53 @@ function rewritten(record: V6LockRecord, verdict: Verdict): LockRecord {
   return ordered as unknown as LockRecord;
 }
 
-/** Each path producer's pin of a v6 externals lock: the alias, and the snapshot file it names. */
-function pathPins(pins: InputsLock): { alias: string; snapshot: string }[] {
+/** What the pins of a v6 externals lock decide for the project at the bound root. */
+interface PinDecisions {
+  /** The pins dropped with their snapshots: a path producer's, a member's, and a bare external given its source. */
+  dropped: { alias: string; snapshot: string }[];
+  /** The bare externals restated with the relative path of their family project. */
+  restated: { alias: string; source: string }[];
+  /** The bare externals whose pin stays, each with why the family could not give it a source. */
+  kept: { alias: string; why: string }[];
+}
+
+/** Whether a directory is a folder on disk and not a git cache checkout. */
+function liveFolder(dir: string): boolean {
+  // A git or hosted member is read from wairon's user cache: no path a declaration could keep.
+  const cache = path.resolve(userCacheDir());
+  const rel = path.relative(cache, path.resolve(dir));
+  if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) return false;
+  try { return fs.statSync(dir).isDirectory(); } catch { return false; }
+}
+
+/** The pins of a v6 externals lock decided: path producers dropped, bare externals bound through the family (steps 15-20 of plan). */
+function decide(pins: InputsLock): PinDecisions {
+  const out: PinDecisions = { dropped: [], restated: [], kept: [] };
   const config = core.loadProjectConfig();
-  if (!config) return [];
+  if (!config) return out;
   const externals = declaredExternals(config);
   const members = declaredMembers(config);
-  return Object.entries(pins.externals).flatMap(([alias, entry]) => {
-    const live = entry.role === 'member'
-      ? members.some((m) => m.alias === alias && (m.storage === 'contained' || m.storage === 'path'))
-      : externals.some((e) => e.alias === alias && e.sourceGit === undefined && e.sourceHosted === undefined);
-    return live ? [{ alias, snapshot: entry.snapshot }] : [];
-  });
+  const bare = (e: { sourcePath?: string; sourceGit?: string; sourceHosted?: string }): boolean => e.sourcePath === undefined && e.sourceGit === undefined && e.sourceHosted === undefined;
+  const bound = externals.some(bare) ? core.resolveExternals(true) : [];
+  const root = getProjectRoot();
+  for (const [alias, entry] of Object.entries(pins.externals)) {
+    if (entry.role === 'member') {
+      if (members.some((m) => m.alias === alias && (m.storage === 'contained' || m.storage === 'path'))) out.dropped.push({ alias, snapshot: entry.snapshot });
+      continue;
+    }
+    const declared = externals.find((e) => e.alias === alias);
+    if (!declared || declared.sourceGit !== undefined || declared.sourceHosted !== undefined) continue;
+    if (declared.sourcePath !== undefined) { out.dropped.push({ alias, snapshot: entry.snapshot }); continue; }
+    const binding = bound.find((x) => x.external.alias === alias)?.external;
+    if (binding?.sourceKind === 'family' && binding.directory !== undefined && liveFolder(binding.directory)) {
+      const rel = path.relative(root, binding.directory).split(path.sep).join('/');
+      out.restated.push({ alias, source: rel.startsWith('.') ? rel : './' + rel });
+      out.dropped.push({ alias, snapshot: entry.snapshot });
+    } else {
+      out.kept.push({ alias, why: binding?.problem ?? 'the family answers with no project folder on disk for it' });
+    }
+  }
+  return out;
 }
 
 /** The inputs lock the v6 pins and the packs make: the hosted and git entries and a part's parent kept, the path producers dropped. */
@@ -189,13 +226,25 @@ function recordChanges(record: V6LockRecord | null, changes: UpgradeChange[], re
   reported.push(`${LOCK_CHANGE}: the approval was not carried — ${verdict.moved.join('; ')}. One \`wairon lock\` approves the design again.`);
 }
 
-/** The planned changes for the inputs: the pins converted, each path pin dropped with its snapshot, the packs recorded. */
-function inputChanges(pins: InputsLock | null, changes: UpgradeChange[]): void {
-  const dropped = pathPins(pins ?? { externals: {}, packs: {} });
-  const lock = inputsOf(pins, dropped);
+/** The planned changes for the inputs: the pins converted, each dropped pin with its snapshot, the packs recorded. */
+function inputChanges(pins: InputsLock | null, changes: UpgradeChange[], reported: string[]): void {
+  const decided = decide(pins ?? { externals: {}, packs: {} });
+  const lock = inputsOf(pins, decided.dropped);
   if (pins !== null) changes.push({ description: INPUTS_CHANGE, design: false });
   else if (holdsEntries(lock)) changes.push({ description: 'record the packs in .wai/inputs.lock.yaml', design: false });
-  for (const d of dropped) changes.push({ description: `${d.alias}: a path producer is read live and never pinned, so its pin and snapshot ${d.snapshot} are dropped`, design: false });
+  const given = new Map(decided.restated.map((r) => [r.alias, r.source]));
+  for (const d of decided.dropped) {
+    const source = given.get(d.alias);
+    changes.push({
+      description: source === undefined
+        ? `${d.alias}: a path producer is read live and never pinned, so its pin and snapshot ${d.snapshot} are dropped`
+        : `${d.alias}: given its source \`${source}\` (the relative path to its family project), read live like a path dependency; its pin and snapshot ${d.snapshot} are dropped`,
+      design: false,
+    });
+  }
+  for (const k of decided.kept) {
+    reported.push(`${k.alias}: an external with no source that the family could not resolve to a project folder (${k.why}), so its pin and declaration are kept. Give it a source with \`sdd_update_external\` (\`source\`) or \`wairon externals use --source\`.`);
+  }
 }
 
 /** iv6_to_v7_tree_step.plan — what moving the project at the bound root from v6 to v7 rewrites, without writing anything. */
@@ -212,7 +261,7 @@ export function plan(root: string): StepPlan {
     // Steps 5-14: the lock record.
     recordChanges(files.readRecord(root), changes, reported);
     // Steps 15-18: the inputs.
-    inputChanges(files.readExternalsLock(root), changes);
+    inputChanges(files.readExternalsLock(root), changes, reported);
     // Step 19.
     return { step: { ...STEP }, project: root, changes, reported };
   });
@@ -234,10 +283,18 @@ function writeRecord(root: string): void {
 function writeInputs(root: string): void {
   // Steps 7-9.
   const pins = files.readExternalsLock(root);
-  const dropped = pathPins(pins ?? { externals: {}, packs: {} });
-  // Steps 10-11.
+  const decided = decide(pins ?? { externals: {}, packs: {} });
+  const { dropped } = decided;
+  // Steps 10-13: each restated external is taken out and declared again with its source, every other field kept.
+  const declarations = core.loadProjectConfig()?.externals ?? {};
+  for (const r of decided.restated) {
+    const declaration = declarations[r.alias] ?? {};
+    core.removeExternal(r.alias);
+    core.declareExternal(r.alias, { ...declaration, source: r.source });
+  }
+  // Steps 14-15.
   files.writeInputsLock(root, inputsOf(pins, dropped));
-  // Steps 12-13: the v6 pins file and each dropped snapshot go.
+  // Steps 16-18: the v6 pins file and each dropped snapshot go.
   const gone = pins === null ? [] : ['.wai/externals.lock.yaml', ...dropped.map((d) => d.snapshot)];
   for (const file of gone) files.removeFile(root, file);
 }
@@ -256,7 +313,7 @@ export function whatChanged(): string[] {
   return [
     'The approval covers the project\'s own design and policy only, so a release, a re-pin or a member\'s re-lock never re-opens it.',
     '.wai/inputs.lock.yaml replaces .wai/externals.lock.yaml and also records the packs.',
-    'Path externals are read live and are no longer pinned.',
+    'Path externals are read live and are no longer pinned, and an external with no source is given the relative path of its family project, so the project\'s own gate reads it live too.',
     'A member\'s approval is its own lock: its parent never records it.',
     'A lock record whose approval could not be proven unchanged needs one `wairon lock`.',
   ];

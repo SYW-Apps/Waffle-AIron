@@ -30,6 +30,22 @@ export function runShell(commandLine: string, options: RunOptions = {}): string 
   return execSync(commandLine, { ...options, encoding: 'utf8' });
 }
 
+/** Start a program detached with its streams ignored and answer once it is running, or why it could not start (the program is not there): null when started, else the error's message. */
+export function startChecked(command: string, args: readonly string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(command, args, { stdio: 'ignore', detached: true });
+      child.once('error', (e) => resolve(e.message));
+      child.once('spawn', () => {
+        child.unref();
+        resolve(null);
+      });
+    } catch (e) {
+      resolve(e instanceof Error ? e.message : String(e));
+    }
+  });
+}
+
 /** Start a program detached with its streams ignored and leave it running (opening a browser). A program that cannot be started is not an error here: it is fire-and-forget. */
 export function start(command: string, args: readonly string[]): void {
   const child = spawn(command, args, { stdio: 'ignore', detached: true });

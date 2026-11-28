@@ -8,7 +8,11 @@ import type { ApprovalVerdict } from '../core/approval.js';
 import { describeApprover, type ProjectApproval } from '../models/lock.js';
 import { familyApprovals } from './adapters/validator.js';
 import type { HostConfig } from './types.js';
-import { gitHead } from '../io/index.js';
+import { gitHead, processes } from '../io/index.js';
+import * as instanceUpgrade from './upgrade.js';
+import { registerLocalDevProject } from './admin.js';
+import { WAIRON_MAJOR } from '../config/defaults.js';
+import type { TreeBehind } from './types.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { declaredExternals, declaredMembers } from '../models/project.js';
@@ -44,6 +48,35 @@ export interface DevCommands {
   doctor: DevCommand;
   /** The family panel's commands: one checked family command, run through the CLI's own command parser. */
   family: DevFamilyRunner;
+  /** The upgrade of the served checkout: `wairon upgrade` at the served root. */
+  upgrade: DevUpgradeCommand;
+  /** How the CLI that started the server is invoked at the served root (`wairon`, or the node command of a local build). */
+  invocation: string;
+}
+
+/** `wairon upgrade` at the served root as the CLI that started the dev server runs it: with `report`, the plan and nothing written; otherwise applied unattended, the page's button being the confirmation. */
+export type DevUpgradeCommand = (report: boolean) => Promise<DevCommandResult>;
+
+/** What the dev page shows when the served checkout was written by an older wairon major. */
+export interface DevUpgradeNeed {
+  /** Each served tree an older major wrote. */
+  trees: TreeBehind[];
+  /** This wairon's major. */
+  runningMajor: number;
+  /** Whether the served checkout has uncommitted changes. */
+  uncommitted: boolean;
+  /** The terminal command that runs the same upgrade at the served root. */
+  command: string;
+}
+
+/** The answer to opening a source file in the developer's editor. */
+export interface DevOpenResult {
+  /** Whether the editor was started on the file. */
+  opened: boolean;
+  /** The editor command used. */
+  editor?: string;
+  /** Why it was not opened. */
+  reason?: string;
 }
 
 /** A pending review request for the dev page, tagged with the member project it was made in (absent for the served project's own). */
@@ -414,6 +447,99 @@ export async function family(cfg: HostConfig, sessionId: string, command: DevFam
   } finally {
     running = false;
   }
+}
+
+/** The terminal command that upgrades the served tree, as the CLI that started the server spells itself. */
+function upgradeCommandLine(cfg: HostConfig): string {
+  const invocation = cfg.devCommands?.invocation?.trim();
+  return `${invocation ? invocation : 'wairon'} upgrade`;
+}
+
+/** dev_cockpit_orchestrator.upgradeNeed — the served trees an older major wrote, or null when every one is current. */
+export function upgradeNeed(cfg: HostConfig, sessionId: string): DevUpgradeNeed | null {
+  // Steps 1-4: refused outside the local development server; the session authenticated; the served root.
+  const root = servedRoot(cfg, sessionId);
+  // Steps 5-7.
+  const trees = instanceUpgrade.behind(cfg);
+  if (trees.length === 0) return null;
+  // Step 8: uncommitted changes at the served root; any failure reads as none.
+  let uncommitted = false;
+  try {
+    uncommitted = processes.run('git', ['status', '--porcelain', '--', '.'], { cwd: root, timeout: 10000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).trim() !== '';
+  } catch {
+    uncommitted = false;
+  }
+  // Step 9.
+  return { trees, runningMajor: WAIRON_MAJOR, uncommitted, command: upgradeCommandLine(cfg) };
+}
+
+/** dev_cockpit_orchestrator.upgrade — the CLI's upgrade at the served root: the report, or applied; the family is registered again after an applied success. */
+export async function upgrade(cfg: HostConfig, sessionId: string, report: boolean): Promise<DevCommandResult> {
+  // Steps 1-2: refused outside the local development server, without the handed commands, or while one runs.
+  const handed = cfg.devCommands;
+  if (cfg.devMode !== true || !handed || running) throw new Error('the command cannot run');
+  // Steps 3-4: the session authenticated; the served root.
+  const root = servedRoot(cfg, sessionId);
+  // Steps 5-7.
+  if (instanceUpgrade.behind(cfg).length === 0) throw new Error('every served tree is on the running major');
+  // Step 8: one at a time, shared with run; a thrown error is a failed result.
+  running = true;
+  let result: DevCommandResult;
+  try {
+    const got = await handed.upgrade(report === true);
+    result = { command: 'upgrade', ok: got.ok, output: plain(got.output) };
+  } catch (e) {
+    result = { command: 'upgrade', ok: false, output: plain([e instanceof Error ? e.message : String(e)]) };
+  } finally {
+    running = false;
+  }
+  // Steps 9-10: the served family registered again from the upgraded declarations (idempotent).
+  if (report !== true && result.ok) {
+    try {
+      registerLocalDevProject(cfg, DEV_PROJECT_ID, root);
+    } catch (e) {
+      result = { ...result, output: [...result.output, `the served project could not be registered again: ${e instanceof Error ? e.message : String(e)}`] };
+    }
+  }
+  // Step 11.
+  return result;
+}
+
+/** The editor command and its leading arguments: WAIRON_EDITOR split on whitespace, else VS Code's `code -g` (`code.cmd` on Windows, which cannot be started without a shell by its bare name). */
+export function editorCommand(env: NodeJS.ProcessEnv, platform: string): string[] {
+  const named = (env.WAIRON_EDITOR ?? '').trim();
+  if (named !== '') return named.split(/\s+/);
+  return [platform === 'win32' ? 'code.cmd' : 'code', '-g'];
+}
+
+/** dev_cockpit_orchestrator.openSource — open a project file in the developer's editor at a line. */
+export async function openSource(cfg: HostConfig, sessionId: string, file: string, line?: number): Promise<DevOpenResult> {
+  // Steps 1-4: refused outside the local development server; the session authenticated; the served root.
+  const root = servedRoot(cfg, sessionId);
+  // Step 5: the file against the served root; refused when absolute, escaping (links followed) or not a file.
+  if (typeof file !== 'string' || file.trim() === '' || path.isAbsolute(file) || path.win32.isAbsolute(file) || file.includes('\0')) {
+    return { opened: false, reason: 'the file must be a path inside the served project' };
+  }
+  let real: string;
+  try {
+    const realRoot = fs.realpathSync(root);
+    real = fs.realpathSync(path.resolve(root, file));
+    const rel = path.relative(realRoot, real);
+    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+      return { opened: false, reason: 'the file is outside the served project' };
+    }
+    if (!fs.statSync(real).isFile()) return { opened: false, reason: 'the file is not a file on disk' };
+  } catch {
+    return { opened: false, reason: 'the file is not on disk' };
+  }
+  // Step 6: the editor and its argument.
+  const [command, ...lead] = editorCommand(process.env, process.platform);
+  const where = Number.isInteger(line) && (line as number) > 0 ? `${real}:${line}` : real;
+  // Step 7: started detached, no shell; a program that is not there reads as no editor.
+  const failure = await processes.startChecked(command, [...lead, where]);
+  if (failure !== null) return { opened: false, reason: 'no editor was found: set WAIRON_EDITOR to your editor command' };
+  // Step 8.
+  return { opened: true, editor: [command, ...lead].join(' ') };
 }
 
 /** dev_cockpit_orchestrator.producers — the projects on disk the served project reads: its members, and its externals declared by path. */

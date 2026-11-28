@@ -384,6 +384,68 @@ function isPkgBinary(): boolean {
   return !!(process as NodeJS.Process & { pkg?: unknown }).pkg;
 }
 
+/** The extracted binary at the extract root or one folder down, or undefined. */
+export function findExtractedBinary(dir: string, name: string): string | undefined {
+  const atRoot = path.join(dir, name);
+  if (files.exists(atRoot)) return atRoot;
+  if (!files.exists(dir)) return undefined;
+  for (const entry of files.listEntries(dir)) {
+    if (!entry.isDirectory()) continue;
+    const nested = path.join(dir, entry.name, name);
+    if (files.exists(nested)) return nested;
+  }
+  return undefined;
+}
+
+/** What a failed extractor left to say: its stderr, else its message, trimmed. */
+function extractorFailure(err: unknown): string {
+  const e = err as { stderr?: unknown; message?: string; status?: number | null };
+  const stderr = e?.stderr ? String(e.stderr).trim() : '';
+  const text = stderr || String(e?.message ?? err).trim();
+  return e?.status != null ? `exit ${e.status}: ${text}` : text;
+}
+
+/**
+ * Unpack the downloaded archive and find the binary. tar first (Windows 10+
+ * ships a bsdtar that reads zip), then PowerShell's Expand-Archive for a zip.
+ * No shell is involved. When no extractor yields the binary the error names
+ * each one tried and the archive, so the person can unpack it by hand.
+ */
+export function extractArchive(
+  archive: string,
+  extractDir: string,
+  binaryName: string,
+  isZip: boolean,
+  runner: (command: string, args: string[]) => unknown,
+): string {
+  const attempts: { label: string; command: string; args: string[] }[] = [
+    { label: 'tar', command: 'tar', args: [isZip ? '-xf' : '-xzf', archive, '-C', extractDir] },
+  ];
+  if (isZip) {
+    attempts.push({
+      label: 'powershell Expand-Archive',
+      command: 'powershell',
+      args: ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive', '-LiteralPath', archive, '-DestinationPath', extractDir, '-Force'],
+    });
+  }
+  const tried: string[] = [];
+  for (const attempt of attempts) {
+    try {
+      runner(attempt.command, attempt.args);
+      tried.push(`${attempt.label}: ran, but ${binaryName} was not in the output`);
+    } catch (err) {
+      tried.push(`${attempt.label}: ${extractorFailure(err)}`);
+    }
+    const found = findExtractedBinary(extractDir, binaryName);
+    if (found) return found;
+  }
+  throw new Error(
+    `Could not extract ${binaryName} from the downloaded archive ${archive}.\n` +
+    tried.map((t) => `  - ${t}`).join('\n') +
+    `\n  Unpack the archive by hand and put ${binaryName} where the running wairon is.`,
+  );
+}
+
 function installBinary(tmpFile: string, destPath: string): void {
   const platform = process.platform;
   const isZip = tmpFile.endsWith('.zip');
@@ -392,23 +454,10 @@ function installBinary(tmpFile: string, destPath: string): void {
   if (files.exists(extractDir)) files.removeExisting(extractDir, { recursive: true });
   files.ensureDir(extractDir);
 
-  if (isZip) {
-    // Use ['ignore', 'pipe', 'pipe'] — piping stdin into PowerShell causes
-    // "Input redirection is not supported" on Windows PowerShell 5.x.
-    processes.runShell(
-      `powershell -NoProfile -NonInteractive -Command "Expand-Archive -Path '${tmpFile}' -DestinationPath '${extractDir}' -Force"`,
-      { stdio: ['ignore', 'pipe', 'pipe'] },
-    );
-  } else {
-    processes.runShell(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: ['ignore', 'pipe', 'pipe'] });
-  }
-
   const binaryName = platform === 'win32' ? 'wairon.exe' : 'wairon';
-  const extractedBinary = path.join(extractDir, binaryName);
-
-  if (!files.exists(extractedBinary)) {
-    throw new Error(`Extracted binary not found at ${extractedBinary}`);
-  }
+  const extractedBinary = extractArchive(tmpFile, extractDir, binaryName, isZip, (cmd, args) =>
+    processes.run(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] }),
+  );
 
   if (platform === 'win32') {
     try {

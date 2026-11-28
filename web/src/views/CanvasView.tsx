@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { get } from '../api';
-import { AsyncView, useAsync } from '../ui';
+import { get, post } from '../api';
+import { AsyncView, useAsync, useToast } from '../ui';
 import { useSettings } from '../settings';
 import { useSession } from '../session';
 import { engineTheme, engineVars } from '../theme/canvasBridge';
@@ -38,6 +38,9 @@ export function CanvasView({
   // canvas (ctx.local) does not, so the "Open in Specs" affordance stays hidden there.
   const { ctx } = useSession();
   const isLocal = !!ctx?.local;
+  const toast = useToast();
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
   // The classic engine ships a dark ('syw') and a 'light' theme for its
   // semantic content colors; the SELECTED app palette is overlaid on the
   // chrome via CSS-variable overrides.
@@ -157,6 +160,18 @@ export function CanvasView({
       // stamps recordId only on records the caller may read, so a node without
       // one never offers the link.
       onOpenProject: DEMO ? undefined : (recordId: string) => navigate('/projects/' + encodeURIComponent(recordId)),
+      // "Open in editor" on a component's source files: the local dev server only (it opens the file in the
+      // developer's editor); a hosted app, shared page or downloaded file gets no hook, so no button.
+      onOpenSource:
+        isLocal && !DEMO
+          ? (file: string) => {
+              post<{ opened: boolean; editor?: string; reason?: string }>('/web/dev/open', { file })
+                .then((r) => {
+                  if (!r.opened) toastRef.current.bad(r.reason || 'Could not open the file in an editor');
+                })
+                .catch((e) => toastRef.current.bad(e instanceof Error ? e.message : String(e)));
+            }
+          : undefined,
       // The Network mode tab opens the derived network view (/canvas/<project>/network).
       onOpenNetwork: DEMO ? undefined : () => navigate(networkUrl()),
       // Stage G: focus a component / open a method's narrative modal when the URL hash asks.

@@ -9,6 +9,7 @@ import {
   saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
+  saveImplementationSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import { createProjectRecord } from '../../src/server/projects.js';
@@ -19,7 +20,8 @@ import { handleShareRequest } from '../../src/server/sharehttp.js';
 import { exportProjectSurface } from '../../src/server/landscape.js';
 import { hashToken } from '../../src/server/credentials.js';
 import { mintUserToken, allow, subjectOf } from './helpers.js';
-import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import { buildCanvasModel } from '../../src/core/canvas.js';
 import type {
   HostConfig,
   Principal,
@@ -94,6 +96,10 @@ function buildTwoPortals(root: string): void {
         endpoint: { transport: 'HTTP', method: 'POST', path: '/sync' },
       },
     ]));
+    saveImplementationSpec({
+      id: 'public-portal-impl', name: 'Impl', description: 'impl', contract: 'ipublic-portal', sourcePath: 'src/public-portal.ts',
+      methods: [{ name: 'getThing', narrative: [] }], createdAt: now, updatedAt: now,
+    } as ImplementationSpec);
     invalidateSpecCache();
   });
 }
@@ -210,6 +216,15 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
     expect(JSON.stringify(snapshot)).not.toContain('"openapi":"{}"');
     // ...and directly: neither field may hold the empty-object placeholder.
     expect(snapshot.openapiSet?.some((s) => s.document === '{}')).toBeFalsy();
+  });
+
+  it('a captured canvas model carries no component sources, though the live model has them', () => {
+    const snapshot = captureSnapshot(dataDir, principal(), 'billing', 'architecture', ['canvas']);
+    const captured = JSON.parse(snapshot.canvasModel as string) as { components: { id: string; sources?: unknown }[] };
+    expect(captured.components.length).toBeGreaterThan(0);
+    expect(captured.components.every((c) => !('sources' in c))).toBe(true);
+    const live = runWithProjectRoot(projectRoot, () => buildCanvasModel());
+    expect(live.components.find((c) => c.id === 'public-portal')?.sources).toEqual([{ file: 'src/public-portal.ts', methods: ['getThing'] }]);
   });
 
   it('a project with no requested openapi artifact captures neither field', () => {

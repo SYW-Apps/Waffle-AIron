@@ -99,6 +99,20 @@ describe('wairon dev registration (sdd_host)', () => {
     expect(backups()).toEqual([]);
   });
 
+  // ── The developer's checkout is never upgraded by the dev server ──────────
+
+  it('starts on a tree an older major wrote, upgrades nothing, and reports it behind', () => {
+    fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
+    const yaml = `schemaVersion: 1.0.0\nid: oldfam\nwaironMajor: ${WAIRON_MAJOR - 1}\nname: oldfam\ncreatedAt: '2026-01-01T00:00:00.000Z'\nupdatedAt: '2026-01-01T00:00:00.000Z'\n`;
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), yaml);
+    registerLocalDevProject(cfg, 'local', root);
+    bootstrapInstance(cfg);
+    const report = runUpgrade(cfg);
+    expect(report.trees).toEqual([]);
+    expect(report.behind).toEqual([{ root: path.resolve(root), writtenMajor: WAIRON_MAJOR - 1 }]);
+    expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).toBe(yaml);
+  });
+
   // ── H4: the reset ─────────────────────────────────────────────────────────
 
   it('resets an unversioned, other-major or unparseable-version dir with its backups; keeps one at the running major', () => {

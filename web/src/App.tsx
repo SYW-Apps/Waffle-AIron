@@ -28,6 +28,7 @@ import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
 import { FamilyPanel } from './views/FamilyPanel';
 import { DevBanner } from './views/DevBanner';
+import { UpgradeGate } from './views/UpgradeGate';
 import { ApprovalBanner, BranchChip, CockpitProvider, LockInPlaceButton, SettingsCog, useApproval, useScopeNodes } from './views/DevCockpit';
 import { parseMoved, subsystemOfRoute } from './views/devCockpitLogic';
 import { Select, Tabs } from './ui';
@@ -197,9 +198,11 @@ function useDevProjectName(): string {
 
 function DevShell() {
   return (
-    <CockpitProvider>
-      <DevFrame />
-    </CockpitProvider>
+    <UpgradeGate>
+      <CockpitProvider>
+        <DevFrame />
+      </CockpitProvider>
+    </UpgradeGate>
   );
 }
 

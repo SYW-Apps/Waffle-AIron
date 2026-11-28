@@ -1,5 +1,6 @@
 import { files } from '../io/index.js';
-import { runWithProjectRoot } from '../utils/fs.js';
+import path from 'node:path';
+import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
 import {
   EXTERNAL_ALIAS_RE,
   aliasGrammarProblem,
@@ -34,6 +35,8 @@ import {
   resolveExternals,
   resolveExternalCandidate,
   resolveProjectExports,
+  projectFamily,
+  resolveChainingParent,
 } from './adapters/surfaces-core.js';
 // surface_orchestrator: the pin a declaration is followed by, the externals
 // listing a removal reads, and the unpin it is followed by.
@@ -151,7 +154,7 @@ interface ProducerRead {
   audience: string;
 }
 
-/** Steps 6-7: the producer's configuration and export table, its root bound read-only — or why it cannot be read. */
+/** Steps 13-14: the producer's configuration and export table, its root bound read-only — or why it cannot be read. */
 function readProducer(binding: ExternalBinding): { read: ProducerRead } | { why: string } {
   const { external } = binding;
   const directory = external.directory;
@@ -159,10 +162,10 @@ function readProducer(binding: ExternalBinding): { read: ProducerRead } | { why:
   if (!files.exists(directory)) return { why: `its root ${directory} does not exist` };
   try {
     return runWithProjectRoot(directory, () => {
-      // Step 6: the id it answers to.
+      // Step 13: the id it answers to.
       const config = loadProjectConfig();
       if (!config) return { why: `${directory} holds no wairon project` };
-      // Step 7: the public names it exports at this project's audience, and every name's own audience.
+      // Step 14: the public names it exports at this project's audience, and every name's own audience.
       const floor = audienceRank(external.audience);
       const entries = resolveProjectExports().entries;
       const exported = entries.filter((e) => audienceRank(e.audience ?? 'instance') >= floor).map((e) => e.publicName);
@@ -193,7 +196,7 @@ function unexportedReason(name: string, read: ProducerRead): string {
   return `the producer does not export "${name}" to this project${read.exported.length ? ` (closest: ${closest(name, read.exported).map((n) => `"${n}"`).join(', ')})` : ' (it exports nothing to this project)'}`;
 }
 
-/** Step 8: what the producer contradicts in the declaration, as the refusal's reason; null when nothing. */
+/** Step 15: what the producer contradicts in the declaration, as the refusal's reason; null when nothing. */
 function contradiction(request: ExternalRequest, binding: ExternalBinding | undefined, read: ProducerRead | null): string | null {
   const declared = request.project ?? request.alias;
   // The family's own resolution already compared the id it found at the source.
@@ -209,8 +212,36 @@ function contradiction(request: ExternalRequest, binding: ExternalBinding | unde
   return missing.length > 0 ? missing.map((u) => unexportedReason(u, read)).join('; ') : null;
 }
 
+/** The ids the family's projects answer to, best effort: the graph the bound root reads. */
+function familyIds(): string[] {
+  try {
+    // The graph is read at the highest root the family reaches, as the candidate binding reads it.
+    let top = path.resolve(getProjectRoot());
+    for (;;) {
+      const parent = runWithProjectRoot(top, () => resolveChainingParent());
+      if (!parent) break;
+      top = path.resolve(parent.parentRoot);
+    }
+    return runWithProjectRoot(top, () => [...new Set(projectFamily().nodes.map((n) => n.id).filter((id): id is string => id !== undefined))]);
+  } catch {
+    return [];
+  }
+}
+
+/** Steps 10-12: why no family project on disk answers to the producer id. */
+function noFamilyProject(declared: string, problem: string | undefined, config: ProjectConfig | null): string {
+  const ids = familyIds();
+  const member = ownGet(config?.members, declared);
+  const memberAt = typeof member === 'string' ? member : member && typeof member === 'object' ? (member as { source?: unknown }).source : undefined;
+  const located = typeof memberAt === 'string' && /^(hosted:|git@|https?:|ssh:)|\.git(#|$)/.test(memberAt)
+    ? ` — a member answers to it at \`${memberAt}\`, give that as the source`
+    : '';
+  const answers = ids.length ? ids.map((i) => `"${i}"`).join(', ') : 'no id';
+  return `no family project on disk answers to "${declared}", so \`source\` must say where it is (accepted: ${LOCATION_FORMS}); the family's projects answer to ${answers}${located}${problem ? ` (${problem})` : ''}`;
+}
+
 /**
- * iexternal_declarations.declare — declare one external of the bound project:
+ * iexternal_declarations.declare— declare one external of the bound project:
  * refuse, writing nothing, what cannot be declared (each in one sentence
  * naming the accepted form); otherwise bind the declaration to its producer
  * BEFORE writing it, refuse what the producer contradicts, and — unless this
@@ -226,40 +257,53 @@ export function declare(request: ExternalRequest): ExternalAddition {
   const problem = requestProblem(request, config, read.source, read.problem);
   // Steps 3-4: a refusal writes nothing.
   if (problem) return refused(alias, problem);
-  const declaration = declarationOf(request, read.source);
+  const requested = declarationOf(request, read.source);
   const declared = request.project ?? alias;
   // Step 5: the binding the written declaration will get, before anything is written.
   let binding: ExternalBinding | undefined;
   let bindProblem = 'it could not be bound';
   try {
-    binding = resolveExternalCandidate(alias, declaration);
+    binding = resolveExternalCandidate(alias, requested);
   } catch (e) {
     bindProblem = e instanceof Error ? e.message : String(e);
   }
-  // Steps 6-7: what the producer answers, when it can be read.
+  // Steps 6-12: a request with no source is filled in from the family.
+  let declaration = requested;
+  if (request.source === undefined) {
+    const external = binding?.external;
+    if (external?.sourceKind === 'family' && external.directory !== undefined) {
+      // Steps 7-9: the relative path from this project's root to that project's root.
+      const relative = path.relative(path.resolve(getProjectRoot()), external.directory).split(path.sep).join('/');
+      declaration = { ...requested, source: { path: relative } };
+    } else {
+      // Steps 10-12: no family project on disk answers to the producer id.
+      return refused(alias, noFamilyProject(declared, external?.problem ?? (binding ? undefined : bindProblem), config));
+    }
+  }
+  // Steps 13-14: what the producer answers, when it can be read.
   const answered = binding ? readProducer(binding) : { why: bindProblem };
   const producer = 'read' in answered ? answered.read : null;
-  // Steps 8-9: a contradiction refuses, writing nothing.
+  // Steps 15-16: a contradiction refuses, writing nothing.
   const contradicted = contradiction(request, binding, producer);
   if (contradicted) return refused(alias, contradicted);
   const why = 'why' in answered ? answered.why : 'unknown';
-  // Steps 10-11: a dry run answers the same verdict and writes nothing.
+  // Steps 17-18: a dry run answers the same verdict and writes nothing.
   if (request.dryRun) {
     return {
       alias, written: false, declaration, project: producer?.id ?? declared,
       ...(producer ? {} : { unreachable: `its producer could not be read (${why}), so nothing would be pinned` }),
     };
   }
-  // Step 12: the write, through the core's configuration portal.
+  // Step 19: the write, through the core's configuration portal.
   try {
     writeDeclaration(alias, declaration);
   } catch (e) {
     return refused(alias, (e instanceof Error ? e.message : String(e)).replace(/\.$/, ''));
   }
-  // Steps 13-14: pin it when asked and the producer was read.
+  // Steps 20-21: pin it when asked and the producer was read.
   let pin: ExternalPin | undefined;
   if (request.pin !== false && producer) pin = pinExternals([alias])[0];
-  // Step 15: the addition.
+  // Step 22: the addition.
   const unreachable = producer
     ? undefined
     : `its producer could not be read (${why}), so nothing was pinned — it reads as unavailable, never a pass, until \`wairon externals pin ${alias}\` succeeds`;
@@ -318,14 +362,28 @@ function useRefused(alias: string, use: string[], why: string): ExternalUseChang
   return { alias, written: false, use, added: [], removed: [], refusal: `The \`use\` of "${alias}" was not changed: ${why}.` };
 }
 
+/** The object form of a declaration's source, whichever form it was written in. */
+function sourceObject(source: ExternalDeclaration['source']): ExternalSource | undefined {
+  return typeof source === 'string' ? readExternalSource(source).source : source;
+}
+
+/** The location a declaration names, as a comparable string; empty when it names none. */
+function locationKey(source: ExternalSource | undefined): string {
+  if (!source) return '';
+  return JSON.stringify([source.git ?? null, source.ref ?? null, source.dir ?? null, source.hosted ?? null, source.path ?? null]);
+}
+
 /**
- * iexternal_declarations.updateUse — add and remove `use` imports of one
- * declared external. Refused, writing nothing, for an undeclared alias, a
- * malformed entry, or — when the producer can be read — an added name it does
- * not export to this project. A dry run, or a change that changes nothing,
- * writes nothing. The pin is untouched.
+ * iexternal_declarations.update — change one declared external: add and
+ * remove `use` imports and/or give it a new location. Refused, writing
+ * nothing, for an undeclared alias, a malformed entry or location, an added
+ * name the readable producer does not export to this project, or a producer at
+ * the new location answering to another id. A dry run, or a change that
+ * changes nothing, writes nothing. A new location is followed by the pin:
+ * a path producer's earlier pin is dropped (read live), a git or hosted one is
+ * pinned anew.
  */
-export function updateUse(request: ExternalUseRequest): ExternalUseChange {
+export function update(request: ExternalUseRequest): ExternalUseChange {
   const { alias } = request;
   // Step 1: the configuration, for the declaration and its current `use`.
   const config = loadProjectConfig();
@@ -336,18 +394,33 @@ export function updateUse(request: ExternalUseRequest): ExternalUseChange {
     const declared = Object.keys(config?.externals ?? {});
     return useRefused(alias, current, `"${alias}" is not a declared external — ${declared.length ? `this project declares ${declared.map((a) => `"${a}"`).join(', ')}` : 'this project declares no externals'} (declare it with \`wairon externals add\`)`);
   }
+  const original = (typeof existing === 'object' && existing !== null ? existing : {}) as ExternalDeclaration;
   const add = [...new Set(request.add ?? [])];
   const drop = [...new Set(request.remove ?? [])];
   const bad = [...add, ...drop].find((u) => !USE_ENTRY_RE.test(u));
   if (bad !== undefined) return useRefused(alias, current, `the entry "${bad}" is neither \`*\` nor a public name ([a-z0-9-_]+)`);
-  if (add.length === 0 && drop.length === 0) return useRefused(alias, current, 'name at least one public name to add or to remove');
+  // A new location, read through the one location grammar as declare reads it.
+  let newSource: ExternalSource | undefined;
+  if (request.source !== undefined) {
+    const read = readExternalSource(request.source);
+    if (NOT_A_LOCATION.test(request.source.trim())) return useRefused(alias, current, `the source "${request.source}" is not a location (accepted: ${LOCATION_FORMS})`);
+    if (read.problem) return useRefused(alias, current, `${read.problem.replace(/^its /, 'the ')} (accepted: ${LOCATION_FORMS})`);
+    if (read.source !== undefined) {
+      newSource = sourceObject(declarationOf({ alias, source: request.source, ...(sourceObject(original.source)?.dir !== undefined && read.source.git !== undefined ? { dir: sourceObject(original.source)!.dir } : {}) }, read.source).source);
+    }
+  }
+  const locationChanged = newSource !== undefined && locationKey(newSource) !== locationKey(sourceObject(original.source));
+  if (add.length === 0 && drop.length === 0 && !locationChanged) {
+    if (request.source !== undefined) return { alias, written: false, use: current, added: [], removed: [], source: request.source };
+    return useRefused(alias, current, 'name at least one public name to add or to remove, or a new location');
+  }
   const kept = current.filter((u) => !drop.includes(u));
   const appended = kept.includes('*') ? [] : add.filter((u) => !kept.includes(u));
   const next = [...kept, ...appended];
   const removedNames = current.filter((u) => drop.includes(u));
   // Steps 5-8: an added name the readable producer does not export to this project.
   const named = appended.filter((u) => u !== '*');
-  if (named.length > 0) {
+  if (named.length > 0 && !locationChanged) {
     const binding = resolveExternals(true).find((b) => b.external.alias === alias);
     const answered = binding ? readProducer(binding) : null;
     if (answered && 'read' in answered) {
@@ -355,14 +428,37 @@ export function updateUse(request: ExternalUseRequest): ExternalUseChange {
       if (missing.length) return useRefused(alias, current, missing.map((u) => unexportedReason(u, answered.read)).join('; '));
     }
   }
-  // Steps 9-10: a dry run, or nothing to change.
-  const same = next.length === current.length && next.every((u, i) => u === current[i]);
-  if (request.dryRun || same) return { alias, written: false, use: next, added: appended, removed: removedNames };
-  // Steps 11-13: a removal restates the declaration (the portal only appends imports).
-  if (removedNames.length > 0) {
-    const original = (typeof existing === 'object' && existing !== null ? existing : {}) as ExternalDeclaration;
-    const { use: _old, ...rest } = original;
-    const restated: ExternalDeclaration = { ...rest, ...(next.length ? { use: next } : {}) };
+  // The resulting declaration: the new location in place of the old, every other field kept.
+  const { use: _old, ...rest } = original;
+  const restated: ExternalDeclaration = { ...rest, ...(locationChanged ? { source: newSource } : {}), ...(next.length ? { use: next } : {}) };
+  // Steps 9-13: a new location is checked against the producer it reaches before anything is written.
+  if (locationChanged) {
+    const declared = original.project ?? alias;
+    let binding: ExternalBinding | undefined;
+    try {
+      binding = resolveExternalCandidate(alias, restated);
+    } catch {
+      binding = undefined;
+    }
+    const problem = binding?.external.problem;
+    if (binding?.external.sourceKind === 'unresolved' && problem && /answers to/.test(problem)) {
+      return useRefused(alias, current, `${problem} — the producer at that location is not "${declared}"`);
+    }
+    const answered = binding ? readProducer(binding) : null;
+    if (answered && 'read' in answered) {
+      if (answered.read.id !== null && answered.read.id !== declared) {
+        return useRefused(alias, current, `the producer at that location answers to "${answered.read.id}", not "${declared}" — point the source at "${declared}", or declare \`project: ${answered.read.id}\``);
+      }
+      const missing = named.filter((u) => !answered.read.exported.includes(u));
+      if (missing.length) return useRefused(alias, current, missing.map((u) => unexportedReason(u, answered.read)).join('; '));
+    }
+  }
+  // Steps 14-15: a dry run, or nothing to change.
+  const same = !locationChanged && next.length === current.length && next.every((u, i) => u === current[i]);
+  const sourceAnswer = locationChanged ? { source: request.source } : {};
+  if (request.dryRun || same) return { alias, written: false, use: next, added: appended, removed: removedNames, ...sourceAnswer };
+  // Steps 16-18: a removal or a new location restates the declaration (the portal only appends imports).
+  if (removedNames.length > 0 || locationChanged) {
     removeExternal(alias);
     try {
       writeDeclaration(alias, restated);
@@ -371,10 +467,16 @@ export function updateUse(request: ExternalUseRequest): ExternalUseChange {
       writeDeclaration(alias, original);
       return useRefused(alias, current, (e instanceof Error ? e.message : String(e)).replace(/\.$/, ''));
     }
-    return { alias, written: true, use: next, added: appended, removed: removedNames };
+  } else {
+    // Step 19: the added names, append-only.
+    importNames(alias, appended);
   }
-  // Step 14: the added names, append-only.
-  importNames(alias, appended);
-  // Step 15.
-  return { alias, written: true, use: next, added: appended, removed: removedNames };
+  // Steps 20-21: the pin follows the location.
+  let pin: string | undefined;
+  if (locationChanged) {
+    const taken = pinExternals([alias])[0];
+    pin = taken && (taken.outcome === 'pinned') ? 're-taken' : taken && taken.outcome === 'unchanged' ? 'dropped' : taken ? `not re-taken (${taken.outcome})` : 'dropped';
+  }
+  // Step 22.
+  return { alias, written: true, use: next, added: appended, removed: removedNames, ...sourceAnswer, ...(pin ? { pin } : {}) };
 }

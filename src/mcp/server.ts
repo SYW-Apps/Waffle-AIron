@@ -96,7 +96,7 @@ import { statusAnswer, type StatusDetail } from './status-summary.js';
 import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
 // removeExternal as dropExternal / updateExternalUse as changeExternalUse:
 // sdd_remove_external's and sdd_update_external's workflows
-// (mcp_externals_orchestrator.remove and .updateUse).
+// (mcp_externals_orchestrator.remove and .update).
 import { removeExternal as dropExternal, updateExternalUse as changeExternalUse } from './adapters/surfaces.js';
 import { listConsumers as externalConsumers, diffSurface as surfaceDiff } from './adapters/surfaces.js';
 // The read-only network tools' workflows (mcp_network_orchestrator).
@@ -581,6 +581,8 @@ const externalUseChangeOutput = {
   added: z.array(z.string()).describe('The names this change imports that were not imported before.'),
   removed: z.array(z.string()).describe('The names this change stops importing.'),
   refusal: z.string().optional().describe('Why nothing was written, in one sentence.'),
+  source: z.string().optional().describe('The location the declaration names after the change, when the change set one.'),
+  pin: z.string().optional().describe('What the location change did to the pin: dropped (a path producer, read live) or re-taken; absent when the location did not change.'),
   ...staleServerOutput,
 };
 
@@ -4127,7 +4129,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
       description: 'Declare one external of the bound project in .wai/project.yaml — the alias its specs will reference as `alias::name` and where the producer is, in the one location grammar members use (`../sibling`, `hosted:<id>`, `<git url>`, `<git url>#<commit>`; a `#<commit>` fixes the ref the pin follows) — then check it against the producer it reaches (the id it answers to, the `use` names it exports to this project; a contradiction takes the declaration back out) and pin it unless pin is false. Refusals are one sentence naming the accepted form. A producer that cannot be read leaves it declared and unpinned, saying why. Use it instead of editing .wai/project.yaml by hand. A tree-scoped write.',
       inputSchema: {
         alias: z.string().describe('The alias specs will reference the producer by (`alias::name`): [a-z0-9-_]+, not already a member or external'),
-        source: z.string().optional().describe('Where the producer is: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`; omit when the family provides it'),
+        source: z.string().optional().describe('Where the producer is: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`; omitted, the relative path of the family project on disk that answers to the producer id is written for it'),
         project: z.string().optional().describe('The producer\'s project id when it differs from the alias'),
         ref: z.string().optional().describe('git only: the branch, tag or full commit the pin follows'),
         dir: z.string().optional().describe('git only: the producer\'s root inside the repository'),
@@ -4171,30 +4173,32 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ alias: string; addUse?: string[]; removeUse?: string[]; dryRun?: boolean }>(server,
+  reg<{ alias: string; addUse?: string[]; removeUse?: string[]; source?: string; dryRun?: boolean }>(server,
     'sdd_update_external',
     {
-      description: 'Add and remove `use` imports of one declared external, so this project\'s specs may name the producer\'s public names bare — e.g. so an `implements` of another project\'s trait may spell the producer\'s types as the producer does. An added name is checked against what the producer exports to this project (refused naming the closest exported names, or the audience that keeps it out). The pin is untouched. Use it instead of editing .wai/project.yaml by hand. A tree-scoped write.',
+      description: 'Change one declared external field by field: add and remove `use` imports, so this project\'s specs may name the producer\'s public names bare (e.g. so an `implements` of another project\'s trait may spell the producer\'s types as the producer does), and give it a new location without removing and re-adding it. An added name is checked against what the producer exports to this project, a new location against the id its producer answers to; the pin follows a new location (dropped for a path producer, read live; re-taken for a git or hosted one). Refusals are one sentence naming the closest exported names, the audience, or the id. Use it instead of editing .wai/project.yaml by hand. A tree-scoped write.',
       inputSchema: {
         alias: z.string().describe('The declared external whose `use` changes'),
         addUse: z.array(z.string()).optional().describe('Public names to import bare (`*` for all)'),
         removeUse: z.array(z.string()).optional().describe('Names to stop importing'),
+        source: z.string().optional().describe('A new location: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`; checked against the id its producer answers to, the pin following it'),
         dryRun: z.boolean().optional().describe('Answer the resulting list, writing nothing'),
       },
       outputSchema: externalUseChangeOutput,
     },
-    ({ alias, addUse, removeUse, dryRun }) => {
+    ({ alias, addUse, removeUse, source, dryRun }) => {
       try {
         const change = changeExternalUse({
           alias,
           ...(addUse !== undefined ? { add: addUse } : {}),
           ...(removeUse !== undefined ? { remove: removeUse } : {}),
+          ...(source !== undefined ? { source } : {}),
           ...(dryRun ? { dryRun: true } : {}),
         });
         if (change.refusal) return { ...structured(change.refusal, { ...change }), isError: true };
         const moved = [change.added.length ? `+ ${change.added.join(', ')}` : '', change.removed.length ? `- ${change.removed.join(', ')}` : ''].filter(Boolean).join('; ') || 'no change';
         const list = change.use.length ? change.use.join(', ') : '(none)';
-        return structured(`${dryRun ? 'Dry run: ' : ''}${alias}.use ${dryRun ? 'would be' : change.written ? 'is now' : 'is already'} [${list}] (${moved}).`, { ...change, ...(dryRun ? { dryRun: true } : {}) });
+        return structured(`${dryRun ? 'Dry run: ' : ''}${alias}.use ${dryRun ? 'would be' : change.written ? 'is now' : 'is already'} [${list}] (${moved})${change.source ? `; location ${change.source}${change.pin ? `, pin ${change.pin}` : ''}` : ''}.`, { ...change, ...(dryRun ? { dryRun: true } : {}) });
       } catch (e) {
         return errMessage(e);
       }

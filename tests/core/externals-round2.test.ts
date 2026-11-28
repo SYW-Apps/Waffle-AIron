@@ -7,7 +7,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, resolveProjectExports } from '../../src/core/specs.js';
 import { externalsRepository } from '../../src/core/externals.js';
 import { pinExternals, getExternalsStatus, listExternals, projectOwnSurface, listConsumers } from '../../src/core/surfaces.js';
-import { declare, remove, updateUse } from '../../src/core/external-declarations.js';
+import { declare, remove, update } from '../../src/core/external-declarations.js';
 import { compose } from '../../src/core/family-validation.js';
 import { validateProject, type ValidationIssue } from '../../src/core/validation.js';
 import { exportDesign } from '../../src/core/surfaces.js';
@@ -296,14 +296,14 @@ describe('implementing an exported trait (R2-22, R2-23, R2-53)', () => {
   it('`externals use` adds and removes imports without a hand edit, refusing an unexported name', () => {
     const p = pair();
     bind(p.studio);
-    expect(updateUse({ alias: 'geo', add: ['tile-key', 'tile-source'] })).toMatchObject({ written: true, use: ['tile-key', 'tile-source'], added: ['tile-key', 'tile-source'] });
+    expect(update({ alias: 'geo', add: ['tile-key', 'tile-source'] })).toMatchObject({ written: true, use: ['tile-key', 'tile-source'], added: ['tile-key', 'tile-source'] });
     expect(studioConfig(p.studio).externals.geo.use).toEqual(['tile-key', 'tile-source']);
-    expect(updateUse({ alias: 'geo', remove: ['tile-source'], dryRun: true })).toMatchObject({ written: false, use: ['tile-key'] });
+    expect(update({ alias: 'geo', remove: ['tile-source'], dryRun: true })).toMatchObject({ written: false, use: ['tile-key'] });
     expect(studioConfig(p.studio).externals.geo.use).toEqual(['tile-key', 'tile-source']);
-    expect(updateUse({ alias: 'geo', remove: ['tile-source'] })).toMatchObject({ written: true, use: ['tile-key'], removed: ['tile-source'] });
+    expect(update({ alias: 'geo', remove: ['tile-source'] })).toMatchObject({ written: true, use: ['tile-key'], removed: ['tile-source'] });
     expect(studioConfig(p.studio).externals.geo).toEqual({ source: { path: '../geo' }, use: ['tile-key'] });
-    expect(updateUse({ alias: 'geo', add: ['tiles-libary'] }).refusal).toMatch(/closest: "tile-library"/);
-    expect(updateUse({ alias: 'nope', add: ['x'] }).refusal).toMatch(/not a declared external/);
+    expect(update({ alias: 'geo', add: ['tiles-libary'] }).refusal).toMatch(/closest: "tile-library"/);
+    expect(update({ alias: 'nope', add: ['x'] }).refusal).toMatch(/not a declared external/);
   });
 });
 

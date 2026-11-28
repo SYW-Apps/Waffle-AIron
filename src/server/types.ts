@@ -1658,3 +1658,11 @@ export interface ProfileApplication {
    *  never compose the path themselves. */
   adoptedPackRef?: string;
 }
+
+/** tree_behind — one served tree an older wairon major wrote, which the local development server serves but never upgrades. */
+export interface TreeBehind {
+  /** The tree's root folder. */
+  root: string;
+  /** The major that wrote it. */
+  writtenMajor: number;
+}
